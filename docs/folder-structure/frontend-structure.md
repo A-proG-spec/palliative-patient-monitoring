@@ -1,5 +1,6 @@
 # folder-structure/frontend-structure.md
 
+
 # PALLIATIVE PATIENT MONITORING SYSTEM - FRONTEND FOLDER & FILE STRUCTURE
 
 ## 1. Overview
@@ -32,6 +33,7 @@ frontend/
 │   │   ├── referrals.ts
 │   │   ├── admissions.ts
 │   │   ├── admin.ts
+│   │   ├── staff.ts
 │   │   ├── client.ts
 │   │   └── index.ts
 │   ├── assets/
@@ -65,7 +67,7 @@ frontend/
 │   │   ├── admin/
 │   │   │   ├── DashboardStats.tsx
 │   │   │   ├── NotificationList.tsx
-│   │   │   ├── PatientDischargeModal.tsx
+│   │   │   ├── CloseCaseModal.tsx
 │   │   │   ├── ReferralApprovalList.tsx
 │   │   │   ├── StaffApprovalList.tsx
 │   │   │   └── index.ts
@@ -96,6 +98,13 @@ frontend/
 │   │       ├── AdmissionForm.tsx
 │   │       ├── AdmissionList.tsx
 │   │       └── index.ts
+│   │   └── staff/
+│   │       ├── StaffDashboardStats.tsx
+│   │       ├── PatientAssignmentList.tsx
+│   │       ├── RecentVisitsList.tsx
+│   │       ├── UpcomingVisitsList.tsx
+│   │       ├── AlertList.tsx
+│   │       └── index.ts
 │   ├── constants/
 │   │   └── index.ts
 │   ├── hooks/
@@ -107,6 +116,7 @@ frontend/
 │   │   ├── usePatientProgress.ts
 │   │   ├── usePatients.ts
 │   │   ├── useReferrals.ts
+│   │   ├── useStaff.ts
 │   │   ├── useVisits.ts
 │   │   └── index.ts
 │   ├── lib/
@@ -116,8 +126,12 @@ frontend/
 │   ├── pages/
 │   │   ├── admin/
 │   │   │   ├── AdminDashboardPage.tsx
+│   │   │   ├── AdminPatientListPage.tsx
+│   │   │   ├── AdminPatientDetailPage.tsx
 │   │   │   ├── ReferralManagementPage.tsx
-│   │   │   └── StaffManagementPage.tsx
+│   │   │   ├── StaffManagementPage.tsx
+│   │   │   ├── ReportsPage.tsx
+│   │   │   └── SettingsPage.tsx
 │   │   ├── staff/
 │   │   │   ├── DashboardPage.tsx
 │   │   │   ├── PatientDetailPage.tsx
@@ -131,7 +145,9 @@ frontend/
 │   │   │   └── RequestReferralPage.tsx
 │   │   ├── auth/
 │   │   │   ├── LoginPage.tsx
-│   │   │   └── RegisterPage.tsx
+│   │   │   ├── RegisterPage.tsx
+│   │   │   ├── VerifyEmailPage.tsx
+│   │   │   └── ResendVerificationPage.tsx
 │   │   ├── LandingPage.tsx
 │   │   ├── NotFoundPage.tsx
 │   │   └── index.ts
@@ -152,12 +168,45 @@ frontend/
 │   │   ├── medication.types.ts
 │   │   ├── patient.types.ts
 │   │   ├── referral.types.ts
+│   │   ├── staff.types.ts
 │   │   ├── visit.types.ts
 │   │   └── index.ts
+│   ├── schemas/
+│   │   ├── auth.schema.ts
+│   │   ├── patient.schema.ts
+│   │   ├── visit.schema.ts
+│   │   ├── medication.schema.ts
+│   │   ├── lab.schema.ts
+│   │   ├── referral.schema.ts
+│   │   └── admission.schema.ts
 │   ├── App.tsx
 │   ├── main.tsx
 │   └── vite-env.d.ts
-|
+├── tests/
+│   ├── components/
+│   │   ├── admin/
+│   │   ├── patients/
+│   │   ├── visits/
+│   │   ├── medications/
+│   │   ├── labs/
+│   │   ├── referrals/
+│   │   └── admissions/
+│   ├── hooks/
+│   │   ├── useAdmin.test.ts
+│   │   ├── useAuth.test.ts
+│   │   ├── usePatients.test.ts
+│   │   ├── useVisits.test.ts
+│   │   ├── useMedications.test.ts
+│   │   ├── useLabs.test.ts
+│   │   ├── useReferrals.test.ts
+│   │   └── useAdmissions.test.ts
+│   ├── pages/
+│   │   ├── admin/
+│   │   ├── staff/
+│   │   └── auth/
+│   ├── setup.ts
+│   └── utils/
+│       └── testHelpers.ts
 ├── .env.example
 ├── .eslintrc.js
 ├── .gitignore
@@ -177,14 +226,15 @@ frontend/
 | File | Purpose |
 |---|---|
 | `client.ts` | Axios instance configuration with interceptors |
-| `auth.ts` | Authentication API calls (register, login, logout, get user) |
+| `auth.ts` | Authentication API calls (register, login, verify email, resend verification, logout, get user) |
 | `patients.ts` | Patient API calls (CRUD operations) |
 | `visits.ts` | Home visit API calls |
 | `medications.ts` | Medication API calls |
 | `labs.ts` | Laboratory test API calls |
 | `referrals.ts` | Referral API calls |
 | `admissions.ts` | Hospital admission API calls |
-| `admin.ts` | Admin API calls (staff approval, dashboard stats, notifications) |
+| `admin.ts` | Admin API calls (staff approval, dashboard stats, notifications, close case) |
+| `staff.ts` | Staff API calls (dashboard stats, alerts, profile) |
 | `index.ts` | API exports |
 
 ### 3.2 Assets (`src/assets/`)
@@ -241,6 +291,7 @@ frontend/
 | `labs/` | Laboratory test components |
 | `referrals/` | Referral components |
 | `admissions/` | Hospital admission components |
+| `staff/` | Staff dashboard components |
 
 ### 3.4 Constants (`src/constants/`)
 
@@ -252,14 +303,15 @@ frontend/
 
 | File | Purpose | Depends On |
 |---|---|---|
-| `useAuth.ts` | Authentication hooks (login, register, logout, get user) | `api/auth.ts`, `store/auth.store.ts` |
-| `useAdmin.ts` | Admin hooks (staff approval, dashboard stats, notifications) | `api/admin.ts` |
-| `usePatients.ts` | Patient hooks (list, detail, register, summary) | `api/patients.ts` |
+| `useAuth.ts` | Authentication hooks (register, login, verify email, resend verification, logout, get user) | `api/auth.ts`, `store/auth.store.ts` |
+| `useAdmin.ts` | Admin hooks (staff approval, dashboard stats, notifications, close case) | `api/admin.ts` |
+| `usePatients.ts` | Patient hooks (list, detail, register, summary, progress) | `api/patients.ts` |
 | `useVisits.ts` | Visit hooks (record, list, detail) | `api/visits.ts` |
 | `useMedications.ts` | Medication hooks (order, list, update) | `api/medications.ts` |
 | `useLabs.ts` | Lab hooks (order, list, update) | `api/labs.ts` |
 | `useReferrals.ts` | Referral hooks (request, list, detail) | `api/referrals.ts` |
 | `useAdmissions.ts` | Admission hooks (record, list, update) | `api/admissions.ts` |
+| `useStaff.ts` | Staff dashboard hooks (dashboard stats, profile, alerts) | `api/staff.ts` |
 | `usePatientProgress.ts` | Patient progress hooks (KPS/PPS graph data) | `api/patients.ts` |
 
 ### 3.6 Lib (`src/lib/`)
@@ -277,8 +329,12 @@ frontend/
 | File | Purpose | Route |
 |---|---|---|
 | `AdminDashboardPage.tsx` | Admin dashboard with statistics and notifications | `/admin` |
+| `AdminPatientListPage.tsx` | View all patients | `/admin/patients` |
+| `AdminPatientDetailPage.tsx` | View patient details and close case | `/admin/patients/:patientId` |
 | `StaffManagementPage.tsx` | Manage staff registrations | `/admin/staff` |
 | `ReferralManagementPage.tsx` | Manage referral approvals | `/admin/referrals` |
+| `ReportsPage.tsx` | View system reports | `/admin/reports` |
+| `SettingsPage.tsx` | System settings | `/admin/settings` |
 
 #### Staff Pages (`src/pages/staff/`)
 
@@ -287,13 +343,13 @@ frontend/
 | `DashboardPage.tsx` | Staff dashboard | `/dashboard` |
 | `PatientListPage.tsx` | List of patients | `/patients` |
 | `PatientRegistrationPage.tsx` | Register new patient | `/patients/new` |
-| `PatientDetailPage.tsx` | Patient details | `/patients/:id` |
-| `PatientSummaryPage.tsx` | Patient summary report | `/patients/:id/summary` |
-| `RecordVisitPage.tsx` | Record home visit | `/patients/:id/visits` |
-| `OrderMedicationPage.tsx` | Order medication | `/patients/:id/medications` |
-| `OrderLabPage.tsx` | Order lab test | `/patients/:id/labs` |
-| `RequestReferralPage.tsx` | Request referral | `/patients/:id/referrals` |
-| `RecordAdmissionPage.tsx` | Record hospital admission | `/patients/:id/admissions` |
+| `PatientDetailPage.tsx` | Patient details | `/patients/:patientId` |
+| `PatientSummaryPage.tsx` | Patient summary report | `/patients/:patientId/summary` |
+| `RecordVisitPage.tsx` | Record home visit | `/patients/:patientId/visits` |
+| `OrderMedicationPage.tsx` | Order medication | `/patients/:patientId/medications` |
+| `OrderLabPage.tsx` | Order lab test | `/patients/:patientId/labs` |
+| `RequestReferralPage.tsx` | Request referral | `/patients/:patientId/referrals` |
+| `RecordAdmissionPage.tsx` | Record hospital admission | `/patients/:patientId/admissions` |
 
 #### Auth Pages (`src/pages/auth/`)
 
@@ -301,6 +357,8 @@ frontend/
 |---|---|---|
 | `LoginPage.tsx` | User login | `/login` |
 | `RegisterPage.tsx` | Staff registration | `/register` |
+| `VerifyEmailPage.tsx` | Email verification | `/verify-email` |
+| `ResendVerificationPage.tsx` | Resend verification email | `/resend-verification` |
 
 #### Public Pages
 
@@ -342,9 +400,22 @@ frontend/
 | `lab.types.ts` | Lab types |
 | `referral.types.ts` | Referral types |
 | `admission.types.ts` | Admission types |
+| `staff.types.ts` | Staff types |
 | `index.ts` | All types exported |
 
-### 3.12 Root Files
+### 3.12 Schemas (`src/schemas/`)
+
+| File | Purpose |
+|---|---|
+| `auth.schema.ts` | Authentication form validation schemas |
+| `patient.schema.ts` | Patient form validation schemas |
+| `visit.schema.ts` | Visit form validation schemas |
+| `medication.schema.ts` | Medication form validation schemas |
+| `lab.schema.ts` | Lab form validation schemas |
+| `referral.schema.ts` | Referral form validation schemas |
+| `admission.schema.ts` | Admission form validation schemas |
+
+### 3.13 Root Files
 
 | File | Purpose |
 |---|---|
@@ -394,55 +465,73 @@ frontend/
 27. `src/api/referrals.ts`
 28. `src/api/admissions.ts`
 29. `src/api/admin.ts`
+30. `src/api/staff.ts`
 
-### Phase 7: Hooks
-30. `src/hooks/useAuth.ts`
-31. `src/hooks/useAdmin.ts`
-32. `src/hooks/usePatients.ts`
-33. `src/hooks/useVisits.ts`
-34. `src/hooks/useMedications.ts`
-35. `src/hooks/useLabs.ts`
-36. `src/hooks/useReferrals.ts`
-37. `src/hooks/useAdmissions.ts`
-38. `src/hooks/usePatientProgress.ts`
-39. `src/hooks/index.ts`
+### Phase 7: Schemas
+31. `src/schemas/auth.schema.ts`
+32. `src/schemas/patient.schema.ts`
+33. `src/schemas/visit.schema.ts`
+34. `src/schemas/medication.schema.ts`
+35. `src/schemas/lab.schema.ts`
+36. `src/schemas/referral.schema.ts`
+37. `src/schemas/admission.schema.ts`
 
-### Phase 8: Pages
-40. `src/pages/auth/LoginPage.tsx`
-41. `src/pages/auth/RegisterPage.tsx`
-42. `src/pages/LandingPage.tsx`
-43. `src/pages/admin/AdminDashboardPage.tsx`
-44. `src/pages/admin/StaffManagementPage.tsx`
-45. `src/pages/admin/ReferralManagementPage.tsx`
-46. `src/pages/staff/DashboardPage.tsx`
-47. `src/pages/staff/PatientListPage.tsx`
-48. `src/pages/staff/PatientRegistrationPage.tsx`
-49. `src/pages/staff/PatientDetailPage.tsx`
-50. `src/pages/staff/PatientSummaryPage.tsx`
-51. `src/pages/staff/RecordVisitPage.tsx`
-52. `src/pages/staff/OrderMedicationPage.tsx`
-53. `src/pages/staff/OrderLabPage.tsx`
-54. `src/pages/staff/RequestReferralPage.tsx`
-55. `src/pages/staff/RecordAdmissionPage.tsx`
-56. `src/pages/NotFoundPage.tsx`
+### Phase 8: Hooks
+38. `src/hooks/useAuth.ts`
+39. `src/hooks/useAdmin.ts`
+40. `src/hooks/usePatients.ts`
+41. `src/hooks/useVisits.ts`
+42. `src/hooks/useMedications.ts`
+43. `src/hooks/useLabs.ts`
+44. `src/hooks/useReferrals.ts`
+45. `src/hooks/useAdmissions.ts`
+46. `src/hooks/useStaff.ts`
+47. `src/hooks/usePatientProgress.ts`
+48. `src/hooks/index.ts`
 
-### Phase 9: Feature Components
-57. `src/components/admin/` (all admin components)
-58. `src/components/patients/` (all patient components)
-59. `src/components/visits/` (all visit components)
-60. `src/components/medications/` (all medication components)
-61. `src/components/labs/` (all lab components)
-62. `src/components/referrals/` (all referral components)
-63. `src/components/admissions/` (all admission components)
+### Phase 9: Pages
+49. `src/pages/auth/LoginPage.tsx`
+50. `src/pages/auth/RegisterPage.tsx`
+51. `src/pages/auth/VerifyEmailPage.tsx`
+52. `src/pages/auth/ResendVerificationPage.tsx`
+53. `src/pages/LandingPage.tsx`
+54. `src/pages/admin/AdminDashboardPage.tsx`
+55. `src/pages/admin/AdminPatientListPage.tsx`
+56. `src/pages/admin/AdminPatientDetailPage.tsx`
+57. `src/pages/admin/StaffManagementPage.tsx`
+58. `src/pages/admin/ReferralManagementPage.tsx`
+59. `src/pages/admin/ReportsPage.tsx`
+60. `src/pages/admin/SettingsPage.tsx`
+61. `src/pages/staff/DashboardPage.tsx`
+62. `src/pages/staff/PatientListPage.tsx`
+63. `src/pages/staff/PatientRegistrationPage.tsx`
+64. `src/pages/staff/PatientDetailPage.tsx`
+65. `src/pages/staff/PatientSummaryPage.tsx`
+66. `src/pages/staff/RecordVisitPage.tsx`
+67. `src/pages/staff/OrderMedicationPage.tsx`
+68. `src/pages/staff/OrderLabPage.tsx`
+69. `src/pages/staff/RequestReferralPage.tsx`
+70. `src/pages/staff/RecordAdmissionPage.tsx`
+71. `src/pages/NotFoundPage.tsx`
 
-### Phase 10: Routing
-64. `src/routes/PublicRoute.tsx`
-65. `src/routes/ProtectedRoute.tsx`
-66. `src/routes/index.tsx`
+### Phase 10: Feature Components
+72. `src/components/admin/` (all admin components)
+73. `src/components/patients/` (all patient components)
+74. `src/components/visits/` (all visit components)
+75. `src/components/medications/` (all medication components)
+76. `src/components/labs/` (all lab components)
+77. `src/components/referrals/` (all referral components)
+78. `src/components/admissions/` (all admission components)
+79. `src/components/staff/` (all staff dashboard components)
 
-### Phase 11: App
-67. `src/App.tsx`
-68. `src/main.tsx`
+### Phase 11: Routing
+80. `src/routes/PublicRoute.tsx`
+81. `src/routes/ProtectedRoute.tsx`
+82. `src/routes/index.tsx`
+
+### Phase 12: App
+83. `src/App.tsx`
+84. `src/main.tsx`
 
 ## 5. Import Path Aliases
 
@@ -470,6 +559,7 @@ export default defineConfig({
       '@store': path.resolve(__dirname, './src/store'),
       '@styles': path.resolve(__dirname, './src/styles'),
       '@types': path.resolve(__dirname, './src/types'),
+      '@schemas': path.resolve(__dirname, './src/schemas'),
       '@utils': path.resolve(__dirname, './src/utils'),
     },
   },
@@ -484,6 +574,7 @@ export default defineConfig({
 | Components | `PascalCase.tsx` | `PatientCard.tsx` |
 | Hooks | `use*.ts` | `usePatients.ts` |
 | Types | `*.types.ts` | `patient.types.ts` |
+| Schemas | `*.schema.ts` | `auth.schema.ts` |
 | Constants | `*.ts` (index) | `index.ts` |
 | Styles | `*.css` | `globals.css` |
 | Tests | `*.test.tsx` | `LoginPage.test.tsx` |
@@ -508,17 +599,23 @@ VITE_APP_ENV=development
 | `/` | `LandingPage` | `PublicLayout` | None |
 | `/login` | `LoginPage` | `AuthLayout` | None |
 | `/register` | `RegisterPage` | `AuthLayout` | None |
+| `/verify-email` | `VerifyEmailPage` | `PublicLayout` | None |
+| `/resend-verification` | `ResendVerificationPage` | `PublicLayout` | None |
 | `/admin` | `AdminDashboardPage` | `DashboardLayout` | Admin |
+| `/admin/patients` | `AdminPatientListPage` | `DashboardLayout` | Admin |
+| `/admin/patients/:patientId` | `AdminPatientDetailPage` | `DashboardLayout` | Admin |
 | `/admin/staff` | `StaffManagementPage` | `DashboardLayout` | Admin |
 | `/admin/referrals` | `ReferralManagementPage` | `DashboardLayout` | Admin |
+| `/admin/reports` | `ReportsPage` | `DashboardLayout` | Admin |
+| `/admin/settings` | `SettingsPage` | `DashboardLayout` | Admin |
 | `/dashboard` | `DashboardPage` | `DashboardLayout` | Staff |
 | `/patients` | `PatientListPage` | `DashboardLayout` | Staff |
 | `/patients/new` | `PatientRegistrationPage` | `DashboardLayout` | Staff |
-| `/patients/:id` | `PatientDetailPage` | `DashboardLayout` | Staff |
-| `/patients/:id/summary` | `PatientSummaryPage` | `DashboardLayout` | Staff |
-| `/patients/:id/visits` | `RecordVisitPage` | `DashboardLayout` | Staff |
-| `/patients/:id/medications` | `OrderMedicationPage` | `DashboardLayout` | Staff |
-| `/patients/:id/labs` | `OrderLabPage` | `DashboardLayout` | Staff |
-| `/patients/:id/referrals` | `RequestReferralPage` | `DashboardLayout` | Staff |
-| `/patients/:id/admissions` | `RecordAdmissionPage` | `DashboardLayout` | Staff |
+| `/patients/:patientId` | `PatientDetailPage` | `DashboardLayout` | Staff |
+| `/patients/:patientId/summary` | `PatientSummaryPage` | `DashboardLayout` | Staff |
+| `/patients/:patientId/visits` | `RecordVisitPage` | `DashboardLayout` | Staff |
+| `/patients/:patientId/medications` | `OrderMedicationPage` | `DashboardLayout` | Staff |
+| `/patients/:patientId/labs` | `OrderLabPage` | `DashboardLayout` | Staff |
+| `/patients/:patientId/referrals` | `RequestReferralPage` | `DashboardLayout` | Staff |
+| `/patients/:patientId/admissions` | `RecordAdmissionPage` | `DashboardLayout` | Staff |
 | `*` | `NotFoundPage` | None | None |
