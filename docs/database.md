@@ -1,6 +1,6 @@
 # database.md
 
-
+```markdown
 # PALLIATIVE PATIENT MONITORING SYSTEM - DATABASE & DATA MODEL
 
 ## 1. Entity List
@@ -69,6 +69,9 @@ export interface IStaff extends Document {
   password: string;
   role: 'TeamLeader' | 'Physician' | 'Nurse' | null;
   status: 'Pending' | 'Active' | 'Rejected';
+  isEmailVerified: boolean;
+  emailVerificationToken: string | null;
+  emailVerificationTokenExpires: Date | null;
   assignedBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -101,6 +104,18 @@ const StaffSchema = new Schema<IStaff>({
     type: String, 
     enum: ['Pending', 'Active', 'Rejected'], 
     default: 'Pending' 
+  },
+  isEmailVerified: { 
+    type: Boolean, 
+    default: false 
+  },
+  emailVerificationToken: { 
+    type: String, 
+    default: null 
+  },
+  emailVerificationTokenExpires: { 
+    type: Date, 
+    default: null 
   },
   assignedBy: { 
     type: Schema.Types.ObjectId, 
@@ -1157,6 +1172,8 @@ export const Notification = mongoose.model<INotification>('Notification', Notifi
 // Staff indexes
 StaffSchema.index({ email: 1 }, { unique: true });
 StaffSchema.index({ status: 1 });
+StaffSchema.index({ isEmailVerified: 1 });
+StaffSchema.index({ emailVerificationToken: 1 });
 
 // Patient indexes
 PatientSchema.index({ status: 1 });
@@ -1246,6 +1263,13 @@ BCRYPT_SALT_ROUNDS=10
 PORT=5000
 NODE_ENV=development
 
+# Email Configuration
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+EMAIL_FROM=noreply@yourdomain.com
+
 # Admin Seed (for first-time setup)
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=adminpassword
@@ -1257,7 +1281,7 @@ ADMIN_NAME=Admin User
 ## 6. Seed Script
 
 ```typescript
-// prisma/seed.ts (or scripts/seed-admin.ts)
+//  scripts/seed-admin.ts
 
 import { Admin } from '../src/models/Admin';
 import { Counter } from '../src/models/Counter';
@@ -1325,6 +1349,9 @@ seedAdmin()
 └─────────────────┘     │  password       │     │  status         │  │
                         │  role (nullable)│     │  currentLocation│  │
                         │  status         │     └─────────────────┘  │
+                        │  isEmailVerified│              │           │
+                        │  emailVerificationToken│      │           │
+                        │  emailVerificationTokenExpires│           │
                         │  createdAt      │              │           │
                         │  updatedAt      │              │           │
                         └─────────────────┘              │           │
@@ -1363,5 +1390,3 @@ seedAdmin()
 │  └─────────────────┘                                              │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
-```
-

@@ -1,6 +1,3 @@
-# usecases.md
-
-
 # PALLIATIVE PATIENT MONITORING SYSTEM - USE CASES
 
 ## UC-01: Staff Registration
@@ -10,7 +7,7 @@
 | Actor | Staff (Nurse, Physician, Team Leader) |
 | Precondition | None |
 | Trigger | Staff submits registration form |
-| Linked FR | FR-01 |
+| Linked FR | FR-01, FR-02 |
 
 **Main Flow:**
 1. Staff navigates to registration page
@@ -18,24 +15,80 @@
 3. Staff submits form
 4. System validates input
 5. System creates staff record with status "Pending"
-6. System creates notification for admin
+6. System generates email verification token
+7. System sends verification email to staff's email address
+8. System displays success message: "Verification email sent. Please check your inbox."
 
 **Alternate Flows:**
 - If email already exists: system returns validation error
 - If validation fails: system shows field-specific errors
+- If email sending fails: system logs error and allows resend
 
-**Postcondition:** Staff record exists with "Pending" status, admin notification created
+**Postcondition:** Staff record exists with "Pending" status, verification email sent
 
 ---
 
-## UC-02: Admin Approves Staff Registration
+## UC-02: Staff Verifies Email
+
+| Field | Detail |
+|---|---|
+| Actor | Staff |
+| Precondition | Staff has registered and received verification email |
+| Trigger | Staff clicks verification link in email |
+| Linked FR | FR-02, FR-03 |
+
+**Main Flow:**
+1. Staff receives verification email with link
+2. Staff clicks verification link
+3. System validates verification token
+4. System marks staff email as verified (`isEmailVerified = true`)
+5. System displays success message: "Email verified successfully. Please wait for admin approval."
+6. System creates notification for admin about new pending staff
+
+**Alternate Flows:**
+- Token is expired: system displays "Verification link has expired. Please request a new one."
+- Token is invalid: system displays "Invalid verification link."
+- Email already verified: system displays "Email already verified."
+
+**Postcondition:** Staff email is verified, admin notification created
+
+---
+
+## UC-03: Staff Requests New Verification Email
+
+| Field | Detail |
+|---|---|
+| Actor | Staff |
+| Precondition | Staff has registered but not verified email |
+| Trigger | Staff requests new verification email |
+| Linked FR | FR-04 |
+
+**Main Flow:**
+1. Staff navigates to login page
+2. Staff clicks "Resend verification email" link
+3. Staff enters email address
+4. System validates email exists and is not verified
+5. System generates new verification token
+6. System sends new verification email
+7. System displays success message: "Verification email sent. Please check your inbox."
+
+**Alternate Flows:**
+- Email not found: system displays "No account found with this email"
+- Email already verified: system displays "Email already verified. Please login."
+- Too many requests: system displays "Please wait before requesting another email"
+
+**Postcondition:** New verification email sent
+
+---
+
+## UC-04: Admin Approves Staff Registration
 
 | Field | Detail |
 |---|---|
 | Actor | Admin |
-| Precondition | Pending staff registrations exist |
+| Precondition | Staff email is verified and pending registrations exist |
 | Trigger | Admin navigates to pending approvals |
-| Linked FR | FR-02, FR-03, FR-04, FR-08 |
+| Linked FR | FR-05, FR-06, FR-07, FR-11 |
 
 **Main Flow:**
 1. Admin views dashboard with pending staff notification
@@ -55,41 +108,44 @@
 
 ---
 
-## UC-03: User Login with Role-Based Redirect
+## UC-05: User Login with Role-Based Redirect
 
 | Field | Detail |
 |---|---|
 | Actor | Staff, Admin |
-| Precondition | User is registered and approved (if staff) |
+| Precondition | User is registered, email verified, and approved (if staff) |
 | Trigger | User submits login credentials |
-| Linked FR | FR-05, FR-06 |
+| Linked FR | FR-08, FR-09 |
 
 **Main Flow:**
 1. User navigates to login page
 2. User enters email and password
 3. System validates credentials
-4. System checks user role (Admin or Staff)
-5. System returns user data with role
-6. Frontend redirects based on role:
+4. System checks if email is verified
+5. System checks user role (Admin or Staff)
+6. System returns user data with role
+7. Frontend redirects based on role:
    - Admin → /admin/dashboard
    - Staff → /dashboard
 
 **Alternate Flows:**
 - Invalid credentials: system returns error
-- Staff account pending: system returns "Account pending approval"
+- Staff account not verified: system returns "Please verify your email before logging in"
+- Staff account pending: system returns "Account pending admin approval"
+- Staff account rejected: system returns "Account has been rejected"
 
 **Postcondition:** User is logged in and redirected to appropriate dashboard
 
 ---
 
-## UC-04: Patient Registration
+## UC-06: Patient Registration
 
 | Field | Detail |
 |---|---|
 | Actor | Staff |
-| Precondition | Staff is authenticated and active |
+| Precondition | Staff is authenticated, email verified, and active |
 | Trigger | Staff initiates patient registration |
-| Linked FR | FR-11, FR-12 |
+| Linked FR | FR-15, FR-16 |
 
 **Main Flow:**
 1. Staff navigates to patient registration
@@ -105,14 +161,14 @@
 
 ---
 
-## UC-05: Record Home Visit
+## UC-07: Record Home Visit
 
 | Field | Detail |
 |---|---|
 | Actor | Staff |
 | Precondition | Patient exists and is active |
 | Trigger | Staff conducts home visit |
-| Linked FR | FR-18 through FR-24 |
+| Linked FR | FR-22 through FR-28 |
 
 **Main Flow:**
 1. Staff selects patient
@@ -144,14 +200,14 @@
 
 ---
 
-## UC-06: Request Referral
+## UC-08: Request Referral
 
 | Field | Detail |
 |---|---|
 | Actor | Staff |
 | Precondition | Patient is active and being monitored |
 | Trigger | Staff identifies need for hospital care |
-| Linked FR | FR-33, FR-34 |
+| Linked FR | FR-37, FR-38, FR-39 |
 
 **Main Flow:**
 1. Staff selects patient
@@ -170,14 +226,14 @@
 
 ---
 
-## UC-07: Admin Approves Referral
+## UC-09: Admin Approves Referral
 
 | Field | Detail |
 |---|---|
 | Actor | Admin |
 | Precondition | Pending referral requests exist |
 | Trigger | Admin reviews referral requests |
-| Linked FR | FR-35, FR-36, FR-37, FR-09 |
+| Linked FR | FR-40, FR-41, FR-42, FR-12 |
 
 **Main Flow:**
 1. Admin views dashboard with pending referral notification
@@ -196,14 +252,14 @@
 
 ---
 
-## UC-08: Record Hospital Admission
+## UC-10: Record Hospital Admission
 
 | Field | Detail |
 |---|---|
 | Actor | Staff |
 | Precondition | Referral has been accepted |
 | Trigger | Patient is admitted to hospital |
-| Linked FR | FR-39 through FR-44 |
+| Linked FR | FR-44 through FR-49 |
 
 **Main Flow:**
 1. Staff selects patient with accepted referral
@@ -223,14 +279,14 @@
 
 ---
 
-## UC-09: Admin Closes Patient Case
+## UC-11: Admin Closes Patient Case
 
 | Field | Detail |
 |---|---|
 | Actor | Admin |
 | Precondition | Patient is active |
 | Trigger | Patient has improved or passed away |
-| Linked FR | FR-17, FR-44, FR-10 |
+| Linked FR | FR-21, FR-49, FR-13 |
 
 **Main Flow:**
 1. Admin selects patient
@@ -246,14 +302,14 @@
 
 ---
 
-## UC-10: View Patient Summary Report
+## UC-12: View Patient Summary Report
 
 | Field | Detail |
 |---|---|
 | Actor | Staff, Admin |
 | Precondition | Patient exists |
 | Trigger | User views patient details |
-| Linked FR | FR-45 through FR-48 |
+| Linked FR | FR-57 through FR-60 |
 
 **Main Flow:**
 1. User selects patient
@@ -270,19 +326,19 @@
 
 ---
 
-## UC-11: Admin Views Dashboard Notifications
+## UC-13: Admin Views Dashboard Notifications
 
 | Field | Detail |
 |---|---|
 | Actor | Admin |
 | Precondition | Admin is authenticated |
 | Trigger | Admin logs in or navigates to dashboard |
-| Linked FR | FR-07, FR-08, FR-09, FR-10 |
+| Linked FR | FR-10, FR-11, FR-12, FR-13 |
 
 **Main Flow:**
 1. Admin logs in
 2. System displays dashboard with notification counts
-3. System shows count of pending staff approvals
+3. System shows count of pending staff approvals (email verified only)
 4. System shows count of pending referrals
 5. System shows count of recent case closures
 6. Admin clicks on notification to view details
@@ -295,14 +351,14 @@
 
 ---
 
-## UC-12: Staff Views Dashboard
+## UC-14: Staff Views Dashboard
 
 | Field | Detail |
 |---|---|
 | Actor | Staff |
-| Precondition | Staff is authenticated and active |
+| Precondition | Staff is authenticated, email verified, and active |
 | Trigger | Staff logs in or navigates to dashboard |
-| Linked FR | FR-45, FR-46, FR-47, FR-48 |
+| Linked FR | FR-50 through FR-56 |
 
 **Main Flow:**
 1. Staff logs in
@@ -323,18 +379,18 @@
 
 ---
 
-## UC-13: Staff Views Staff Profile
+## UC-15: Staff Views Profile
 
 | Field | Detail |
 |---|---|
 | Actor | Staff |
-| Precondition | Staff is authenticated and active |
+| Precondition | Staff is authenticated, email verified, and active |
 | Trigger | Staff navigates to profile page |
-| Linked FR | FR-05 |
+| Linked FR | FR-08 |
 
 **Main Flow:**
 1. Staff navigates to profile page
-2. System displays staff profile information (name, email, phone, role, status)
+2. System displays staff profile information (name, email, phone, role, status, email verification status)
 3. Staff can view their assigned patients count
 4. Staff can view their today's visits count
 
@@ -342,14 +398,14 @@
 
 ---
 
-## UC-14: Staff Updates Profile
+## UC-16: Staff Updates Profile
 
 | Field | Detail |
 |---|---|
 | Actor | Staff |
-| Precondition | Staff is authenticated and active |
+| Precondition | Staff is authenticated, email verified, and active |
 | Trigger | Staff updates profile information |
-| Linked FR | FR-05 |
+| Linked FR | FR-14 |
 
 **Main Flow:**
 1. Staff navigates to profile page
@@ -366,14 +422,14 @@
 
 ---
 
-## UC-15: Staff Views Alerts
+## UC-17: Staff Views Alerts
 
 | Field | Detail |
 |---|---|
 | Actor | Staff |
-| Precondition | Staff is authenticated and active |
+| Precondition | Staff is authenticated, email verified, and active |
 | Trigger | Staff navigates to alerts section |
-| Linked FR | FR-45, FR-46 |
+| Linked FR | FR-55 |
 
 **Main Flow:**
 1. Staff navigates to alerts section
@@ -385,18 +441,3 @@
 
 **Postcondition:** Alert read status updated
 
----
-
-## Summary of Changes
-
-| Change | Before | After |
-|---|---|---|
-| Discharge terminology | "Discharge Patient" | "Close Patient Case" |
-| Discharge response fields | `dischargeReason`, `dischargeDate` | `closeReason`, `closeDate` |
-| Notification type | `'Discharge'` | `'CloseCase'` |
-| Staff Dashboard | Not defined | Added UC-12, UC-13, UC-14, UC-15 |
-| Staff Profile | Not defined | Added UC-13, UC-14 |
-| Staff Alerts | Not defined | Added UC-15 |
-| Referral form fields | Missing prepared by fields | Added preparedBy, preparedByDesignation, signature |
-```
-```

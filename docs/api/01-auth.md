@@ -11,6 +11,8 @@
 | POST | /auth/login | Public | Unified login for staff and admin |
 | GET | /auth/me | Staff, Admin | Get current authenticated user |
 | POST | /auth/logout | Staff, Admin | Logout user |
+| GET | /auth/verify-email | Public | Verify email address |
+| POST | /auth/resend-verification | Public | Resend verification email |
 | GET | /staff/me | Staff | Get staff profile |
 | PUT | /staff/me | Staff | Update staff profile |
 
@@ -48,13 +50,14 @@
 {
   "statusCode": 201,
   "success": true,
-  "message": "Registration successful, pending admin approval",
+  "message": "Registration successful. Please check your email to verify your account.",
   "data": {
     "id": "507f1f77bcf86cd799439011",
     "name": "John Doe",
     "email": "john@example.com",
     "phone": "+251911111111",
     "status": "Pending",
+    "isEmailVerified": false,
     "createdAt": "2026-08-29T10:00:00Z"
   }
 }
@@ -66,6 +69,99 @@
 |---|---|---|
 | 400 | Email already exists | "Email already registered" |
 | 400 | Validation error | Field-specific errors |
+
+---
+
+### GET /auth/verify-email
+
+**Purpose:** Verify staff email address
+
+**Auth:** Public
+
+**Query Params:**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| token | string | Yes | Email verification token sent via email |
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "success": true,
+  "message": "Email verified successfully. Please wait for admin approval.",
+  "data": {
+    "email": "john@example.com",
+    "isEmailVerified": true
+  }
+}
+```
+
+**Success Response - Already Verified (200):**
+
+```json
+{
+  "statusCode": 200,
+  "success": true,
+  "message": "Email already verified. Please login.",
+  "data": {
+    "email": "john@example.com",
+    "isEmailVerified": true
+  }
+}
+```
+
+**Error Responses:**
+
+| Status | Condition | Message |
+|---|---|---|
+| 400 | Invalid token | "Invalid verification link" |
+| 400 | Token expired | "Verification link has expired. Please request a new one." |
+| 404 | Staff not found | "User not found" |
+
+---
+
+### POST /auth/resend-verification
+
+**Purpose:** Resend verification email
+
+**Auth:** Public
+
+**Request Body:**
+
+```json
+{
+  "email": "john@example.com"
+}
+```
+
+**Validation Rules:**
+
+| Field | Rule |
+|---|---|
+| email | Required, valid email format |
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "success": true,
+  "message": "Verification email sent. Please check your inbox.",
+  "data": {
+    "email": "john@example.com"
+  }
+}
+```
+
+**Error Responses:**
+
+| Status | Condition | Message |
+|---|---|---|
+| 404 | Email not found | "No account found with this email" |
+| 400 | Email already verified | "Email already verified. Please login." |
+| 429 | Too many requests | "Please wait before requesting another email" |
 
 ---
 
@@ -93,7 +189,7 @@
 
 **Success Response (200):**
 
-**For Staff User:**
+**For Staff User (Email Verified & Active):**
 
 ```json
 {
@@ -110,6 +206,7 @@
       "role": "Nurse",
       "type": "staff",
       "status": "Active",
+      "isEmailVerified": true,
       "createdAt": "2026-08-29T10:00:00Z"
     }
   }
@@ -141,8 +238,9 @@
 | Status | Condition | Message |
 |---|---|---|
 | 401 | Invalid credentials | "Invalid email or password" |
-| 401 | Account pending (staff only) | "Account pending admin approval" |
-| 401 | Account rejected (staff only) | "Account has been rejected" |
+| 401 | Email not verified | "Please verify your email before logging in" |
+| 401 | Account pending | "Account pending admin approval" |
+| 401 | Account rejected | "Account has been rejected" |
 
 ---
 
@@ -169,6 +267,7 @@
     "role": "Nurse",
     "type": "staff",
     "status": "Active",
+    "isEmailVerified": true,
     "createdAt": "2026-08-29T10:00:00Z"
   }
 }
@@ -244,6 +343,7 @@
     "phone": "+251911111111",
     "role": "Nurse",
     "status": "Active",
+    "isEmailVerified": true,
     "assignedPatientsCount": 12,
     "todayVisitsCount": 3,
     "createdAt": "2026-08-29T10:00:00Z"
@@ -296,6 +396,7 @@
     "phone": "+251912222222",
     "role": "Nurse",
     "status": "Active",
+    "isEmailVerified": true,
     "updatedAt": "2026-08-29T11:00:00Z"
   }
 }
@@ -338,6 +439,7 @@ export interface AuthResponse {
     role?: 'TeamLeader' | 'Physician' | 'Nurse';
     type: 'staff' | 'admin';
     status?: 'Pending' | 'Active' | 'Rejected';
+    isEmailVerified?: boolean;
     createdAt?: string;
   };
 }
@@ -348,6 +450,7 @@ export interface RegisterResponse {
   email: string;
   phone: string;
   status: string;
+  isEmailVerified: boolean;
   createdAt: string;
 }
 
@@ -359,6 +462,7 @@ export interface User {
   role?: 'TeamLeader' | 'Physician' | 'Nurse';
   type: 'staff' | 'admin';
   status?: 'Pending' | 'Active' | 'Rejected';
+  isEmailVerified?: boolean;
   createdAt?: string;
 }
 
@@ -369,6 +473,7 @@ export interface StaffProfile {
   phone: string;
   role: 'TeamLeader' | 'Physician' | 'Nurse';
   status: 'Pending' | 'Active' | 'Rejected';
+  isEmailVerified: boolean;
   assignedPatientsCount: number;
   todayVisitsCount: number;
   createdAt: string;
@@ -386,7 +491,21 @@ export interface UpdateStaffProfileResponse {
   phone: string;
   role: 'TeamLeader' | 'Physician' | 'Nurse';
   status: 'Active';
+  isEmailVerified: boolean;
   updatedAt: string;
+}
+
+export interface VerifyEmailResponse {
+  email: string;
+  isEmailVerified: boolean;
+}
+
+export interface ResendVerificationRequest {
+  email: string;
+}
+
+export interface ResendVerificationResponse {
+  email: string;
 }
 ```
 
@@ -406,7 +525,10 @@ import {
   User,
   StaffProfile,
   UpdateStaffProfileRequest,
-  UpdateStaffProfileResponse
+  UpdateStaffProfileResponse,
+  VerifyEmailResponse,
+  ResendVerificationRequest,
+  ResendVerificationResponse
 } from '@/types/auth.types';
 
 export const authApi = {
@@ -416,6 +538,22 @@ export const authApi = {
    */
   register: (data: RegisterRequest): Promise<RegisterResponse> => {
     return api.post<RegisterResponse>('/auth/register', data).then((res) => res.data);
+  },
+
+  /**
+   * Verify email address
+   * GET /auth/verify-email
+   */
+  verifyEmail: (token: string): Promise<VerifyEmailResponse> => {
+    return api.get<VerifyEmailResponse>(`/auth/verify-email?token=${token}`).then((res) => res.data);
+  },
+
+  /**
+   * Resend verification email
+   * POST /auth/resend-verification
+   */
+  resendVerification: (data: ResendVerificationRequest): Promise<ResendVerificationResponse> => {
+    return api.post<ResendVerificationResponse>('/auth/resend-verification', data).then((res) => res.data);
   },
 
   /**
@@ -479,6 +617,24 @@ import { LoginRequest, RegisterRequest, UpdateStaffProfileRequest } from '@/type
 export function useRegister() {
   return useMutation({
     mutationFn: (data: RegisterRequest) => authApi.register(data),
+  });
+}
+
+/**
+ * Verify email address
+ */
+export function useVerifyEmail() {
+  return useMutation({
+    mutationFn: (token: string) => authApi.verifyEmail(token),
+  });
+}
+
+/**
+ * Resend verification email
+ */
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: (data: { email: string }) => authApi.resendVerification(data),
   });
 }
 
@@ -593,46 +749,44 @@ export function useUpdateStaffProfile() {
 |  +-----------------------------------------------------+ |
 |  |                    REGISTRATION FLOW                  | |
 |  |                                                     | |
-|  |  Staff -> POST /auth/register -> Status: Pending    | |
-|  |         -> Admin approves -> Status: Active         | |
+|  |  Staff → POST /auth/register → Status: Pending      | |
+|  |         → Send verification email                    | |
+|  |         → Staff clicks email link                    | |
+|  |         → GET /auth/verify-email                    | |
+|  |         → isEmailVerified = true                    | |
+|  |         → Admin approves → Status: Active           | |
 |  +-----------------------------------------------------+ |
 |                           |                               |
 |                           v                               |
 |  +-----------------------------------------------------+ |
 |  |                    LOGIN FLOW                        | |
 |  |                                                     | |
-|  |  User -> POST /auth/login -> Backend validates      | |
+|  |  User → POST /auth/login → Backend validates:       | |
+|  |         1. Credentials                              | |
+|  |         2. Email verified                           | |
+|  |         3. Status (staff only)                     | |
 |  |                              ↓                       | |
 |  |                        Returns { token, user }       | |
 |  |                              ↓                       | |
 |  |                   Frontend stores token & user       | |
 |  |                              ↓                       | |
 |  |              Redirect based on user.type:            | |
-|  |              admin -> /admin   staff -> /dashboard   | |
+|  |              admin → /admin   staff → /dashboard     | |
 |  +-----------------------------------------------------+ |
 |                           |                               |
 |                           v                               |
 |  +-----------------------------------------------------+ |
 |  |                    AUTHENTICATED REQUESTS            | |
 |  |                                                     | |
-|  |  Frontend -> Attaches Bearer token to header        | |
-|  |  Backend  -> Verifies token, attaches user to req   | |
-|  +-----------------------------------------------------+ |
-|                           |                               |
-|                           v                               |
-|  +-----------------------------------------------------+ |
-|  |                    PROFILE FLOWS                     | |
-|  |                                                     | |
-|  |  GET /auth/me   -> Get current user (generic)      | |
-|  |  GET /staff/me  -> Get staff profile (staff only)  | |
-|  |  PUT /staff/me  -> Update staff profile             | |
+|  |  Frontend → Attaches Bearer token to header         | |
+|  |  Backend  → Verifies token, attaches user to req    | |
 |  +-----------------------------------------------------+ |
 |                           |                               |
 |                           v                               |
 |  +-----------------------------------------------------+ |
 |  |                    LOGOUT FLOW                       | |
 |  |                                                     | |
-|  |  User -> POST /auth/logout -> Token invalidated     | |
+|  |  User → POST /auth/logout → Token invalidated       | |
 |  |                              ↓                       | |
 |  |                   Frontend clears token & user       | |
 |  |                              ↓                       | |
@@ -641,3 +795,56 @@ export function useUpdateStaffProfile() {
 |                                                           |
 +-----------------------------------------------------------+
 ```
+
+---
+
+## 7. Email Verification Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    EMAIL VERIFICATION FLOW                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    VERIFICATION EMAIL SENT                           │  │
+│  │                                                                      │  │
+│  │  Staff registers → System generates token → Email sent              │  │
+│  │                                                                      │  │
+│  │  Email Content:                                                      │  │
+│  │  "Welcome to Palliative Care System!                                │  │
+│  │   Please click the link below to verify your email:                 │  │
+│  │   https://yourdomain.com/verify-email?token=xxxxx"                 │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    ▼                                       │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    STAFF CLICKS LINK                                 │  │
+│  │                                                                      │  │
+│  │  GET /auth/verify-email?token=xxxxx                                 │  │
+│  │         ↓                                                            │  │
+│  │  Backend validates token                                             │  │
+│  │         ↓                                                            │  │
+│  │  isEmailVerified = true                                              │  │
+│  │         ↓                                                            │  │
+│  │  Success Page: "Email verified successfully.                        │  │
+│  │  Please wait for admin approval."                                   │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    ▼                                       │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    RESEND VERIFICATION                               │  │
+│  │                                                                      │  │
+│  │  Staff → POST /auth/resend-verification                             │  │
+│  │         → { email: "john@example.com" }                             │  │
+│  │         ↓                                                            │  │
+│  │  Backend checks email exists and not verified                      │  │
+│  │         ↓                                                            │  │
+│  │  Generates new token → Sends new email                              │  │
+│  │         ↓                                                            │  │
+│  │  "Verification email sent. Please check your inbox."               │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
