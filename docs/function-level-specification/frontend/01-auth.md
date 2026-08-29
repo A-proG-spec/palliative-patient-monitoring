@@ -5,7 +5,7 @@
 
 ## 1. Overview
 
-This document defines the function-level specification for frontend authentication features including registration, login, logout, and user session management.
+This document defines the function-level specification for frontend authentication features including registration, email verification, login, logout, and user session management.
 
 **Files Covered:**
 - `src/api/auth.ts`
@@ -13,6 +13,8 @@ This document defines the function-level specification for frontend authenticati
 - `src/hooks/useAuth.ts`
 - `src/pages/auth/LoginPage.tsx`
 - `src/pages/auth/RegisterPage.tsx`
+- `src/pages/auth/VerifyEmailPage.tsx`
+- `src/pages/auth/ResendVerificationPage.tsx`
 - `src/routes/ProtectedRoute.tsx`
 - `src/routes/PublicRoute.tsx`
 
@@ -25,6 +27,8 @@ This document defines the function-level specification for frontend authenticati
 | Function | Signature | Purpose |
 |---|---|---|
 | register | `(data: RegisterRequest): Promise<RegisterResponse>` | POST /auth/register |
+| verifyEmail | `(token: string): Promise<VerifyEmailResponse>` | GET /auth/verify-email |
+| resendVerification | `(data: ResendVerificationRequest): Promise<ResendVerificationResponse>` | POST /auth/resend-verification |
 | login | `(data: LoginRequest): Promise<LoginResponse>` | POST /auth/login |
 | getCurrentUser | `(): Promise<User>` | GET /auth/me |
 | logout | `(): Promise<void>` | POST /auth/logout |
@@ -33,11 +37,28 @@ This document defines the function-level specification for frontend authenticati
 
 ```typescript
 import api from './client';
-import { LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, User } from '@/types/auth.types';
+import { 
+  LoginRequest, 
+  LoginResponse, 
+  RegisterRequest, 
+  RegisterResponse,
+  User,
+  VerifyEmailResponse,
+  ResendVerificationRequest,
+  ResendVerificationResponse
+} from '@/types/auth.types';
 
 export const authApi = {
   register: (data: RegisterRequest): Promise<RegisterResponse> => {
     return api.post<RegisterResponse>('/auth/register', data).then((res) => res.data);
+  },
+
+  verifyEmail: (token: string): Promise<VerifyEmailResponse> => {
+    return api.get<VerifyEmailResponse>(`/auth/verify-email?token=${token}`).then((res) => res.data);
+  },
+
+  resendVerification: (data: ResendVerificationRequest): Promise<ResendVerificationResponse> => {
+    return api.post<ResendVerificationResponse>('/auth/resend-verification', data).then((res) => res.data);
   },
 
   login: (data: LoginRequest): Promise<LoginResponse> => {
@@ -135,6 +156,53 @@ export function useRegister() {
 
 ---
 
+#### useVerifyEmail
+
+| Field | Detail |
+|---|---|
+| Signature | `useVerifyEmail(): UseMutationResult<VerifyEmailResponse, AxiosError, string>` |
+| Purpose | Verify email address using token |
+| API Call | `authApi.verifyEmail(token)` |
+| Side Effects | None |
+| Edge Cases | Invalid token -> error from API |
+| Edge Cases | Expired token -> error from API |
+
+**Implementation:**
+
+```typescript
+export function useVerifyEmail() {
+  return useMutation({
+    mutationFn: (token: string) => authApi.verifyEmail(token),
+  });
+}
+```
+
+---
+
+#### useResendVerification
+
+| Field | Detail |
+|---|---|
+| Signature | `useResendVerification(): UseMutationResult<ResendVerificationResponse, AxiosError, { email: string }>` |
+| Purpose | Resend verification email |
+| API Call | `authApi.resendVerification(data)` |
+| Side Effects | None |
+| Edge Cases | Email not found -> error from API |
+| Edge Cases | Already verified -> error from API |
+| Edge Cases | Too many requests -> error from API |
+
+**Implementation:**
+
+```typescript
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: (data: { email: string }) => authApi.resendVerification(data),
+  });
+}
+```
+
+---
+
 #### useLogin
 
 | Field | Detail |
@@ -144,6 +212,7 @@ export function useRegister() {
 | API Call | `authApi.login(data)` |
 | Side Effects | Sets auth state, navigates to appropriate dashboard |
 | Edge Cases | Invalid credentials -> error from API |
+| Edge Cases | Email not verified -> error from API |
 | Edge Cases | Account pending -> error from API |
 | Edge Cases | Account rejected -> error from API |
 
@@ -251,8 +320,11 @@ export function useCurrentUser() {
 1. Renders email and password fields
 2. Client-side validation with Zod
 3. On submit, calls `useLogin()` mutation
-4. On success, redirects based on user role
+4. On success, redirects based on user role:
+   - `admin` -> `/admin`
+   - `staff` -> `/dashboard`
 5. On error, displays form-level error message
+6. Provides "Resend verification email" link for unverified users
 
 **Validation Schema:**
 
@@ -271,30 +343,6 @@ export const loginSchema = z.object({
 | Submitting | Submit button disabled, loading spinner |
 | Error | Form-level error message displayed |
 | Success | Redirect to dashboard |
-
-**Implementation:**
-
-```typescript
-export const LoginPage: React.FC = () => {
-  const { register, handleSubmit, formState: { errors }, setError } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-  });
-
-  const loginMutation = useLogin();
-
-  const onSubmit = (data: LoginFormData) => {
-    loginMutation.mutate(data, {
-      onError: (error: any) => {
-        setError('root', {
-          message: error.response?.data?.message || 'Login failed. Please try again.',
-        });
-      },
-    });
-  };
-
-  // Render form with fields and error states
-};
-```
 
 ---
 
@@ -315,7 +363,7 @@ export const LoginPage: React.FC = () => {
 1. Renders name, email, phone, password, confirm password fields
 2. Client-side validation with Zod
 3. On submit, calls `useRegister()` mutation
-4. On success, shows success message and redirects to login
+4. On success, shows success message and redirects to login after 3 seconds
 5. On error, displays field-specific or form-level errors
 
 **Validation Schema:**
@@ -340,42 +388,76 @@ export const registerSchema = z.object({
 | Idle | Form fields enabled, submit button enabled |
 | Submitting | Submit button disabled, loading spinner |
 | Error | Field-specific or form-level error messages |
-| Success | Success message displayed, redirect to login |
+| Success | Success message displayed, redirect to login after 3s |
 
-**Implementation:**
+---
+
+### 5.3 VerifyEmailPage
+
+**Route:** `/verify-email`
+
+**Layout:** `PublicLayout`
+
+**Guard:** None
+
+**Purpose:** Email verification page
+
+**Behavior:**
+
+1. Reads `token` from URL query parameter using `useSearchParams()`
+2. Calls `useVerifyEmail()` mutation on mount
+3. Displays loading state while verifying
+4. Displays success or error message based on response
+5. Provides appropriate action links (login, resend verification)
+
+**States:**
+
+| State | UI |
+|---|---|
+| Loading | "Verifying your email..." with spinner |
+| Success | ✅ "Email verified successfully! Please wait for admin approval." + Login link |
+| Invalid Token | ❌ "Invalid verification link." + Resend link |
+| Expired Token | ⏰ "Verification link has expired. Please request a new one." + Resend link |
+| Already Verified | ℹ️ "Email already verified. Please login." + Login link |
+
+---
+
+### 5.4 ResendVerificationPage
+
+**Route:** `/resend-verification`
+
+**Layout:** `PublicLayout`
+
+**Guard:** None
+
+**Purpose:** Resend verification email page
+
+**Local State:** React Hook Form state (email)
+
+**Behavior:**
+
+1. Renders email field
+2. Client-side validation with Zod
+3. On submit, calls `useResendVerification()` mutation
+4. On success, shows success message
+5. On error, displays error message
+
+**Validation Schema:**
 
 ```typescript
-export const RegisterPage: React.FC = () => {
-  const navigate = useNavigate();
-  const { register, handleSubmit, formState: { errors }, setError } = useForm<RegisterFormData>({
-    resolver: zodResolver(registerSchema),
-  });
-
-  const registerMutation = useRegister();
-
-  const onSubmit = (data: RegisterFormData) => {
-    // Remove confirmPassword before sending to API
-    const { confirmPassword, ...requestData } = data;
-    
-    registerMutation.mutate(requestData, {
-      onSuccess: () => {
-        // Show success message and redirect to login after 2 seconds
-        setTimeout(() => navigate('/login'), 2000);
-      },
-      onError: (error: any) => {
-        const message = error.response?.data?.message;
-        if (message === 'Email already registered') {
-          setError('email', { message: 'Email already registered' });
-        } else {
-          setError('root', { message: message || 'Registration failed. Please try again.' });
-        }
-      },
-    });
-  };
-
-  // Render form with fields and error states
-};
+export const resendVerificationSchema = z.object({
+  email: z.string().email('Invalid email address'),
+});
 ```
+
+**States:**
+
+| State | UI |
+|---|---|
+| Idle | Form fields enabled, submit button enabled |
+| Submitting | Submit button disabled, loading spinner |
+| Error | Form-level error message displayed |
+| Success | Success message displayed |
 
 ---
 
@@ -459,57 +541,83 @@ export const PublicRoute = () => {
 ## 7. Flow Diagram
 
 ```
-+-----------------------------------------------------------+
-|               AUTHENTICATION FLOW (FRONTEND)               |
-+-----------------------------------------------------------+
-|                                                           |
-|  +-----------------------------------------------------+ |
-|  |                    REGISTRATION FLOW                 | |
-|  |                                                     | |
-|  |  User -> /register -> RegisterPage                  | |
-|  |         -> useRegister() -> POST /auth/register     | |
-|  |         -> Success -> Show success message          | |
-|  |         -> Redirect to /login after 2s              | |
-|  |         -> Error -> Display error message           | |
-|  +-----------------------------------------------------+ |
-|                           |                               |
-|                           v                               |
-|  +-----------------------------------------------------+ |
-|  |                    LOGIN FLOW                        | |
-|  |                                                     | |
-|  |  User -> /login -> LoginPage                        | |
-|  |         -> useLogin() -> POST /auth/login           | |
-|  |         -> Success -> Store token & user            | |
-|  |         -> Redirect based on role:                  | |
-|  |            admin -> /admin                          | |
-|  |            staff -> /dashboard                      | |
-|  |         -> Error -> Display error message           | |
-|  +-----------------------------------------------------+ |
-|                           |                               |
-|                           v                               |
-|  +-----------------------------------------------------+ |
-|  |                    AUTHENTICATED FLOW                | |
-|  |                                                     | |
-|  |  Request -> ProtectedRoute                          | |
-|  |         -> Check isAuthenticated                    | |
-|  |         -> If false -> Redirect to /login           | |
-|  |         -> If true -> Check role for route          | |
-|  |         -> Render child routes                      | |
-|  |                                                     | |
-|  |  Auth pages -> PublicRoute                          | |
-|  |         -> Check isAuthenticated                    | |
-|  |         -> If true -> Redirect to dashboard         | |
-|  |         -> If false -> Render child routes          | |
-|  +-----------------------------------------------------+ |
-|                           |                               |
-|                           v                               |
-|  +-----------------------------------------------------+ |
-|  |                    LOGOUT FLOW                       | |
-|  |                                                     | |
-|  |  User clicks Logout -> useLogout()                  | |
-|  |         -> POST /auth/logout                        | |
-|  |         -> Clear token & user from store            | |
-|  |         -> Redirect to /login                       | |
-|  +-----------------------------------------------------+ |
-|                                                           |
-+-----------------------------------------------------------+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│               AUTHENTICATION FLOW (FRONTEND)                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    REGISTRATION FLOW                                 │  │
+│  │                                                                      │  │
+│  │  User -> /register -> RegisterPage                                  │  │
+│  │         -> useRegister() -> POST /auth/register                     │  │
+│  │         -> Success -> Show "Check your email" message               │  │
+│  │         -> Redirect to /login after 3s                              │  │
+│  │         -> Error -> Display error message                           │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    ▼                                       │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    EMAIL VERIFICATION FLOW                           │  │
+│  │                                                                      │  │
+│  │  User clicks email link -> /verify-email?token=xxx                  │  │
+│  │         -> useVerifyEmail() -> GET /auth/verify-email               │  │
+│  │         -> Success -> Show "Email verified" message                 │  │
+│  │         -> Invalid -> Show "Invalid link" message                   │  │
+│  │         -> Expired -> Show "Link expired" message                   │  │
+│  │         -> Already Verified -> Show "Already verified" message      │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    ▼                                       │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    LOGIN FLOW                                        │  │
+│  │                                                                      │  │
+│  │  User -> /login -> LoginPage                                        │  │
+│  │         -> useLogin() -> POST /auth/login                           │  │
+│  │         -> Success -> Store token & user                            │  │
+│  │         -> Redirect based on role:                                  │  │
+│  │            admin -> /admin                                          │  │
+│  │            staff -> /dashboard                                      │  │
+│  │         -> Error (not verified) -> Show "Verify your email"         │  │
+│  │         -> Error (pending) -> Show "Pending approval"               │  │
+│  │         -> Error (rejected) -> Show "Account rejected"              │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    ▼                                       │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    RESEND VERIFICATION FLOW                          │  │
+│  │                                                                      │  │
+│  │  User -> /resend-verification -> ResendVerificationPage             │  │
+│  │         -> useResendVerification() -> POST /auth/resend-verification │  │
+│  │         -> Success -> Show "Email sent" message                     │  │
+│  │         -> Error -> Display error message                           │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    ▼                                       │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    AUTHENTICATED FLOW                                │  │
+│  │                                                                      │  │
+│  │  Request -> ProtectedRoute                                          │  │
+│  │         -> Check isAuthenticated                                    │  │
+│  │         -> If false -> Redirect to /login                           │  │
+│  │         -> If true -> Check role for route                          │  │
+│  │         -> Render child routes                                      │  │
+│  │                                                                      │  │
+│  │  Auth pages -> PublicRoute                                          │  │
+│  │         -> Check isAuthenticated                                    │  │
+│  │         -> If true -> Redirect to dashboard                         │  │
+│  │         -> If false -> Render child routes                          │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    ▼                                       │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    LOGOUT FLOW                                       │  │
+│  │                                                                      │  │
+│  │  User clicks Logout -> useLogout()                                  │  │
+│  │         -> POST /auth/logout                                        │  │
+│  │         -> Clear token & user from store                            │  │
+│  │         -> Redirect to /login                                       │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
