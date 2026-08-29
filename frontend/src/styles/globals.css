@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: #002395;
+    --color-primary-hover: #001B73;
+    --color-primary-light: #E8ECF7;
+    --color-background: #F7F9FE;
+    --color-surface: #F7F9FE;
+    --color-surface-lowest: #FFFFFF;
+    --color-border: #E6EBF4;
+    --color-foreground: #181C20;
+    --color-secondary-text: #52627A;
+    --color-muted: #8290A7;
+    --color-success: #43B982;
+    --color-warning: #F5A34A;
+    --color-error: #E74F3D;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #F7F9FE;
+    color: #181C20;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    margin: 0;
+    color: #181C20;
+  }
+
+  a {
+    color: #002395;
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: #001B73;
+  }
+
+  input, textarea, select, button {
+    font-family: inherit;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #F1F4F9;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #C2C6D6;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #727785;
+  }
+}
+
+@layer components {
+  /* Focus ring using primary color */
+  .focus-ring {
+    @apply outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1;
+  }
+
+  /* Card base */
+  .card {
+    @apply bg-surface-container-lowest rounded-xl shadow-card border border-border-base;
+  }
+
+  /* Section spacing */
+  .page-container {
+    @apply px-6 py-6 max-w-container-2xl mx-auto;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Skeleton animation */
+  .skeleton {
+    @apply animate-pulse bg-surface-container-low rounded;
+  }
+}
