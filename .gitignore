@@ -1,0 +1,319 @@
+# ============================================
+# ROOT .gitignore - Palliative Patient Monitoring System
+# ============================================
+
+# ============================================
+# OS / IDE / Editor Files
+# ============================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Linux
+*~
+
+# IDE - VSCode
+.vscode/
+*.code-workspace
+.vscode-test/
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+.history/
+
+# IDE - IntelliJ / WebStorm / PHPStorm
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.idea_modules/
+.classpath
+.project
+.settings/
+bin/
+build/
+target/
+
+# IDE - Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# IDE - Vim
+*.swp
+*.swo
+*.un~
+*~
+
+# ============================================
+# Node.js / JavaScript / TypeScript
+# ============================================
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Package locks (keep these in the repo, but sometimes excluded)
+# Uncomment if you want to exclude lock files
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Build outputs
+dist/
+build/
+out/
+*.tsbuildinfo
+*.js.map
+*.d.ts.map
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# ============================================
+# Backend Specific
+# ============================================
+
+# Backend build
+backend/dist/
+backend/build/
+backend/out/
+
+# Backend logs
+backend/logs/
+*.log
+backend/npm-debug.log*
+backend/yarn-debug.log*
+backend/yarn-error.log*
+
+# Backend environment
+backend/.env
+backend/.env.local
+backend/.env.*.local
+
+# Backend test coverage
+backend/coverage/
+backend/.nyc_output/
+
+# Backend temporary files
+backend/tmp/
+backend/temp/
+backend/.cache/
+
+# Backend uploads (if any)
+backend/uploads/
+backend/media/
+backend/storage/
+
+# ============================================
+# Frontend Specific
+# ============================================
+
+# Frontend build
+frontend/dist/
+frontend/build/
+frontend/out/
+frontend/.vercel/
+frontend/.netlify/
+
+# Frontend environment
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# Frontend test coverage
+frontend/coverage/
+frontend/.nyc_output/
+
+# Frontend cache
+frontend/.vite/
+frontend/.cache/
+frontend/node_modules/.vite/
+frontend/.parcel-cache/
+frontend/.next/
+
+# Frontend temporary files
+frontend/tmp/
+frontend/temp/
+
+# ============================================
+# Documentation Builds
+# ============================================
+
+# Docs build (if using docs as code)
+docs/_build/
+docs/build/
+docs/out/
+docs/.vitepress/dist/
+docs/.vuepress/dist/
+
+# ============================================
+# Testing / Coverage
+# ============================================
+
+# Test coverage
+coverage/
+.nyc_output/
+*.lcov
+*.lcov.info
+
+# Test results
+test-results/
+jest-results.json
+vitest-results.json
+*.test-results.json
+
+# ============================================
+# Database / Data Files
+# ============================================
+
+# MongoDB data (if using local DB)
+data/
+db/
+mongodb-data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Dump files
+*.dump
+*.sql
+*.backup
+
+# ============================================
+# Docker / Container
+# ============================================
+
+# Docker
+docker-compose.override.yml
+*.dockerignore
+Dockerfile.*
+.docker/
+
+# Container volumes
+volumes/
+*.volume/
+
+# ============================================
+# CI / CD
+# ============================================
+
+# CI/CD platform specific
+.github/workflows/*.local.yml
+.gitlab-ci.local.yml
+.travis.local.yml
+circleci.local.yml
+azure-pipelines.local.yml
+
+# ============================================
+# Security / Secrets
+# ============================================
+
+# Secrets
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.truststore
+*.p8
+secrets/
+secrets.env
+*.secret
+
+# SSH keys
+*.id_rsa
+*.id_dsa
+*.id_ecdsa
+*.id_ed25519
+
+# GPG keys
+*.gpg
+*.asc
+
+# ============================================
+# Miscellaneous
+# ============================================
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+tmp/
+temp/
+.cache/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+
+# Archive files
+*.zip
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# ============================================
+# Project Specific
+# ============================================
+
+# Backup files
+*.backup
+*.old
+*.orig
+
+# IDE specific project files
+*.code-workspace
+*.iml
+
+# ============================================
+# Keep these files in repo (example)
+# ============================================
+
+# !.env.example
+# !.env.test
+# !*.sample
