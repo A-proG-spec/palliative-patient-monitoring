@@ -23,6 +23,7 @@ backend/
 ├── src/
 │   ├── config/
 │   │   ├── database.ts
+|   |   ├── email.ts
 │   │   ├── env.ts
 │   │   └── logger.ts
 │   ├── constants/
@@ -100,7 +101,6 @@ backend/
 │   │   ├── ApiError.ts
 │   │   ├── ApiResponse.ts
 │   │   ├── asyncHandler.ts
-│   │   ├── email.ts
 │   │   ├── jwt.ts
 │   │   ├── password.ts
 │   │   └── token.ts
@@ -161,8 +161,8 @@ backend/
 | File | Purpose | Depends On |
 |---|---|---|
 | `auth.controller.ts` | Handles authentication requests (register, login, verify email, resend verification) | `auth.service.ts` |
-| `admin.controller.ts` | Handles admin operations (staff approval, dashboard stats, close case) | `admin.service.ts` |
-| `patient.controller.ts` | Handles patient CRUD operations | `patient.service.ts` |
+| `admin.controller.ts` | Handles admin operations (staff approval, dashboard stats, close case, full patient detail, visit edit, print/export) | `admin.service.ts` |
+| `patient.controller.ts` | Handles patient CRUD operations and print/export | `patient.service.ts` |
 | `visit.controller.ts` | Handles home visit records | `visit.service.ts` |
 | `medication.controller.ts` | Handles medication orders | `medication.service.ts` |
 | `lab.controller.ts` | Handles laboratory test orders | `lab.service.ts` |
@@ -188,7 +188,7 @@ backend/
 | `Staff.ts` | Staff member model with email verification fields | `IStaff` |
 | `Patient.ts` | Patient model | `IPatient` |
 | `Counter.ts` | Auto-increment counter for patient display IDs | `ICounter` |
-| `HomeVisit.ts` | Home visit record model | `IHomeVisit` |
+| `HomeVisit.ts` | Home visit record model (includes editHistory for admin edits) | `IHomeVisit` |
 | `Medication.ts` | Medication record model | `IMedication` |
 | `LaboratoryTest.ts` | Lab test record model | `ILaboratoryTest` |
 | `Referral.ts` | Referral record model | `IReferral` |
@@ -215,7 +215,7 @@ backend/
 | File | Purpose | Zod Schemas |
 |---|---|---|
 | `auth.schema.ts` | Auth request validation | `registerSchema`, `loginSchema`, `verifyEmailQuerySchema`, `resendVerificationSchema` |
-| `admin.schema.ts` | Admin request validation | `approveStaffSchema`, `closeCaseSchema` |
+| `admin.schema.ts` | Admin request validation | `approveStaffSchema`, `closeCaseSchema`, `updateVisitSchema`, `getVisitParamsSchema` |
 | `patient.schema.ts` | Patient request validation | `createPatientSchema`, `getPatientsQuerySchema` |
 | `visit.schema.ts` | Visit request validation | `createVisitSchema` |
 | `medication.schema.ts` | Medication request validation | `createMedicationSchema`, `updateMedicationSchema` |
@@ -229,8 +229,8 @@ backend/
 | File | Purpose | Depends On |
 |---|---|---|
 | `auth.service.ts` | Authentication business logic (register, login, verify email, resend verification) | `models/Staff`, `models/Admin`, `utils/jwt`, `utils/password`, `utils/token`, `utils/email` |
-| `admin.service.ts` | Admin business logic | `models/Staff`, `models/Patient`, `models/Referral`, `models/Notification` |
-| `patient.service.ts` | Patient business logic | `models/Patient`, `models/Staff`, `models/Counter` |
+| `admin.service.ts` | Admin business logic (staff approval, dashboard stats, notifications, full patient detail, visit edit with audit trail, print/export) | `models/Staff`, `models/Patient`, `models/Referral`, `models/Notification`, `models/HomeVisit`, `models/Medication`, `models/LaboratoryTest`, `models/HospitalAdmission` |
+| `patient.service.ts` | Patient business logic (CRUD, summary, progress, print/export) | `models/Patient`, `models/Staff`, `models/Counter`, `models/HomeVisit`, `models/Medication`, `models/LaboratoryTest`, `models/Referral`, `models/HospitalAdmission` |
 | `visit.service.ts` | Visit business logic | `models/HomeVisit`, `models/Patient` |
 | `medication.service.ts` | Medication business logic | `models/Medication`, `models/Patient` |
 | `lab.service.ts` | Lab business logic | `models/LaboratoryTest`, `models/Patient` |
@@ -243,8 +243,8 @@ backend/
 | File | Purpose |
 |---|---|
 | `auth.types.ts` | Authentication types |
-| `admin.types.ts` | Admin types |
-| `patient.types.ts` | Patient types |
+| `admin.types.ts` | Admin types (includes full patient detail, visit edit, print types) |
+| `patient.types.ts` | Patient types (includes print/export types) |
 | `visit.types.ts` | Visit types |
 | `medication.types.ts` | Medication types |
 | `lab.types.ts` | Lab types |
@@ -305,7 +305,7 @@ backend/
 14. `src/models/Admin.ts`
 15. `src/models/Staff.ts`
 16. `src/models/Patient.ts`
-17. `src/models/HomeVisit.ts`
+17. `src/models/HomeVisit.ts` (includes editHistory field)
 18. `src/models/Medication.ts`
 19. `src/models/LaboratoryTest.ts`
 20. `src/models/Referral.ts`
@@ -314,8 +314,8 @@ backend/
 
 ### Phase 4: Services
 23. `src/services/auth.service.ts`
-24. `src/services/admin.service.ts`
-25. `src/services/patient.service.ts`
+24. `src/services/admin.service.ts` (includes full patient detail, visit edit with audit trail, print/export)
+25. `src/services/patient.service.ts` (includes print/export)
 26. `src/services/visit.service.ts`
 27. `src/services/medication.service.ts`
 28. `src/services/lab.service.ts`
@@ -325,7 +325,7 @@ backend/
 
 ### Phase 5: Schemas
 32. `src/schemas/auth.schema.ts`
-33. `src/schemas/admin.schema.ts`
+33. `src/schemas/admin.schema.ts` (includes updateVisitSchema)
 34. `src/schemas/patient.schema.ts`
 35. `src/schemas/visit.schema.ts`
 36. `src/schemas/medication.schema.ts`
@@ -343,8 +343,8 @@ backend/
 
 ### Phase 7: Controllers
 46. `src/controllers/auth.controller.ts`
-47. `src/controllers/admin.controller.ts`
-48. `src/controllers/patient.controller.ts`
+47. `src/controllers/admin.controller.ts` (includes full patient detail, visit edit, print/export)
+48. `src/controllers/patient.controller.ts` (includes print/export)
 49. `src/controllers/visit.controller.ts`
 50. `src/controllers/medication.controller.ts`
 51. `src/controllers/lab.controller.ts`
@@ -354,8 +354,8 @@ backend/
 
 ### Phase 8: Routes
 55. `src/routes/auth.routes.ts`
-56. `src/routes/admin.routes.ts`
-57. `src/routes/patient.routes.ts`
+56. `src/routes/admin.routes.ts` (includes full patient detail, visit edit, print/export routes)
+57. `src/routes/patient.routes.ts` (includes print/export routes)
 58. `src/routes/visit.routes.ts`
 59. `src/routes/medication.routes.ts`
 60. `src/routes/lab.routes.ts`

@@ -5,7 +5,7 @@
 
 ## 1. Overview
 
-This document defines the function-level specification for frontend patient management features including patient registration, patient list, patient detail, patient summary, and patient progress tracking.
+This document defines the function-level specification for frontend patient management features including patient registration, patient list, patient detail, patient summary, patient progress tracking, and print/export functionality.
 
 **Files Covered:**
 - `src/api/patients.ts`
@@ -15,11 +15,14 @@ This document defines the function-level specification for frontend patient mana
 - `src/components/patients/PatientList.tsx`
 - `src/components/patients/PatientSummary.tsx`
 - `src/components/patients/PatientProgressGraph.tsx`
+- `src/components/patients/PatientPrintView.tsx`
+- `src/components/common/PrintButton.tsx`
 - `src/pages/staff/PatientListPage.tsx`
 - `src/pages/staff/PatientRegistrationPage.tsx`
 - `src/pages/staff/PatientDetailPage.tsx`
 - `src/pages/staff/PatientSummaryPage.tsx`
 - `src/pages/staff/PatientProgressPage.tsx`
+- `src/pages/staff/PatientPrintPage.tsx`
 
 ---
 
@@ -34,6 +37,8 @@ This document defines the function-level specification for frontend patient mana
 | getById | `(patientId: string): Promise<Patient>` | GET /patients/:patientId |
 | getSummary | `(patientId: string): Promise<PatientSummaryResponse>` | GET /patients/:patientId/summary |
 | getProgress | `(patientId: string): Promise<PatientProgressData>` | GET /patients/:patientId/progress |
+| getPrintData | `(patientId: string): Promise<PatientPrintData>` | GET /patients/:patientId/print |
+| exportPDF | `(patientId: string): Promise<Blob>` | GET /patients/:patientId/export |
 
 **Implementation:**
 
@@ -44,7 +49,8 @@ import {
   CreatePatientRequest, 
   PatientListResponse, 
   PatientSummaryResponse,
-  PatientProgressData
+  PatientProgressData,
+  PatientPrintData
 } from '@/types/patient.types';
 
 export const patientApi = {
@@ -71,6 +77,14 @@ export const patientApi = {
 
   getProgress: (patientId: string): Promise<PatientProgressData> => {
     return api.get<PatientProgressData>(`/patients/${patientId}/progress`).then((res) => res.data);
+  },
+
+  getPrintData: (patientId: string): Promise<PatientPrintData> => {
+    return api.get<PatientPrintData>(`/patients/${patientId}/print`).then((res) => res.data);
+  },
+
+  exportPDF: (patientId: string): Promise<Blob> => {
+    return api.get(`/patients/${patientId}/export`, { responseType: 'blob' }).then((res) => res.data);
   },
 };
 ```
@@ -178,6 +192,51 @@ export function usePatientProgress(patientId: string) {
     queryKey: ['patients', patientId, 'progress'],
     queryFn: () => patientApi.getProgress(patientId),
     enabled: !!patientId,
+  });
+}
+```
+
+---
+
+#### usePatientPrint (NEW)
+
+| Field | Detail |
+|---|---|
+| Signature | `usePatientPrint(patientId: string): UseQueryResult<PatientPrintData>` |
+| Query Key | `['patients', patientId, 'print']` |
+| Purpose | Get patient data formatted for print/export |
+| Auth | Staff, Admin |
+| Enabled | `!!patientId` |
+| Edge Cases | Patient not found -> 404 error |
+
+**Implementation:**
+
+```typescript
+export function usePatientPrint(patientId: string) {
+  return useQuery({
+    queryKey: ['patients', patientId, 'print'],
+    queryFn: () => patientApi.getPrintData(patientId),
+    enabled: !!patientId,
+  });
+}
+```
+
+---
+
+#### useExportPatientPDF (NEW)
+
+| Field | Detail |
+|---|---|
+| Signature | `useExportPatientPDF(): UseMutationResult<Blob, AxiosError, string>` |
+| Purpose | Export patient history as PDF |
+| Auth | Staff, Admin |
+
+**Implementation:**
+
+```typescript
+export function useExportPatientPDF() {
+  return useMutation({
+    mutationFn: (patientId: string) => patientApi.exportPDF(patientId),
   });
 }
 ```
@@ -323,7 +382,7 @@ interface PatientSummaryProps {
 
 ---
 
-### 4.5 PatientProgressGraph
+### 4.5 PatientProgressGraph (UPDATED)
 
 **Purpose:** Display KPS and PPS trends over time
 
@@ -338,6 +397,7 @@ interface PatientProgressGraphProps {
     kps: { trend: 'improving' | 'stable' | 'declining'; percentageChange: number };
     pps: { trend: 'improving' | 'stable' | 'declining'; percentageChange: number };
   };
+  isPrintView?: boolean;  // NEW - disables interactivity for print
 }
 ```
 
@@ -349,6 +409,61 @@ interface PatientProgressGraphProps {
 - Reference lines at 80, 50, 20
 - Tooltip shows values on hover
 - Trend summary with arrows and percentages
+- In print view: static rendering with no interactivity
+
+---
+
+### 4.6 PrintButton (NEW)
+
+**Purpose:** Reusable print/export PDF button for patient history
+
+**Props:**
+
+```typescript
+interface PrintButtonProps {
+  patientId: string;
+  patientName: string;
+  variant?: 'button' | 'icon';
+  label?: string;
+  onPrintStart?: () => void;
+  onPrintComplete?: () => void;
+}
+```
+
+**Behavior:**
+- Opens print dialog with formatted patient data
+- Uses `window.print()` for browser print
+- Can also trigger PDF export via backend
+- Shows loading state while preparing data
+
+---
+
+### 4.7 PatientPrintView (NEW)
+
+**Purpose:** Print-friendly layout for patient history
+
+**Props:**
+
+```typescript
+interface PatientPrintViewProps {
+  data: PatientPrintData;
+  loading?: boolean;
+}
+```
+
+**Behavior:**
+- Displays print-optimized layout with ALL patient records
+- Includes institution header (Yekatit 12 Hospital Medical College)
+- Shows ALL sections with FULL details:
+  - Patient Demographics: All fields
+  - KPS/PPS Progress Graph: Visual trends
+  - Visits: FULL details (vitals, pain scores, ADL, symptoms, red flags, team members, signatures)
+  - Medications: Complete details (name, dosage, frequency, route, status, prescribed by, administered at)
+  - Laboratory Tests: Full details (test name, ordered date, performed date, result, location, status)
+  - Referrals: Complete details including prepared by, designation, signature, action taken, outcome, follow-up
+  - Admissions: Full details including care plan, pain management, medication plan, nursing care plan
+- Shows generated timestamp and user info
+- Uses `print-color` and `print-bg` classes for color preservation
 
 ---
 
@@ -431,7 +546,7 @@ export const PatientListPage: React.FC = () => {
 
 ---
 
-### 5.3 PatientDetailPage
+### 5.3 PatientDetailPage (UPDATED)
 
 **Route:** `/patients/:id`
 
@@ -448,7 +563,15 @@ export const PatientListPage: React.FC = () => {
 1. Uses `usePatient(id)` hook
 2. Displays patient demographics
 3. Displays tabs: Visits, Medications, Labs, Referrals, Admissions
-4. Action buttons: View Summary, Record Visit, Order Medication, Order Lab, Request Referral, Record Admission
+4. Action buttons: View Summary, Record Visit, Order Medication, Order Lab, Request Referral, Record Admission, Print History
+
+**Components:**
+
+- `PatientDemographics`
+- `PatientDiagnosis`
+- `Tabs` (Visits, Medications, Labs, Referrals, Admissions)
+- `ActionButtons`
+- `PrintButton`
 
 **States:**
 
@@ -460,7 +583,7 @@ export const PatientListPage: React.FC = () => {
 
 ---
 
-### 5.4 PatientSummaryPage
+### 5.4 PatientSummaryPage (UPDATED)
 
 **Route:** `/patients/:id/summary`
 
@@ -468,13 +591,21 @@ export const PatientListPage: React.FC = () => {
 
 **Guard:** `ProtectedRoute` (staff)
 
-**Purpose:** View comprehensive patient summary
+**Purpose:** View comprehensive patient summary with print functionality
 
 **Behavior:**
 
 1. Uses `usePatientSummary(id)` hook
-2. Displays complete patient summary
-3. Includes PatientProgressGraph
+2. Uses `usePatientProgress(id)` hook
+3. Displays complete patient summary
+4. Displays KPS/PPS progress graph
+5. Print/Export functionality available
+
+**Components:**
+
+- `PatientSummary`
+- `PatientProgressGraph`
+- `PrintButton`
 
 **States:**
 
@@ -482,7 +613,7 @@ export const PatientListPage: React.FC = () => {
 |---|---|
 | Loading | Skeleton summary |
 | Error | Error message with retry |
-| Success | Full patient summary |
+| Success | Full patient summary with print button |
 
 ---
 
@@ -502,6 +633,10 @@ export const PatientListPage: React.FC = () => {
 2. Displays KPS and PPS trend graphs
 3. Shows trend analysis
 
+**Components:**
+
+- `PatientProgressGraph`
+
 **States:**
 
 | State | UI |
@@ -513,7 +648,163 @@ export const PatientListPage: React.FC = () => {
 
 ---
 
-## 6. Flow Diagram
+### 5.6 PatientPrintPage (NEW)
+
+**Route:** `/patients/:id/print`
+
+**Layout:** `PrintLayout`
+
+**Guard:** `ProtectedRoute` (staff, admin)
+
+**Purpose:** Dedicated print-friendly view for patient history
+
+**Behavior:**
+
+1. Uses `usePatientPrint(id)` hook to fetch formatted print data
+2. Displays print-optimized layout with ALL patient records and FULL details
+3. Automatically triggers print dialog on load
+4. Includes institution header (Yekatit 12 Hospital Medical College)
+5. Shows ALL sections with FULL data:
+   - **Patient Demographics:** All fields
+   - **KPS/PPS Progress Graph:** Visual trends
+   - **Visits:** FULL details (vitals, pain scores, ADL, symptoms, red flags, team members, signatures)
+   - **Medications:** Complete details
+   - **Laboratory Tests:** Full details
+   - **Referrals:** Complete details including prepared by, signature, action taken
+   - **Admissions:** Full details including care plans
+6. Shows generated timestamp and user info
+
+**Components:**
+
+- `PatientPrintView`
+
+**States:**
+
+| State | UI |
+|---|---|
+| Loading | "Loading patient data..." |
+| Error | Error message with retry |
+| Success | Full print view with auto-print |
+
+---
+
+## 6. Page Implementations
+
+### PatientSummaryPage (UPDATED)
+
+```typescript
+// src/pages/staff/PatientSummaryPage.tsx
+
+import React from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { usePatientSummary, usePatientProgress } from '@/hooks/usePatients';
+import { PatientSummary } from '@/components/patients/PatientSummary';
+import { PatientProgressGraph } from '@/components/patients/PatientProgressGraph';
+import { PrintButton } from '@/components/common/PrintButton';
+import { Button } from '@/components/ui/Button';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { ErrorState } from '@/components/common/ErrorState';
+
+export const PatientSummaryPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const patientId = id!;
+
+  const { data: summary, isLoading: summaryLoading, error: summaryError, refetch: refetchSummary } = usePatientSummary(patientId);
+  const { data: progress, isLoading: progressLoading } = usePatientProgress(patientId);
+
+  if (summaryLoading || progressLoading) {
+    return <LoadingSpinner />;
+  }
+
+  if (summaryError || !summary) {
+    return <ErrorState onRetry={refetchSummary} />;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">
+          Patient Summary: {summary.patient.firstName} {summary.patient.lastName}
+        </h1>
+        <div className="flex gap-2">
+          <PrintButton
+            patientId={patientId}
+            patientName={`${summary.patient.firstName} ${summary.patient.lastName}`}
+          />
+          <Button variant="outline" onClick={() => navigate(`/patients/${patientId}`)}>
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <PatientSummary summary={summary} />
+
+      {progress && progress.visits.length > 0 && (
+        <PatientProgressGraph
+          patientName={progress.patientName}
+          data={progress.visits}
+          trends={progress.trends}
+        />
+      )}
+    </div>
+  );
+};
+```
+
+### PatientPrintPage (NEW)
+
+```typescript
+// src/pages/staff/PatientPrintPage.tsx
+
+import React, { useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { usePatientPrint } from '@/hooks/usePatients';
+import { PatientPrintView } from '@/components/patients/PatientPrintView';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { ErrorState } from '@/components/common/ErrorState';
+
+export const PatientPrintPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const patientId = id!;
+
+  const { data, isLoading, error, refetch } = usePatientPrint(patientId);
+
+  // Auto-trigger print dialog when data is loaded
+  useEffect(() => {
+    if (data && !isLoading) {
+      // Small delay to ensure DOM is rendered
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    }
+  }, [data, isLoading]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner />
+        <span className="ml-4 text-muted-foreground">Loading patient data...</span>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <ErrorState onRetry={refetch} />
+      </div>
+    );
+  }
+
+  return <PatientPrintView data={data} />;
+};
+```
+
+---
+
+## 7. Flow Diagram (UPDATED)
 
 ```
 +-----------------------------------------------------------+
@@ -544,7 +835,7 @@ export const PatientListPage: React.FC = () => {
 |                           |                               |
 |                           v                               |
 |  +-----------------------------------------------------+ |
-|  |                    DETAIL FLOW                       | |
+|  |                    DETAIL FLOW (UPDATED)             | |
 |  |                                                     | |
 |  |  Staff -> /patients/:id -> PatientDetailPage        | |
 |  |         -> usePatient(id)                           | |
@@ -553,17 +844,32 @@ export const PatientListPage: React.FC = () => {
 |  |         -> Tabs: Visits, Medications, Labs,        | |
 |  |                Referrals, Admissions                | |
 |  |         -> Action buttons                           | |
+|  |         -> Print History -> /patients/:id/print     | |
 |  +-----------------------------------------------------+ |
 |                           |                               |
 |                           v                               |
 |  +-----------------------------------------------------+ |
-|  |                    SUMMARY FLOW                      | |
+|  |                    SUMMARY FLOW (UPDATED)            | |
 |  |                                                     | |
 |  |  Staff -> /patients/:id/summary -> PatientSummaryPage| |
 |  |         -> usePatientSummary(id)                    | |
 |  |         -> GET /patients/:id/summary                | |
 |  |         -> Display comprehensive summary            | |
 |  |         -> PatientProgressGraph                     | |
+|  |         -> Print button -> /patients/:id/print      | |
+|  +-----------------------------------------------------+ |
+|                           |                               |
+|                           v                               |
+|  +-----------------------------------------------------+ |
+|  |                    PRINT FLOW (NEW)                  | |
+|  |                                                     | |
+|  |  User clicks Print -> /patients/:id/print           | |
+|  |         -> PatientPrintPage                         | |
+|  |         -> usePatientPrint(id)                      | |
+|  |         -> GET /patients/:id/print                  | |
+|  |         -> Display print-optimized view with        | |
+|  |            ALL patient data (FULL visit details)    | |
+|  |         -> Auto-trigger window.print()              | |
 |  +-----------------------------------------------------+ |
 |                           |                               |
 |                           v                               |
@@ -578,3 +884,4 @@ export const PatientListPage: React.FC = () => {
 |  +-----------------------------------------------------+ |
 |                                                           |
 +-----------------------------------------------------------+
+```

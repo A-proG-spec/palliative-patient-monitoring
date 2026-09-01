@@ -14,11 +14,17 @@
 | GET | /admin/dashboard/notifications | Admin | Get admin notifications |
 | PUT | /admin/dashboard/notifications/:notificationId/read | Admin | Mark notification as read |
 | GET | /admin/patients | Admin | Get all patients |
-| GET | /admin/patients/:patientId | Admin | Get patient details |
+| GET | /admin/patients/:patientId | Admin | Get patient details (basic) |
+| GET | /admin/patients/:patientId/full | Admin | Get patient details with full records (like staff view) |
 | PUT | /admin/patients/:patientId/close-case | Admin | Close patient case (discharge) |
+| GET | /admin/patients/:patientId/print | Admin | Get patient data formatted for print |
+| GET | /admin/patients/:patientId/export | Admin | Export patient history as PDF |
 | GET | /admin/referrals/pending | Admin | Get pending referrals |
 | PUT | /admin/referrals/:referralId/approve | Admin | Approve referral |
 | PUT | /admin/referrals/:referralId/decline | Admin | Decline referral |
+| GET | /admin/visits/:visitId | Admin | Get visit details with edit history |
+| PUT | /admin/visits/:visitId | Admin | Update visit record (admin only) |
+| GET | /admin/visits/:visitId/history | Admin | Get visit edit history |
 | GET | /admin/reports | Admin | Get system reports |
 | GET | /admin/reports/export | Admin | Export report (PDF/Excel) |
 
@@ -332,7 +338,58 @@
 
 ### GET /admin/patients/:patientId
 
-**Purpose:** Get detailed patient information including all records
+**Purpose:** Get basic patient information (summary view)
+
+**Auth:** Admin
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "success": true,
+  "message": "OK",
+  "data": {
+    "id": "507f1f77bcf86cd799439012",
+    "patientDisplayId": "PAT-001",
+    "firstName": "Sarah",
+    "lastName": "Johnson",
+    "age": 65,
+    "sex": "Female",
+    "dateOfBirth": "1961-08-15",
+    "address": "Bole, Addis Ababa",
+    "phone": "+251922222222",
+    "emergencyContactName": "Michael Johnson",
+    "emergencyContactPhone": "+251933333333",
+    "caregiverName": "Michael Johnson",
+    "caregiverPhone": "+251933333333",
+    "primaryDiagnosis": "Stage IV Breast Cancer",
+    "secondaryDiagnoses": ["Metastatic to bone"],
+    "diseaseStage": "Advanced",
+    "comorbidities": ["Hypertension"],
+    "estimatedPrognosis": "Months",
+    "status": "Active",
+    "currentLocation": "Home",
+    "registeredBy": {
+      "id": "507f1f77bcf86cd799439011",
+      "name": "John Doe"
+    },
+    "createdAt": "2026-08-29T10:00:00Z"
+  }
+}
+```
+
+**Error Responses:**
+
+| Status | Condition | Message |
+|---|---|---|
+| 404 | Patient not found | "Patient not found" |
+
+---
+
+### GET /admin/patients/:patientId/full (NEW)
+
+**Purpose:** Get detailed patient information including ALL records (like staff view) with full visit details, medications, labs, referrals, admissions, and KPS/PPS progress
 
 **Auth:** Admin
 
@@ -372,8 +429,78 @@
       {
         "id": "507f1f77bcf86cd799439013",
         "visitDate": "2026-08-29T08:00:00Z",
+        "timeStarted": "09:00",
+        "timeEnded": "10:30",
+        "visitType": "Routine",
+        "teamMembers": [
+          { "role": "TeamLeader", "name": "Dr. Smith" },
+          { "role": "Nurse", "name": "Jane Doe" }
+        ],
+        "overallStatus": "Stable",
+        "mobility": "RequiresAssistance",
+        "vitals": {
+          "temperature": 36.8,
+          "pulse": 78,
+          "bp": "120/80",
+          "respiration": 18,
+          "spo2": 97
+        },
+        "painScore": 3,
+        "painLocation": ["Back"],
+        "painCharacteristics": ["Dull"],
+        "painMedicationEffective": true,
+        "symptoms": ["Fatigue"],
+        "adl": {
+          "feeding": "NeedsAssistance",
+          "bathing": "NeedsAssistance",
+          "dressing": "Independent",
+          "toileting": "NeedsAssistance",
+          "mobility": "NeedsAssistance"
+        },
+        "ppsScore": 60,
+        "kpsScore": 60,
+        "appetite": "Fair",
+        "oralIntake": "Reduced",
+        "hydrationStatus": "Adequate",
+        "emotionalStatus": "Stable",
+        "familySupport": "Good",
+        "financialDifficulty": false,
+        "spiritualNeeds": false,
+        "religiousSupportRequested": false,
+        "medicationAvailable": true,
+        "medicationCorrectlyTaken": true,
+        "medicationSideEffects": false,
+        "medicationRefillNeeded": false,
+        "morphineAvailable": true,
+        "adherenceLevel": "Good",
+        "currentMedications": [],
+        "caregiverBurden": "Moderate",
+        "caregiverUnderstanding": "Good",
+        "caregivingCapacity": "Moderate",
+        "familyEmotionalStatus": "Stable",
+        "educationProvided": ["PainManagement", "MedicationAdministration"],
+        "homeCondition": "Clean",
+        "homeObservations": ["AdequateLighting", "Ventilation"],
+        "nursingCareGiven": ["MedicationAdmin", "Counseling"],
+        "redFlags": ["None"],
         "outcome": "Stable",
-        "staff": "Jane Doe"
+        "nextVisitDate": "2026-09-05T00:00:00Z",
+        "teamLeader": { "id": "507f1f77bcf86cd799439010", "name": "Dr. Smith" },
+        "physician": { "id": "507f1f77bcf86cd799439009", "name": "Dr. Kebede" },
+        "nurse": { "id": "507f1f77bcf86cd799439008", "name": "Jane Doe" },
+        "createdAt": "2026-08-29T10:30:00Z",
+        "updatedAt": "2026-08-29T10:30:00Z",
+        "canEdit": true,
+        "editHistory": [
+          {
+            "editedBy": { "id": "507f1f77bcf86cd799439001", "name": "Admin User" },
+            "editedAt": "2026-09-01T10:30:00Z",
+            "changes": [
+              { "field": "painScore", "from": 5, "to": 3 },
+              { "field": "outcome", "from": "SymptomsWorsened", "to": "Stable" }
+            ]
+          }
+        ]
       }
     ],
     "medications": [
@@ -381,31 +508,138 @@
         "id": "507f1f77bcf86cd799439014",
         "name": "Morphine",
         "dosage": "10mg",
-        "status": "Given"
+        "frequency": "Every 6 hours",
+        "route": "Oral",
+        "administeredAt": "Home",
+        "status": "Given",
+        "prescribedBy": {
+          "id": "507f1f77bcf86cd799439011",
+          "name": "John Doe"
+        },
+        "visitId": null,
+        "admissionId": null,
+        "createdAt": "2026-08-29T10:00:00Z"
       }
     ],
     "labTests": [
       {
         "id": "507f1f77bcf86cd799439015",
-        "name": "Complete Blood Count",
-        "dateOrdered": "2026-08-29T09:00:00Z",
-        "result": "Normal"
+        "testName": "Complete Blood Count",
+        "dateOrdered": "2026-08-29T00:00:00Z",
+        "datePerformed": "2026-08-30T00:00:00Z",
+        "result": "Normal - WBC: 6.5, RBC: 4.2, HGB: 13.5, PLT: 250",
+        "location": "Home",
+        "status": "Completed",
+        "orderedBy": {
+          "id": "507f1f77bcf86cd799439011",
+          "name": "John Doe"
+        },
+        "visitId": null,
+        "admissionId": null,
+        "createdAt": "2026-08-29T10:00:00Z"
       }
     ],
     "referrals": [
       {
         "id": "507f1f77bcf86cd799439016",
-        "date": "2026-08-29T09:30:00Z",
-        "status": "Pending"
+        "referralType": "Outgoing",
+        "referralDate": "2026-08-29T00:00:00Z",
+        "primaryDiagnosis": "Stage IV Breast Cancer",
+        "diseaseStage": "Advanced",
+        "ppsScore": 60,
+        "kpsScore": 60,
+        "currentSymptoms": {
+          "pain": 3,
+          "dyspnea": 2,
+          "fatigue": 5,
+          "anxiety": 2,
+          "depression": 1
+        },
+        "reasons": ["SymptomControl", "PainManagement"],
+        "otherReason": null,
+        "referringFacility": "Home Care Unit",
+        "receivingFacility": "Yekatit 12 Hospital",
+        "contactPerson": "Dr. Alem",
+        "contactNumber": "+251944444444",
+        "status": "Accepted",
+        "actionTaken": "ReferralAccepted",
+        "outcome": "Patient transferred for inpatient care",
+        "followUpDate": "2026-09-05T00:00:00Z",
+        "followUpStatus": "Pending",
+        "requestedBy": {
+          "id": "507f1f77bcf86cd799439011",
+          "name": "John Doe"
+        },
+        "approvedBy": {
+          "id": "507f1f77bcf86cd799439001",
+          "name": "Admin User"
+        },
+        "preparedBy": "Dr. Smith",
+        "preparedByDesignation": "Physician",
+        "signature": "Dr. Smith",
+        "createdAt": "2026-08-29T10:00:00Z"
       }
     ],
     "admissions": [
       {
         "id": "507f1f77bcf86cd799439017",
-        "date": "2026-08-30T10:00:00Z",
-        "status": "Active"
+        "admissionDate": "2026-08-30T00:00:00Z",
+        "dischargeDate": null,
+        "bedNumber": "B-12",
+        "ward": "Palliative Care Ward",
+        "admittingPhysician": "Dr. Kebede",
+        "careTeam": "Team A",
+        "primaryDiagnosis": "Stage IV Breast Cancer",
+        "secondaryDiagnoses": ["Metastatic to bone"],
+        "diseaseStage": "Advanced",
+        "comorbidities": ["Hypertension"],
+        "estimatedPrognosis": "Months",
+        "ppsScore": 60,
+        "functionalStatus": "PartiallyDependent",
+        "painScore": 4,
+        "painType": "Mixed",
+        "symptomsPresent": ["Fatigue", "Anxiety"],
+        "emotionalStatus": "Anxious",
+        "familySupport": "Moderate",
+        "socialChallenges": "Financial constraints for medications",
+        "spiritualConcerns": false,
+        "spiritualSupportPreferred": null,
+        "painManagementPlan": "Morphine 10mg every 6 hours",
+        "medicationPlan": "Continue current medications",
+        "nursingCarePlan": "Daily monitoring and pain assessment",
+        "homeBasedCareRequired": false,
+        "psychosocialSupportPlan": "Counseling referral made",
+        "physiotherapyRequired": false,
+        "dischargeReason": null,
+        "status": "Active",
+        "createdBy": {
+          "id": "507f1f77bcf86cd799439011",
+          "name": "John Doe"
+        },
+        "createdAt": "2026-08-30T10:00:00Z"
       }
     ],
+    "progress": {
+      "data": [
+        { "visitId": "507f1f77bcf86cd799439013", "visitDate": "2026-08-29T08:00:00Z", "kpsScore": 60, "ppsScore": 60 },
+        { "visitId": "507f1f77bcf86cd799439018", "visitDate": "2026-08-22T08:00:00Z", "kpsScore": 45, "ppsScore": 50 },
+        { "visitId": "507f1f77bcf86cd799439019", "visitDate": "2026-08-15T08:00:00Z", "kpsScore": 30, "ppsScore": 35 }
+      ],
+      "trends": {
+        "kps": {
+          "trend": "declining",
+          "percentageChange": -25,
+          "firstScore": 60,
+          "lastScore": 45
+        },
+        "pps": {
+          "trend": "declining",
+          "percentageChange": -20,
+          "firstScore": 60,
+          "lastScore": 48
+        }
+      }
+    },
     "createdAt": "2026-08-29T10:00:00Z"
   }
 }
@@ -462,6 +696,218 @@
 | 404 | Patient not found | "Patient not found" |
 | 400 | Invalid reason | "Invalid close reason" |
 | 400 | Already closed | "Patient case is already closed" |
+
+---
+
+### GET /admin/patients/:patientId/print (NEW)
+
+**Purpose:** Get patient data formatted for print/export with ALL records and FULL details
+
+**Auth:** Admin
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "success": true,
+  "message": "OK",
+  "data": {
+    "patient": {
+      "id": "507f1f77bcf86cd799439012",
+      "patientDisplayId": "PAT-001",
+      "firstName": "Sarah",
+      "lastName": "Johnson",
+      "age": 65,
+      "sex": "Female",
+      "dateOfBirth": "1961-08-15",
+      "address": "Bole, Addis Ababa",
+      "phone": "+251922222222",
+      "emergencyContactName": "Michael Johnson",
+      "emergencyContactPhone": "+251933333333",
+      "caregiverName": "Michael Johnson",
+      "caregiverPhone": "+251933333333",
+      "status": "Active",
+      "currentLocation": "Home",
+      "primaryDiagnosis": "Stage IV Breast Cancer",
+      "secondaryDiagnoses": ["Metastatic to bone"],
+      "diseaseStage": "Advanced",
+      "comorbidities": ["Hypertension"],
+      "estimatedPrognosis": "Months",
+      "registeredBy": { "id": "507f1f77bcf86cd799439011", "name": "John Doe" },
+      "createdAt": "2026-08-29T10:00:00Z"
+    },
+    "progress": {
+      "data": [
+        { "visitId": "v1", "visitDate": "2026-08-29T08:00:00Z", "kpsScore": 60, "ppsScore": 60 },
+        { "visitId": "v2", "visitDate": "2026-08-22T08:00:00Z", "kpsScore": 45, "ppsScore": 50 }
+      ],
+      "trends": {
+        "kps": { "trend": "declining", "percentageChange": -25, "firstScore": 60, "lastScore": 45 },
+        "pps": { "trend": "declining", "percentageChange": -20, "firstScore": 60, "lastScore": 48 }
+      }
+    },
+    "visits": [
+      {
+        "id": "507f1f77bcf86cd799439013",
+        "visitDate": "2026-08-29T08:00:00Z",
+        "timeStarted": "09:00",
+        "timeEnded": "10:30",
+        "visitType": "Routine",
+        "teamMembers": [{ "role": "TeamLeader", "name": "Dr. Smith" }],
+        "overallStatus": "Stable",
+        "mobility": "RequiresAssistance",
+        "vitals": { "temperature": 36.8, "pulse": 78, "bp": "120/80", "respiration": 18, "spo2": 97 },
+        "painScore": 3,
+        "painLocation": ["Back"],
+        "painCharacteristics": ["Dull"],
+        "painMedicationEffective": true,
+        "symptoms": ["Fatigue"],
+        "adl": { "feeding": "NeedsAssistance", "bathing": "NeedsAssistance", "dressing": "Independent", "toileting": "NeedsAssistance", "mobility": "NeedsAssistance" },
+        "ppsScore": 60,
+        "kpsScore": 60,
+        "appetite": "Fair",
+        "oralIntake": "Reduced",
+        "hydrationStatus": "Adequate",
+        "emotionalStatus": "Stable",
+        "familySupport": "Good",
+        "financialDifficulty": false,
+        "spiritualNeeds": false,
+        "religiousSupportRequested": false,
+        "medicationAvailable": true,
+        "medicationCorrectlyTaken": true,
+        "medicationSideEffects": false,
+        "medicationRefillNeeded": false,
+        "morphineAvailable": true,
+        "adherenceLevel": "Good",
+        "currentMedications": [],
+        "caregiverBurden": "Moderate",
+        "caregiverUnderstanding": "Good",
+        "caregivingCapacity": "Moderate",
+        "familyEmotionalStatus": "Stable",
+        "educationProvided": ["PainManagement"],
+        "homeCondition": "Clean",
+        "homeObservations": ["AdequateLighting"],
+        "nursingCareGiven": ["MedicationAdmin"],
+        "redFlags": ["None"],
+        "outcome": "Stable",
+        "nextVisitDate": "2026-09-05T00:00:00Z",
+        "teamLeader": { "id": "id1", "name": "Dr. Smith" },
+        "physician": { "id": "id2", "name": "Dr. Kebede" },
+        "nurse": { "id": "id3", "name": "Jane Doe" }
+      }
+    ],
+    "medications": [
+      {
+        "id": "507f1f77bcf86cd799439014",
+        "name": "Morphine",
+        "dosage": "10mg",
+        "frequency": "Every 6 hours",
+        "route": "Oral",
+        "administeredAt": "Home",
+        "status": "Given",
+        "prescribedBy": { "id": "id", "name": "John Doe" },
+        "createdAt": "2026-08-29T10:00:00Z"
+      }
+    ],
+    "labTests": [
+      {
+        "id": "507f1f77bcf86cd799439015",
+        "testName": "Complete Blood Count",
+        "dateOrdered": "2026-08-29T00:00:00Z",
+        "datePerformed": "2026-08-30T00:00:00Z",
+        "result": "Normal",
+        "location": "Home",
+        "status": "Completed",
+        "orderedBy": { "id": "id", "name": "John Doe" }
+      }
+    ],
+    "referrals": [
+      {
+        "id": "507f1f77bcf86cd799439016",
+        "referralType": "Outgoing",
+        "referralDate": "2026-08-29T00:00:00Z",
+        "primaryDiagnosis": "Stage IV Breast Cancer",
+        "diseaseStage": "Advanced",
+        "ppsScore": 60,
+        "kpsScore": 60,
+        "currentSymptoms": { "pain": 3, "dyspnea": 2, "fatigue": 5, "anxiety": 2, "depression": 1 },
+        "reasons": ["SymptomControl", "PainManagement"],
+        "referringFacility": "Home Care Unit",
+        "receivingFacility": "Yekatit 12 Hospital",
+        "contactPerson": "Dr. Alem",
+        "contactNumber": "+251944444444",
+        "status": "Accepted",
+        "actionTaken": "ReferralAccepted",
+        "outcome": "Patient transferred",
+        "followUpDate": "2026-09-05T00:00:00Z",
+        "followUpStatus": "Pending",
+        "requestedBy": { "id": "id", "name": "John Doe" },
+        "approvedBy": { "id": "id", "name": "Admin User" },
+        "preparedBy": "Dr. Smith",
+        "preparedByDesignation": "Physician",
+        "signature": "Dr. Smith",
+        "createdAt": "2026-08-29T10:00:00Z"
+      }
+    ],
+    "admissions": [
+      {
+        "id": "507f1f77bcf86cd799439017",
+        "admissionDate": "2026-08-30T00:00:00Z",
+        "dischargeDate": null,
+        "bedNumber": "B-12",
+        "ward": "Palliative Care Ward",
+        "admittingPhysician": "Dr. Kebede",
+        "careTeam": "Team A",
+        "primaryDiagnosis": "Stage IV Breast Cancer",
+        "secondaryDiagnoses": ["Metastatic to bone"],
+        "diseaseStage": "Advanced",
+        "comorbidities": ["Hypertension"],
+        "estimatedPrognosis": "Months",
+        "ppsScore": 60,
+        "functionalStatus": "PartiallyDependent",
+        "painScore": 4,
+        "painType": "Mixed",
+        "symptomsPresent": ["Fatigue", "Anxiety"],
+        "emotionalStatus": "Anxious",
+        "familySupport": "Moderate",
+        "spiritualConcerns": false,
+        "painManagementPlan": "Morphine 10mg every 6 hours",
+        "medicationPlan": "Continue current medications",
+        "nursingCarePlan": "Daily monitoring and pain assessment",
+        "homeBasedCareRequired": false,
+        "physiotherapyRequired": false,
+        "dischargeReason": null,
+        "status": "Active",
+        "createdBy": { "id": "id", "name": "John Doe" }
+      }
+    ],
+    "generatedAt": "2026-09-01T10:30:00Z",
+    "generatedBy": {
+      "id": "507f1f77bcf86cd799439001",
+      "name": "Admin User",
+      "role": "admin"
+    }
+  }
+}
+```
+
+---
+
+### GET /admin/patients/:patientId/export (NEW)
+
+**Purpose:** Export patient history as PDF with ALL records and FULL details
+
+**Auth:** Admin
+
+**Success Response (200):**
+
+Returns a PDF file blob.
+
+**Response Headers:**
+
+- `Content-Type: application/pdf`
+- `Content-Disposition: attachment; filename=patient-history-PAT-001.pdf`
 
 ---
 
@@ -558,6 +1004,218 @@
 
 ---
 
+### GET /admin/visits/:visitId (NEW)
+
+**Purpose:** Get visit details with edit history
+
+**Auth:** Admin
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "success": true,
+  "message": "OK",
+  "data": {
+    "id": "507f1f77bcf86cd799439013",
+    "patientId": "507f1f77bcf86cd799439012",
+    "patientName": "Sarah Johnson",
+    "visitDate": "2026-08-29T08:00:00Z",
+    "timeStarted": "09:00",
+    "timeEnded": "10:30",
+    "visitType": "Routine",
+    "teamMembers": [
+      { "role": "TeamLeader", "name": "Dr. Smith" },
+      { "role": "Nurse", "name": "Jane Doe" }
+    ],
+    "overallStatus": "Stable",
+    "mobility": "RequiresAssistance",
+    "vitals": {
+      "temperature": 36.8,
+      "pulse": 78,
+      "bp": "120/80",
+      "respiration": 18,
+      "spo2": 97
+    },
+    "painScore": 3,
+    "painLocation": ["Back"],
+    "painCharacteristics": ["Dull"],
+    "painMedicationEffective": true,
+    "symptoms": ["Fatigue"],
+    "adl": {
+      "feeding": "NeedsAssistance",
+      "bathing": "NeedsAssistance",
+      "dressing": "Independent",
+      "toileting": "NeedsAssistance",
+      "mobility": "NeedsAssistance"
+    },
+    "ppsScore": 60,
+    "kpsScore": 60,
+    "appetite": "Fair",
+    "oralIntake": "Reduced",
+    "hydrationStatus": "Adequate",
+    "emotionalStatus": "Stable",
+    "familySupport": "Good",
+    "financialDifficulty": false,
+    "spiritualNeeds": false,
+    "religiousSupportRequested": false,
+    "medicationAvailable": true,
+    "medicationCorrectlyTaken": true,
+    "medicationSideEffects": false,
+    "medicationRefillNeeded": false,
+    "morphineAvailable": true,
+    "adherenceLevel": "Good",
+    "currentMedications": [],
+    "caregiverBurden": "Moderate",
+    "caregiverUnderstanding": "Good",
+    "caregivingCapacity": "Moderate",
+    "familyEmotionalStatus": "Stable",
+    "educationProvided": ["PainManagement", "MedicationAdministration"],
+    "homeCondition": "Clean",
+    "homeObservations": ["AdequateLighting", "Ventilation"],
+    "nursingCareGiven": ["MedicationAdmin", "Counseling"],
+    "redFlags": ["None"],
+    "outcome": "Stable",
+    "nextVisitDate": "2026-09-05T00:00:00Z",
+    "teamLeaderId": "507f1f77bcf86cd799439010",
+    "physicianId": "507f1f77bcf86cd799439009",
+    "nurseId": "507f1f77bcf86cd799439008",
+    "createdAt": "2026-08-29T10:30:00Z",
+    "updatedAt": "2026-09-01T10:30:00Z",
+    "editHistory": [
+      {
+        "editedBy": { "id": "507f1f77bcf86cd799439001", "name": "Admin User" },
+        "editedAt": "2026-09-01T10:30:00Z",
+        "changes": [
+          { "field": "painScore", "from": 5, "to": 3 },
+          { "field": "outcome", "from": "SymptomsWorsened", "to": "Stable" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Error Responses:**
+
+| Status | Condition | Message |
+|---|---|---|
+| 404 | Visit not found | "Visit not found" |
+
+---
+
+### PUT /admin/visits/:visitId (NEW)
+
+**Purpose:** Update visit record (admin only) with audit trail
+
+**Auth:** Admin
+
+**Request Body:**
+
+```json
+{
+  "painScore": 3,
+  "outcome": "Stable",
+  "overallStatus": "Stable",
+  "ppsScore": 60,
+  "kpsScore": 60
+}
+```
+
+**Validation Rules:**
+
+| Field | Rule |
+|---|---|
+| visitDate | Optional, valid date |
+| timeStarted | Optional, valid time |
+| timeEnded | Optional, valid time |
+| visitType | Optional, valid enum |
+| overallStatus | Optional, valid enum |
+| painScore | Optional, 0-10 |
+| ppsScore | Optional, 0-100 |
+| kpsScore | Optional, 0-100 |
+| outcome | Optional, valid enum |
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "success": true,
+  "message": "Visit updated successfully",
+  "data": {
+    "id": "507f1f77bcf86cd799439013",
+    "updatedAt": "2026-09-01T10:30:00Z",
+    "updatedBy": {
+      "id": "507f1f77bcf86cd799439001",
+      "name": "Admin User"
+    },
+    "changes": [
+      { "field": "painScore", "from": 5, "to": 3 },
+      { "field": "outcome", "from": "SymptomsWorsened", "to": "Stable" }
+    ]
+  }
+}
+```
+
+**Error Responses:**
+
+| Status | Condition | Message |
+|---|---|---|
+| 404 | Visit not found | "Visit not found" |
+| 403 | Not admin | "Only admin can edit visits" |
+| 400 | Validation error | Field-specific errors |
+
+---
+
+### GET /admin/visits/:visitId/history (NEW)
+
+**Purpose:** Get visit edit history
+
+**Auth:** Admin
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "success": true,
+  "message": "OK",
+  "data": [
+    {
+      "editedBy": {
+        "id": "507f1f77bcf86cd799439001",
+        "name": "Admin User"
+      },
+      "editedAt": "2026-09-01T10:30:00Z",
+      "changes": [
+        { "field": "painScore", "from": 5, "to": 3 },
+        { "field": "outcome", "from": "SymptomsWorsened", "to": "Stable" }
+      ]
+    },
+    {
+      "editedBy": {
+        "id": "507f1f77bcf86cd799439005",
+        "name": "Super Admin"
+      },
+      "editedAt": "2026-08-31T14:20:00Z",
+      "changes": [
+        { "field": "ppsScore", "from": 55, "to": 60 }
+      ]
+    }
+  ]
+}
+```
+
+**Error Responses:**
+
+| Status | Condition | Message |
+|---|---|---|
+| 404 | Visit not found | "Visit not found" |
+
+---
+
 ### GET /admin/reports
 
 **Purpose:** Get system reports and analytics
@@ -628,14 +1286,7 @@
 
 **Success Response (200):**
 
-```json
-{
-  "statusCode": 200,
-  "success": true,
-  "message": "OK",
-  "data": {} // Returns file blob
-}
-```
+Returns a file blob.
 
 **Response Headers:**
 
@@ -758,7 +1409,179 @@ export interface AdminPatient {
   };
 }
 
-export interface AdminPatientDetail extends AdminPatient {
+// ============================================
+// FULL ADMIN PATIENT DETAIL (NEW)
+// ============================================
+
+export interface AdminVisitFullDetail {
+  id: string;
+  visitDate: string;
+  timeStarted: string;
+  timeEnded: string;
+  visitType: 'Routine' | 'Emergency' | 'FirstAssessment' | 'PostDischarge' | 'EndOfLife' | 'Bereavement';
+  teamMembers: Array<{ role: string; name: string }>;
+  overallStatus: string;
+  mobility: string;
+  vitals?: {
+    temperature: number;
+    pulse: number;
+    bp: string;
+    respiration: number;
+    spo2: number;
+  };
+  painScore: number;
+  painLocation: string[];
+  painCharacteristics: string[];
+  painMedicationEffective: boolean;
+  symptoms: string[];
+  adl: {
+    feeding: string;
+    bathing: string;
+    dressing: string;
+    toileting: string;
+    mobility: string;
+  };
+  ppsScore: number;
+  kpsScore: number;
+  appetite: string;
+  oralIntake: string;
+  hydrationStatus: string;
+  emotionalStatus: string;
+  familySupport: string;
+  financialDifficulty: boolean;
+  spiritualNeeds: boolean;
+  religiousSupportRequested: boolean;
+  medicationAvailable: boolean;
+  medicationCorrectlyTaken: boolean;
+  medicationSideEffects: boolean;
+  medicationRefillNeeded: boolean;
+  morphineAvailable: boolean;
+  adherenceLevel: string;
+  currentMedications: Array<{ name: string; dosage: string; frequency: string; route: string }>;
+  caregiverBurden: string;
+  caregiverUnderstanding: string;
+  caregivingCapacity: string;
+  familyEmotionalStatus: string;
+  educationProvided: string[];
+  homeCondition: string;
+  homeObservations: string[];
+  nursingCareGiven: string[];
+  redFlags: string[];
+  redFlagActions?: string;
+  referralsMade: string[];
+  outcome: string;
+  nextVisitDate?: string;
+  teamLeader: { id: string; name: string };
+  physician: { id: string; name: string };
+  nurse: { id: string; name: string };
+  createdAt: string;
+  updatedAt: string;
+  canEdit: boolean;
+  editHistory?: Array<{
+    editedBy: { id: string; name: string };
+    editedAt: string;
+    changes: Array<{ field: string; from: any; to: any }>;
+  }>;
+}
+
+export interface AdminMedicationFullDetail {
+  id: string;
+  name: string;
+  dosage: string;
+  frequency: string;
+  route: string;
+  administeredAt: 'Home' | 'Hospital';
+  status: 'Ordered' | 'Given';
+  prescribedBy: { id: string; name: string };
+  visitId?: string;
+  admissionId?: string;
+  createdAt: string;
+}
+
+export interface AdminLabFullDetail {
+  id: string;
+  testName: string;
+  dateOrdered: string;
+  datePerformed?: string;
+  result?: string;
+  location: 'Home' | 'Hospital';
+  status: 'Ordered' | 'Completed';
+  orderedBy: { id: string; name: string };
+  visitId?: string;
+  admissionId?: string;
+  createdAt: string;
+}
+
+export interface AdminReferralFullDetail {
+  id: string;
+  referralType: 'Incoming' | 'Outgoing';
+  referralDate: string;
+  primaryDiagnosis: string;
+  diseaseStage: 'Early' | 'Advanced' | 'EndStage';
+  ppsScore: number;
+  kpsScore: number;
+  currentSymptoms: {
+    pain: number;
+    dyspnea: number;
+    fatigue: number;
+    anxiety: number;
+    depression: number;
+  };
+  reasons: string[];
+  otherReason?: string;
+  referringFacility: string;
+  receivingFacility: string;
+  contactPerson: string;
+  contactNumber: string;
+  status: string;
+  actionTaken?: string;
+  outcome?: string;
+  followUpDate?: string;
+  followUpStatus?: string;
+  requestedBy: { id: string; name: string };
+  approvedBy?: { id: string; name: string };
+  preparedBy: string;
+  preparedByDesignation: string;
+  signature: string;
+  createdAt: string;
+}
+
+export interface AdminAdmissionFullDetail {
+  id: string;
+  admissionDate: string;
+  dischargeDate?: string;
+  bedNumber: string;
+  ward: string;
+  admittingPhysician: string;
+  careTeam: string;
+  primaryDiagnosis: string;
+  secondaryDiagnoses: string[];
+  diseaseStage: string;
+  comorbidities: string[];
+  estimatedPrognosis: string;
+  ppsScore: number;
+  functionalStatus: string;
+  painScore: number;
+  painType: string;
+  symptomsPresent: string[];
+  emotionalStatus: string;
+  familySupport: string;
+  socialChallenges?: string;
+  spiritualConcerns: boolean;
+  spiritualSupportPreferred?: string;
+  painManagementPlan: string;
+  medicationPlan: string;
+  nursingCarePlan: string;
+  homeBasedCareRequired: boolean;
+  psychosocialSupportPlan?: string;
+  physiotherapyRequired: boolean;
+  dischargeReason?: string;
+  status: string;
+  createdBy: { id: string; name: string };
+  createdAt: string;
+}
+
+export interface AdminPatientFullDetail extends AdminPatient {
   dateOfBirth: string;
   address: string;
   phone: string;
@@ -770,35 +1593,154 @@ export interface AdminPatientDetail extends AdminPatient {
   diseaseStage: 'Early' | 'Advanced' | 'EndStage';
   comorbidities: string[];
   estimatedPrognosis: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
-  visits: Array<{
-    id: string;
-    visitDate: string;
-    outcome: string;
-    staff: string;
-  }>;
-  medications: Array<{
-    id: string;
-    name: string;
-    dosage: string;
-    status: string;
-  }>;
-  labTests: Array<{
-    id: string;
-    name: string;
-    dateOrdered: string;
-    result?: string;
-  }>;
-  referrals: Array<{
-    id: string;
-    date: string;
-    status: string;
-  }>;
-  admissions: Array<{
-    id: string;
-    date: string;
-    status: string;
-  }>;
+  visits: AdminVisitFullDetail[];
+  medications: AdminMedicationFullDetail[];
+  labTests: AdminLabFullDetail[];
+  referrals: AdminReferralFullDetail[];
+  admissions: AdminAdmissionFullDetail[];
+  progress: {
+    data: Array<{ visitId: string; visitDate: string; kpsScore: number; ppsScore: number }>;
+    trends: {
+      kps: { trend: string; percentageChange: number; firstScore: number; lastScore: number };
+      pps: { trend: string; percentageChange: number; firstScore: number; lastScore: number };
+    };
+  } | null;
   createdAt: string;
+}
+
+// ============================================
+// ADMIN VISIT UPDATE TYPES (NEW)
+// ============================================
+
+export interface UpdateVisitRequest {
+  visitDate?: string;
+  timeStarted?: string;
+  timeEnded?: string;
+  visitType?: 'Routine' | 'Emergency' | 'FirstAssessment' | 'PostDischarge' | 'EndOfLife' | 'Bereavement';
+  teamMembers?: Array<{ role: string; name: string; staffId?: string }>;
+  overallStatus?: 'Stable' | 'Deteriorating' | 'Critical' | 'BedBound';
+  mobility?: 'Ambulatory' | 'RequiresAssistance' | 'Bedridden';
+  vitals?: {
+    temperature?: number;
+    pulse?: number;
+    bp?: string;
+    respiration?: number;
+    spo2?: number;
+  };
+  painScore?: number;
+  painLocation?: string[];
+  painCharacteristics?: string[];
+  painMedicationEffective?: boolean;
+  symptoms?: string[];
+  adl?: {
+    feeding?: string;
+    bathing?: string;
+    dressing?: string;
+    toileting?: string;
+    mobility?: string;
+  };
+  ppsScore?: number;
+  kpsScore?: number;
+  appetite?: string;
+  oralIntake?: string;
+  hydrationStatus?: string;
+  emotionalStatus?: string;
+  familySupport?: string;
+  financialDifficulty?: boolean;
+  spiritualNeeds?: boolean;
+  religiousSupportRequested?: boolean;
+  medicationAvailable?: boolean;
+  medicationCorrectlyTaken?: boolean;
+  medicationSideEffects?: boolean;
+  medicationRefillNeeded?: boolean;
+  morphineAvailable?: boolean;
+  adherenceLevel?: string;
+  currentMedications?: Array<{ name: string; dosage: string; frequency: string; route: string }>;
+  caregiverBurden?: string;
+  caregiverUnderstanding?: string;
+  caregivingCapacity?: string;
+  familyEmotionalStatus?: string;
+  educationProvided?: string[];
+  homeCondition?: string;
+  homeObservations?: string[];
+  nursingCareGiven?: string[];
+  redFlags?: string[];
+  redFlagActions?: string;
+  referralsMade?: string[];
+  outcome?: string;
+  nextVisitDate?: string;
+  teamLeaderId?: string;
+  physicianId?: string;
+  nurseId?: string;
+}
+
+export interface UpdateVisitResponse {
+  id: string;
+  updatedAt: string;
+  updatedBy: {
+    id: string;
+    name: string;
+  };
+  changes: Array<{
+    field: string;
+    from: any;
+    to: any;
+  }>;
+}
+
+export interface VisitEditHistoryEntry {
+  editedBy: { id: string; name: string };
+  editedAt: string;
+  changes: Array<{ field: string; from: any; to: any }>;
+}
+
+// ============================================
+// ADMIN PRINT TYPES (NEW)
+// ============================================
+
+export interface AdminPrintData {
+  patient: {
+    id: string;
+    patientDisplayId: string;
+    firstName: string;
+    lastName: string;
+    age: number;
+    sex: string;
+    dateOfBirth: string;
+    address: string;
+    phone: string;
+    emergencyContactName: string;
+    emergencyContactPhone: string;
+    caregiverName: string;
+    caregiverPhone: string;
+    status: string;
+    currentLocation: string;
+    primaryDiagnosis: string;
+    secondaryDiagnoses: string[];
+    diseaseStage: string;
+    comorbidities: string[];
+    estimatedPrognosis: string;
+    registeredBy: { id: string; name: string };
+    createdAt: string;
+  };
+  progress: {
+    data: Array<{ visitId: string; visitDate: string; kpsScore: number; ppsScore: number }>;
+    trends: {
+      kps: { trend: string; percentageChange: number; firstScore: number; lastScore: number };
+      pps: { trend: string; percentageChange: number; firstScore: number; lastScore: number };
+    };
+  } | null;
+  visits: AdminVisitFullDetail[];
+  medications: AdminMedicationFullDetail[];
+  labTests: AdminLabFullDetail[];
+  referrals: AdminReferralFullDetail[];
+  admissions: AdminAdmissionFullDetail[];
+  generatedAt: string;
+  generatedBy: {
+    id: string;
+    name: string;
+    role: string;
+  };
 }
 
 export interface ReportData {
@@ -819,18 +1761,3 @@ export interface ExportReportRequest {
   endDate?: string;
 }
 ```
-
----
-
-## 4. Summary of Changes
-
-| Change | Before | After |
-|---|---|---|
-| Patient discharge endpoint | `PUT /admin/patients/:patientId/discharge` | `PUT /admin/patients/:patientId/close-case` |
-| Notification type | `'Discharge'` | `'CloseCase'` |
-| Dashboard stats field | `recentDischarges` | `recentCloseCases` |
-| Response field | `dischargeReason`, `dischargeDate` | `closeReason`, `closeDate` |
-| Request body field | `dischargeReason` | `reason` |
-| Report field | `dischargesByReason` | `closeCasesByReason` |
-| Export endpoint | Not available | Added `GET /admin/reports/export` |
-| Approved staff response | Basic object | Includes `assignedBy` with admin details |
