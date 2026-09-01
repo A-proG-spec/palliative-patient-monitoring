@@ -1,0 +1,537 @@
+import { Staff } from '@models/Staff.js';
+import { Patient } from '@models/Patient.js';
+import { Referral } from '@models/Referral.js';
+import { Notification } from '@models/Notification.js';
+import { HomeVisit } from '@models/HomeVisit.js';
+import { HospitalAdmission } from '@models/HospitalAdmission.js';
+import { Medication } from '@models/Medication.js';        // ✅ Added - was missing
+import { LaboratoryTest } from '@models/LaboratoryTest.js'; // ✅ Added - was missing
+import { ApiError } from '@utils/ApiError.js';
+
+export const getPendingStaff = async () => {
+  const pendingStaff = await Staff.find({
+    status: 'Pending',
+    isEmailVerified: true,
+  }).select('-password');
+
+  return pendingStaff.map((staff) => ({
+    id: staff._id.toString(),
+    name: staff.name,
+    email: staff.email,
+    phone: staff.phone,
+    role: staff.role,
+    status: staff.status,
+    createdAt: staff.createdAt,
+  }));
+};
+
+export const approveStaff = async (staffId: string, role: string, adminId: string) => {
+  const staff = await Staff.findById(staffId);
+
+  if (!staff) {
+    throw new ApiError(404, 'Staff member not found');
+  }
+
+  if (!['TeamLeader', 'Physician', 'Nurse'].includes(role)) {
+    throw new ApiError(400, 'Invalid role specified');
+  }
+
+  if (staff.status === 'Active') {
+    throw new ApiError(400, 'Staff member is already approved');
+  }
+
+  if (!staff.isEmailVerified) {
+    throw new ApiError(400, 'Staff email is not verified');
+  }
+
+  // ✅ Fixed: Type assertion for role
+  staff.role = role as 'TeamLeader' | 'Physician' | 'Nurse';
+  staff.status = 'Active';
+  staff.assignedBy = adminId as any;
+  await staff.save();
+
+  // Delete notification
+  await Notification.deleteOne({
+    type: 'StaffApproval',
+    'data.staffId': staffId,
+  });
+
+  return {
+    id: staff._id.toString(),
+    name: staff.name,
+    email: staff.email,
+    phone: staff.phone,
+    role: staff.role,
+    status: staff.status,
+    assignedBy: {
+      id: adminId,
+      name: 'Admin',
+    },
+    updatedAt: staff.updatedAt,
+  };
+};
+
+export const rejectStaff = async (staffId: string) => {
+  const staff = await Staff.findById(staffId);
+
+  if (!staff) {
+    throw new ApiError(404, 'Staff member not found');
+  }
+
+  if (staff.status === 'Active') {
+    throw new ApiError(400, 'Staff member is already approved');
+  }
+
+  staff.status = 'Rejected';
+  await staff.save();
+
+  // Delete notification
+  await Notification.deleteOne({
+    type: 'StaffApproval',
+    'data.staffId': staffId,
+  });
+
+  return {
+    id: staff._id.toString(),
+    status: staff.status,
+  };
+};
+
+export const getDashboardStats = async () => {
+  const [totalPatients, activePatients, dischargedPatients, pendingReferrals, pendingStaff] =
+    await Promise.all([
+      Patient.countDocuments(),
+      Patient.countDocuments({ status: 'Active' }),
+      Patient.countDocuments({ status: 'Discharged' }),
+      Referral.countDocuments({ status: 'Pending' }),
+      Staff.countDocuments({ status: 'Pending', isEmailVerified: true }),
+    ]);
+
+  const hospitalizedPatients = await Patient.countDocuments({
+    currentLocation: 'ReferredHospital',
+  });
+
+  const patientsByStatus = await Patient.aggregate([
+    { $group: { _id: '$status', count: { $sum: 1 } } },
+    { $project: { status: '$_id', count: 1, _id: 0 } },
+  ]);
+
+  const recentReferrals = await Referral.find()
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .populate('patientId', 'firstName lastName');
+
+  const recentVisits = await HomeVisit.find()
+    .sort({ visitDate: -1 })
+    .limit(5)
+    .populate('patientId', 'firstName lastName')
+    .populate('teamLeaderId', 'name');
+
+  // Get notification counts
+  const staffApprovals = await Notification.countDocuments({
+    type: 'StaffApproval',
+    read: false,
+  });
+
+  const pendingReferralsCount = await Referral.countDocuments({ status: 'Pending' });
+
+  const recentCloseCases = await Notification.countDocuments({
+    type: 'CloseCase',
+    createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+  });
+
+  return {
+    totalPatients,
+    activePatients,
+    hospitalizedPatients,
+    dischargedPatients,
+    pendingReferrals,
+    pendingStaff,
+    notifications: {
+      staffApprovals,
+      pendingReferrals: pendingReferralsCount,
+      recentCloseCases,
+    },
+    patientsByStatus,
+    recentReferrals: recentReferrals.map((r) => ({
+      id: r._id.toString(),
+      patientName: `${(r.patientId as any).firstName} ${(r.patientId as any).lastName}`,
+      date: r.createdAt,
+      status: r.status,
+    })),
+    recentVisits: recentVisits.map((v) => ({
+      patientName: `${(v.patientId as any).firstName} ${(v.patientId as any).lastName}`,
+      date: v.visitDate,
+      staff: (v.teamLeaderId as any)?.name || 'Unknown',
+    })),
+  };
+};
+
+export const getNotifications = async (limit: number = 20, read?: string) => {
+  const filter: any = {};
+  if (read !== undefined) {
+    filter.read = read === 'true';
+  }
+
+  const notifications = await Notification.find(filter)
+    .sort({ createdAt: -1 })
+    .limit(limit);
+
+  const unreadCount = await Notification.countDocuments({ read: false });
+  const totalCount = await Notification.countDocuments();
+
+  return {
+    notifications: notifications.map((n) => ({
+      id: n._id.toString(),
+      type: n.type,
+      message: n.message,
+      data: n.data,
+      read: n.read,
+      createdAt: n.createdAt,
+    })),
+    unreadCount,
+    totalCount,
+  };
+};
+
+export const markNotificationRead = async (notificationId: string) => {
+  const notification = await Notification.findById(notificationId);
+
+  if (!notification) {
+    throw new ApiError(404, 'Notification not found');
+  }
+
+  notification.read = true;
+  await notification.save();
+
+  return {
+    id: notification._id.toString(),
+    read: notification.read,
+  };
+};
+
+export const getPatients = async (page: number = 1, limit: number = 20, status?: string, search?: string) => {
+  const filter: any = {};
+
+  if (status) {
+    filter.status = status;
+  }
+
+  if (search) {
+    filter.$or = [
+      { firstName: { $regex: search, $options: 'i' } },
+      { lastName: { $regex: search, $options: 'i' } },
+      { patientDisplayId: { $regex: search, $options: 'i' } },
+    ];
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [items, total] = await Promise.all([
+    Patient.find(filter)
+      .skip(skip)
+      .limit(limit)
+      .populate('registeredBy', 'name'),
+    Patient.countDocuments(filter),
+  ]);
+
+  return {
+    items: items.map((patient) => ({
+      id: patient._id.toString(),
+      patientDisplayId: patient.patientDisplayId,
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      age: patient.age,
+      sex: patient.sex,
+      status: patient.status,
+      currentLocation: patient.currentLocation,
+      primaryDiagnosis: patient.primaryDiagnosis,
+      registeredAt: patient.createdAt,
+      registeredBy: {
+        id: (patient.registeredBy as any)?._id?.toString() || '',
+        name: (patient.registeredBy as any)?.name || 'Unknown',
+      },
+    })),
+    page,
+    limit,
+    total,
+  };
+};
+
+export const getPatientDetail = async (patientId: string) => {
+  const patient = await Patient.findById(patientId).populate('registeredBy', 'name');
+
+  if (!patient) {
+    throw new ApiError(404, 'Patient not found');
+  }
+
+  const visits = await HomeVisit.find({ patientId })
+    .sort({ visitDate: -1 })
+    .populate('teamLeaderId', 'name');
+
+  // ✅ Fixed: Now Medication is imported
+  const medications = await Medication.find({ patientId }).sort({ createdAt: -1 });
+  
+  // ✅ Fixed: Now LaboratoryTest is imported
+  const labTests = await LaboratoryTest.find({ patientId }).sort({ dateOrdered: -1 });
+  
+  const referrals = await Referral.find({ patientId }).sort({ createdAt: -1 });
+  const admissions = await HospitalAdmission.find({ patientId }).sort({ admissionDate: -1 });
+
+  return {
+    id: patient._id.toString(),
+    patientDisplayId: patient.patientDisplayId,
+    firstName: patient.firstName,
+    lastName: patient.lastName,
+    age: patient.age,
+    sex: patient.sex,
+    dateOfBirth: patient.dateOfBirth,
+    address: patient.address,
+    phone: patient.phone,
+    emergencyContactName: patient.emergencyContactName,
+    emergencyContactPhone: patient.emergencyContactPhone,
+    caregiverName: patient.caregiverName,
+    caregiverPhone: patient.caregiverPhone,
+    primaryDiagnosis: patient.primaryDiagnosis,
+    secondaryDiagnoses: patient.secondaryDiagnoses,
+    diseaseStage: patient.diseaseStage,
+    comorbidities: patient.comorbidities,
+    estimatedPrognosis: patient.estimatedPrognosis,
+    status: patient.status,
+    currentLocation: patient.currentLocation,
+    registeredBy: {
+      id: (patient.registeredBy as any)?._id?.toString() || '',
+      name: (patient.registeredBy as any)?.name || 'Unknown',
+    },
+    visits: visits.map((v) => ({
+      id: v._id.toString(),
+      visitDate: v.visitDate,
+      outcome: v.outcome,
+      staff: (v.teamLeaderId as any)?.name || 'Unknown',
+    })),
+    medications: medications.map((m: any) => ({  // ✅ Added type
+      id: m._id.toString(),
+      name: m.name,
+      dosage: m.dosage,
+      status: m.status,
+    })),
+    labTests: labTests.map((l: any) => ({  // ✅ Added type
+      id: l._id.toString(),
+      name: l.testName,
+      dateOrdered: l.dateOrdered,
+      result: l.result,
+    })),
+    referrals: referrals.map((r) => ({
+      id: r._id.toString(),
+      date: r.createdAt,
+      status: r.status,
+    })),
+    admissions: admissions.map((a) => ({
+      id: a._id.toString(),
+      date: a.admissionDate,
+      status: a.status,
+    })),
+    createdAt: patient.createdAt,
+  };
+};
+
+export const closeCase = async (patientId: string, reason: string, _adminId: string) => {  // ✅ Fixed: Removed unused adminId or use _adminId
+  const patient = await Patient.findById(patientId);
+
+  if (!patient) {
+    throw new ApiError(404, 'Patient not found');
+  }
+
+  if (patient.status === 'Discharged') {
+    throw new ApiError(400, 'Patient case is already closed');
+  }
+
+  patient.status = 'Discharged';
+  await patient.save();
+
+  // Create notification
+  await Notification.create({
+    type: 'CloseCase',
+    message: `Patient case closed: ${patient.firstName} ${patient.lastName}`,
+    data: {
+      patientId: patient._id,
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      reason,
+    },
+    read: false,
+  });
+
+  return {
+    id: patient._id.toString(),
+    status: patient.status,
+    closeReason: reason,
+    closeDate: new Date(),
+  };
+};
+
+export const getPendingReferrals = async () => {
+  const referrals = await Referral.find({ status: 'Pending' })
+    .populate('patientId', 'firstName lastName');
+
+  return referrals.map((r) => ({
+    id: r._id.toString(),
+    patientId: (r.patientId as any)._id.toString(),
+    patientName: `${(r.patientId as any).firstName} ${(r.patientId as any).lastName}`,
+    referralDate: r.referralDate,
+    primaryDiagnosis: r.primaryDiagnosis,
+    status: r.status,
+    reasons: r.reasons,
+    receivingFacility: r.receivingFacility,
+  }));
+};
+
+export const approveReferral = async (referralId: string, adminId: string) => {
+  const referral = await Referral.findById(referralId);
+
+  if (!referral) {
+    throw new ApiError(404, 'Referral not found');
+  }
+
+  if (referral.status !== 'Pending') {
+    throw new ApiError(400, 'Referral has already been processed');
+  }
+
+  referral.status = 'Accepted';
+  referral.approvedBy = adminId as any;
+  await referral.save();
+
+  // Update patient location
+  await Patient.findByIdAndUpdate(referral.patientId, {
+    currentLocation: 'ReferredHospital',
+  });
+
+  // Create notification
+  const patient = await Patient.findById(referral.patientId);
+  await Notification.create({
+    type: 'ReferralApproval',
+    message: `Referral approved for ${patient?.firstName} ${patient?.lastName}`,
+    data: {
+      referralId: referral._id,
+      patientId: referral.patientId,
+      patientName: `${patient?.firstName} ${patient?.lastName}`,
+    },
+    read: false,
+  });
+
+  return {
+    id: referral._id.toString(),
+    status: referral.status,
+    approvedBy: {
+      id: adminId,
+      name: 'Admin',
+    },
+    updatedAt: referral.updatedAt,
+  };
+};
+
+export const declineReferral = async (referralId: string) => {
+  const referral = await Referral.findById(referralId);
+
+  if (!referral) {
+    throw new ApiError(404, 'Referral not found');
+  }
+
+  if (referral.status !== 'Pending') {
+    throw new ApiError(400, 'Referral has already been processed');
+  }
+
+  referral.status = 'Declined';
+  await referral.save();
+
+  return {
+    id: referral._id.toString(),
+    status: referral.status,
+  };
+};
+
+export const getReports = async (startDate?: string, endDate?: string) => {
+  const dateFilter: any = {};
+
+  if (startDate) {
+    dateFilter.$gte = new Date(startDate);
+  }
+  if (endDate) {
+    dateFilter.$lte = new Date(endDate);
+  }
+
+  const filter: any = {};
+  if (Object.keys(dateFilter).length > 0) {
+    filter.createdAt = dateFilter;
+  }
+
+  const [totalPatients, activePatients, dischargedPatients, hospitalizedPatients] = await Promise.all([
+    Patient.countDocuments(filter),
+    Patient.countDocuments({ ...filter, status: 'Active' }),
+    Patient.countDocuments({ ...filter, status: 'Discharged' }),
+    Patient.countDocuments({ ...filter, currentLocation: 'ReferredHospital' }),
+  ]);
+
+  const referralsByStatus = await Referral.aggregate([
+    { $match: filter },
+    { $group: { _id: '$status', count: { $sum: 1 } } },
+    { $project: { status: '$_id', count: 1, _id: 0 } },
+  ]);
+
+  const patientsByLocation = await Patient.aggregate([
+    { $match: filter },
+    { $group: { _id: '$currentLocation', count: { $sum: 1 } } },
+    { $project: { location: '$_id', count: 1, _id: 0 } },
+  ]);
+
+  const patientsByStage = await Patient.aggregate([
+    { $match: filter },
+    { $group: { _id: '$diseaseStage', count: { $sum: 1 } } },
+    { $project: { stage: '$_id', count: 1, _id: 0 } },
+  ]);
+
+  const closeCasesByReason = await Notification.aggregate([
+    { $match: { ...filter, type: 'CloseCase' } },
+    { $group: { _id: '$data.reason', count: { $sum: 1 } } },
+    { $project: { reason: '$_id', count: 1, _id: 0 } },
+  ]);
+
+  const visitsByMonth = await HomeVisit.aggregate([
+    { $match: filter },
+    {
+      $group: {
+        _id: { $dateToString: { format: '%Y-%m', date: '$visitDate' } },
+        count: { $sum: 1 },
+      },
+    },
+    { $project: { month: '$_id', count: 1, _id: 0 } },
+    { $sort: { month: 1 } },
+  ]);
+
+  return {
+    totalPatients,
+    activePatients,
+    dischargedPatients,
+    hospitalizedPatients,
+    referralsByStatus,
+    patientsByLocation,
+    patientsByStage,
+    closeCasesByReason,
+    visitsByMonth,
+  };
+};
+
+export default {
+  getPendingStaff,
+  approveStaff,
+  rejectStaff,
+  getDashboardStats,
+  getNotifications,
+  markNotificationRead,
+  getPatients,
+  getPatientDetail,
+  closeCase,
+  getPendingReferrals,
+  approveReferral,
+  declineReferral,
+  getReports,
+};

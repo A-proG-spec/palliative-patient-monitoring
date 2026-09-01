@@ -1,0 +1,9 @@
+export { default as authController } from './auth.controller.js';
+export { default as adminController } from './admin.controller.js';
+export { default as patientController } from './patient.controller.js';
+export { default as visitController } from './visit.controller.js';
+export { default as medicationController } from './medication.controller.js';
+export { default as labController } from './lab.controller.js';
+export { default as referralController } from './referral.controller.js';
+export { default as admissionController } from './admission.controller.js';
+export { default as staffController } from './staff.controller.js';
