@@ -1,4 +1,7 @@
-# UI FOUNDATION SPECIFICATION
+# ui-foundation-spec.md
+
+
+# PALLIATIVE PATIENT MONITORING SYSTEM - UI FOUNDATION SPECIFICATION
 
 ## 1. Color Palette
 
@@ -102,8 +105,20 @@
 
 ### 3.1 Font Family
 
-- Primary Font: **Inter** (Google Fonts)
+- **Primary Font: Outfit** (Google Fonts)
 - Fallback: system-ui, -apple-system, sans-serif
+
+```html
+<!-- Google Font Import -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap" rel="stylesheet">
+```
+
+```css
+/* Tailwind CSS Configuration */
+font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+```
 
 ### 3.2 Font Sizes
 
@@ -210,3 +225,529 @@
 | Exception | Heatmap cells use 2px (near-sharp) |
 
 ---
+
+## 7. Print Styles (NEW)
+
+### 7.1 Print Font Configuration
+
+```css
+/* src/styles/print.css */
+
+@media print {
+  /* Font configuration - Outfit for print */
+  body {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+  }
+
+  /* Header font */
+  .print-header h1 {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 700;
+    color: #002395;
+    font-size: 20pt;
+    margin: 0;
+  }
+
+  /* Section headings */
+  .print-section h2 {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 600;
+    font-size: 14pt;
+    color: #002395;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+  }
+
+  .print-section h3 {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 600;
+    font-size: 12pt;
+    color: #1f2937;
+    margin: 6px 0;
+  }
+
+  /* Labels */
+  .print-label {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 600;
+    color: #4b5563;
+  }
+
+  /* Table headers */
+  .print-table th {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 600;
+    background-color: #f3f4f6;
+    text-align: left;
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+  }
+
+  .print-table td {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 400;
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+  }
+
+  /* Badges */
+  .print-badge {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 500;
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 9pt;
+  }
+
+  /* Footer */
+  .print-footer {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 400;
+    text-align: center;
+    font-size: 9pt;
+    color: #9ca3af;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 12px;
+    margin-top: 20px;
+  }
+}
+```
+
+### 7.2 Print Page Setup
+
+```css
+@media print {
+  @page {
+    size: A4;
+    margin: 20mm;
+  }
+}
+```
+
+### 7.3 Print Color Preservation
+
+```css
+@media print {
+  .print-color {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-bg {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+```
+
+### 7.4 Print Table Styling
+
+```css
+@media print {
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10pt;
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  }
+
+  .print-table th {
+    background-color: #f3f4f6;
+    font-weight: 600;
+    text-align: left;
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+  }
+
+  .print-table td {
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+}
+```
+
+### 7.5 Print Badge Colors
+
+```css
+@media print {
+  .print-badge-active {
+    background-color: #d1fae5 !important;
+    color: #065f46 !important;
+  }
+
+  .print-badge-discharged {
+    background-color: #f3f4f6 !important;
+    color: #4b5563 !important;
+  }
+
+  .print-badge-ordered {
+    background-color: #fef3c7 !important;
+    color: #92400e !important;
+  }
+
+  .print-badge-given {
+    background-color: #d1fae5 !important;
+    color: #065f46 !important;
+  }
+
+  .print-badge-pending {
+    background-color: #fef3c7 !important;
+    color: #92400e !important;
+  }
+
+  .print-badge-accepted {
+    background-color: #d1fae5 !important;
+    color: #065f46 !important;
+  }
+
+  .print-badge-declined {
+    background-color: #fce4ec !important;
+    color: #b71c1c !important;
+  }
+}
+```
+
+### 7.6 Print Card & Section Styling
+
+```css
+@media print {
+  .print-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 12px;
+    page-break-inside: avoid;
+  }
+
+  .print-section {
+    margin-bottom: 16px;
+  }
+
+  .print-avoid-break {
+    page-break-inside: avoid;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+
+  .print-graph {
+    width: 100%;
+    max-width: 100%;
+    margin: 8px 0;
+  }
+}
+```
+
+### 7.7 Print Header & Footer
+
+```css
+@media print {
+  .print-header {
+    text-align: center;
+    border-bottom: 2px solid #002395;
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+  }
+
+  .print-header .subtitle {
+    font-size: 12pt;
+    color: #555;
+  }
+
+  .print-footer {
+    text-align: center;
+    font-size: 9pt;
+    color: #9ca3af;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 12px;
+    margin-top: 20px;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
+```
+
+### 7.8 Complete Print CSS File
+
+```css
+/* src/styles/print.css */
+
+/* ============================================
+   PRINT STYLES - Palliative Patient Monitoring System
+   Font: Outfit (Google Fonts)
+   ============================================ */
+
+@media print {
+  /* ── Page Setup ── */
+  @page {
+    size: A4;
+    margin: 20mm;
+  }
+
+  /* ── Base Styles ── */
+  body {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+
+  /* ── Hide Non-Print Elements ── */
+  .no-print {
+    display: none !important;
+  }
+
+  /* ── Color Preservation ── */
+  .print-color {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-bg {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* ── Header ── */
+  .print-header {
+    text-align: center;
+    border-bottom: 2px solid #002395;
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+  }
+
+  .print-header h1 {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 700;
+    color: #002395;
+    font-size: 20pt;
+    margin: 0;
+  }
+
+  .print-header .subtitle {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 400;
+    font-size: 12pt;
+    color: #555;
+  }
+
+  /* ── Sections ── */
+  .print-section {
+    margin-bottom: 16px;
+  }
+
+  .print-section h2 {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 600;
+    font-size: 14pt;
+    color: #002395;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+  }
+
+  .print-section h3 {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 600;
+    font-size: 12pt;
+    color: #1f2937;
+    margin: 6px 0;
+  }
+
+  /* ── Cards ── */
+  .print-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 12px;
+    page-break-inside: avoid;
+  }
+
+  /* ── Tables ── */
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10pt;
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  }
+
+  .print-table th {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 600;
+    background-color: #f3f4f6;
+    text-align: left;
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+  }
+
+  .print-table td {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 400;
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  /* ── Labels ── */
+  .print-label {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 600;
+    color: #4b5563;
+  }
+
+  /* ── Badges ── */
+  .print-badge {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 500;
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 9pt;
+  }
+
+  .print-badge-active {
+    background-color: #d1fae5 !important;
+    color: #065f46 !important;
+  }
+
+  .print-badge-discharged {
+    background-color: #f3f4f6 !important;
+    color: #4b5563 !important;
+  }
+
+  .print-badge-ordered {
+    background-color: #fef3c7 !important;
+    color: #92400e !important;
+  }
+
+  .print-badge-given {
+    background-color: #d1fae5 !important;
+    color: #065f46 !important;
+  }
+
+  .print-badge-pending {
+    background-color: #fef3c7 !important;
+    color: #92400e !important;
+  }
+
+  .print-badge-accepted {
+    background-color: #d1fae5 !important;
+    color: #065f46 !important;
+  }
+
+  .print-badge-declined {
+    background-color: #fce4ec !important;
+    color: #b71c1c !important;
+  }
+
+  /* ── Graph ── */
+  .print-graph {
+    width: 100%;
+    max-width: 100%;
+    margin: 8px 0;
+  }
+
+  /* ── Page Breaks ── */
+  .print-avoid-break {
+    page-break-inside: avoid;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+
+  /* ── Footer ── */
+  .print-footer {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-weight: 400;
+    text-align: center;
+    font-size: 9pt;
+    color: #9ca3af;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 12px;
+    margin-top: 20px;
+  }
+}
+```
+
+### 7.9 Tailwind Print Utility Classes
+
+Add these print utility classes to your Tailwind configuration:
+
+```javascript
+// tailwind.config.js
+
+module.exports = {
+  theme: {
+    extend: {
+      fontFamily: {
+        outfit: ['Outfit', 'system-ui', '-apple-system', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [
+    function({ addUtilities }) {
+      addUtilities({
+        '.print-hide': {
+          '@media print': {
+            display: 'none !important',
+          },
+        },
+        '.print-show': {
+          '@media print': {
+            display: 'block !important',
+          },
+        },
+        '.print-color': {
+          '@media print': {
+            '-webkit-print-color-adjust': 'exact !important',
+            'print-color-adjust': 'exact !important',
+          },
+        },
+        '.print-bg': {
+          '@media print': {
+            '-webkit-print-color-adjust': 'exact !important',
+            'print-color-adjust': 'exact !important',
+          },
+        },
+        '.print-avoid-break': {
+          '@media print': {
+            'page-break-inside': 'avoid !important',
+          },
+        },
+        '.print-page-break': {
+          '@media print': {
+            'page-break-before': 'always !important',
+          },
+        },
+      });
+    },
+  ],
+};
+```

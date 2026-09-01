@@ -1,13 +1,13 @@
-# frontend-specification/03-patients.md
+# frontend-specification/11-print-export.md
 
 
-# PALLIATIVE PATIENT MONITORING SYSTEM - FRONTEND PATIENT SPECIFICATION
+# PALLIATIVE PATIENT MONITORING SYSTEM - FRONTEND PRINT/EXPORT SPECIFICATION
 
 ## 1. Overview
 
-This document defines the frontend implementation for patient management features including patient registration, patient list, patient detail, patient summary, and patient history print/export.
+This document defines the frontend implementation for printing and exporting patient history data. Both Staff and Admin users can print patient records with ALL data and FULL visit details in a professionally formatted document.
 
-**API Reference:** `api/03-patients.md`
+**API Reference:** `api/03-patients.md`, `api/02-admin.md`
 
 ---
 
@@ -15,148 +15,31 @@ This document defines the frontend implementation for patient management feature
 
 | Route | Component | Layout | Auth |
 |---|---|---|---|
-| `/patients` | `PatientListPage` | `DashboardLayout` | Staff |
-| `/patients/new` | `PatientRegistrationPage` | `DashboardLayout` | Staff |
-| `/patients/:id` | `PatientDetailPage` | `DashboardLayout` | Staff |
-| `/patients/:id/summary` | `PatientSummaryPage` | `DashboardLayout` | Staff |
-| `/patients/:id/progress` | `PatientProgressPage` | `DashboardLayout` | Staff |
 | `/patients/:id/print` | `PatientPrintPage` | `PrintLayout` | Staff, Admin |
+| `/admin/patients/:id/print` | `AdminPatientPrintPage` | `PrintLayout` | Admin |
 
 ---
 
 ## 3. Types
 
 ```typescript
-// src/types/patient.types.ts
+// src/types/print.types.ts
 
-export interface Patient {
-  id: string;
-  patientDisplayId?: string;
-  firstName: string;
-  lastName: string;
-  age: number;
-  sex: 'Male' | 'Female';
-  dateOfBirth: string;
-  address: string;
-  phone: string;
-  emergencyContactName: string;
-  emergencyContactPhone: string;
-  caregiverName: string;
-  caregiverPhone: string;
-  primaryDiagnosis: string;
-  secondaryDiagnoses: string[];
-  diseaseStage: 'Early' | 'Advanced' | 'EndStage';
-  comorbidities: string[];
-  estimatedPrognosis: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
-  status: 'Active' | 'Discharged';
-  currentLocation: 'Home' | 'ReferredHospital';
-  registeredBy: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreatePatientRequest {
-  firstName: string;
-  lastName: string;
-  age: number;
-  sex: 'Male' | 'Female';
-  dateOfBirth: string;
-  address: string;
-  phone: string;
-  emergencyContactName: string;
-  emergencyContactPhone: string;
-  caregiverName: string;
-  caregiverPhone: string;
-  primaryDiagnosis: string;
-  secondaryDiagnoses?: string[];
-  diseaseStage: 'Early' | 'Advanced' | 'EndStage';
-  comorbidities?: string[];
-  estimatedPrognosis: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
-}
-
-export interface PatientListResponse {
-  items: Patient[];
-  page: number;
-  limit: number;
-  total: number;
-}
-
-export interface PatientSummaryResponse {
-  patient: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    age: number;
-    sex: string;
-    status: string;
-    currentLocation: string;
-    patientDisplayId?: string;
-  };
-  diagnosis: {
-    primary: string;
-    secondary: string[];
-    stage: string;
-  };
-  visits: Array<{
-    id: string;
-    date: string;
-    outcome: string;
-    staff: { id: string; name: string };
-  }>;
-  medications: Array<{
-    id: string;
-    name: string;
-    dosage: string;
-    status: string;
-    administeredAt: string;
-  }>;
-  labTests: Array<{
-    id: string;
-    name: string;
-    dateOrdered: string;
-    result?: string;
-  }>;
-  referrals: Array<{
-    id: string;
-    date: string;
-    status: string;
-  }>;
-  admissions: Array<{
-    id: string;
-    date: string;
-    status: string;
-  }>;
-}
-
-export interface ProgressDataPoint {
-  visitId: string;
-  visitDate: string;
-  kpsScore: number;
-  ppsScore: number;
-}
-
-export interface PatientProgressData {
+export interface PrintButtonProps {
   patientId: string;
   patientName: string;
-  visits: ProgressDataPoint[];
-  trends: {
-    kps: {
-      trend: 'improving' | 'stable' | 'declining';
-      percentageChange: number;
-      firstScore: number;
-      lastScore: number;
-    };
-    pps: {
-      trend: 'improving' | 'stable' | 'declining';
-      percentageChange: number;
-      firstScore: number;
-      lastScore: number;
-    };
-  };
+  variant?: 'button' | 'icon';
+  label?: string;
+  onPrintStart?: () => void;
+  onPrintComplete?: () => void;
+}
+
+export interface PrintLayoutProps {
+  children: React.ReactNode;
 }
 
 // ============================================
-// PRINT/EXPORT TYPES (NEW)
+// PRINT DATA TYPES (Shared between Staff and Admin)
 // ============================================
 
 export interface PrintableVisit {
@@ -220,6 +103,14 @@ export interface PrintableVisit {
   teamLeader: { id: string; name: string };
   physician: { id: string; name: string };
   nurse: { id: string; name: string };
+  createdAt?: string;
+  updatedAt?: string;
+  canEdit?: boolean;
+  editHistory?: Array<{
+    editedBy: { id: string; name: string };
+    editedAt: string;
+    changes: Array<{ field: string; from: any; to: any }>;
+  }>;
 }
 
 export interface PrintableMedication {
@@ -231,6 +122,8 @@ export interface PrintableMedication {
   administeredAt: 'Home' | 'Hospital';
   status: 'Ordered' | 'Given';
   prescribedBy: { id: string; name: string };
+  visitId?: string;
+  admissionId?: string;
   createdAt: string;
 }
 
@@ -243,6 +136,9 @@ export interface PrintableLab {
   location: 'Home' | 'Hospital';
   status: 'Ordered' | 'Completed';
   orderedBy: { id: string; name: string };
+  visitId?: string;
+  admissionId?: string;
+  createdAt: string;
 }
 
 export interface PrintableReferral {
@@ -311,6 +207,7 @@ export interface PrintableAdmission {
   dischargeReason?: string;
   status: string;
   createdBy: { id: string; name: string };
+  createdAt: string;
 }
 
 export interface PatientPrintData {
@@ -339,7 +236,7 @@ export interface PatientPrintData {
     createdAt: string;
   };
   progress: {
-    data: ProgressDataPoint[];
+    data: Array<{ visitId: string; visitDate: string; kpsScore: number; ppsScore: number }>;
     trends: {
       kps: { trend: string; percentageChange: number; firstScore: number; lastScore: number };
       pps: { trend: string; percentageChange: number; firstScore: number; lastScore: number };
@@ -364,66 +261,16 @@ export interface PatientPrintData {
 ## 4. API Calls
 
 ```typescript
-// src/api/patients.ts
+// src/api/patients.ts (Staff Print)
 
 import api from './client';
-import { 
-  Patient, 
-  CreatePatientRequest, 
-  PatientListResponse, 
-  PatientSummaryResponse,
-  PatientProgressData,
-  PatientPrintData
-} from '@/types/patient.types';
+import { PatientPrintData } from '@/types/print.types';
 
 export const patientApi = {
-  /**
-   * Register new patient
-   * POST /patients
-   */
-  register: (data: CreatePatientRequest): Promise<Patient> => {
-    return api.post<Patient>('/patients', data).then((res) => res.data);
-  },
+  // ... existing methods
 
   /**
-   * Get list of patients (filtered)
-   * GET /patients
-   */
-  getList: (params?: {
-    page?: number;
-    limit?: number;
-    status?: 'Active' | 'Discharged';
-    search?: string;
-  }): Promise<PatientListResponse> => {
-    return api.get<PatientListResponse>('/patients', { params }).then((res) => res.data);
-  },
-
-  /**
-   * Get patient details
-   * GET /patients/:patientId
-   */
-  getById: (patientId: string): Promise<Patient> => {
-    return api.get<Patient>(`/patients/${patientId}`).then((res) => res.data);
-  },
-
-  /**
-   * Get patient summary report
-   * GET /patients/:patientId/summary
-   */
-  getSummary: (patientId: string): Promise<PatientSummaryResponse> => {
-    return api.get<PatientSummaryResponse>(`/patients/${patientId}/summary`).then((res) => res.data);
-  },
-
-  /**
-   * Get patient progress data for KPS/PPS graph
-   * GET /patients/:patientId/progress
-   */
-  getProgress: (patientId: string): Promise<PatientProgressData> => {
-    return api.get<PatientProgressData>(`/patients/${patientId}/progress`).then((res) => res.data);
-  },
-
-  /**
-   * Get patient data formatted for print/export
+   * Get patient data formatted for print
    * GET /patients/:patientId/print
    */
   getPrintData: (patientId: string): Promise<PatientPrintData> => {
@@ -440,6 +287,33 @@ export const patientApi = {
 };
 ```
 
+```typescript
+// src/api/admin.ts (Admin Print)
+
+import api from './client';
+import { AdminPrintData } from '@/types/admin.types';
+
+export const adminApi = {
+  // ... existing methods
+
+  /**
+   * Get patient data formatted for print (admin version)
+   * GET /admin/patients/:patientId/print
+   */
+  getPatientPrintData: (patientId: string): Promise<AdminPrintData> => {
+    return api.get<AdminPrintData>(`/admin/patients/${patientId}/print`).then((res) => res.data);
+  },
+
+  /**
+   * Export patient history as PDF (admin version)
+   * GET /admin/patients/:patientId/export
+   */
+  exportPatientPDF: (patientId: string): Promise<Blob> => {
+    return api.get(`/admin/patients/${patientId}/export`, { responseType: 'blob' }).then((res) => res.data);
+  },
+};
+```
+
 ---
 
 ## 5. Hooks
@@ -447,57 +321,9 @@ export const patientApi = {
 ```typescript
 // src/hooks/usePatients.ts
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { patientApi } from '@/api/patients';
-import { CreatePatientRequest } from '@/types/patient.types';
-
-/**
- * Get list of patients
- */
-export function usePatients(params?: {
-  page?: number;
-  limit?: number;
-  status?: 'Active' | 'Discharged';
-  search?: string;
-}) {
-  return useQuery({
-    queryKey: ['patients', params],
-    queryFn: () => patientApi.getList(params),
-  });
-}
-
-/**
- * Get patient details
- */
-export function usePatient(patientId: string) {
-  return useQuery({
-    queryKey: ['patients', patientId],
-    queryFn: () => patientApi.getById(patientId),
-    enabled: !!patientId,
-  });
-}
-
-/**
- * Get patient summary report
- */
-export function usePatientSummary(patientId: string) {
-  return useQuery({
-    queryKey: ['patients', patientId, 'summary'],
-    queryFn: () => patientApi.getSummary(patientId),
-    enabled: !!patientId,
-  });
-}
-
-/**
- * Get patient progress data for KPS/PPS graph
- */
-export function usePatientProgress(patientId: string) {
-  return useQuery({
-    queryKey: ['patients', patientId, 'progress'],
-    queryFn: () => patientApi.getProgress(patientId),
-    enabled: !!patientId,
-  });
-}
+import { PatientPrintData } from '@/types/print.types';
 
 /**
  * Get patient data formatted for print
@@ -518,17 +344,32 @@ export function useExportPatientPDF() {
     mutationFn: (patientId: string) => patientApi.exportPDF(patientId),
   });
 }
+```
+
+```typescript
+// src/hooks/useAdmin.ts
+
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { adminApi } from '@/api/admin';
+import { AdminPrintData } from '@/types/admin.types';
 
 /**
- * Register new patient
+ * Get patient data formatted for print (admin version)
  */
-export function useRegisterPatient() {
-  const queryClient = useQueryClient();
+export function useAdminPatientPrint(patientId: string) {
+  return useQuery({
+    queryKey: ['admin', 'patients', patientId, 'print'],
+    queryFn: () => adminApi.getPatientPrintData(patientId),
+    enabled: !!patientId,
+  });
+}
+
+/**
+ * Export patient history as PDF (admin version)
+ */
+export function useExportPatientPDF() {
   return useMutation({
-    mutationFn: (data: CreatePatientRequest) => patientApi.register(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients'] });
-    },
+    mutationFn: (patientId: string) => adminApi.exportPatientPDF(patientId),
   });
 }
 ```
@@ -537,213 +378,7 @@ export function useRegisterPatient() {
 
 ## 6. Components
 
-### 6.1 PatientCard
-
-**Purpose:** Display patient summary card in patient list
-
-**Props:**
-
-```typescript
-interface PatientCardProps {
-  patient: Patient;
-  onClick?: (id: string) => void;
-}
-```
-
-**Visual Design:**
-
-```
-+-----------------------------------------------------------+
-| +-------------------------------------------------------+ |
-| | [Patient Avatar]   Sarah Johnson                      | |
-| |                    PAT-001                            | |
-| |                    Age: 65  Female                    | |
-| |                    Stage IV Breast Cancer             | |
-| |                    Status: Active  Location: Home     | |
-| |                    Registered: 2026-08-29             | |
-| |                                    [View Details]     | |
-| +-------------------------------------------------------+ |
-+-----------------------------------------------------------+
-```
-
----
-
-### 6.2 PatientForm
-
-**Purpose:** Form for registering new patient
-
-**Props:**
-
-```typescript
-interface PatientFormProps {
-  onSubmit: (data: CreatePatientRequest) => void;
-  isSubmitting?: boolean;
-  initialValues?: Partial<CreatePatientRequest>;
-}
-```
-
-**Visual Design:**
-
-```
-+-----------------------------------------------------------+
-| Patient Registration                                       |
-| +-------------------------------------------------------+ |
-| | Personal Information                                   | |
-| | +---------------------------------------------------+ | |
-| | | First Name: [________________] Last Name: [_______]| | |
-| | | Age: [___]  Sex: [Male/Female]  DOB: [__/__/____] | | |
-| | | Address: [________________________]               | | |
-| | | Phone: [________________________]                 | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Emergency Contact                                     | |
-| | +---------------------------------------------------+ | |
-| | | Name: [________________] Phone: [________________]  | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Caregiver Information                                 | |
-| | +---------------------------------------------------+ | |
-| | | Name: [________________] Phone: [________________]  | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Medical Information                                   | |
-| | +---------------------------------------------------+ | |
-| | | Primary Diagnosis: [________________________]      | | |
-| | | Secondary Diagnoses: [________________________]   | | |
-| | | Disease Stage: [Early/Advanced/EndStage]          | | |
-| | | Comorbidities: [________________________]         | | |
-| | | Estimated Prognosis: [Days/Weeks/Months/Uncertain]| | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| |                              [Cancel] [Register]      | |
-| +-------------------------------------------------------+ |
-+-----------------------------------------------------------+
-```
-
----
-
-### 6.3 PatientSummary
-
-**Purpose:** Display comprehensive patient summary
-
-**Props:**
-
-```typescript
-interface PatientSummaryProps {
-  summary: PatientSummaryResponse;
-  loading?: boolean;
-}
-```
-
-**Visual Design:**
-
-```
-+-----------------------------------------------------------+
-| Patient Summary: Sarah Johnson                             |
-| PAT-001                                                    |
-+-----------------------------------------------------------+
-|                                                           |
-| +-------------------------------------------------------+ |
-| | Patient Information                                    | |
-| | Name: Sarah Johnson   Age: 65   Sex: Female           | |
-| | Status: Active        Location: Home                  | |
-| +-------------------------------------------------------+ |
-|                                                           |
-| +-------------------------------------------------------+ |
-| | Diagnosis                                              | |
-| | Primary: Stage IV Breast Cancer                       | |
-| | Secondary: Metastatic to bone                         | |
-| | Stage: Advanced                                       | |
-| +-------------------------------------------------------+ |
-|                                                           |
-| +-------------------------------------------------------+ |
-| | Visit History                                          | |
-| | Date          Outcome    Staff                        | |
-| | 2026-08-29    Stable     Jane Doe                     | |
-| | 2026-08-22    Stable     Jane Doe                     | |
-| +-------------------------------------------------------+ |
-|                                                           |
-| +-------------------------------------------------------+ |
-| | Medications                                            | |
-| | Name         Dosage     Status   Administered At      | |
-| | Morphine     10mg       Given    Home                 | |
-| +-------------------------------------------------------+ |
-|                                                           |
-| +-------------------------------------------------------+ |
-| | Lab Tests                                              | |
-| | Name                  Date Ordered   Result            | |
-| | Complete Blood Count  2026-08-29     Normal            | |
-| +-------------------------------------------------------+ |
-|                                                           |
-| +-------------------------------------------------------+ |
-| | Referrals                                              | |
-| | Date          Status                                   | |
-| | 2026-08-29    Pending                                  | |
-| +-------------------------------------------------------+ |
-|                                                           |
-| +-------------------------------------------------------+ |
-| | Admissions                                             | |
-| | Date          Status                                   | |
-| | 2026-08-30    Active                                   | |
-| +-------------------------------------------------------+ |
-+-----------------------------------------------------------+
-```
-
----
-
-### 6.4 PatientProgressGraph
-
-**Purpose:** Display KPS and PPS trends over time
-
-**Props:**
-
-```typescript
-interface PatientProgressGraphProps {
-  patientName: string;
-  data: ProgressDataPoint[];
-  loading?: boolean;
-  trends?: {
-    kps: { trend: 'improving' | 'stable' | 'declining'; percentageChange: number };
-    pps: { trend: 'improving' | 'stable' | 'declining'; percentageChange: number };
-  };
-  isPrintView?: boolean;
-}
-```
-
-**Visual Design:**
-
-```
-+-----------------------------------------------------------+
-| Patient Progress: Sarah Johnson                            |
-| KPS (Karnofsky Performance Score) & PPS (Palliative       |
-| Performance Scale)                                         |
-| +-------------------------------------------------------+ |
-| | KPS: 35  (Declining -15%)   PPS: 45  (Declining -18%) | |
-| +-------------------------------------------------------+ |
-|                                                           |
-| Score                                                     |
-| 100 -                                                     |
-|  90 -                                                     |
-|  80 -                                                     |
-|  70 -                                           *         |
-|  60 -                                  *                  |
-|  50 -                         *                           |
-|  40 -                *                                    |
-|  30 -       *                                             |
-|  20 -                                                     |
-|  10 -                                                     |
-|   0 +--------+--------+--------+--------+--------+-------+ |
-|     08/01    08/08    08/15    08/22    08/29    09/05    |
-|                                                           |
-| Legend:                                                   |
-| ---- KPS Score (60 -> 55 -> 50 -> 45 -> 40 -> 35)        |
-| ---- PPS Score (70 -> 65 -> 60 -> 55 -> 50 -> 45)        |
-+-----------------------------------------------------------+
-```
-
----
-
-### 6.5 PrintButton (NEW)
+### 6.1 PrintButton
 
 **Purpose:** Reusable print/export PDF button for patient history
 
@@ -764,6 +399,8 @@ interface PrintButtonProps {
 - Opens print dialog with formatted patient data
 - Uses `window.print()` for browser print
 - Can also trigger PDF export via backend
+- Shows loading state while preparing data
+- Available to both Staff and Admin
 
 **Visual Design:**
 
@@ -775,9 +412,111 @@ interface PrintButtonProps {
 +-----------------------------------------------------------+
 ```
 
+**Implementation:**
+
+```typescript
+// src/components/common/PrintButton.tsx
+
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/Button';
+import { Printer } from 'lucide-react';
+
+interface PrintButtonProps {
+  patientId: string;
+  patientName: string;
+  variant?: 'button' | 'icon';
+  label?: string;
+  onPrintStart?: () => void;
+  onPrintComplete?: () => void;
+}
+
+export const PrintButton: React.FC<PrintButtonProps> = ({
+  patientId,
+  patientName,
+  variant = 'button',
+  label = 'Print Patient History',
+  onPrintStart,
+  onPrintComplete,
+}) => {
+  const navigate = useNavigate();
+
+  const handlePrint = () => {
+    onPrintStart?.();
+    navigate(`/patients/${patientId}/print`);
+    onPrintComplete?.();
+  };
+
+  if (variant === 'icon') {
+    return (
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={handlePrint}
+        title={label}
+        className="no-print"
+      >
+        <Printer className="h-4 w-4" />
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      variant="outline"
+      onClick={handlePrint}
+      className="no-print"
+    >
+      <Printer className="h-4 w-4 mr-2" />
+      {label}
+    </Button>
+  );
+};
+```
+
 ---
 
-### 6.6 PatientPrintView (NEW)
+### 6.2 PrintLayout
+
+**Purpose:** Minimal layout for print views
+
+**Props:**
+
+```typescript
+interface PrintLayoutProps {
+  children: React.ReactNode;
+}
+```
+
+**Behavior:**
+- Removes all navigation, sidebars, and interactive elements
+- Sets white background
+- Applies print-specific styles
+- Uses minimal padding for print formatting
+
+**Implementation:**
+
+```typescript
+// src/components/layouts/PrintLayout.tsx
+
+import React from 'react';
+
+interface PrintLayoutProps {
+  children: React.ReactNode;
+}
+
+export const PrintLayout: React.FC<PrintLayoutProps> = ({ children }) => {
+  return (
+    <div className="print-layout min-h-screen bg-white p-8">
+      {children}
+    </div>
+  );
+};
+```
+
+---
+
+### 6.3 PatientPrintView
 
 **Purpose:** Print-friendly layout for patient history
 
@@ -802,6 +541,7 @@ interface PatientPrintViewProps {
   - Referrals: Complete details including prepared by, designation, signature, action taken, outcome, follow-up
   - Admissions: Full details including care plan, pain management, medication plan, nursing care plan
 - Shows generated timestamp and user info
+- Uses `print-color` and `print-bg` classes for color preservation
 
 **Visual Design:**
 
@@ -1007,184 +747,7 @@ interface PatientPrintViewProps {
 
 ## 7. Pages
 
-### 7.1 PatientListPage
-
-**Route:** `/patients`
-
-**Layout:** `DashboardLayout`
-
-**Guard:** `ProtectedRoute` (staff)
-
-**Purpose:** Display list of patients
-
-**Behavior:**
-
-1. Uses `usePatients()` hook
-2. Displays patient cards in grid
-3. Search bar for filtering patients
-4. Filter by status dropdown
-5. Pagination controls
-6. "Register New Patient" button
-
-**Components:**
-
-- `SearchBar`
-- `StatusFilter`
-- `PatientCard`
-- `Pagination`
-- `Button` (Register New Patient)
-
-**States:**
-
-| State | UI |
-|---|---|
-| Loading | Skeleton cards |
-| Error | Error message with retry |
-| Empty | Empty state with "Register New Patient" button |
-| Success | Grid of patient cards |
-
----
-
-### 7.2 PatientRegistrationPage
-
-**Route:** `/patients/new`
-
-**Layout:** `DashboardLayout`
-
-**Guard:** `ProtectedRoute` (staff)
-
-**Purpose:** Register new patient
-
-**Behavior:**
-
-1. Uses `useRegisterPatient()` mutation
-2. React Hook Form with Zod validation
-3. On success, navigates to patient detail
-4. On error, displays validation errors
-
-**Components:**
-
-- `PatientForm`
-
-**States:**
-
-| State | UI |
-|---|---|
-| Idle | Form enabled |
-| Submitting | Form disabled with spinner |
-| Error | Field-level and form-level errors |
-| Success | Redirect to patient detail |
-
----
-
-### 7.3 PatientDetailPage
-
-**Route:** `/patients/:id`
-
-**Layout:** `DashboardLayout`
-
-**Guard:** `ProtectedRoute` (staff)
-
-**Purpose:** View patient details
-
-**Behavior:**
-
-1. Uses `usePatient(id)` hook
-2. Displays patient information
-3. Tabs for different sections (Visits, Medications, Labs, Referrals, Admissions)
-4. "View Summary" button
-5. "Record Visit" button
-6. "Order Medication" button
-7. "Order Lab Test" button
-8. "Request Referral" button
-9. "Record Admission" button
-10. "Print History" button
-11. Back button
-
-**Components:**
-
-- `PatientDemographics`
-- `PatientDiagnosis`
-- `Tabs` (Visits, Medications, Labs, Referrals, Admissions)
-- `ActionButtons`
-- `PrintButton`
-
-**States:**
-
-| State | UI |
-|---|---|
-| Loading | Skeleton details |
-| Error | Error message with retry |
-| Success | Full patient details with tabs |
-
----
-
-### 7.4 PatientSummaryPage (UPDATED)
-
-**Route:** `/patients/:id/summary`
-
-**Layout:** `DashboardLayout`
-
-**Guard:** `ProtectedRoute` (staff)
-
-**Purpose:** View comprehensive patient summary with print functionality
-
-**Behavior:**
-
-1. Uses `usePatientSummary(id)` hook
-2. Uses `usePatientProgress(id)` hook
-3. Displays complete patient summary
-4. Displays KPS/PPS progress graph
-5. **Print/Export functionality available**
-
-**Components:**
-
-- `PatientSummary`
-- `PatientProgressGraph`
-- `PrintButton`
-
-**States:**
-
-| State | UI |
-|---|---|
-| Loading | Skeleton summary |
-| Error | Error message with retry |
-| Success | Full patient summary with print button |
-
----
-
-### 7.5 PatientProgressPage
-
-**Route:** `/patients/:id/progress`
-
-**Layout:** `DashboardLayout`
-
-**Guard:** `ProtectedRoute` (staff)
-
-**Purpose:** View KPS/PPS progress graphs
-
-**Behavior:**
-
-1. Uses `usePatientProgress(id)` hook
-2. Displays KPS and PPS trend graphs
-3. Shows trend analysis
-
-**Components:**
-
-- `PatientProgressGraph`
-
-**States:**
-
-| State | UI |
-|---|---|
-| Loading | Skeleton graph |
-| Error | Error message with retry |
-| Empty | "No progress data available" |
-| Success | Full progress graphs |
-
----
-
-### 7.6 PatientPrintPage (NEW)
+### 7.1 PatientPrintPage (Staff)
 
 **Route:** `/patients/:id/print`
 
@@ -1192,7 +755,7 @@ interface PatientPrintViewProps {
 
 **Guard:** `ProtectedRoute` (staff, admin)
 
-**Purpose:** Dedicated print-friendly view for patient history with full visit details
+**Purpose:** Dedicated print-friendly view for patient history
 
 **Behavior:**
 
@@ -1201,13 +764,13 @@ interface PatientPrintViewProps {
 3. Automatically triggers print dialog on load
 4. Includes institution header (Yekatit 12 Hospital Medical College)
 5. Shows ALL sections with FULL data:
-   - **Patient Demographics:** All fields
-   - **KPS/PPS Progress Graph:** Visual trends
-   - **Visits:** FULL details (vitals, pain scores, ADL, symptoms, red flags, team members, signatures)
-   - **Medications:** Complete details
-   - **Laboratory Tests:** Full details
-   - **Referrals:** Complete details including prepared by, signature, action taken
-   - **Admissions:** Full details including care plans
+   - Patient Demographics: All fields
+   - KPS/PPS Progress Graph: Visual trends
+   - Visits: FULL details (vitals, pain scores, ADL, symptoms, red flags, team members, signatures)
+   - Medications: Complete details
+   - Laboratory Tests: Full details
+   - Referrals: Complete details including prepared by, signature, action taken
+   - Admissions: Full details including care plans
 6. Shows generated timestamp and user info
 
 **Components:**
@@ -1218,220 +781,11 @@ interface PatientPrintViewProps {
 
 | State | UI |
 |---|---|
-| Loading | "Loading patient data..." |
+| Loading | "Loading patient data..." with spinner |
 | Error | Error message with retry |
 | Success | Full print view with auto-print |
 
----
-
-## 8. Page Implementations
-
-### PatientListPage
-
-```typescript
-// src/pages/staff/PatientListPage.tsx
-
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { usePatients } from '@/hooks/usePatients';
-import { PatientCard } from '@/components/patients/PatientCard';
-import { SearchBar } from '@/components/common/SearchBar';
-import { StatusFilter } from '@/components/common/StatusFilter';
-import { Pagination } from '@/components/common/Pagination';
-import { Button } from '@/components/ui/Button';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { ErrorState } from '@/components/common/ErrorState';
-import { EmptyState } from '@/components/common/EmptyState';
-
-export const PatientListPage: React.FC = () => {
-  const navigate = useNavigate();
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<'Active' | 'Discharged' | undefined>(undefined);
-  const limit = 12;
-
-  const { data, isLoading, error, refetch } = usePatients({ page, limit, search, status });
-
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
-
-  if (error) {
-    return <ErrorState onRetry={refetch} />;
-  }
-
-  if (!data || data.items.length === 0) {
-    return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Patients</h1>
-          <Button onClick={() => navigate('/patients/new')}>Register New Patient</Button>
-        </div>
-        <EmptyState
-          title="No patients found"
-          description="Start by registering your first patient."
-          actionLabel="Register Patient"
-          onAction={() => navigate('/patients/new')}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Patients</h1>
-        <Button onClick={() => navigate('/patients/new')}>Register New Patient</Button>
-      </div>
-
-      <div className="flex gap-4">
-        <SearchBar
-          placeholder="Search patients..."
-          value={search}
-          onChange={setSearch}
-        />
-        <StatusFilter
-          value={status}
-          onChange={setStatus}
-          options={[
-            { value: 'Active', label: 'Active' },
-            { value: 'Discharged', label: 'Discharged' },
-          ]}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {data.items.map((patient) => (
-          <PatientCard
-            key={patient.id}
-            patient={patient}
-            onClick={(id) => navigate(`/patients/${id}`)}
-          />
-        ))}
-      </div>
-
-      <Pagination
-        page={page}
-        total={data.total}
-        limit={limit}
-        onPageChange={setPage}
-      />
-    </div>
-  );
-};
-```
-
-### PatientRegistrationPage
-
-```typescript
-// src/pages/staff/PatientRegistrationPage.tsx
-
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useRegisterPatient } from '@/hooks/usePatients';
-import { PatientForm } from '@/components/patients/PatientForm';
-import { createPatientSchema, CreatePatientFormData } from '@/schemas/patient.schema';
-
-export const PatientRegistrationPage: React.FC = () => {
-  const navigate = useNavigate();
-  const registerMutation = useRegisterPatient();
-
-  const form = useForm<CreatePatientFormData>({
-    resolver: zodResolver(createPatientSchema),
-    defaultValues: {
-      sex: 'Female',
-      diseaseStage: 'Early',
-      estimatedPrognosis: 'Months',
-    },
-  });
-
-  const onSubmit = (data: CreatePatientFormData) => {
-    registerMutation.mutate(data, {
-      onSuccess: (response) => {
-        navigate(`/patients/${response.id}`);
-      },
-    });
-  };
-
-  return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Register New Patient</h1>
-      <PatientForm
-        form={form}
-        onSubmit={onSubmit}
-        isSubmitting={registerMutation.isPending}
-        error={registerMutation.error}
-      />
-    </div>
-  );
-};
-```
-
-### PatientSummaryPage (UPDATED)
-
-```typescript
-// src/pages/staff/PatientSummaryPage.tsx
-
-import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { usePatientSummary, usePatientProgress } from '@/hooks/usePatients';
-import { PatientSummary } from '@/components/patients/PatientSummary';
-import { PatientProgressGraph } from '@/components/patients/PatientProgressGraph';
-import { PrintButton } from '@/components/common/PrintButton';
-import { Button } from '@/components/ui/Button';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { ErrorState } from '@/components/common/ErrorState';
-
-export const PatientSummaryPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const patientId = id!;
-
-  const { data: summary, isLoading: summaryLoading, error: summaryError, refetch: refetchSummary } = usePatientSummary(patientId);
-  const { data: progress, isLoading: progressLoading } = usePatientProgress(patientId);
-
-  if (summaryLoading || progressLoading) {
-    return <LoadingSpinner />;
-  }
-
-  if (summaryError || !summary) {
-    return <ErrorState onRetry={refetchSummary} />;
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">
-          Patient Summary: {summary.patient.firstName} {summary.patient.lastName}
-        </h1>
-        <div className="flex gap-2">
-          <PrintButton
-            patientId={patientId}
-            patientName={`${summary.patient.firstName} ${summary.patient.lastName}`}
-          />
-          <Button variant="outline" onClick={() => navigate(`/patients/${patientId}`)}>
-            Back
-          </Button>
-        </div>
-      </div>
-
-      <PatientSummary summary={summary} />
-
-      {progress && progress.visits.length > 0 && (
-        <PatientProgressGraph
-          patientName={progress.patientName}
-          data={progress.visits}
-          trends={progress.trends}
-        />
-      )}
-    </div>
-  );
-};
-```
-
-### PatientPrintPage (NEW)
+**Implementation:**
 
 ```typescript
 // src/pages/staff/PatientPrintPage.tsx
@@ -1483,92 +837,26 @@ export const PatientPrintPage: React.FC = () => {
 
 ---
 
-## 9. Form Validation Schema
+### 7.2 AdminPatientPrintPage (Admin)
 
-```typescript
-// src/schemas/patient.schema.ts
+**Route:** `/admin/patients/:patientId/print`
 
-import { z } from 'zod';
+**Layout:** `PrintLayout`
 
-export const createPatientSchema = z.object({
-  firstName: z.string().min(2, 'First name must be at least 2 characters'),
-  lastName: z.string().min(2, 'Last name must be at least 2 characters'),
-  age: z.number().min(1, 'Age must be greater than 0').max(150, 'Invalid age'),
-  sex: z.enum(['Male', 'Female']),
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
-  address: z.string().min(1, 'Address is required'),
-  phone: z.string().min(10, 'Phone number is required'),
-  emergencyContactName: z.string().min(1, 'Emergency contact name is required'),
-  emergencyContactPhone: z.string().min(10, 'Emergency contact phone is required'),
-  caregiverName: z.string().min(1, 'Caregiver name is required'),
-  caregiverPhone: z.string().min(10, 'Caregiver phone is required'),
-  primaryDiagnosis: z.string().min(1, 'Primary diagnosis is required'),
-  secondaryDiagnoses: z.array(z.string()).optional(),
-  diseaseStage: z.enum(['Early', 'Advanced', 'EndStage']),
-  comorbidities: z.array(z.string()).optional(),
-  estimatedPrognosis: z.enum(['Days', 'Weeks', 'Months', 'Uncertain']),
-});
+**Guard:** `ProtectedRoute` (admin only)
 
-export type CreatePatientFormData = z.infer<typeof createPatientSchema>;
-```
+**Purpose:** Dedicated print-friendly view for admin patient history
+
+**Behavior:**
+
+1. Uses `useAdminPatientPrint(patientId)` hook
+2. Same display as staff version but with admin context
+3. May include additional admin-specific fields (e.g., edit history, audit trail)
+4. Auto-triggers print on load
 
 ---
 
-## 10. Route Configuration
-
-```typescript
-// src/routes/index.tsx (patient section)
-
-{
-  element: <ProtectedRoute />,
-  children: [
-    {
-      element: <DashboardLayout />,
-      children: [
-        { 
-          path: '/patients', 
-          element: withSuspense(PatientListPage) 
-        },
-        { 
-          path: '/patients/new', 
-          element: withSuspense(PatientRegistrationPage) 
-        },
-        { 
-          path: '/patients/:id', 
-          element: withSuspense(PatientDetailPage) 
-        },
-        { 
-          path: '/patients/:id/summary', 
-          element: withSuspense(PatientSummaryPage) 
-        },
-        { 
-          path: '/patients/:id/progress', 
-          element: withSuspense(PatientProgressPage) 
-        },
-      ],
-    },
-    // Print route uses minimal layout
-    {
-      element: <ProtectedRoute />,
-      children: [
-        {
-          element: <PrintLayout />,
-          children: [
-            { 
-              path: '/patients/:id/print', 
-              element: withSuspense(PatientPrintPage) 
-            },
-          ],
-        },
-      ],
-    },
-  ],
-}
-```
-
----
-
-## 11. Print Styles (Global)
+## 8. Print Styles
 
 ```css
 /* src/styles/print.css */
@@ -1590,10 +878,17 @@ export type CreatePatientFormData = z.infer<typeof createPatientSchema>;
     background: white !important;
     color: black !important;
     font-size: 12pt;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
 
   /* Preserve colors in print */
   .print-color {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Preserve background colors */
+  .print-bg {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -1616,7 +911,7 @@ export type CreatePatientFormData = z.infer<typeof createPatientSchema>;
 
   /* Card styling in print */
   .print-card {
-    border: 1px solid #ddd;
+    border: 1px solid #e5e7eb;
     border-radius: 4px;
     padding: 12px;
     margin-bottom: 12px;
@@ -1650,104 +945,177 @@ export type CreatePatientFormData = z.infer<typeof createPatientSchema>;
   .print-section h2 {
     font-size: 14pt;
     color: #002395;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid #e5e7eb;
     padding-bottom: 4px;
+    margin-bottom: 8px;
+  }
+
+  .print-section h3 {
+    font-size: 12pt;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 6px 0;
+  }
+
+  /* Field labels */
+  .print-label {
+    font-weight: 600;
+    color: #4b5563;
+  }
+
+  /* Data table styling */
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10pt;
+  }
+
+  .print-table th {
+    background-color: #f3f4f6;
+    font-weight: 600;
+    text-align: left;
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+  }
+
+  .print-table td {
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+  }
+
+  /* Status badges */
+  .print-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 9pt;
+    font-weight: 500;
+  }
+
+  .print-badge-active {
+    background-color: #d1fae5;
+    color: #065f46;
+  }
+
+  .print-badge-discharged {
+    background-color: #f3f4f6;
+    color: #4b5563;
+  }
+
+  .print-badge-ordered {
+    background-color: #fef3c7;
+    color: #92400e;
+  }
+
+  .print-badge-given {
+    background-color: #d1fae5;
+    color: #065f46;
+  }
+
+  .print-badge-pending {
+    background-color: #fef3c7;
+    color: #92400e;
+  }
+
+  .print-badge-accepted {
+    background-color: #d1fae5;
+    color: #065f46;
+  }
+
+  .print-badge-declined {
+    background-color: #fce4ec;
+    color: #b71c1c;
   }
 
   /* Footer */
   .print-footer {
     text-align: center;
-    font-size: 10pt;
-    color: #888;
-    border-top: 1px solid #ddd;
+    font-size: 9pt;
+    color: #9ca3af;
+    border-top: 1px solid #e5e7eb;
     padding-top: 12px;
     margin-top: 20px;
+  }
+
+  /* Force page breaks */
+  .page-break {
+    page-break-before: always;
+  }
+
+  /* Graph container */
+  .print-graph {
+    width: 100%;
+    max-width: 100%;
+    margin: 8px 0;
+  }
+
+  /* Avoid breaking inside */
+  .print-avoid-break {
+    page-break-inside: avoid;
   }
 }
 ```
 
 ---
 
-## 12. Flow Diagram (UPDATED)
+## 9. Flow Diagram
 
 ```
 +-----------------------------------------------------------+
-|                    PATIENT FLOW (FRONTEND)                 |
+|                    PRINT FLOW (FRONTEND)                   |
 +-----------------------------------------------------------+
 |                                                           |
 |  +-----------------------------------------------------+ |
-|  |                    REGISTRATION FLOW                 | |
+|  |                    USER ACTION                       | |
 |  |                                                     | |
-|  |  Staff -> /patients/new -> PatientRegistrationPage  | |
-|  |                    -> useRegisterPatient()           | |
-|  |                    -> POST /patients                 | |
-|  |                    -> Success -> /patients/:id       | |
+|  |  User clicks Print button on patient detail or      | |
+|  |  summary page                                       | |
+|  |         ↓                                           | |
+|  |  PrintButton component handles click                | |
+|  |         ↓                                           | |
+|  |  Navigate to /patients/:id/print                   | |
 |  +-----------------------------------------------------+ |
 |                           |                               |
 |                           v                               |
 |  +-----------------------------------------------------+ |
-|  |                    LIST FLOW                         | |
+|  |                    DATA FETCHING                     | |
 |  |                                                     | |
-|  |  Staff -> /patients -> PatientListPage              | |
-|  |                    -> usePatients()                  | |
-|  |                    -> GET /patients                  | |
-|  |                    -> Display patient cards          | |
-|  |                    -> Search and filter              | |
-|  |                    -> Pagination                     | |
-|  |                    -> Click patient -> /patients/:id | |
+|  |  PatientPrintPage component mounts                  | |
+|  |         ↓                                           | |
+|  |  usePatientPrint(id) hook                          | |
+|  |         ↓                                           | |
+|  |  GET /patients/:id/print                           | |
+|  |         ↓                                           | |
+|  |  Returns PatientPrintData with ALL records         | |
 |  +-----------------------------------------------------+ |
 |                           |                               |
 |                           v                               |
 |  +-----------------------------------------------------+ |
-|  |                    DETAIL FLOW                       | |
+|  |                    RENDER PRINT VIEW                 | |
 |  |                                                     | |
-|  |  Staff -> /patients/:id -> PatientDetailPage        | |
-|  |                    -> usePatient(id)                 | |
-|  |                    -> GET /patients/:id              | |
-|  |                    -> Display patient details        | |
-|  |                    -> Action buttons                 | |
-|  |                    -> View Summary                   | |
-|  |                    -> Record Visit                   | |
-|  |                    -> Order Medication               | |
-|  |                    -> Order Lab Test                 | |
-|  |                    -> Request Referral               | |
-|  |                    -> Record Admission               | |
-|  |                    -> Print History                  | |
+|  |  PatientPrintView renders:                         | |
+|  |    - Institution header                            | |
+|  |    - Patient demographics                          | |
+|  |    - KPS/PPS progress graph                        | |
+|  |    - Visits (FULL details)                         | |
+|  |    - Medications (FULL details)                    | |
+|  |    - Lab tests (FULL details)                      | |
+|  |    - Referrals (FULL details)                      | |
+|  |    - Admissions (FULL details)                     | |
+|  |    - Generated timestamp and user info             | |
 |  +-----------------------------------------------------+ |
 |                           |                               |
 |                           v                               |
 |  +-----------------------------------------------------+ |
-|  |                    SUMMARY FLOW (UPDATED)            | |
+|  |                    AUTO-PRINT                       | |
 |  |                                                     | |
-|  |  Staff -> /patients/:id/summary -> PatientSummaryPage| |
-|  |                    -> usePatientSummary(id)          | |
-|  |                    -> GET /patients/:id/summary      | |
-|  |                    -> Display comprehensive summary  | |
-|  |                    -> Display KPS/PPS progress       | |
-|  |                    -> Print button -> /print         | |
-|  +-----------------------------------------------------+ |
-|                           |                               |
-|                           v                               |
-|  +-----------------------------------------------------+ |
-|  |                    PRINT FLOW (NEW)                  | |
-|  |                                                     | |
-|  |  User clicks Print button -> /patients/:id/print    | |
-|  |                    -> PatientPrintPage               | |
-|  |                    -> usePatientPrint(id)            | |
-|  |                    -> GET /patients/:id/print        | |
-|  |                    -> Display print-optimized view   | |
-|  |                    -> Auto-trigger window.print()    | |
-|  +-----------------------------------------------------+ |
-|                           |                               |
-|                           v                               |
-|  +-----------------------------------------------------+ |
-|  |                    PROGRESS FLOW                     | |
-|  |                                                     | |
-|  |  Staff -> /patients/:id/progress -> PatientProgressPage| |
-|  |                    -> usePatientProgress(id)         | |
-|  |                    -> GET /patients/:id/progress     | |
-|  |                    -> Display KPS/PPS graphs         | |
-|  |                    -> Trend analysis                 | |
+|  |  useEffect triggers window.print()                 | |
+|  |         ↓                                           | |
+|  |  Browser print dialog opens                         | |
+|  |         ↓                                           | |
+|  |  User selects "Save as PDF" or "Print"             | |
+|  |         ↓                                           | |
+|  |  PDF generated with ALL data and FULL details      | |
 |  +-----------------------------------------------------+ |
 |                                                           |
 +-----------------------------------------------------------+

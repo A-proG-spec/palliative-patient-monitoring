@@ -33,6 +33,7 @@ The application has three route categories:
 | Public (no auth) | None | `PublicLayout` | Landing Page |
 | Auth Pages | `PublicRoute` | `AuthLayout` | Login, Register |
 | Authenticated | `ProtectedRoute` | `DashboardLayout` | All admin and staff pages |
+| Print | `ProtectedRoute` | `PrintLayout` | Print views (minimal UI) |
 
 ### 2.2 Role-Based Routing
 
@@ -64,13 +65,14 @@ All API calls are organized by feature in the `src/api/` folder:
 |---|---|
 | `client.ts` | Axios instance configuration with interceptors |
 | `auth.ts` | Authentication API calls (register, login, logout, get user) |
-| `patients.ts` | Patient API calls (CRUD operations) |
+| `patients.ts` | Patient API calls (CRUD operations, print/export) |
 | `visits.ts` | Home visit API calls |
 | `medications.ts` | Medication API calls |
 | `labs.ts` | Laboratory test API calls |
 | `referrals.ts` | Referral API calls |
 | `admissions.ts` | Hospital admission API calls |
-| `admin.ts` | Admin API calls (staff approval, dashboard stats, notifications) |
+| `admin.ts` | Admin API calls (staff approval, dashboard stats, notifications, full patient detail, visit edit, print/export) |
+| `staff.ts` | Staff API calls (dashboard stats, alerts, profile) |
 | `index.ts` | API exports |
 
 ### 3.2 Axios Instance (`src/api/client.ts`)
@@ -105,6 +107,17 @@ api.interceptors.response.use(
     }
     return Promise.reject(error);
   }
+);
+
+// For blob responses (PDF export), don't unwrap
+api.interceptors.response.use(
+  (response) => {
+    if (response.config.responseType === 'blob') {
+      return response;
+    }
+    return response.data;
+  },
+  (error) => Promise.reject(error)
 );
 
 export default api;
@@ -215,6 +228,23 @@ export interface PatientProgressData {
 }
 ```
 
+### 4.3 Print Types (`src/types/print.types.ts`) - NEW
+
+```typescript
+export interface PrintButtonProps {
+  patientId: string;
+  patientName: string;
+  variant?: 'button' | 'icon';
+  label?: string;
+  onPrintStart?: () => void;
+  onPrintComplete?: () => void;
+}
+
+export interface PrintLayoutProps {
+  children: React.ReactNode;
+}
+```
+
 ---
 
 ## 5. Graph Component for KPS/PPS Tracking
@@ -234,6 +264,7 @@ interface PatientProgressGraphProps {
     kps: { trend: 'improving' | 'stable' | 'declining'; percentageChange: number };
     pps: { trend: 'improving' | 'stable' | 'declining'; percentageChange: number };
   };
+  isPrintView?: boolean; // NEW - disables interactivity for print
 }
 ```
 
@@ -285,245 +316,316 @@ export function usePatientProgress(patientId: string) {
 }
 ```
 
-### 5.3 Graph Component Implementation
+---
+
+## 6. Print/Export Conventions (NEW)
+
+### 6.1 Print Layout
+
+A minimal layout for print views that hides all navigation, sidebars, and interactive elements:
 
 ```typescript
-// src/components/patients/PatientProgressGraph.tsx
+// src/components/layouts/PrintLayout.tsx
 
 import React from 'react';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  ReferenceLine,
-} from 'recharts';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 
-interface ProgressDataPoint {
-  visitDate: string;
-  kpsScore: number;
-  ppsScore: number;
+interface PrintLayoutProps {
+  children: React.ReactNode;
 }
 
-interface PatientProgressGraphProps {
-  patientName: string;
-  data: ProgressDataPoint[];
-  loading?: boolean;
-  trends?: {
-    kps: { trend: 'improving' | 'stable' | 'declining'; percentageChange: number };
-    pps: { trend: 'improving' | 'stable' | 'declining'; percentageChange: number };
-  };
-}
-
-export const PatientProgressGraph: React.FC<PatientProgressGraphProps> = ({
-  patientName,
-  data,
-  loading,
-  trends,
-}) => {
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Loading progress data...</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64 animate-pulse bg-muted rounded-lg" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!data || data.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>No Progress Data</CardTitle>
-          <CardDescription>No KPS/PPS scores have been recorded for this patient yet.</CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
-  const getTrendColor = (trend: string) => {
-    switch (trend) {
-      case 'improving':
-        return 'bg-green-100 text-green-800';
-      case 'stable':
-        return 'bg-blue-100 text-blue-800';
-      case 'declining':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getTrendArrow = (trend: string) => {
-    switch (trend) {
-      case 'improving':
-        return '↑';
-      case 'stable':
-        return '→';
-      case 'declining':
-        return '↓';
-      default:
-        return '';
-    }
-  };
-
-  const lastKps = data[data.length - 1]?.kpsScore || 0;
-  const lastPps = data[data.length - 1]?.ppsScore || 0;
-
+export const PrintLayout: React.FC<PrintLayoutProps> = ({ children }) => {
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div>
-            <CardTitle>Patient Progress: {patientName}</CardTitle>
-            <CardDescription>
-              KPS (Karnofsky Performance Score) & PPS (Palliative Performance Scale)
-            </CardDescription>
-          </div>
-          <div className="flex gap-4 text-sm">
-            <div className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-blue-500" />
-              <span>KPS: {lastKps}</span>
-              {trends && (
-                <Badge className={getTrendColor(trends.kps.trend)}>
-                  {getTrendArrow(trends.kps.trend)} {Math.abs(trends.kps.percentageChange)}%
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-green-500" />
-              <span>PPS: {lastPps}</span>
-              {trends && (
-                <Badge className={getTrendColor(trends.pps.trend)}>
-                  {getTrendArrow(trends.pps.trend)} {Math.abs(trends.pps.percentageChange)}%
-                </Badge>
-              )}
-            </div>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis
-                dataKey="visitDate"
-                tick={{ fontSize: 12 }}
-                interval={0}
-                angle={-45}
-                textAnchor="end"
-              />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
-              <Tooltip
-                content={({ active, payload, label }) => {
-                  if (active && payload && payload.length) {
-                    return (
-                      <div className="bg-white p-3 rounded-lg shadow-lg border">
-                        <p className="font-medium">{label}</p>
-                        <p className="text-sm text-blue-600">
-                          KPS: {payload[0]?.value}
-                        </p>
-                        <p className="text-sm text-green-600">
-                          PPS: {payload[1]?.value}
-                        </p>
-                      </div>
-                    );
-                  }
-                  return null;
-                }}
-              />
-              <Legend
-                formatter={(value) => {
-                  const labels = {
-                    kpsScore: 'KPS Score',
-                    ppsScore: 'PPS Score',
-                  };
-                  return labels[value as keyof typeof labels] || value;
-                }}
-              />
-              <ReferenceLine y={80} stroke="#94a3b8" strokeDasharray="3 3" label="High" />
-              <ReferenceLine y={50} stroke="#94a3b8" strokeDasharray="3 3" label="Medium" />
-              <ReferenceLine y={20} stroke="#94a3b8" strokeDasharray="3 3" label="Low" />
-              <Line
-                type="monotone"
-                dataKey="kpsScore"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                dot={{ fill: '#3b82f6', r: 4 }}
-                activeDot={{ r: 6 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="ppsScore"
-                stroke="#22c55e"
-                strokeWidth={2}
-                dot={{ fill: '#22c55e', r: 4 }}
-                activeDot={{ r: 6 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Trend Summary */}
-        {trends && (
-          <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm font-medium">KPS Trend</p>
-                <p className="text-sm text-muted-foreground">
-                  {trends.kps.trend === 'improving'
-                    ? 'Patient shows improvement in functional status'
-                    : trends.kps.trend === 'stable'
-                    ? 'Patient\'s functional status is stable'
-                    : 'Patient shows decline in functional status'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {trends.kps.firstScore} → {trends.kps.lastScore} ({trends.kps.percentageChange}% change)
-                </p>
-              </div>
-              <div>
-                <p className="text-sm font-medium">PPS Trend</p>
-                <p className="text-sm text-muted-foreground">
-                  {trends.pps.trend === 'improving'
-                    ? 'Patient shows improvement in overall performance'
-                    : trends.pps.trend === 'stable'
-                    ? 'Patient\'s overall performance is stable'
-                    : 'Patient shows decline in overall performance'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {trends.pps.firstScore} → {trends.pps.lastScore} ({trends.pps.percentageChange}% change)
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="mt-3 text-xs text-muted-foreground">
-          <p>Scores range from 0-100. Higher scores indicate better functional status.</p>
-          <p>KPS: Measures functional independence | PPS: Measures overall performance</p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="print-layout min-h-screen bg-white">
+      {children}
+    </div>
   );
 };
 ```
 
+### 6.2 Print Button Component
+
+Reusable print button that triggers patient history print:
+
+```typescript
+// src/components/common/PrintButton.tsx
+
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/Button';
+import { Printer } from 'lucide-react';
+
+interface PrintButtonProps {
+  patientId: string;
+  patientName: string;
+  variant?: 'button' | 'icon';
+  label?: string;
+  onPrintStart?: () => void;
+  onPrintComplete?: () => void;
+}
+
+export const PrintButton: React.FC<PrintButtonProps> = ({
+  patientId,
+  patientName,
+  variant = 'button',
+  label = 'Print Patient History',
+  onPrintStart,
+  onPrintComplete,
+}) => {
+  const navigate = useNavigate();
+
+  const handlePrint = () => {
+    onPrintStart?.();
+    navigate(`/patients/${patientId}/print`);
+    onPrintComplete?.();
+  };
+
+  if (variant === 'icon') {
+    return (
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={handlePrint}
+        title={label}
+        className="no-print"
+      >
+        <Printer className="h-4 w-4" />
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      variant="outline"
+      onClick={handlePrint}
+      className="no-print"
+    >
+      <Printer className="h-4 w-4 mr-2" />
+      {label}
+    </Button>
+  );
+};
+```
+
+### 6.3 Print Styles (Global)
+
+```css
+/* src/styles/print.css */
+
+@media print {
+  /* Hide non-print elements */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: A4;
+    margin: 20mm;
+  }
+
+  /* Ensure all content is visible */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  /* Preserve colors in print */
+  .print-color {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Preserve background colors */
+  .print-bg {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Table styling */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  /* Card styling in print */
+  .print-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 12px;
+    page-break-inside: avoid;
+  }
+
+  /* Header styling */
+  .print-header {
+    text-align: center;
+    border-bottom: 2px solid #002395;
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+  }
+
+  .print-header h1 {
+    color: #002395;
+    font-size: 20pt;
+    margin: 0;
+  }
+
+  .print-header .subtitle {
+    font-size: 12pt;
+    color: #555;
+  }
+
+  /* Section styling */
+  .print-section {
+    margin-bottom: 16px;
+  }
+
+  .print-section h2 {
+    font-size: 14pt;
+    color: #002395;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+  }
+
+  .print-section h3 {
+    font-size: 12pt;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 6px 0;
+  }
+
+  /* Field labels */
+  .print-label {
+    font-weight: 600;
+    color: #4b5563;
+  }
+
+  /* Data table styling */
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10pt;
+  }
+
+  .print-table th {
+    background-color: #f3f4f6;
+    font-weight: 600;
+    text-align: left;
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+  }
+
+  .print-table td {
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+  }
+
+  /* Status badges */
+  .print-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 9pt;
+    font-weight: 500;
+  }
+
+  .print-badge-active {
+    background-color: #d1fae5;
+    color: #065f46;
+  }
+
+  .print-badge-discharged {
+    background-color: #f3f4f6;
+    color: #4b5563;
+  }
+
+  .print-badge-ordered {
+    background-color: #fef3c7;
+    color: #92400e;
+  }
+
+  .print-badge-given {
+    background-color: #d1fae5;
+    color: #065f46;
+  }
+
+  .print-badge-pending {
+    background-color: #fef3c7;
+    color: #92400e;
+  }
+
+  .print-badge-accepted {
+    background-color: #d1fae5;
+    color: #065f46;
+  }
+
+  .print-badge-declined {
+    background-color: #fce4ec;
+    color: #b71c1c;
+  }
+
+  /* Footer */
+  .print-footer {
+    text-align: center;
+    font-size: 9pt;
+    color: #9ca3af;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 12px;
+    margin-top: 20px;
+  }
+
+  /* Force page breaks */
+  .page-break {
+    page-break-before: always;
+  }
+
+  /* Graph container */
+  .print-graph {
+    width: 100%;
+    max-width: 100%;
+    margin: 8px 0;
+  }
+
+  /* Avoid breaking inside */
+  .print-avoid-break {
+    page-break-inside: avoid;
+  }
+}
+```
+
+### 6.4 Print Component Guidelines
+
+| Rule | Description |
+|---|---|
+| `no-print` class | Add to any element that should be hidden in print (buttons, navigation, sidebars) |
+| `print-color` class | Add to elements that need to preserve colors (badges, status indicators) |
+| `print-bg` class | Add to elements that need to preserve background colors |
+| `print-card` class | For card-like containers in print view |
+| `print-header` class | For the institution header |
+| `print-section` class | For each data section (Demographics, Visits, Medications, etc.) |
+| `print-table` class | For data tables |
+| `print-badge-*` classes | For status badges with color coding |
+| `page-break` class | Force a page break before an element |
+| `print-avoid-break` class | Prevent page break inside an element |
+
 ---
 
-## 6. Route Guards
+## 7. Route Guards
 
-### 6.1 ProtectedRoute.tsx
+### 7.1 ProtectedRoute.tsx
 
 ```typescript
 // src/routes/ProtectedRoute.tsx
@@ -553,21 +655,21 @@ export const ProtectedRoute = () => {
 
 ---
 
-## 7. Component Reusability Guidelines
+## 8. Component Reusability Guidelines
 
-### 7.1 When to Create a UI Component
+### 8.1 When to Create a UI Component
 
 - Used in multiple places
 - Has consistent styling
 - Is generic (button, input, card)
 
-### 7.2 When to Create a Feature Component
+### 8.2 When to Create a Feature Component
 
 - Specific to a feature (patient card, visit form)
 - Contains business logic
 - Fetches or manipulates data
 
-### 7.3 When to Create a Page
+### 8.3 When to Create a Page
 
 - Represents a route
 - Composes multiple components
@@ -575,7 +677,7 @@ export const ProtectedRoute = () => {
 
 ---
 
-## 8. Error Handling Strategy
+## 9. Error Handling Strategy
 
 | Error Type | Handling |
 |---|---|
@@ -588,7 +690,7 @@ export const ProtectedRoute = () => {
 
 ---
 
-## 9. Performance Optimizations
+## 10. Performance Optimizations
 
 | Strategy | Implementation |
 |---|---|
@@ -600,7 +702,7 @@ export const ProtectedRoute = () => {
 
 ---
 
-## 10. Naming Conventions
+## 11. Naming Conventions
 
 | File Type | Naming Convention | Example |
 |---|---|---|
@@ -614,24 +716,33 @@ export const ProtectedRoute = () => {
 
 ---
 
-## 11. Route Summary
+## 12. Route Summary (UPDATED)
 
 | Route | Component | Layout | Auth |
 |---|---|---|---|
 | `/` | `LandingPage` | `PublicLayout` | None |
 | `/login` | `LoginPage` | `AuthLayout` | None |
 | `/register` | `RegisterPage` | `AuthLayout` | None |
+| `/verify-email` | `VerifyEmailPage` | `PublicLayout` | None |
+| `/resend-verification` | `ResendVerificationPage` | `PublicLayout` | None |
 | `/admin` | `AdminDashboardPage` | `DashboardLayout` | Admin |
+| `/admin/patients` | `AdminPatientListPage` | `DashboardLayout` | Admin |
+| `/admin/patients/:id` | `AdminPatientDetailPage` | `DashboardLayout` | Admin |
+| `/admin/patients/:id/print` | `AdminPatientPrintPage` | `PrintLayout` | Admin |
 | `/admin/staff` | `StaffManagementPage` | `DashboardLayout` | Admin |
 | `/admin/referrals` | `ReferralManagementPage` | `DashboardLayout` | Admin |
+| `/admin/reports` | `ReportsPage` | `DashboardLayout` | Admin |
+| `/admin/settings` | `SettingsPage` | `DashboardLayout` | Admin |
 | `/dashboard` | `DashboardPage` | `DashboardLayout` | Staff |
 | `/patients` | `PatientListPage` | `DashboardLayout` | Staff |
 | `/patients/new` | `PatientRegistrationPage` | `DashboardLayout` | Staff |
 | `/patients/:id` | `PatientDetailPage` | `DashboardLayout` | Staff |
 | `/patients/:id/summary` | `PatientSummaryPage` | `DashboardLayout` | Staff |
+| `/patients/:id/progress` | `PatientProgressPage` | `DashboardLayout` | Staff |
 | `/patients/:id/visits` | `RecordVisitPage` | `DashboardLayout` | Staff |
 | `/patients/:id/medications` | `OrderMedicationPage` | `DashboardLayout` | Staff |
 | `/patients/:id/labs` | `OrderLabPage` | `DashboardLayout` | Staff |
 | `/patients/:id/referrals` | `RequestReferralPage` | `DashboardLayout` | Staff |
 | `/patients/:id/admissions` | `RecordAdmissionPage` | `DashboardLayout` | Staff |
+| `/patients/:id/print` | `PatientPrintPage` | `PrintLayout` | Staff, Admin |
 | `*` | `NotFoundPage` | None | None |
