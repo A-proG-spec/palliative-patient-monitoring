@@ -5,7 +5,7 @@
 
 ## 1. Overview
 
-This document defines the function-level specification for admin features including staff management, dashboard statistics, notifications, referral management, patient discharge, and patient management.
+This document defines the function-level specification for admin features including staff management, dashboard statistics, notifications, referral management, patient management (with full detail view), visit management (edit with audit trail), and print/export functionality.
 
 **Files Covered:**
 - `src/schemas/admin.schema.ts`
@@ -22,10 +22,12 @@ This document defines the function-level specification for admin features includ
 | Schema | Shape |
 |---|---|
 | approveStaffSchema | `z.object({ body: z.object({ role: z.enum(['TeamLeader', 'Physician', 'Nurse']) }) })` |
-| dischargePatientSchema | `z.object({ body: z.object({ dischargeReason: z.enum(['Improved', 'Deceased']) }) })` |
+| closeCaseSchema | `z.object({ body: z.object({ reason: z.enum(['Improved', 'Deceased']) }) })` |
 | getNotificationsQuerySchema | `z.object({ query: z.object({ limit: z.coerce.number().int().positive().optional().default(20), read: z.enum(['true', 'false']).optional() }) })` |
-| getPatientsQuerySchema | `z.object({ query: z.object({ page: z.coerce.number().int().positive().optional().default(1), limit: z.coerce.number().int().positive().max(100).optional().default(20), status: z.enum(['Active', 'Discharged']).optional(), search: z.string().optional() }) })` |
+| getAdminPatientsQuerySchema | `z.object({ query: z.object({ page: z.coerce.number().int().positive().optional().default(1), limit: z.coerce.number().int().positive().max(100).optional().default(20), status: z.enum(['Active', 'Discharged']).optional(), search: z.string().optional() }) })` |
 | getReportsQuerySchema | `z.object({ query: z.object({ startDate: z.string().date().optional(), endDate: z.string().date().optional() }) })` |
+| updateVisitSchema | `z.object({ body: z.object({ visitDate: z.string().date().optional(), timeStarted: z.string().regex(/^\d{2}:\d{2}$/).optional(), timeEnded: z.string().regex(/^\d{2}:\d{2}$/).optional(), visitType: z.enum(['Routine', 'Emergency', 'FirstAssessment', 'PostDischarge', 'EndOfLife', 'Bereavement']).optional(), overallStatus: z.enum(['Stable', 'Deteriorating', 'Critical', 'BedBound']).optional(), mobility: z.enum(['Ambulatory', 'RequiresAssistance', 'Bedridden']).optional(), painScore: z.number().min(0).max(10).optional(), ppsScore: z.number().min(0).max(100).optional(), kpsScore: z.number().min(0).max(100).optional(), outcome: z.enum(['Stable', 'SymptomsImproved', 'SymptomsUnchanged', 'SymptomsWorsened', 'ReferredToFacility', 'Deceased']).optional(), teamLeaderId: z.string().optional(), physicianId: z.string().optional(), nurseId: z.string().optional() }) })` |
+| getVisitParamsSchema | `z.object({ params: z.object({ visitId: z.string().min(1, 'Visit ID is required') }) })` |
 
 ---
 
@@ -44,6 +46,8 @@ This document defines the function-level specification for admin features includ
 | Throws | None |
 | Side Effects | Read-only |
 
+---
+
 #### approveStaff
 
 | Field | Detail |
@@ -56,6 +60,8 @@ This document defines the function-level specification for admin features includ
 | Throws | `ApiError(400, "Invalid role specified")` |
 | Side Effects | Updates staff status to Active, assigns role, creates notification |
 
+---
+
 #### rejectStaff
 
 | Field | Detail |
@@ -66,6 +72,8 @@ This document defines the function-level specification for admin features includ
 | Output | Staff id and updated status |
 | Throws | `ApiError(404, "Staff member not found")` |
 | Side Effects | Updates staff status to Rejected |
+
+---
 
 #### getDashboardStats
 
@@ -78,6 +86,8 @@ This document defines the function-level specification for admin features includ
 | Throws | None |
 | Side Effects | Read-only |
 
+---
+
 #### getNotifications
 
 | Field | Detail |
@@ -88,6 +98,8 @@ This document defines the function-level specification for admin features includ
 | Output | Notifications list with unread count |
 | Throws | None |
 | Side Effects | Read-only |
+
+---
 
 #### markNotificationRead
 
@@ -100,6 +112,8 @@ This document defines the function-level specification for admin features includ
 | Throws | `ApiError(404, "Notification not found")` |
 | Side Effects | Updates notification read status |
 
+---
+
 #### getPatients
 
 | Field | Detail |
@@ -111,28 +125,59 @@ This document defines the function-level specification for admin features includ
 | Throws | None |
 | Side Effects | Read-only |
 
-#### getPatientDetail
+---
+
+#### getPatientDetail (Basic)
 
 | Field | Detail |
 |---|---|
 | Signature | `getPatientDetail(patientId: string): Promise<AdminPatientDetailDTO>` |
-| Purpose | Get detailed patient information including all records |
+| Purpose | Get basic patient information (summary view) |
 | Inputs | patientId |
-| Output | Complete patient detail object |
+| Output | Basic patient detail object |
 | Throws | `ApiError(404, "Patient not found")` |
 | Side Effects | Read-only |
 
-#### dischargePatient
+---
+
+#### getPatientFullDetail (NEW)
 
 | Field | Detail |
 |---|---|
-| Signature | `dischargePatient(patientId: string, reason: string, adminId: string): Promise<DischargeResponseDTO>` |
-| Purpose | Discharge patient (case closed) |
-| Inputs | patientId, reason, adminId |
-| Output | Patient discharge response |
+| Signature | `getPatientFullDetail(patientId: string): Promise<AdminPatientFullDetailDTO>` |
+| Purpose | Get detailed patient information including ALL records (like staff view) with full visit details, medications, labs, referrals, admissions, and KPS/PPS progress |
+| Inputs | patientId |
+| Output | Complete patient detail with all records |
 | Throws | `ApiError(404, "Patient not found")` |
-| Throws | `ApiError(400, "Patient is already discharged")` |
+| Side Effects | Read-only |
+
+**Implementation Details:**
+
+1. Find patient by ID with registeredBy populated
+2. Get all visits with full details (including team members, vitals, pain scores, ADL, symptoms, red flags)
+3. Get all medications with full details
+4. Get all lab tests with full details
+5. Get all referrals with full details (including preparedBy, signature, actionTaken)
+6. Get all admissions with full details (including care plans)
+7. Calculate KPS/PPS progress data from visits
+8. Calculate trends (improving/stable/declining) for KPS and PPS
+9. Return combined object with all data
+
+---
+
+#### closeCase
+
+| Field | Detail |
+|---|---|
+| Signature | `closeCase(patientId: string, reason: string, adminId: string): Promise<CloseCaseResponseDTO>` |
+| Purpose | Close patient case |
+| Inputs | patientId, reason, adminId |
+| Output | Patient close response |
+| Throws | `ApiError(404, "Patient not found")` |
+| Throws | `ApiError(400, "Patient is already closed")` |
 | Side Effects | Updates patient status to Discharged, creates notification |
+
+---
 
 #### getPendingReferrals
 
@@ -145,6 +190,8 @@ This document defines the function-level specification for admin features includ
 | Throws | None |
 | Side Effects | Read-only |
 
+---
+
 #### approveReferral
 
 | Field | Detail |
@@ -155,6 +202,8 @@ This document defines the function-level specification for admin features includ
 | Output | Updated referral object |
 | Throws | `ApiError(404, "Referral not found")` |
 | Side Effects | Updates referral status to Accepted, updates patient location to ReferredHospital, creates notification |
+
+---
 
 #### declineReferral
 
@@ -167,6 +216,96 @@ This document defines the function-level specification for admin features includ
 | Throws | `ApiError(404, "Referral not found")` |
 | Side Effects | Updates referral status to Declined |
 
+---
+
+#### getVisitById (NEW)
+
+| Field | Detail |
+|---|---|
+| Signature | `getVisitById(visitId: string): Promise<AdminVisitFullDetailDTO>` |
+| Purpose | Get visit details with edit history |
+| Inputs | visitId |
+| Output | Full visit detail with edit history |
+| Throws | `ApiError(404, "Visit not found")` |
+| Side Effects | Read-only |
+
+---
+
+#### updateVisit (NEW)
+
+| Field | Detail |
+|---|---|
+| Signature | `updateVisit(visitId: string, data: UpdateVisitInput, adminId: string): Promise<UpdateVisitResponseDTO>` |
+| Purpose | Update visit record (admin only) with audit trail |
+| Inputs | visitId, data, adminId |
+| Output | Updated visit response with audit trail |
+| Throws | `ApiError(404, "Visit not found")` |
+| Throws | `ApiError(403, "Only admin can edit visits")` |
+| Side Effects | Updates visit record, logs changes in edit history |
+
+**Implementation Details:**
+
+1. Find visit by ID
+2. Track changes by comparing each field
+3. Record changes with before/after values
+4. Update visit with new data
+5. Append edit history entry with admin ID, timestamp, and changes
+6. Return updated visit with audit trail
+
+---
+
+#### getVisitEditHistory (NEW)
+
+| Field | Detail |
+|---|---|
+| Signature | `getVisitEditHistory(visitId: string): Promise<VisitEditHistoryEntry[]>` |
+| Purpose | Get visit edit history |
+| Inputs | visitId |
+| Output | Array of edit history entries |
+| Throws | `ApiError(404, "Visit not found")` |
+| Side Effects | Read-only |
+
+---
+
+#### getPatientPrintData (NEW)
+
+| Field | Detail |
+|---|---|
+| Signature | `getPatientPrintData(patientId: string, adminId: string): Promise<AdminPrintDataDTO>` |
+| Purpose | Get patient data formatted for print/export with ALL records and FULL details |
+| Inputs | patientId, adminId |
+| Output | Print-formatted patient data |
+| Throws | `ApiError(404, "Patient not found")` |
+| Side Effects | Read-only |
+
+**Implementation Details:**
+
+1. Get patient with all demographics
+2. Get KPS/PPS progress data with trends
+3. Get all visits with FULL details (vitals, pain scores, ADL, symptoms, red flags, team members)
+4. Get all medications with FULL details
+5. Get all lab tests with FULL details
+6. Get all referrals with FULL details (preparedBy, signature, actionTaken, outcome, follow-up)
+7. Get all admissions with FULL details (care plans, pain management, medication plan, nursing care plan)
+8. Add generation timestamp and admin info
+9. Return combined object
+
+---
+
+#### exportPatientPDF (NEW)
+
+| Field | Detail |
+|---|---|
+| Signature | `exportPatientPDF(patientId: string, adminId: string): Promise<Buffer>` |
+| Purpose | Export patient history as PDF with ALL records and FULL details |
+| Inputs | patientId, adminId |
+| Output | PDF buffer |
+| Throws | `ApiError(404, "Patient not found")` |
+| Throws | `ApiError(500, "Failed to generate PDF")` |
+| Side Effects | Generates PDF file |
+
+---
+
 #### getReports
 
 | Field | Detail |
@@ -177,6 +316,19 @@ This document defines the function-level specification for admin features includ
 | Output | Report data object |
 | Throws | None |
 | Side Effects | Read-only |
+
+---
+
+#### exportReport
+
+| Field | Detail |
+|---|---|
+| Signature | `exportReport(format: 'pdf' | 'excel', startDate?: string, endDate?: string): Promise<Buffer>` |
+| Purpose | Export system report in PDF or Excel format |
+| Inputs | format, startDate, endDate |
+| Output | File buffer |
+| Throws | `ApiError(400, "Invalid export format")` |
+| Side Effects | Generates report file |
 
 ---
 
@@ -194,11 +346,18 @@ This document defines the function-level specification for admin features includ
 | markNotificationRead | `adminService.markNotificationRead(req.params.notificationId)` | 200, `SuccessResponse(200, "Notification marked as read", result)` |
 | getPatients | `adminService.getPatients(req.query.page, req.query.limit, req.query.status, req.query.search)` | 200, `SuccessResponse(200, "OK", result)` |
 | getPatientDetail | `adminService.getPatientDetail(req.params.patientId)` | 200, `SuccessResponse(200, "OK", result)` |
-| dischargePatient | `adminService.dischargePatient(req.params.patientId, req.body.dischargeReason, req.user.id)` | 200, `SuccessResponse(200, "Patient discharged successfully", result)` |
+| getPatientFullDetail | `adminService.getPatientFullDetail(req.params.patientId)` | 200, `SuccessResponse(200, "OK", result)` |
+| closeCase | `adminService.closeCase(req.params.patientId, req.body.reason, req.user.id)` | 200, `SuccessResponse(200, "Patient case closed successfully", result)` |
 | getPendingReferrals | `adminService.getPendingReferrals()` | 200, `SuccessResponse(200, "OK", result)` |
 | approveReferral | `adminService.approveReferral(req.params.referralId, req.user.id)` | 200, `SuccessResponse(200, "Referral approved", result)` |
 | declineReferral | `adminService.declineReferral(req.params.referralId)` | 200, `SuccessResponse(200, "Referral declined", result)` |
+| getVisitById | `adminService.getVisitById(req.params.visitId)` | 200, `SuccessResponse(200, "OK", result)` |
+| updateVisit | `adminService.updateVisit(req.params.visitId, req.body, req.user.id)` | 200, `SuccessResponse(200, "Visit updated successfully", result)` |
+| getVisitEditHistory | `adminService.getVisitEditHistory(req.params.visitId)` | 200, `SuccessResponse(200, "OK", result)` |
+| getPatientPrintData | `adminService.getPatientPrintData(req.params.patientId, req.user.id)` | 200, `SuccessResponse(200, "OK", result)` |
+| exportPatientPDF | `adminService.exportPatientPDF(req.params.patientId, req.user.id)` | 200, Returns PDF file blob |
 | getReports | `adminService.getReports(req.query.startDate, req.query.endDate)` | 200, `SuccessResponse(200, "OK", result)` |
+| exportReport | `adminService.exportReport(req.query.format, req.query.startDate, req.query.endDate)` | 200, Returns file blob |
 
 ---
 
@@ -214,13 +373,20 @@ This document defines the function-level specification for admin features includ
 | GET | /dashboard/stats | `authMiddleware, roleMiddleware(['admin'])` | getDashboardStats |
 | GET | /dashboard/notifications | `authMiddleware, roleMiddleware(['admin']), validate(getNotificationsQuerySchema)` | getNotifications |
 | PUT | /dashboard/notifications/:notificationId/read | `authMiddleware, roleMiddleware(['admin'])` | markNotificationRead |
-| GET | /patients | `authMiddleware, roleMiddleware(['admin']), validate(getPatientsQuerySchema)` | getPatients |
+| GET | /patients | `authMiddleware, roleMiddleware(['admin']), validate(getAdminPatientsQuerySchema)` | getPatients |
 | GET | /patients/:patientId | `authMiddleware, roleMiddleware(['admin'])` | getPatientDetail |
-| PUT | /patients/:patientId/discharge | `authMiddleware, roleMiddleware(['admin']), validate(dischargePatientSchema)` | dischargePatient |
+| GET | /patients/:patientId/full | `authMiddleware, roleMiddleware(['admin'])` | getPatientFullDetail |
+| PUT | /patients/:patientId/close-case | `authMiddleware, roleMiddleware(['admin']), validate(closeCaseSchema)` | closeCase |
+| GET | /patients/:patientId/print | `authMiddleware, roleMiddleware(['admin'])` | getPatientPrintData |
+| GET | /patients/:patientId/export | `authMiddleware, roleMiddleware(['admin'])` | exportPatientPDF |
 | GET | /referrals/pending | `authMiddleware, roleMiddleware(['admin'])` | getPendingReferrals |
 | PUT | /referrals/:referralId/approve | `authMiddleware, roleMiddleware(['admin'])` | approveReferral |
 | PUT | /referrals/:referralId/decline | `authMiddleware, roleMiddleware(['admin'])` | declineReferral |
+| GET | /visits/:visitId | `authMiddleware, roleMiddleware(['admin'])` | getVisitById |
+| PUT | /visits/:visitId | `authMiddleware, roleMiddleware(['admin']), validate(updateVisitSchema)` | updateVisit |
+| GET | /visits/:visitId/history | `authMiddleware, roleMiddleware(['admin'])` | getVisitEditHistory |
 | GET | /reports | `authMiddleware, roleMiddleware(['admin']), validate(getReportsQuerySchema)` | getReports |
+| GET | /reports/export | `authMiddleware, roleMiddleware(['admin'])` | exportReport |
 
 Mounted at: `/api/v1/admin`
 
@@ -270,6 +436,46 @@ const createNotification = async (type: string, message: string, data: any) => {
 };
 ```
 
+### Audit Trail for Visit Edits (NEW)
+
+```typescript
+// src/services/admin.service.ts (internal function)
+
+const trackVisitChanges = (original: any, updated: any): Array<{ field: string; from: any; to: any }> => {
+  const changes: Array<{ field: string; from: any; to: any }> = [];
+  const fieldsToTrack = [
+    'visitDate', 'timeStarted', 'timeEnded', 'visitType',
+    'overallStatus', 'mobility', 'painScore', 'ppsScore', 'kpsScore',
+    'outcome', 'teamLeaderId', 'physicianId', 'nurseId'
+  ];
+
+  for (const field of fieldsToTrack) {
+    if (updated[field] !== undefined && original[field] !== updated[field]) {
+      changes.push({
+        field,
+        from: original[field],
+        to: updated[field]
+      });
+    }
+  }
+
+  return changes;
+};
+
+const addEditHistoryEntry = async (visitId: string, adminId: string, changes: any[]) => {
+  // Append to visit's editHistory array
+  await HomeVisit.findByIdAndUpdate(visitId, {
+    $push: {
+      editHistory: {
+        editedBy: adminId,
+        editedAt: new Date(),
+        changes
+      }
+    }
+  });
+};
+```
+
 ### DTO Types
 
 ```typescript
@@ -295,7 +501,7 @@ export interface DashboardStatsDTO {
   notifications: {
     staffApprovals: number;
     pendingReferrals: number;
-    recentDischarges: number;
+    recentCloseCases: number;
   };
   patientsByStatus: Array<{ status: string; count: number }>;
   recentReferrals: Array<{
@@ -340,41 +546,347 @@ export interface AdminPatientDetailDTO extends AdminPatientDTO {
   diseaseStage: 'Early' | 'Advanced' | 'EndStage';
   comorbidities: string[];
   estimatedPrognosis: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
-  visits: Array<{
-    id: string;
-    visitDate: Date;
-    outcome: string;
-    staff: string;
-  }>;
-  medications: Array<{
-    id: string;
-    name: string;
-    dosage: string;
-    status: string;
-  }>;
-  labTests: Array<{
-    id: string;
-    name: string;
-    dateOrdered: Date;
-    result?: string;
-  }>;
-  referrals: Array<{
-    id: string;
-    date: Date;
-    status: string;
-  }>;
-  admissions: Array<{
-    id: string;
-    date: Date;
-    status: string;
+}
+
+// ============================================
+// FULL ADMIN PATIENT DETAIL DTO (NEW)
+// ============================================
+
+export interface AdminVisitFullDetailDTO {
+  id: string;
+  visitDate: Date;
+  timeStarted: string;
+  timeEnded: string;
+  visitType: string;
+  teamMembers: Array<{ role: string; name: string }>;
+  overallStatus: string;
+  mobility: string;
+  vitals?: {
+    temperature: number;
+    pulse: number;
+    bp: string;
+    respiration: number;
+    spo2: number;
+  };
+  painScore: number;
+  painLocation: string[];
+  painCharacteristics: string[];
+  painMedicationEffective: boolean;
+  symptoms: string[];
+  adl: {
+    feeding: string;
+    bathing: string;
+    dressing: string;
+    toileting: string;
+    mobility: string;
+  };
+  ppsScore: number;
+  kpsScore: number;
+  appetite: string;
+  oralIntake: string;
+  hydrationStatus: string;
+  emotionalStatus: string;
+  familySupport: string;
+  financialDifficulty: boolean;
+  spiritualNeeds: boolean;
+  religiousSupportRequested: boolean;
+  medicationAvailable: boolean;
+  medicationCorrectlyTaken: boolean;
+  medicationSideEffects: boolean;
+  medicationRefillNeeded: boolean;
+  morphineAvailable: boolean;
+  adherenceLevel: string;
+  currentMedications: Array<{ name: string; dosage: string; frequency: string; route: string }>;
+  caregiverBurden: string;
+  caregiverUnderstanding: string;
+  caregivingCapacity: string;
+  familyEmotionalStatus: string;
+  educationProvided: string[];
+  homeCondition: string;
+  homeObservations: string[];
+  nursingCareGiven: string[];
+  redFlags: string[];
+  redFlagActions?: string;
+  referralsMade: string[];
+  outcome: string;
+  nextVisitDate?: Date;
+  teamLeader: { id: string; name: string };
+  physician: { id: string; name: string };
+  nurse: { id: string; name: string };
+  createdAt: Date;
+  updatedAt: Date;
+  canEdit: boolean;
+  editHistory?: Array<{
+    editedBy: { id: string; name: string };
+    editedAt: Date;
+    changes: Array<{ field: string; from: any; to: any }>;
   }>;
 }
 
-export interface DischargeResponseDTO {
+export interface AdminMedicationFullDetailDTO {
+  id: string;
+  name: string;
+  dosage: string;
+  frequency: string;
+  route: string;
+  administeredAt: 'Home' | 'Hospital';
+  status: 'Ordered' | 'Given';
+  prescribedBy: { id: string; name: string };
+  visitId?: string;
+  admissionId?: string;
+  createdAt: Date;
+}
+
+export interface AdminLabFullDetailDTO {
+  id: string;
+  testName: string;
+  dateOrdered: Date;
+  datePerformed?: Date;
+  result?: string;
+  location: 'Home' | 'Hospital';
+  status: 'Ordered' | 'Completed';
+  orderedBy: { id: string; name: string };
+  visitId?: string;
+  admissionId?: string;
+  createdAt: Date;
+}
+
+export interface AdminReferralFullDetailDTO {
+  id: string;
+  referralType: 'Incoming' | 'Outgoing';
+  referralDate: Date;
+  primaryDiagnosis: string;
+  diseaseStage: 'Early' | 'Advanced' | 'EndStage';
+  ppsScore: number;
+  kpsScore: number;
+  currentSymptoms: {
+    pain: number;
+    dyspnea: number;
+    fatigue: number;
+    anxiety: number;
+    depression: number;
+  };
+  reasons: string[];
+  otherReason?: string;
+  referringFacility: string;
+  receivingFacility: string;
+  contactPerson: string;
+  contactNumber: string;
+  status: string;
+  actionTaken?: string;
+  outcome?: string;
+  followUpDate?: Date;
+  followUpStatus?: string;
+  requestedBy: { id: string; name: string };
+  approvedBy?: { id: string; name: string };
+  preparedBy: string;
+  preparedByDesignation: string;
+  signature: string;
+  createdAt: Date;
+}
+
+export interface AdminAdmissionFullDetailDTO {
+  id: string;
+  admissionDate: Date;
+  dischargeDate?: Date;
+  bedNumber: string;
+  ward: string;
+  admittingPhysician: string;
+  careTeam: string;
+  primaryDiagnosis: string;
+  secondaryDiagnoses: string[];
+  diseaseStage: string;
+  comorbidities: string[];
+  estimatedPrognosis: string;
+  ppsScore: number;
+  functionalStatus: string;
+  painScore: number;
+  painType: string;
+  symptomsPresent: string[];
+  emotionalStatus: string;
+  familySupport: string;
+  socialChallenges?: string;
+  spiritualConcerns: boolean;
+  spiritualSupportPreferred?: string;
+  painManagementPlan: string;
+  medicationPlan: string;
+  nursingCarePlan: string;
+  homeBasedCareRequired: boolean;
+  psychosocialSupportPlan?: string;
+  physiotherapyRequired: boolean;
+  dischargeReason?: string;
+  status: string;
+  createdBy: { id: string; name: string };
+  createdAt: Date;
+}
+
+export interface AdminPatientFullDetailDTO extends AdminPatientDTO {
+  dateOfBirth: Date;
+  address: string;
+  phone: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  caregiverName: string;
+  caregiverPhone: string;
+  secondaryDiagnoses: string[];
+  diseaseStage: 'Early' | 'Advanced' | 'EndStage';
+  comorbidities: string[];
+  estimatedPrognosis: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
+  visits: AdminVisitFullDetailDTO[];
+  medications: AdminMedicationFullDetailDTO[];
+  labTests: AdminLabFullDetailDTO[];
+  referrals: AdminReferralFullDetailDTO[];
+  admissions: AdminAdmissionFullDetailDTO[];
+  progress: {
+    data: Array<{ visitId: string; visitDate: Date; kpsScore: number; ppsScore: number }>;
+    trends: {
+      kps: { trend: string; percentageChange: number; firstScore: number; lastScore: number };
+      pps: { trend: string; percentageChange: number; firstScore: number; lastScore: number };
+    };
+  } | null;
+  createdAt: Date;
+}
+
+// ============================================
+// ADMIN VISIT UPDATE TYPES (NEW)
+// ============================================
+
+export interface UpdateVisitInput {
+  visitDate?: string;
+  timeStarted?: string;
+  timeEnded?: string;
+  visitType?: string;
+  teamMembers?: Array<{ role: string; name: string; staffId?: string }>;
+  overallStatus?: string;
+  mobility?: string;
+  vitals?: {
+    temperature?: number;
+    pulse?: number;
+    bp?: string;
+    respiration?: number;
+    spo2?: number;
+  };
+  painScore?: number;
+  painLocation?: string[];
+  painCharacteristics?: string[];
+  painMedicationEffective?: boolean;
+  symptoms?: string[];
+  adl?: {
+    feeding?: string;
+    bathing?: string;
+    dressing?: string;
+    toileting?: string;
+    mobility?: string;
+  };
+  ppsScore?: number;
+  kpsScore?: number;
+  appetite?: string;
+  oralIntake?: string;
+  hydrationStatus?: string;
+  emotionalStatus?: string;
+  familySupport?: string;
+  financialDifficulty?: boolean;
+  spiritualNeeds?: boolean;
+  religiousSupportRequested?: boolean;
+  medicationAvailable?: boolean;
+  medicationCorrectlyTaken?: boolean;
+  medicationSideEffects?: boolean;
+  medicationRefillNeeded?: boolean;
+  morphineAvailable?: boolean;
+  adherenceLevel?: string;
+  currentMedications?: Array<{ name: string; dosage: string; frequency: string; route: string }>;
+  caregiverBurden?: string;
+  caregiverUnderstanding?: string;
+  caregivingCapacity?: string;
+  familyEmotionalStatus?: string;
+  educationProvided?: string[];
+  homeCondition?: string;
+  homeObservations?: string[];
+  nursingCareGiven?: string[];
+  redFlags?: string[];
+  redFlagActions?: string;
+  referralsMade?: string[];
+  outcome?: string;
+  nextVisitDate?: string;
+  teamLeaderId?: string;
+  physicianId?: string;
+  nurseId?: string;
+}
+
+export interface UpdateVisitResponseDTO {
+  id: string;
+  updatedAt: Date;
+  updatedBy: {
+    id: string;
+    name: string;
+  };
+  changes: Array<{
+    field: string;
+    from: any;
+    to: any;
+  }>;
+}
+
+export interface VisitEditHistoryEntry {
+  editedBy: { id: string; name: string };
+  editedAt: Date;
+  changes: Array<{ field: string; from: any; to: any }>;
+}
+
+export interface CloseCaseResponseDTO {
   id: string;
   status: 'Discharged';
-  dischargeReason: 'Improved' | 'Deceased';
-  dischargeDate: Date;
+  closeReason: 'Improved' | 'Deceased';
+  closeDate: Date;
+}
+
+// ============================================
+// ADMIN PRINT TYPES (NEW)
+// ============================================
+
+export interface AdminPrintDataDTO {
+  patient: {
+    id: string;
+    patientDisplayId: string;
+    firstName: string;
+    lastName: string;
+    age: number;
+    sex: string;
+    dateOfBirth: Date;
+    address: string;
+    phone: string;
+    emergencyContactName: string;
+    emergencyContactPhone: string;
+    caregiverName: string;
+    caregiverPhone: string;
+    status: string;
+    currentLocation: string;
+    primaryDiagnosis: string;
+    secondaryDiagnoses: string[];
+    diseaseStage: string;
+    comorbidities: string[];
+    estimatedPrognosis: string;
+    registeredBy: { id: string; name: string };
+    createdAt: Date;
+  };
+  progress: {
+    data: Array<{ visitId: string; visitDate: Date; kpsScore: number; ppsScore: number }>;
+    trends: {
+      kps: { trend: string; percentageChange: number; firstScore: number; lastScore: number };
+      pps: { trend: string; percentageChange: number; firstScore: number; lastScore: number };
+    };
+  } | null;
+  visits: AdminVisitFullDetailDTO[];
+  medications: AdminMedicationFullDetailDTO[];
+  labTests: AdminLabFullDetailDTO[];
+  referrals: AdminReferralFullDetailDTO[];
+  admissions: AdminAdmissionFullDetailDTO[];
+  generatedAt: Date;
+  generatedBy: {
+    id: string;
+    name: string;
+    role: string;
+  };
 }
 
 export interface ReportDataDTO {
@@ -385,7 +897,7 @@ export interface ReportDataDTO {
   referralsByStatus: Array<{ status: string; count: number }>;
   patientsByLocation: Array<{ location: string; count: number }>;
   patientsByStage: Array<{ stage: string; count: number }>;
-  dischargesByReason: Array<{ reason: string; count: number }>;
+  closeCasesByReason: Array<{ reason: string; count: number }>;
   visitsByMonth: Array<{ month: string; count: number }>;
 }
 ```
@@ -411,11 +923,13 @@ export interface ReportDataDTO {
 |---|---|---|
 | approveStaffSchema accepts valid role | parse `{ body: { role: "Nurse" } }` | Passes |
 | approveStaffSchema rejects invalid role | parse `{ body: { role: "Invalid" } }` | Validation fails |
-| dischargePatientSchema accepts valid reason | parse `{ body: { dischargeReason: "Improved" } }` | Passes |
-| dischargePatientSchema rejects invalid reason | parse `{ body: { dischargeReason: "Invalid" } }` | Validation fails |
-| getPatientsQuerySchema default values | parse `{ query: {} }` | page=1, limit=20 |
-| getPatientsQuerySchema accepts valid status | parse `{ query: { status: "Active" } }` | Passes |
-| getPatientsQuerySchema rejects invalid status | parse `{ query: { status: "Invalid" } }` | Validation fails |
+| closeCaseSchema accepts valid reason | parse `{ body: { reason: "Improved" } }` | Passes |
+| closeCaseSchema rejects invalid reason | parse `{ body: { reason: "Invalid" } }` | Validation fails |
+| getAdminPatientsQuerySchema default values | parse `{ query: {} }` | page=1, limit=20 |
+| getAdminPatientsQuerySchema accepts valid status | parse `{ query: { status: "Active" } }` | Passes |
+| getAdminPatientsQuerySchema rejects invalid status | parse `{ query: { status: "Invalid" } }` | Validation fails |
+| updateVisitSchema accepts valid data | parse `{ body: { painScore: 3, outcome: "Stable" } }` | Passes |
+| updateVisitSchema rejects invalid painScore | parse `{ body: { painScore: 15 } }` | Validation fails |
 
 ### admin.service.test.ts
 
@@ -427,13 +941,13 @@ export interface ReportDataDTO {
 | Staff not found | Mock staff not found | call `approveStaff(staffId, role, adminId)` | Throws ApiError(404, "Staff member not found") |
 | Invalid role | Mock staff found | call `approveStaff(staffId, "Invalid", adminId)` | Throws ApiError(400, "Invalid role specified") |
 
-#### dischargePatient
+#### closeCase
 
 | Case | Setup | Action | Expected Result |
 |---|---|---|---|
-| Patient exists and active | Mock patient found with status Active | call `dischargePatient(patientId, reason, adminId)` | Resolves with updated patient, status Discharged |
-| Patient not found | Mock patient not found | call `dischargePatient(patientId, reason, adminId)` | Throws ApiError(404, "Patient not found") |
-| Patient already discharged | Mock patient found with status Discharged | call `dischargePatient(patientId, reason, adminId)` | Throws ApiError(400, "Patient is already discharged") |
+| Patient exists and active | Mock patient found with status Active | call `closeCase(patientId, reason, adminId)` | Resolves with updated patient, status Discharged |
+| Patient not found | Mock patient not found | call `closeCase(patientId, reason, adminId)` | Throws ApiError(404, "Patient not found") |
+| Patient already closed | Mock patient found with status Discharged | call `closeCase(patientId, reason, adminId)` | Throws ApiError(400, "Patient is already closed") |
 
 #### approveReferral
 
@@ -442,9 +956,33 @@ export interface ReportDataDTO {
 | Referral exists and pending | Mock referral found with status Pending | call `approveReferral(referralId, adminId)` | Resolves with updated referral, status Accepted |
 | Referral not found | Mock referral not found | call `approveReferral(referralId, adminId)` | Throws ApiError(404, "Referral not found") |
 
+#### updateVisit (NEW)
+
+| Case | Setup | Action | Expected Result |
+|---|---|---|---|
+| Visit exists and admin | Mock visit found, admin authenticated | call `updateVisit(visitId, data, adminId)` | Resolves with updated visit, audit trail created |
+| Visit not found | Mock visit not found | call `updateVisit(visitId, data, adminId)` | Throws ApiError(404, "Visit not found") |
+| Non-admin user | Mock visit found, staff authenticated | call `updateVisit(visitId, data, staffId)` | Throws ApiError(403, "Only admin can edit visits") |
+| No changes | Mock visit found, data same as original | call `updateVisit(visitId, {}, adminId)` | Resolves with no changes, no audit entry |
+
+#### getPatientFullDetail (NEW)
+
+| Case | Setup | Action | Expected Result |
+|---|---|---|---|
+| Patient exists with all records | Mock patient found with visits, medications, labs, referrals, admissions | call `getPatientFullDetail(patientId)` | Resolves with complete patient detail including KPS/PPS trends |
+| Patient not found | Mock patient not found | call `getPatientFullDetail(patientId)` | Throws ApiError(404, "Patient not found") |
+| Patient with no visits | Mock patient found with no visits | call `getPatientFullDetail(patientId)` | Resolves with patient detail, progress null, empty arrays |
+
+#### getPatientPrintData (NEW)
+
+| Case | Setup | Action | Expected Result |
+|---|---|---|---|
+| Patient exists | Mock patient found with all records | call `getPatientPrintData(patientId, adminId)` | Resolves with print-formatted data including ALL fields |
+| Patient not found | Mock patient not found | call `getPatientPrintData(patientId, adminId)` | Throws ApiError(404, "Patient not found") |
+
 ---
 
-## 9. Flow Diagram
+## 9. Flow Diagram (UPDATED)
 
 ```
 +-----------------------------------------------------------+
@@ -487,7 +1025,7 @@ export interface ReportDataDTO {
 |                           |                               |
 |                           v                               |
 |  +-----------------------------------------------------+ |
-|  |                    PATIENT MANAGEMENT FLOW           | |
+|  |                    PATIENT MANAGEMENT FLOW (UPDATED) | |
 |  |                                                     | |
 |  |  GET /admin/patients                                | |
 |  |         -> adminService.getPatients()               | |
@@ -496,8 +1034,35 @@ export interface ReportDataDTO {
 |  |                                                     | |
 |  |  GET /admin/patients/:patientId                     | |
 |  |         -> adminService.getPatientDetail()          | |
-|  |         -> Get patient with all records             | |
+|  |         -> Get basic patient info                   | |
 |  |         -> Return patient detail                    | |
+|  |                                                     | |
+|  |  GET /admin/patients/:patientId/full (NEW)          | |
+|  |         -> adminService.getPatientFullDetail()      | |
+|  |         -> Get patient with ALL records             | |
+|  |         -> Calculate KPS/PPS trends                 | |
+|  |         -> Return full patient detail               | |
+|  +-----------------------------------------------------+ |
+|                           |                               |
+|                           v                               |
+|  +-----------------------------------------------------+ |
+|  |                    VISIT MANAGEMENT (NEW)            | |
+|  |                                                     | |
+|  |  GET /admin/visits/:visitId                         | |
+|  |         -> adminService.getVisitById()              | |
+|  |         -> Return visit with edit history           | |
+|  |                                                     | |
+|  |  PUT /admin/visits/:visitId                         | |
+|  |         -> adminService.updateVisit()               | |
+|  |         -> Check admin role                         | |
+|  |         -> Track changes                            | |
+|  |         -> Update visit                             | |
+|  |         -> Add audit trail entry                    | |
+|  |         -> Return updated visit                     | |
+|  |                                                     | |
+|  |  GET /admin/visits/:visitId/history                 | |
+|  |         -> adminService.getVisitEditHistory()       | |
+|  |         -> Return edit history                      | |
 |  +-----------------------------------------------------+ |
 |                           |                               |
 |                           v                               |
@@ -519,16 +1084,32 @@ export interface ReportDataDTO {
 |                           |                               |
 |                           v                               |
 |  +-----------------------------------------------------+ |
-|  |                    DISCHARGE FLOW                    | |
+|  |                    CLOSE CASE FLOW                   | |
 |  |                                                     | |
-|  |  PUT /admin/patients/:patientId/discharge           | |
-|  |         -> adminService.dischargePatient()          | |
+|  |  PUT /admin/patients/:patientId/close-case          | |
+|  |         -> adminService.closeCase()                 | |
 |  |         -> Check patient exists                     | |
 |  |         -> Check patient is active                  | |
 |  |         -> Update status to Discharged              | |
-|  |         -> Record discharge reason and date         | |
+|  |         -> Record close reason and date             | |
 |  |         -> Create notification                      | |
-|  |         -> Return discharge response                | |
+|  |         -> Return close response                    | |
+|  +-----------------------------------------------------+ |
+|                           |                               |
+|                           v                               |
+|  +-----------------------------------------------------+ |
+|  |                    PRINT/EXPORT FLOW (NEW)           | |
+|  |                                                     | |
+|  |  GET /admin/patients/:patientId/print               | |
+|  |         -> adminService.getPatientPrintData()       | |
+|  |         -> Get patient with ALL records             | |
+|  |         -> Format for print                         | |
+|  |         -> Return print data                        | |
+|  |                                                     | |
+|  |  GET /admin/patients/:patientId/export              | |
+|  |         -> adminService.exportPatientPDF()          | |
+|  |         -> Generate PDF with ALL data               | |
+|  |         -> Return PDF file                          | |
 |  +-----------------------------------------------------+ |
 |                           |                               |
 |                           v                               |
@@ -544,3 +1125,4 @@ export interface ReportDataDTO {
 |  +-----------------------------------------------------+ |
 |                                                           |
 +-----------------------------------------------------------+
+```

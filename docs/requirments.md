@@ -1,3 +1,5 @@
+# requirements.md
+
 # PALLIATIVE PATIENT MONITORING SYSTEM - REQUIREMENTS
 
 ## 1. Functional Requirements
@@ -32,81 +34,90 @@
 | FR-19 | Patient has status: Active or Closed | Must | System |
 | FR-20 | Patient has current location: Home or ReferredHospital | Must | System |
 | FR-21 | Admin can close patient cases (case closed) | Must | Admin |
+| FR-22 | Admin can view patient details with full records (visits, medications, labs, referrals, admissions) | Must | Admin |
+| FR-23 | Admin can click on patient name in any admin table to navigate to patient detail page | Must | Admin |
 
 ### C. Home Visits
 
 | ID | Requirement | Priority | Actor |
 |---|---|---|---|
-| FR-22 | Staff can record home visits | Must | Staff |
-| FR-23 | Home visit records include patient condition, vitals, pain assessment | Must | Staff |
-| FR-24 | Home visit records include symptoms, functional status, ADL | Must | Staff |
-| FR-25 | Home visit records include medication review, caregiver assessment | Must | Staff |
-| FR-26 | Home visit records include education provided, home environment | Must | Staff |
-| FR-27 | Home visit records include red flag assessment and actions taken | Must | Staff |
-| FR-28 | Staff can schedule follow-up visits | Should | Staff |
+| FR-24 | Staff can record home visits | Must | Staff |
+| FR-25 | Home visit records include patient condition, vitals, pain assessment | Must | Staff |
+| FR-26 | Home visit records include symptoms, functional status, ADL | Must | Staff |
+| FR-27 | Home visit records include medication review, caregiver assessment | Must | Staff |
+| FR-28 | Home visit records include education provided, home environment | Must | Staff |
+| FR-29 | Home visit records include red flag assessment and actions taken | Must | Staff |
+| FR-30 | Staff can schedule follow-up visits | Should | Staff |
+| FR-31 | Admin can edit visit records to correct errors | Must | Admin |
+| FR-32 | All admin edits to visit records are tracked with audit trail (who, when, what changed) | Must | Admin |
+| FR-33 | Staff cannot edit visit records after submission | Must | System |
 
 ### D. Medications
 
 | ID | Requirement | Priority | Actor |
 |---|---|---|---|
-| FR-29 | Staff can order medications for patients | Must | Staff |
-| FR-30 | Medication records include name, dosage, frequency, route | Must | Staff |
-| FR-31 | Medication records include location (Home or Hospital) | Must | Staff |
-| FR-32 | Medication records include prescribed by and status | Must | Staff |
+| FR-34 | Staff can order medications for patients | Must | Staff |
+| FR-35 | Medication records include name, dosage, frequency, route | Must | Staff |
+| FR-36 | Medication records include location (Home or Hospital) | Must | Staff |
+| FR-37 | Medication records include prescribed by and status | Must | Staff |
 
 ### E. Laboratory Tests
 
 | ID | Requirement | Priority | Actor |
 |---|---|---|---|
-| FR-33 | Staff can order laboratory tests | Must | Staff |
-| FR-34 | Lab test records include test name, ordered date, performed date | Must | Staff |
-| FR-35 | Lab test records include result as text description | Must | Staff |
-| FR-36 | Lab test records include location (Home or Hospital) | Must | Staff |
+| FR-38 | Staff can order laboratory tests | Must | Staff |
+| FR-39 | Lab test records include test name, ordered date, performed date | Must | Staff |
+| FR-40 | Lab test records include result as text description | Must | Staff |
+| FR-41 | Lab test records include location (Home or Hospital) | Must | Staff |
 
 ### F. Referrals
 
 | ID | Requirement | Priority | Actor |
 |---|---|---|---|
-| FR-37 | Staff can request patient referrals | Must | Staff |
-| FR-38 | Referral requests include patient info, clinical info, reason | Must | Staff |
-| FR-39 | Referral requests include prepared by details (name, designation, signature) | Must | Staff |
-| FR-40 | Admin can approve or decline referral requests | Must | Admin |
-| FR-41 | Referral approval triggers patient location change to ReferredHospital | Must | System |
-| FR-42 | Referral declined keeps patient in Active status | Must | System |
-| FR-43 | Referral records include follow-up status | Should | Staff, Admin |
+| FR-42 | Staff can request patient referrals | Must | Staff |
+| FR-43 | Referral requests include patient info, clinical info, reason | Must | Staff |
+| FR-44 | Referral requests include prepared by details (name, designation, signature) | Must | Staff |
+| FR-45 | Admin can approve or decline referral requests | Must | Admin |
+| FR-46 | Referral approval triggers patient location change to ReferredHospital | Must | System |
+| FR-47 | Referral declined keeps patient in Active status | Must | System |
+| FR-48 | Referral records include follow-up status | Should | Staff, Admin |
+| FR-49 | Admin can click on patient name in referral list to view patient details | Must | Admin |
 
 ### G. Hospital Admission
 
 | ID | Requirement | Priority | Actor |
 |---|---|---|---|
-| FR-44 | Staff can create hospital admission records for referred patients | Must | Staff |
-| FR-45 | Admission records include patient identification, referral info | Must | Staff |
-| FR-46 | Admission records include medical diagnosis and palliative eligibility | Must | Staff |
-| FR-47 | Admission records include pain assessment and initial care plan | Must | Staff |
-| FR-48 | Admission records include assigned bed and care team | Must | Staff |
-| FR-49 | Admission status changes to Discharged upon hospital discharge | Must | System |
+| FR-50 | Staff can create hospital admission records for referred patients | Must | Staff |
+| FR-51 | Admission records include patient identification, referral info | Must | Staff |
+| FR-52 | Admission records include medical diagnosis and palliative eligibility | Must | Staff |
+| FR-53 | Admission records include pain assessment and initial care plan | Must | Staff |
+| FR-54 | Admission records include assigned bed and care team | Must | Staff |
+| FR-55 | Admission status changes to Discharged upon hospital discharge | Must | System |
 
 ### H. Staff Dashboard
 
 | ID | Requirement | Priority | Actor |
 |---|---|---|---|
-| FR-50 | Staff has a dashboard with assigned patients overview | Must | Staff |
-| FR-51 | Staff dashboard shows today's visits count | Must | Staff |
-| FR-52 | Staff dashboard shows total and active patients | Must | Staff |
-| FR-53 | Staff dashboard shows recent visits | Must | Staff |
-| FR-54 | Staff dashboard shows upcoming scheduled visits | Must | Staff |
-| FR-55 | Staff dashboard shows alerts (red flags, pending referrals, overdue visits) | Must | Staff |
-| FR-56 | Staff dashboard auto-refreshes every 60 seconds | Should | Staff |
+| FR-56 | Staff has a dashboard with assigned patients overview | Must | Staff |
+| FR-57 | Staff dashboard shows today's visits count | Must | Staff |
+| FR-58 | Staff dashboard shows total and active patients | Must | Staff |
+| FR-59 | Staff dashboard shows recent visits | Must | Staff |
+| FR-60 | Staff dashboard shows upcoming scheduled visits | Must | Staff |
+| FR-61 | Staff dashboard shows alerts (red flags, pending referrals, overdue visits) | Must | Staff |
+| FR-62 | Staff dashboard auto-refreshes every 60 seconds | Should | Staff |
 
-### I. Reports
+### I. Reports & Print
 
 | ID | Requirement | Priority | Actor |
 |---|---|---|---|
-| FR-57 | Staff can view patient summary reports | Must | Staff |
-| FR-58 | Admin can view comprehensive patient statistics | Must | Admin |
-| FR-59 | Reports include patient history, visits, medications, lab results | Must | Staff, Admin |
-| FR-60 | Reports include referral history and admission details | Should | Staff, Admin |
-| FR-61 | Admin can export reports in PDF or Excel format | Could | Admin |
+| FR-63 | Staff can view patient summary reports | Must | Staff |
+| FR-64 | Admin can view comprehensive patient statistics | Must | Admin |
+| FR-65 | Reports include patient history, visits, medications, lab results | Must | Staff, Admin |
+| FR-66 | Reports include referral history and admission details | Should | Staff, Admin |
+| FR-67 | Admin can export reports in PDF or Excel format | Could | Admin |
+| FR-68 | Staff and Admin can print/export patient history as PDF | Should | Staff, Admin |
+| FR-69 | Printable patient history includes all data: demographics, visits, medications, lab tests, referrals, admissions, KPS/PPS progress | Should | Staff, Admin |
+| FR-70 | Print view is formatted for professional presentation with institution header | Should | System |
 
 ## 2. Non-Functional Requirements
 
@@ -117,9 +128,12 @@
 | Security | Admin and staff areas authenticated | Code review |
 | Security | Role-based access control enforced | Manual testing |
 | Security | Email verification required before login | Manual testing |
+| Security | Admin edit actions are logged with audit trail | Code review |
 | Usability | Mobile-responsive design | Manual testing |
+| Usability | Print-ready format for patient records | Visual inspection |
 | Availability | 99% uptime target | Monitoring |
-| Data Integrity | Patient records immutable (no updates) | Code review |
+| Data Integrity | Patient records immutable (no updates except admin edits to visits) | Code review |
+| Data Integrity | Visit edits tracked with audit trail | Code review |
 | Data Accuracy | All forms validated before submission | Code review |
 
 ## 3. Explicitly Out of Scope
@@ -131,6 +145,29 @@
 - No real-time updates
 - No payment processing
 - No appointment reminders
-- No export functionality for staff (admin only)
+- No export functionality for staff (admin only for reports)
 - No social login (Google, Facebook, etc.)
+- No staff editing of patient records (admin only)
+- No bulk edit of visits
 
+## 4. Summary of Changes
+
+| Change | Before | After |
+|---|---|---|
+| Admin patient detail view | Basic info only | Full patient records like staff view |
+| Admin click patient name | Not available | Navigate to patient detail from any admin table |
+| Admin edit visits | Not allowed | Admin can edit visit records with audit trail |
+| Visit edit audit trail | Not tracked | Who, when, what changed tracked |
+| Staff visit edit | Not allowed | Still not allowed (unchanged) |
+| Print patient history | Not available | Staff and Admin can print/export |
+| Printable format | Not defined | Professional layout with institution header |
+| FR-22 | Not present | Admin full patient detail view |
+| FR-23 | Not present | Admin click patient name navigation |
+| FR-31 | Not present | Admin edit visits |
+| FR-32 | Not present | Audit trail for edits |
+| FR-49 | Not present | Admin click patient name in referrals |
+| FR-68 | Not present | Print/export patient history |
+| FR-69 | Not present | Printable patient history content |
+| FR-70 | Not present | Print professional formatting |
+```
+```

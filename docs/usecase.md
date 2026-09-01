@@ -1,3 +1,5 @@
+# usecases.md
+
 # PALLIATIVE PATIENT MONITORING SYSTEM - USE CASES
 
 ## UC-01: Staff Registration
@@ -168,7 +170,7 @@
 | Actor | Staff |
 | Precondition | Patient exists and is active |
 | Trigger | Staff conducts home visit |
-| Linked FR | FR-22 through FR-28 |
+| Linked FR | FR-24 through FR-30 |
 
 **Main Flow:**
 1. Staff selects patient
@@ -200,14 +202,96 @@
 
 ---
 
-## UC-08: Request Referral
+## UC-08: Admin Edits Visit Record
+
+| Field | Detail |
+|---|---|
+| Actor | Admin |
+| Precondition | Visit record exists and contains errors |
+| Trigger | Admin identifies error in visit record |
+| Linked FR | FR-31, FR-32, FR-33 |
+
+**Main Flow:**
+1. Admin navigates to patient detail page
+2. Admin views the visit records tab
+3. Admin identifies visit with error
+4. Admin clicks "Edit" button on the visit
+5. System opens edit modal with pre-filled visit data
+6. Admin modifies the incorrect fields
+7. Admin submits changes
+8. System validates the updated data
+9. System updates the visit record
+10. System logs the edit in audit trail (admin ID, timestamp, fields changed)
+11. System displays success message: "Visit updated successfully"
+12. System shows "Edited by [Admin Name]" on the visit
+
+**Alternate Flows:**
+- Validation fails: system shows field-specific errors
+- Staff tries to edit: system returns "Permission denied" error
+
+**Postcondition:** Visit record updated, audit trail created
+
+---
+
+## UC-09: Admin Views Patient Detail with Full Records
+
+| Field | Detail |
+|---|---|
+| Actor | Admin |
+| Precondition | Patient exists |
+| Trigger | Admin navigates to patient detail |
+| Linked FR | FR-18, FR-22, FR-23 |
+
+**Main Flow:**
+1. Admin navigates to patient list
+2. Admin clicks on patient name or "View Details"
+3. System displays full patient detail view
+4. System shows all sections:
+   - Patient demographics
+   - Medical diagnosis
+   - Complete visit history (with Edit button)
+   - Complete medication list
+   - Complete lab test results
+   - Complete referral history
+   - Complete admission records
+   - KPS/PPS progress graph (if available)
+5. Admin can click "Edit" on any visit to correct errors
+6. Admin can click patient name in any table to navigate
+
+**Postcondition:** Admin sees complete patient data, same as staff view
+
+---
+
+## UC-10: Admin Clicks Patient Name to Navigate
+
+| Field | Detail |
+|---|---|
+| Actor | Admin |
+| Precondition | Patient name appears in any admin table (referrals, notifications, etc.) |
+| Trigger | Admin clicks on patient name |
+| Linked FR | FR-23, FR-49 |
+
+**Main Flow:**
+1. Admin views an admin table (referral list, notification list, patient list)
+2. Admin clicks on any patient name displayed
+3. System navigates to patient detail page: `/admin/patients/:patientId`
+4. System displays full patient details
+
+**Alternate Flows:**
+- Patient not found: system shows 404 error
+
+**Postcondition:** Admin is on patient detail page
+
+---
+
+## UC-11: Request Referral
 
 | Field | Detail |
 |---|---|
 | Actor | Staff |
 | Precondition | Patient is active and being monitored |
 | Trigger | Staff identifies need for hospital care |
-| Linked FR | FR-37, FR-38, FR-39 |
+| Linked FR | FR-42, FR-43, FR-44 |
 
 **Main Flow:**
 1. Staff selects patient
@@ -226,14 +310,14 @@
 
 ---
 
-## UC-09: Admin Approves Referral
+## UC-12: Admin Approves Referral
 
 | Field | Detail |
 |---|---|
 | Actor | Admin |
 | Precondition | Pending referral requests exist |
 | Trigger | Admin reviews referral requests |
-| Linked FR | FR-40, FR-41, FR-42, FR-12 |
+| Linked FR | FR-45, FR-46, FR-47, FR-12, FR-49 |
 
 **Main Flow:**
 1. Admin views dashboard with pending referral notification
@@ -252,14 +336,14 @@
 
 ---
 
-## UC-10: Record Hospital Admission
+## UC-13: Record Hospital Admission
 
 | Field | Detail |
 |---|---|
 | Actor | Staff |
 | Precondition | Referral has been accepted |
 | Trigger | Patient is admitted to hospital |
-| Linked FR | FR-44 through FR-49 |
+| Linked FR | FR-50 through FR-55 |
 
 **Main Flow:**
 1. Staff selects patient with accepted referral
@@ -279,14 +363,14 @@
 
 ---
 
-## UC-11: Admin Closes Patient Case
+## UC-14: Admin Closes Patient Case
 
 | Field | Detail |
 |---|---|
 | Actor | Admin |
 | Precondition | Patient is active |
 | Trigger | Patient has improved or passed away |
-| Linked FR | FR-21, FR-49, FR-13 |
+| Linked FR | FR-21, FR-55, FR-13 |
 
 **Main Flow:**
 1. Admin selects patient
@@ -302,14 +386,14 @@
 
 ---
 
-## UC-12: View Patient Summary Report
+## UC-15: View Patient Summary Report
 
 | Field | Detail |
 |---|---|
 | Actor | Staff, Admin |
 | Precondition | Patient exists |
 | Trigger | User views patient details |
-| Linked FR | FR-57 through FR-60 |
+| Linked FR | FR-63 through FR-66 |
 
 **Main Flow:**
 1. User selects patient
@@ -326,7 +410,40 @@
 
 ---
 
-## UC-13: Admin Views Dashboard Notifications
+## UC-16: Print Patient History
+
+| Field | Detail |
+|---|---|
+| Actor | Staff, Admin |
+| Precondition | Patient exists and has records |
+| Trigger | User clicks "Print" or "Export PDF" on patient summary |
+| Linked FR | FR-68, FR-69, FR-70 |
+
+**Main Flow:**
+1. User navigates to patient summary page
+2. User clicks "Print/Export PDF" button
+3. System opens print dialog with formatted patient data
+4. System displays:
+   - Institution header (Yekatit 12 Hospital Medical College)
+   - Patient demographics and ID
+   - All visits (chronological)
+   - All medications
+   - All lab tests
+   - All referrals
+   - All admissions
+   - KPS/PPS progress graph (if available)
+   - Generated date
+5. User selects "Save as PDF" or prints
+6. System generates PDF/printout
+
+**Alternate Flows:**
+- No data available: system shows "No records to print" message
+
+**Postcondition:** Patient history printed/exported as PDF
+
+---
+
+## UC-17: Admin Views Dashboard Notifications
 
 | Field | Detail |
 |---|---|
@@ -342,6 +459,7 @@
 4. System shows count of pending referrals
 5. System shows count of recent case closures
 6. Admin clicks on notification to view details
+7. If notification is referral-related, admin can click patient name to view details
 
 **Alternate Flows:**
 - No pending items: system shows "All clear" message
@@ -351,14 +469,14 @@
 
 ---
 
-## UC-14: Staff Views Dashboard
+## UC-18: Staff Views Dashboard
 
 | Field | Detail |
 |---|---|
 | Actor | Staff |
 | Precondition | Staff is authenticated, email verified, and active |
 | Trigger | Staff logs in or navigates to dashboard |
-| Linked FR | FR-50 through FR-56 |
+| Linked FR | FR-56 through FR-62 |
 
 **Main Flow:**
 1. Staff logs in
@@ -379,7 +497,7 @@
 
 ---
 
-## UC-15: Staff Views Profile
+## UC-19: Staff Views Profile
 
 | Field | Detail |
 |---|---|
@@ -398,7 +516,7 @@
 
 ---
 
-## UC-16: Staff Updates Profile
+## UC-20: Staff Updates Profile
 
 | Field | Detail |
 |---|---|
@@ -422,14 +540,14 @@
 
 ---
 
-## UC-17: Staff Views Alerts
+## UC-21: Staff Views Alerts
 
 | Field | Detail |
 |---|---|
 | Actor | Staff |
 | Precondition | Staff is authenticated, email verified, and active |
 | Trigger | Staff navigates to alerts section |
-| Linked FR | FR-55 |
+| Linked FR | FR-61 |
 
 **Main Flow:**
 1. Staff navigates to alerts section
@@ -440,4 +558,3 @@
 6. Staff marks alert as read
 
 **Postcondition:** Alert read status updated
-
