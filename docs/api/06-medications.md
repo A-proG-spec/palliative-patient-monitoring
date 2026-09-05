@@ -1,4 +1,4 @@
-# api/05-medications.md
+# api/06-medications.md
 
 
 # PALLIATIVE PATIENT MONITORING SYSTEM - MEDICATIONS API SPECIFICATION

@@ -1,6 +1,6 @@
-# folder-structure/frontend-structure.md
+# UPDATED: PALLIATIVE PATIENT MONITORING SYSTEM - FRONTEND FOLDER & FILE STRUCTURE
 
-
+```markdown
 # PALLIATIVE PATIENT MONITORING SYSTEM - FRONTEND FOLDER & FILE STRUCTURE
 
 ## 1. Overview
@@ -16,6 +16,7 @@ This document defines the complete frontend folder structure for the Palliative 
 - Zustand (State Management)
 - React Hook Form + Zod
 - Recharts (for graphs)
+- Sonner (Toast Notifications)
 
 ## 2. Complete Folder Structure
 
@@ -25,17 +26,19 @@ frontend/
 │   └── favicon.svg
 ├── src/
 │   ├── api/
-│   │   ├── auth.ts
-│   │   ├── patients.ts
-│   │   ├── visits.ts
-│   │   ├── medications.ts
-│   │   ├── labs.ts
-│   │   ├── referrals.ts
-│   │   ├── admissions.ts
 │   │   ├── admin.ts
-│   │   ├── staff.ts
+│   │   ├── admissions.ts
+│   │   ├── auth.ts
 │   │   ├── client.ts
-│   │   └── index.ts
+│   │   ├── index.ts
+│   │   ├── labs.ts
+│   │   ├── medications.ts
+│   │   ├── patients.ts
+│   │   ├── profile.ts                  # NEW - Profile API calls
+│   │   ├── referrals.ts
+│   │   ├── signatures.ts               # NEW - Digital signature API calls
+│   │   ├── staff.ts                    # NEW - Staff API calls
+│   │   └── visits.ts
 │   ├── assets/
 │   │   ├── images/
 │   │   └── icons/
@@ -71,13 +74,14 @@ frontend/
 │   │   │   ├── AdminMedicationList.tsx   # NEW - Full medication list
 │   │   │   ├── AdminLabList.tsx          # NEW - Full lab test list
 │   │   │   ├── AdminReferralList.tsx     # NEW - Full referral list
-│   │   │   ├── AdminAdmissionList.tsx    # NEW - Full admission list
+│   │   │   ├── AdminAdmissionList.tsx    # NEW - Full admission list with edit
 │   │   │   ├── DashboardStats.tsx
 │   │   │   ├── NotificationList.tsx
 │   │   │   ├── CloseCaseModal.tsx
 │   │   │   ├── ReferralApprovalList.tsx
 │   │   │   ├── StaffApprovalList.tsx
 │   │   │   ├── VisitEditModal.tsx        # NEW - Admin edit visit modal
+│   │   │   ├── AdmissionEditModal.tsx    # NEW - Admin edit admission modal
 │   │   │   └── index.ts
 │   │   ├── patients/
 │   │   │   ├── PatientCard.tsx
@@ -90,6 +94,7 @@ frontend/
 │   │   ├── visits/
 │   │   │   ├── VisitForm.tsx
 │   │   │   ├── VisitList.tsx
+│   │   │   ├── SignatureSection.tsx      # NEW - Digital signature section
 │   │   │   └── index.ts
 │   │   ├── medications/
 │   │   │   ├── MedicationForm.tsx
@@ -107,12 +112,17 @@ frontend/
 │   │   │   ├── AdmissionForm.tsx
 │   │   │   ├── AdmissionList.tsx
 │   │   │   └── index.ts
-│   │   └── staff/
-│   │       ├── StaffDashboardStats.tsx
-│   │       ├── PatientAssignmentList.tsx
-│   │       ├── RecentVisitsList.tsx
-│   │       ├── UpcomingVisitsList.tsx
-│   │       ├── AlertList.tsx
+│   │   ├── staff/
+│   │   │   ├── StaffDashboardStats.tsx
+│   │   │   ├── PatientAssignmentList.tsx
+│   │   │   ├── RecentVisitsList.tsx
+│   │   │   ├── UpcomingVisitsList.tsx
+│   │   │   ├── AlertList.tsx
+│   │   │   └── index.ts
+│   │   └── profile/                     # NEW - Profile components
+│   │       ├── ProfileInfo.tsx
+│   │       ├── ChangePassword.tsx
+│   │       ├── ActivityStats.tsx
 │   │       └── index.ts
 │   ├── constants/
 │   │   └── index.ts
@@ -124,13 +134,16 @@ frontend/
 │   │   ├── useMedications.ts
 │   │   ├── usePatientProgress.ts
 │   │   ├── usePatients.ts
+│   │   ├── useProfile.ts                # NEW - Profile hooks
 │   │   ├── useReferrals.ts
+│   │   ├── useSignatures.ts             # NEW - Digital signature hooks
 │   │   ├── useStaff.ts
 │   │   ├── useVisits.ts
 │   │   └── index.ts
 │   ├── lib/
 │   │   ├── axios.ts
 │   │   ├── queryClient.ts
+│   │   ├── toast.ts                     # NEW - Toast utility
 │   │   └── utils.ts
 │   ├── pages/
 │   │   ├── admin/
@@ -161,10 +174,14 @@ frontend/
 │   │   │   └── ResendVerificationPage.tsx
 │   │   ├── LandingPage.tsx
 │   │   ├── NotFoundPage.tsx
+│   │   ├── ProfilePage.tsx               # NEW - Profile page
+│   │   ├── UnauthorizedPage.tsx          # NEW - Unauthorized page
 │   │   └── index.ts
 │   ├── routes/
 │   │   ├── ProtectedRoute.tsx
 │   │   ├── PublicRoute.tsx
+│   │   ├── AdminRoute.tsx                # NEW - Admin route guard
+│   │   ├── StaffRoute.tsx                # NEW - Staff route guard
 │   │   └── index.tsx
 │   ├── store/
 │   │   ├── auth.store.ts
@@ -180,8 +197,11 @@ frontend/
 │   │   ├── medication.types.ts
 │   │   ├── patient.types.ts
 │   │   ├── print.types.ts               # NEW - Print-related types
+│   │   ├── profile.types.ts             # NEW - Profile types
 │   │   ├── referral.types.ts
+│   │   ├── signature.types.ts           # NEW - Digital signature types
 │   │   ├── staff.types.ts
+│   │   ├── toast.types.ts               # NEW - Toast types
 │   │   ├── visit.types.ts
 │   │   └── index.ts
 │   ├── schemas/
@@ -191,7 +211,9 @@ frontend/
 │   │   ├── medication.schema.ts
 │   │   ├── lab.schema.ts
 │   │   ├── referral.schema.ts
-│   │   └── admission.schema.ts
+│   │   ├── admission.schema.ts
+│   │   ├── profile.schema.ts            # NEW - Profile schemas
+│   │   └── signature.schema.ts          # NEW - Digital signature schemas
 │   ├── App.tsx
 │   ├── main.tsx
 │   └── vite-env.d.ts
@@ -240,13 +262,15 @@ frontend/
 |---|---|
 | `client.ts` | Axios instance configuration with interceptors (includes blob support for PDF) |
 | `auth.ts` | Authentication API calls (register, login, verify email, resend verification, logout, get user) |
+| `profile.ts` | **NEW** - Profile API calls (get profile, update profile, change password, activity stats) |
+| `signatures.ts` | **NEW** - Digital signature API calls (sign visit, get visit signatures) |
 | `patients.ts` | Patient API calls (CRUD operations, print/export) |
 | `visits.ts` | Home visit API calls |
 | `medications.ts` | Medication API calls |
 | `labs.ts` | Laboratory test API calls |
 | `referrals.ts` | Referral API calls |
 | `admissions.ts` | Hospital admission API calls |
-| `admin.ts` | Admin API calls (staff approval, dashboard stats, notifications, close case, full patient detail, visit edit, print/export) |
+| `admin.ts` | Admin API calls (staff approval, dashboard stats, notifications, close case, full patient detail, visit edit, admission edit, print/export) |
 | `staff.ts` | Staff API calls (dashboard stats, alerts, profile) |
 | `index.ts` | API exports |
 
@@ -299,14 +323,10 @@ frontend/
 
 | Folder | Purpose | New Files |
 |---|---|---|
-| `admin/` | Admin-specific components | `AdminVisitList.tsx`, `AdminMedicationList.tsx`, `AdminLabList.tsx`, `AdminReferralList.tsx`, `AdminAdmissionList.tsx`, `VisitEditModal.tsx` |
+| `admin/` | Admin-specific components | `AdminVisitList.tsx`, `AdminMedicationList.tsx`, `AdminLabList.tsx`, `AdminReferralList.tsx`, `AdminAdmissionList.tsx`, `VisitEditModal.tsx`, `AdmissionEditModal.tsx` |
 | `patients/` | Patient management components | `PatientPrintView.tsx` |
-| `visits/` | Home visit components | - |
-| `medications/` | Medication components | - |
-| `labs/` | Laboratory test components | - |
-| `referrals/` | Referral components | - |
-| `admissions/` | Hospital admission components | - |
-| `staff/` | Staff dashboard components | - |
+| `visits/` | Home visit components | `SignatureSection.tsx` |
+| `profile/` | **NEW** - Profile components | `ProfileInfo.tsx`, `ChangePassword.tsx`, `ActivityStats.tsx` |
 
 ### 3.4 Constants (`src/constants/`)
 
@@ -319,7 +339,7 @@ frontend/
 | File | Purpose | Depends On |
 |---|---|---|
 | `useAuth.ts` | Authentication hooks (register, login, verify email, resend verification, logout, get user) | `api/auth.ts`, `store/auth.store.ts` |
-| `useAdmin.ts` | Admin hooks (staff approval, dashboard stats, notifications, close case, full patient detail, visit edit, print) | `api/admin.ts` |
+| `useAdmin.ts` | Admin hooks (staff approval, dashboard stats, notifications, close case, full patient detail, visit edit, admission edit, print) | `api/admin.ts` |
 | `usePatients.ts` | Patient hooks (list, detail, register, summary, progress, print) | `api/patients.ts` |
 | `useVisits.ts` | Visit hooks (record, list, detail) | `api/visits.ts` |
 | `useMedications.ts` | Medication hooks (order, list, update) | `api/medications.ts` |
@@ -327,7 +347,10 @@ frontend/
 | `useReferrals.ts` | Referral hooks (request, list, detail) | `api/referrals.ts` |
 | `useAdmissions.ts` | Admission hooks (record, list, update) | `api/admissions.ts` |
 | `useStaff.ts` | Staff dashboard hooks (dashboard stats, profile, alerts) | `api/staff.ts` |
+| `useProfile.ts` | **NEW** - Profile hooks (get profile, update profile, change password, activity stats) | `api/profile.ts` |
+| `useSignatures.ts` | **NEW** - Digital signature hooks (sign visit, get visit signatures) | `api/signatures.ts` |
 | `usePatientProgress.ts` | Patient progress hooks (KPS/PPS graph data) | `api/patients.ts` |
+| `index.ts` | All hooks exported | - |
 
 ### 3.6 Lib (`src/lib/`)
 
@@ -335,6 +358,7 @@ frontend/
 |---|---|
 | `axios.ts` | Axios instance with interceptors (includes blob response handling) |
 | `queryClient.ts` | React Query client configuration |
+| `toast.ts` | **NEW** - Toast notification utility (success, error, warning, info, loading, promise) |
 | `utils.ts` | Utility functions |
 
 ### 3.7 Pages (`src/pages/`)
@@ -345,7 +369,7 @@ frontend/
 |---|---|---|
 | `AdminDashboardPage.tsx` | Admin dashboard with statistics and notifications | `/admin` |
 | `AdminPatientListPage.tsx` | View all patients | `/admin/patients` |
-| `AdminPatientDetailPage.tsx` | View patient details with full records and edit visits | `/admin/patients/:patientId` |
+| `AdminPatientDetailPage.tsx` | View patient details with full records and edit visits/admissions | `/admin/patients/:patientId` |
 | `AdminPatientPrintPage.tsx` | **NEW** - Admin print/export view | `/admin/patients/:patientId/print` |
 | `StaffManagementPage.tsx` | Manage staff registrations | `/admin/staff` |
 | `ReferralManagementPage.tsx` | Manage referral approvals | `/admin/referrals` |
@@ -383,6 +407,8 @@ frontend/
 |---|---|---|
 | `LandingPage.tsx` | Landing page | `/` |
 | `NotFoundPage.tsx` | 404 page | `*` |
+| `UnauthorizedPage.tsx` | **NEW** - Unauthorized access page | `/unauthorized` |
+| `ProfilePage.tsx` | **NEW** - User profile page | `/profile` |
 
 ### 3.8 Routes (`src/routes/`)
 
@@ -390,6 +416,8 @@ frontend/
 |---|---|
 | `ProtectedRoute.tsx` | Protects routes requiring authentication |
 | `PublicRoute.tsx` | Redirects authenticated users away from public routes |
+| `AdminRoute.tsx` | **NEW** - Admin route guard (redirects non-admin to unauthorized) |
+| `StaffRoute.tsx` | **NEW** - Staff route guard (redirects non-staff to unauthorized) |
 | `index.tsx` | Router configuration |
 
 ### 3.9 Store (`src/store/`)
@@ -411,7 +439,7 @@ frontend/
 | File | Purpose |
 |---|---|
 | `auth.types.ts` | Authentication types |
-| `admin.types.ts` | Admin types (includes full patient detail, visit edit, print types) |
+| `admin.types.ts` | Admin types (includes full patient detail, visit edit, admission edit, print types) |
 | `patient.types.ts` | Patient types (includes print/export types) |
 | `visit.types.ts` | Visit types |
 | `medication.types.ts` | Medication types |
@@ -420,6 +448,9 @@ frontend/
 | `admission.types.ts` | Admission types |
 | `staff.types.ts` | Staff types |
 | `print.types.ts` | **NEW** - Print-related types (PrintButtonProps, PrintLayoutProps) |
+| `profile.types.ts` | **NEW** - Profile types (Profile, UpdateProfileRequest, ChangePasswordRequest, ActivityStats) |
+| `signature.types.ts` | **NEW** - Digital signature types (Signature, SignVisitRequest, VisitSignaturesResponse) |
+| `toast.types.ts` | **NEW** - Toast types (ToastType, ToastOptions) |
 | `index.ts` | All types exported |
 
 ### 3.12 Schemas (`src/schemas/`)
@@ -433,12 +464,14 @@ frontend/
 | `lab.schema.ts` | Lab form validation schemas |
 | `referral.schema.ts` | Referral form validation schemas |
 | `admission.schema.ts` | Admission form validation schemas |
+| `profile.schema.ts` | **NEW** - Profile form validation schemas (update profile, change password) |
+| `signature.schema.ts` | **NEW** - Digital signature form validation schema |
 
 ### 3.13 Root Files
 
 | File | Purpose |
 |---|---|
-| `App.tsx` | Main application component |
+| `App.tsx` | Main application component (includes Toaster for toast notifications) |
 | `main.tsx` | Application entry point |
 | `vite-env.d.ts` | Vite environment types |
 
@@ -447,115 +480,122 @@ frontend/
 ### Phase 1: Configuration & Types
 1. `src/styles/globals.css`
 2. `src/styles/print.css` **NEW**
-3. `src/types/` (all type files)
+3. `src/types/` (all type files including new ones)
 4. `src/constants/index.ts`
 
 ### Phase 2: API Client
 5. `src/lib/utils.ts`
 6. `src/lib/axios.ts` (with blob support)
 7. `src/lib/queryClient.ts`
-8. `src/api/client.ts`
-9. `src/api/index.ts`
+8. `src/lib/toast.ts` **NEW**
+9. `src/api/client.ts`
+10. `src/api/index.ts`
 
 ### Phase 3: Store
-10. `src/store/auth.store.ts`
-11. `src/store/index.ts`
+11. `src/store/auth.store.ts`
+12. `src/store/index.ts`
 
 ### Phase 4: UI Components
-12. `src/components/ui/` (all UI components)
-13. `src/components/common/StatusBadge.tsx`
-14. `src/components/common/LoadingSpinner.tsx`
-15. `src/components/common/EmptyState.tsx`
-16. `src/components/common/PrintButton.tsx` **NEW**
+13. `src/components/ui/` (all UI components)
+14. `src/components/common/StatusBadge.tsx`
+15. `src/components/common/LoadingSpinner.tsx`
+16. `src/components/common/EmptyState.tsx`
+17. `src/components/common/PrintButton.tsx` **NEW**
 
 ### Phase 5: Layouts
-17. `src/components/layouts/PublicLayout.tsx`
-18. `src/components/layouts/AuthLayout.tsx`
-19. `src/components/layouts/DashboardLayout.tsx`
-20. `src/components/layouts/PrintLayout.tsx` **NEW**
-21. `src/components/common/Navbar.tsx`
-22. `src/components/common/Sidebar.tsx`
-23. `src/components/common/Footer.tsx`
-24. `src/components/common/ErrorBoundary.tsx`
+18. `src/components/layouts/PublicLayout.tsx`
+19. `src/components/layouts/AuthLayout.tsx`
+20. `src/components/layouts/DashboardLayout.tsx`
+21. `src/components/layouts/PrintLayout.tsx` **NEW**
+22. `src/components/common/Navbar.tsx`
+23. `src/components/common/Sidebar.tsx`
+24. `src/components/common/Footer.tsx`
+25. `src/components/common/ErrorBoundary.tsx`
 
 ### Phase 6: API Files
-25. `src/api/auth.ts`
-26. `src/api/patients.ts` (includes print/export)
-27. `src/api/visits.ts`
-28. `src/api/medications.ts`
-29. `src/api/labs.ts`
-30. `src/api/referrals.ts`
-31. `src/api/admissions.ts`
-32. `src/api/admin.ts` (includes full detail, visit edit, print)
-33. `src/api/staff.ts`
+26. `src/api/auth.ts`
+27. `src/api/profile.ts` **NEW**
+28. `src/api/signatures.ts` **NEW**
+29. `src/api/patients.ts` (includes print/export)
+30. `src/api/visits.ts`
+31. `src/api/medications.ts`
+32. `src/api/labs.ts`
+33. `src/api/referrals.ts`
+34. `src/api/admissions.ts`
+35. `src/api/admin.ts` (includes full detail, visit edit, admission edit, print)
+36. `src/api/staff.ts`
 
 ### Phase 7: Schemas
-34. `src/schemas/auth.schema.ts`
-35. `src/schemas/patient.schema.ts`
-36. `src/schemas/visit.schema.ts`
-37. `src/schemas/medication.schema.ts`
-38. `src/schemas/lab.schema.ts`
-39. `src/schemas/referral.schema.ts`
-40. `src/schemas/admission.schema.ts`
+37. `src/schemas/auth.schema.ts`
+38. `src/schemas/patient.schema.ts`
+39. `src/schemas/visit.schema.ts`
+40. `src/schemas/medication.schema.ts`
+41. `src/schemas/lab.schema.ts`
+42. `src/schemas/referral.schema.ts`
+43. `src/schemas/admission.schema.ts`
+44. `src/schemas/profile.schema.ts` **NEW**
+45. `src/schemas/signature.schema.ts` **NEW**
 
 ### Phase 8: Hooks
-41. `src/hooks/useAuth.ts`
-42. `src/hooks/useAdmin.ts` (includes full detail, visit edit, print)
-43. `src/hooks/usePatients.ts` (includes print)
-44. `src/hooks/useVisits.ts`
-45. `src/hooks/useMedications.ts`
-46. `src/hooks/useLabs.ts`
-47. `src/hooks/useReferrals.ts`
-48. `src/hooks/useAdmissions.ts`
-49. `src/hooks/useStaff.ts`
-50. `src/hooks/usePatientProgress.ts`
-51. `src/hooks/index.ts`
+46. `src/hooks/useAuth.ts`
+47. `src/hooks/useAdmin.ts` (includes full detail, visit edit, admission edit, print)
+48. `src/hooks/usePatients.ts` (includes print)
+49. `src/hooks/useVisits.ts`
+50. `src/hooks/useMedications.ts`
+51. `src/hooks/useLabs.ts`
+52. `src/hooks/useReferrals.ts`
+53. `src/hooks/useAdmissions.ts`
+54. `src/hooks/useStaff.ts`
+55. `src/hooks/useProfile.ts` **NEW**
+56. `src/hooks/useSignatures.ts` **NEW**
+57. `src/hooks/usePatientProgress.ts`
+58. `src/hooks/index.ts`
 
-### Phase 9: Pages
-52. `src/pages/auth/LoginPage.tsx`
-53. `src/pages/auth/RegisterPage.tsx`
-54. `src/pages/auth/VerifyEmailPage.tsx`
-55. `src/pages/auth/ResendVerificationPage.tsx`
-56. `src/pages/LandingPage.tsx`
-57. `src/pages/admin/AdminDashboardPage.tsx`
-58. `src/pages/admin/AdminPatientListPage.tsx`
-59. `src/pages/admin/AdminPatientDetailPage.tsx` (full detail with edit)
-60. `src/pages/admin/AdminPatientPrintPage.tsx` **NEW**
-61. `src/pages/admin/StaffManagementPage.tsx`
-62. `src/pages/admin/ReferralManagementPage.tsx`
-63. `src/pages/admin/ReportsPage.tsx`
-64. `src/pages/admin/SettingsPage.tsx`
-65. `src/pages/staff/DashboardPage.tsx`
-66. `src/pages/staff/PatientListPage.tsx`
-67. `src/pages/staff/PatientRegistrationPage.tsx`
-68. `src/pages/staff/PatientDetailPage.tsx`
-69. `src/pages/staff/PatientSummaryPage.tsx` (with print)
-70. `src/pages/staff/PatientPrintPage.tsx` **NEW**
-71. `src/pages/staff/RecordVisitPage.tsx`
-72. `src/pages/staff/OrderMedicationPage.tsx`
-73. `src/pages/staff/OrderLabPage.tsx`
-74. `src/pages/staff/RequestReferralPage.tsx`
-75. `src/pages/staff/RecordAdmissionPage.tsx`
-76. `src/pages/NotFoundPage.tsx`
+### Phase 9: Feature Components
+59. `src/components/visits/SignatureSection.tsx` **NEW**
+60. `src/components/admin/` (all admin components including new ones)
+61. `src/components/patients/` (all patient components including PatientPrintView)
+62. `src/components/profile/` **NEW** (ProfileInfo, ChangePassword, ActivityStats)
 
-### Phase 10: Feature Components
-77. `src/components/admin/` (all admin components including new ones)
-78. `src/components/patients/` (all patient components including PatientPrintView)
-79. `src/components/visits/` (all visit components)
-80. `src/components/medications/` (all medication components)
-81. `src/components/labs/` (all lab components)
-82. `src/components/referrals/` (all referral components)
-83. `src/components/admissions/` (all admission components)
-84. `src/components/staff/` (all staff dashboard components)
+### Phase 10: Pages
+63. `src/pages/auth/LoginPage.tsx`
+64. `src/pages/auth/RegisterPage.tsx`
+65. `src/pages/auth/VerifyEmailPage.tsx`
+66. `src/pages/auth/ResendVerificationPage.tsx`
+67. `src/pages/LandingPage.tsx`
+68. `src/pages/UnauthorizedPage.tsx` **NEW**
+69. `src/pages/ProfilePage.tsx` **NEW**
+70. `src/pages/admin/AdminDashboardPage.tsx`
+71. `src/pages/admin/AdminPatientListPage.tsx`
+72. `src/pages/admin/AdminPatientDetailPage.tsx` (full detail with edit)
+73. `src/pages/admin/AdminPatientPrintPage.tsx` **NEW**
+74. `src/pages/admin/StaffManagementPage.tsx`
+75. `src/pages/admin/ReferralManagementPage.tsx`
+76. `src/pages/admin/ReportsPage.tsx`
+77. `src/pages/admin/SettingsPage.tsx`
+78. `src/pages/staff/DashboardPage.tsx`
+79. `src/pages/staff/PatientListPage.tsx`
+80. `src/pages/staff/PatientRegistrationPage.tsx`
+81. `src/pages/staff/PatientDetailPage.tsx`
+82. `src/pages/staff/PatientSummaryPage.tsx` (with print)
+83. `src/pages/staff/PatientPrintPage.tsx` **NEW**
+84. `src/pages/staff/RecordVisitPage.tsx` (with signatures)
+85. `src/pages/staff/OrderMedicationPage.tsx`
+86. `src/pages/staff/OrderLabPage.tsx`
+87. `src/pages/staff/RequestReferralPage.tsx`
+88. `src/pages/staff/RecordAdmissionPage.tsx`
+89. `src/pages/NotFoundPage.tsx`
 
 ### Phase 11: Routing
-85. `src/routes/PublicRoute.tsx`
-86. `src/routes/ProtectedRoute.tsx`
-87. `src/routes/index.tsx` (includes print routes)
+90. `src/routes/PublicRoute.tsx`
+91. `src/routes/ProtectedRoute.tsx`
+92. `src/routes/AdminRoute.tsx` **NEW**
+93. `src/routes/StaffRoute.tsx` **NEW**
+94. `src/routes/index.tsx` (includes print routes, profile, unauthorized)
 
 ### Phase 12: App
-88. `src/App.tsx` (imports print.css)
-89. `src/main.tsx`
+95. `src/App.tsx` (imports print.css, adds Toaster)
+96. `src/main.tsx`
 
 ## 5. Import Path Aliases
 
@@ -615,34 +655,3 @@ VITE_API_URL=http://localhost:5000/api/v1
 VITE_APP_NAME=Palliative Care System
 VITE_APP_ENV=development
 ```
-
-## 8. Route Summary (UPDATED)
-
-| Route | Component | Layout | Auth |
-|---|---|---|---|
-| `/` | `LandingPage` | `PublicLayout` | None |
-| `/login` | `LoginPage` | `AuthLayout` | None |
-| `/register` | `RegisterPage` | `AuthLayout` | None |
-| `/verify-email` | `VerifyEmailPage` | `PublicLayout` | None |
-| `/resend-verification` | `ResendVerificationPage` | `PublicLayout` | None |
-| `/admin` | `AdminDashboardPage` | `DashboardLayout` | Admin |
-| `/admin/patients` | `AdminPatientListPage` | `DashboardLayout` | Admin |
-| `/admin/patients/:patientId` | `AdminPatientDetailPage` | `DashboardLayout` | Admin |
-| `/admin/patients/:patientId/print` | `AdminPatientPrintPage` | `PrintLayout` | Admin |
-| `/admin/staff` | `StaffManagementPage` | `DashboardLayout` | Admin |
-| `/admin/referrals` | `ReferralManagementPage` | `DashboardLayout` | Admin |
-| `/admin/reports` | `ReportsPage` | `DashboardLayout` | Admin |
-| `/admin/settings` | `SettingsPage` | `DashboardLayout` | Admin |
-| `/dashboard` | `DashboardPage` | `DashboardLayout` | Staff |
-| `/patients` | `PatientListPage` | `DashboardLayout` | Staff |
-| `/patients/new` | `PatientRegistrationPage` | `DashboardLayout` | Staff |
-| `/patients/:patientId` | `PatientDetailPage` | `DashboardLayout` | Staff |
-| `/patients/:patientId/summary` | `PatientSummaryPage` | `DashboardLayout` | Staff |
-| `/patients/:patientId/print` | `PatientPrintPage` | `PrintLayout` | Staff |
-| `/patients/:patientId/visits` | `RecordVisitPage` | `DashboardLayout` | Staff |
-| `/patients/:patientId/medications` | `OrderMedicationPage` | `DashboardLayout` | Staff |
-| `/patients/:patientId/labs` | `OrderLabPage` | `DashboardLayout` | Staff |
-| `/patients/:patientId/referrals` | `RequestReferralPage` | `DashboardLayout` | Staff |
-| `/patients/:patientId/admissions` | `RecordAdmissionPage` | `DashboardLayout` | Staff |
-| `*` | `NotFoundPage` | None | None |
-

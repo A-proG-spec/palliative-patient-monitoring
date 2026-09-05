@@ -19,7 +19,7 @@ This document defines the frontend implementation for the staff dashboard featur
 
 ---
 
-## 3. Staff Sidebar Navigation
+## 3. Staff Sidebar Navigation (UPDATED)
 
 The staff sidebar contains the following navigation items in order:
 
@@ -34,6 +34,7 @@ The staff sidebar contains the following navigation items in order:
 |  ------------------------------------------------- |
 |  Staff Name                                        |
 |  staff@example.com                                 |
+|  [Profile]                                         |
 |  [Logout]                                          |
 +---------------------------------------------------+
 ```
@@ -45,6 +46,7 @@ The staff sidebar contains the following navigation items in order:
 | 1 | Dashboard | `/dashboard` | Today's visits count |
 | 2 | Patients | `/patients` | Total patients assigned |
 | 3 | Visits | `/patients/:id/visits` | - |
+| 4 | Profile | `/profile` | - |
 
 ---
 
@@ -100,6 +102,7 @@ export interface StaffProfile {
   role: 'TeamLeader' | 'Physician' | 'Nurse';
   assignedPatientsCount: number;
   todayVisitsCount: number;
+  createdAt: string;
 }
 ```
 
@@ -283,11 +286,11 @@ interface UpcomingVisitsListProps {
 +-----------------------------------------------------------+
 | Upcoming Visits                                            |
 | +-------------------------------------------------------+ |
-| | Patient        | Date       | Type            |         |
+| | Patient        | Date       | Type            |         | |
 | +----------------+------------+-----------------+---------+ |
-| | Sarah Johnson  | 2026-09-05 | Routine         |         |
-| | Michael Brown  | 2026-09-06 | Follow-up       |         |
-| | John Smith     | 2026-09-07 | Emergency       | ⚠️      |
+| | Sarah Johnson  | 2026-09-05 | Routine         |         | |
+| | Michael Brown  | 2026-09-06 | Follow-up       |         | |
+| | John Smith     | 2026-09-07 | Emergency       | ⚠️      | |
 | +----------------+------------+-----------------+---------+ |
 +-----------------------------------------------------------+
 ```
@@ -468,6 +471,10 @@ export const DashboardPage: React.FC = () => {
           path: '/dashboard', 
           element: withSuspense(DashboardPage) 
         },
+        { 
+          path: '/profile', 
+          element: withSuspense(ProfilePage) 
+        },
         // ... other staff routes
       ],
     },
@@ -477,7 +484,7 @@ export const DashboardPage: React.FC = () => {
 
 ---
 
-## 10. Flow Diagram
+## 10. Flow Diagram (UPDATED)
 
 ```
 +-----------------------------------------------------------+
@@ -514,6 +521,18 @@ export const DashboardPage: React.FC = () => {
 |  |  "Record Visit" button -> /patients/:id/visits      | |
 |  |  "View Summary" button -> /patients/:id/summary    | |
 |  +-----------------------------------------------------+ |
+|                           |                               |
+|                           v                               |
+|  +-----------------------------------------------------+ |
+|  |                    PROFILE FLOW (NEW)                | |
+|  |                                                     | |
+|  |  Staff clicks Profile in sidebar -> /profile        | |
+|  |         -> ProfilePage                              | |
+|  |         -> View profile information                 | |
+|  |         -> Edit name and phone                      | |
+|  |         -> Change password                          | |
+|  |         -> View activity statistics                 | |
+|  +-----------------------------------------------------+ |
 |                                                           |
 +-----------------------------------------------------------+
 ```
@@ -532,6 +551,7 @@ export const DashboardPage: React.FC = () => {
 | Alerts | Red flags, pending referrals, overdue visits |
 | Quick Actions | Record Visit, View Summary buttons |
 | Auto-Refresh | Dashboard updates every 60 seconds |
+| Profile Access | Access to profile page from sidebar |
 
 ---
 
@@ -589,5 +609,4 @@ export interface StaffDashboardStats {
     createdAt: Date;
   }>;
 }
-```
 ```

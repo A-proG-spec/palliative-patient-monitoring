@@ -1,3 +1,4 @@
+```markdown
 # frontend-specification/08-admissions.md
 
 
@@ -5,9 +6,9 @@
 
 ## 1. Overview
 
-This document defines the frontend implementation for hospital admission management features including recording admissions, viewing admission history, and updating admission status.
+This document defines the frontend implementation for hospital admission management features including recording admissions, viewing admission history, updating admission status (admin only), and admin editing of admission records with audit trail.
 
-**API Reference:** `api/08-admissions.md`
+**API Reference:** `api/08-admissions.md`, `api/12-admin-admissions.md`
 
 ---
 
@@ -17,6 +18,7 @@ This document defines the frontend implementation for hospital admission managem
 |---|---|---|---|
 | `/patients/:id/admissions` | `RecordAdmissionPage` | `DashboardLayout` | Staff |
 | `/patients/:id/admissions/:admissionId` | `AdmissionDetailPage` | `DashboardLayout` | Staff |
+| `/admin/patients/:patientId` | `AdminPatientDetailPage` | `DashboardLayout` | Admin |
 
 ---
 
@@ -31,6 +33,7 @@ export interface HospitalAdmission {
   referralId: string;
   admissionDate: string;
   dischargeDate?: string;
+  hospitalPatientId?: string;
   bedNumber: string;
   ward: string;
   admittingPhysician: string;
@@ -66,6 +69,7 @@ export interface HospitalAdmission {
 export interface CreateAdmissionRequest {
   referralId: string;
   admissionDate: string;
+  hospitalPatientId?: string;
   bedNumber: string;
   ward: string;
   admittingPhysician: string;
@@ -104,6 +108,80 @@ export interface AdmissionListResponse {
   page: number;
   limit: number;
   total: number;
+}
+
+// ============================================
+// ADMIN ADMISSION TYPES (NEW)
+// ============================================
+
+export interface AdminAdmissionDetail extends HospitalAdmission {
+  patientName: string;
+  patientDisplayId: string;
+  canEdit: boolean;
+  editHistory?: Array<{
+    editedBy: { id: string; name: string };
+    editedAt: string;
+    changes: Array<{ field: string; from: any; to: any }>;
+  }>;
+}
+
+export interface UpdateAdminAdmissionRequest {
+  admissionDate?: string;
+  bedNumber?: string;
+  ward?: string;
+  admittingPhysician?: string;
+  careTeam?: string;
+  primaryDiagnosis?: string;
+  secondaryDiagnoses?: string[];
+  diseaseStage?: 'Early' | 'Advanced' | 'Terminal';
+  comorbidities?: string[];
+  estimatedPrognosis?: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
+  ppsScore?: number;
+  functionalStatus?: 'FullyIndependent' | 'PartiallyDependent' | 'FullyDependent';
+  painScore?: number;
+  painType?: 'Acute' | 'Chronic' | 'Neuropathic' | 'Mixed';
+  symptomsPresent?: string[];
+  emotionalStatus?: 'Stable' | 'Anxious' | 'Depressed' | 'Distressed';
+  familySupport?: 'Strong' | 'Moderate' | 'Weak' | 'None';
+  socialChallenges?: string;
+  spiritualConcerns?: boolean;
+  spiritualSupportPreferred?: 'ReligiousLeader' | 'Counselor' | 'Other';
+  painManagementPlan?: string;
+  medicationPlan?: string;
+  nursingCarePlan?: string;
+  homeBasedCareRequired?: boolean;
+  psychosocialSupportPlan?: string;
+  physiotherapyRequired?: boolean;
+  status?: 'Active' | 'Discharged';
+  dischargeDate?: string;
+  dischargeReason?: 'Improved' | 'Deceased';
+}
+
+export interface UpdateAdminAdmissionResponse {
+  id: string;
+  updatedAt: string;
+  updatedBy: {
+    id: string;
+    name: string;
+  };
+  changes: Array<{
+    field: string;
+    from: any;
+    to: any;
+  }>;
+  admission: {
+    id: string;
+    admissionDate: string;
+    bedNumber: string;
+    painScore: number;
+    status: string;
+  };
+}
+
+export interface AdmissionEditHistoryEntry {
+  editedBy: { id: string; name: string };
+  editedAt: string;
+  changes: Array<{ field: string; from: any; to: any }>;
 }
 ```
 
@@ -147,11 +225,51 @@ export const admissionApi = {
   },
 
   /**
-   * Update admission status (discharge)
+   * Update admission status (discharge) - ADMIN ONLY
    * PUT /patients/:patientId/admissions/:admissionId
    */
   update: (patientId: string, admissionId: string, data: UpdateAdmissionRequest): Promise<HospitalAdmission> => {
     return api.put<HospitalAdmission>(`/patients/${patientId}/admissions/${admissionId}`, data).then((res) => res.data);
+  },
+};
+```
+
+```typescript
+// src/api/admin.ts (NEW ADMIN ADMISSION METHODS)
+
+import api from './client';
+import { 
+  AdminAdmissionDetail,
+  UpdateAdminAdmissionRequest,
+  UpdateAdminAdmissionResponse,
+  AdmissionEditHistoryEntry
+} from '@/types/admission.types';
+
+export const adminApi = {
+  // ... existing methods
+
+  /**
+   * Get admission details with edit history (admin only)
+   * GET /admin/admissions/:admissionId
+   */
+  getAdmissionById: (admissionId: string): Promise<AdminAdmissionDetail> => {
+    return api.get<AdminAdmissionDetail>(`/admin/admissions/${admissionId}`).then((res) => res.data);
+  },
+
+  /**
+   * Update admission record (admin only)
+   * PUT /admin/admissions/:admissionId
+   */
+  updateAdmission: (admissionId: string, data: UpdateAdminAdmissionRequest): Promise<UpdateAdminAdmissionResponse> => {
+    return api.put<UpdateAdminAdmissionResponse>(`/admin/admissions/${admissionId}`, data).then((res) => res.data);
+  },
+
+  /**
+   * Get admission edit history (admin only)
+   * GET /admin/admissions/:admissionId/history
+   */
+  getAdmissionEditHistory: (admissionId: string): Promise<AdmissionEditHistoryEntry[]> => {
+    return api.get<AdmissionEditHistoryEntry[]>(`/admin/admissions/${admissionId}/history`).then((res) => res.data);
   },
 };
 ```
@@ -208,7 +326,8 @@ export function useRecordAdmission(patientId: string) {
 }
 
 /**
- * Update admission status (discharge)
+ * Update admission status (discharge) - ADMIN ONLY
+ * This hook should only be used by admin users
  */
 export function useUpdateAdmission(patientId: string) {
   const queryClient = useQueryClient();
@@ -217,9 +336,59 @@ export function useUpdateAdmission(patientId: string) {
       admissionApi.update(patientId, admissionId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'admissions'] });
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'admissions'] });
       queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'summary'] });
     },
+  });
+}
+```
+
+```typescript
+// src/hooks/useAdmin.ts (NEW ADMIN ADMISSION HOOKS)
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { adminApi } from '@/api/admin';
+import { UpdateAdminAdmissionRequest } from '@/types/admission.types';
+import { toastUtils } from '@/lib/toast';
+
+/**
+ * Get admission details with edit history (admin only)
+ */
+export function useAdminAdmissionDetail(admissionId: string) {
+  return useQuery({
+    queryKey: ['admin', 'admissions', admissionId],
+    queryFn: () => adminApi.getAdmissionById(admissionId),
+    enabled: !!admissionId,
+  });
+}
+
+/**
+ * Update admission record (admin only)
+ */
+export function useUpdateAdminAdmission() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ admissionId, data }: { admissionId: string; data: UpdateAdminAdmissionRequest }) =>
+      adminApi.updateAdmission(admissionId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'admissions', variables.admissionId] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'admissions', variables.admissionId, 'history'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
+      toastUtils.success('Admission updated successfully');
+    },
+    onError: (error: any) => {
+      toastUtils.error('Update failed', error.response?.data?.message || 'Failed to update admission');
+    },
+  });
+}
+
+/**
+ * Get admission edit history (admin only)
+ */
+export function useAdminAdmissionEditHistory(admissionId: string) {
+  return useQuery({
+    queryKey: ['admin', 'admissions', admissionId, 'history'],
+    queryFn: () => adminApi.getAdmissionEditHistory(admissionId),
+    enabled: !!admissionId,
   });
 }
 ```
@@ -228,7 +397,7 @@ export function useUpdateAdmission(patientId: string) {
 
 ## 6. Components
 
-### 6.1 AdmissionForm
+### 6.1 AdmissionForm (UPDATED)
 
 **Purpose:** Form for recording hospital admission
 
@@ -245,14 +414,21 @@ interface AdmissionFormProps {
 }
 ```
 
-**Visual Design:**
+**Visual Design (UPDATED):**
 
 ```
 +-----------------------------------------------------------+
 | Record Hospital Admission - Sarah Johnson                  |
+| System ID: PAT-001                                         |
 +-----------------------------------------------------------+
 |                                                           |
 | +-------------------------------------------------------+ |
+| | Hospital Identification                                | |
+| | +---------------------------------------------------+ | |
+| | | Hospital Patient ID (MRN): [____________________] | | |
+| | | (Assigned by hospital upon admission)            | | |
+| | +---------------------------------------------------+ | |
+| |                                                       | |
 | | Referral Information                                   | |
 | | +---------------------------------------------------+ | |
 | | | Referral: [Select accepted referral]               | | |
@@ -316,7 +492,7 @@ interface AdmissionFormProps {
 
 ---
 
-### 6.2 AdmissionList
+### 6.2 AdmissionList (UPDATED)
 
 **Purpose:** Display list of admissions for a patient
 
@@ -338,14 +514,14 @@ interface AdmissionListProps {
 | Hospital Admissions                                        |
 +-----------------------------------------------------------+
 | +-------------------------------------------------------+ |
-| | Date       | Bed   | Ward   | Status   | Action       | |
-| +------------+-------+--------+----------+--------------+ |
-| | 2026-08-30 | B-12  | Pallia-| Active   | [View]       | |
-| |            |       | tive   |          | [Discharge]  | |
-| |            |       | Ward   |          |              | |
-| | 2026-08-22 | A-05  | Medical| Dischar- | [View]       | |
-| |            |       | Ward   | ged      |              | |
-| +------------+-------+--------+----------+--------------+ |
+| | Date       | Bed   | Ward   | MRN      | Status   |   | |
+| +------------+-------+--------+----------+----------+---+ |
+| | 2026-08-30 | B-12  | Pallia-| MRN-2026 | Active   |   | |
+| |            |       | tive   | -0845    |          |   | |
+| |            |       | Ward   |          |          |   | |
+| | 2026-08-22 | A-05  | Medical| MRN-2026 | Dischar- |   | |
+| |            |       | Ward   | -0820    | ged      |   | |
+| +------------+-------+--------+----------+----------+---+ |
 |                                                           |
 |                          [Page 1] [Page 2] [Page 3]        |
 +-----------------------------------------------------------+
@@ -353,7 +529,7 @@ interface AdmissionListProps {
 
 ---
 
-### 6.3 AdmissionCard
+### 6.3 AdmissionCard (UPDATED)
 
 **Purpose:** Display admission summary card
 
@@ -373,6 +549,7 @@ interface AdmissionCardProps {
 | +-------------------------------------------------------+ |
 | | Admission: 2026-08-30                                  | |
 | | Bed: B-12   Ward: Palliative Care Ward                | |
+| | MRN: MRN-2026-0845                                    | |
 | | Status: [Active]                                      | |
 | | Physician: Dr. Kebede                                 | |
 | | Care Team: Team A                                     | |
@@ -384,7 +561,7 @@ interface AdmissionCardProps {
 
 ---
 
-### 6.4 AdmissionDetail
+### 6.4 AdmissionDetail (UPDATED)
 
 **Purpose:** Display complete admission information
 
@@ -399,7 +576,7 @@ interface AdmissionDetailProps {
 }
 ```
 
-**Visual Design:**
+**Visual Design (UPDATED):**
 
 ```
 +-----------------------------------------------------------+
@@ -409,6 +586,7 @@ interface AdmissionDetailProps {
 | | Admission Information                                  | |
 | | Date: 2026-08-30   Status: [Active]                   | |
 | | Bed: B-12   Ward: Palliative Care Ward                | |
+| | MRN: MRN-2026-0845                                    | |
 | | Physician: Dr. Kebede   Care Team: Team A             | |
 | +-------------------------------------------------------+ |
 |                                                           |
@@ -453,37 +631,187 @@ interface AdmissionDetailProps {
 
 ---
 
-### 6.5 StatusBadge
+### 6.5 AdminAdmissionList (NEW)
 
-**Purpose:** Display admission status with color coding
+**Purpose:** Display full admission list with edit capability for admin
 
 **Props:**
 
 ```typescript
-interface StatusBadgeProps {
-  status: 'Active' | 'Discharged';
+interface AdminAdmissionListProps {
+  admissions: AdminAdmissionDetail[];
+  patientId: string;
+  loading?: boolean;
+  onEdit?: (admissionId: string) => void;
 }
 ```
+
+**Behavior:**
+- Renders table of admissions with ALL fields displayed
+- Each admission row shows: Date, Bed, Ward, MRN, Physician, Status, Actions
+- "Edit" button for each admission (admin only)
+- Expandable rows for full admission details
 
 **Visual Design:**
 
 ```
 +-----------------------------------------------------------+
-| Status Badges                                              |
+| Admission History - Full Details                           |
++-----------------------------------------------------------+
+| +-------------------------------------------------------+ |
+| | Date  | Bed   | Ward   | MRN         | Status | Action| |
+| +-------+-------+--------+-------------+--------+-------+ |
+| | 08-30 | B-12  | Pallia-| MRN-2026-   | Active | [Edit]| |
+| |       |       | tive   | 0845        |        | [View]| |
+| |       |       | Ward   |             |        |       | |
+| | 08-22 | A-05  | Medical| MRN-2026-   | Dis-   | [View]| |
+| |       |       | Ward   | 0820        | charged|       | |
+| +-------+-------+--------+-------------+--------+-------+ |
 |                                                           |
-|  +----------+          +----------+                       |
-|  | Active   |          | Dischar- |                       |
-|  | (Green)  |          | ged      |                       |
-|  +----------+          | (Gray)   |                       |
-|                        +----------+                       |
+| Click [View] to see full admission record               |
+| Click [Edit] to modify admission (admin only)           |
 +-----------------------------------------------------------+
 ```
 
 ---
 
-### 6.6 DischargeModal
+### 6.6 AdmissionEditModal (NEW)
 
-**Purpose:** Modal for discharging a patient from admission
+**Purpose:** Modal for admin to edit admission records
+
+**Props:**
+
+```typescript
+interface AdmissionEditModalProps {
+  open: boolean;
+  admissionId: string;
+  patientName: string;
+  admissionData: AdminAdmissionDetail;
+  onClose: () => void;
+  onSave: (data: UpdateAdminAdmissionRequest) => void;
+  isSubmitting?: boolean;
+  editHistory?: AdmissionEditHistoryEntry[];
+}
+```
+
+**Behavior:**
+- Opens when admin clicks "Edit" button on any admission
+- Pre-filled with existing admission data
+- Admin can modify any admission field
+- Shows audit trail: "Last edited by [Admin Name] on [Date]"
+- Shows field-by-field change history
+- Validates input before saving
+- After save, refreshes admission list and shows success message
+
+**Visual Design:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Edit Admission Record - Sarah Johnson                                     │
+│ PAT-001  |  MRN: MRN-2026-0845                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ ADMISSION INFORMATION                                                 │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  Admission Date: [2026-08-30]                                         │ │
+│  │  Bed Number:    [B-12]                                                │ │
+│  │  Ward:          [Palliative Care Ward]                                │ │
+│  │  Physician:     [Dr. Kebede]                                          │ │
+│  │  Care Team:     [Team A]                                              │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ MEDICAL DIAGNOSIS                                                     │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  Primary Diagnosis:   [Stage IV Breast Cancer]                        │ │
+│  │  Secondary Diagnoses: [Metastatic to bone]                            │ │
+│  │  Disease Stage:       [Advanced ▼]                                   │ │
+│  │  Co-morbidities:      [Hypertension]                                  │ │
+│  │  Estimated Prognosis: [Months ▼]                                     │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ PALLIATIVE ASSESSMENT                                                 │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  PPS Score:        [60]                                               │ │
+│  │  Functional Status: [PartiallyDependent ▼]                           │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ PAIN & SYMPTOM ASSESSMENT                                             │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  Pain Score:        [4]                                               │ │
+│  │  Pain Type:         [Mixed ▼]                                        │ │
+│  │  Symptoms Present:  [Fatigue, Anxiety]                                │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ PSYCHOSOCIAL & SPIRITUAL                                              │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  Emotional Status:     [Anxious ▼]                                   │ │
+│  │  Family Support:       [Moderate ▼]                                  │ │
+│  │  Social Challenges:    [Financial constraints]                        │ │
+│  │  Spiritual Concerns:   [No]                                           │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ CARE PLAN                                                             │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  Pain Management Plan:    [Morphine 10mg every 6 hours]              │ │
+│  │  Medication Plan:         [Continue current medications]             │ │
+│  │  Nursing Care Plan:       [Daily monitoring and pain assessment]     │ │
+│  │  Home-Based Care Required: [No]                                       │ │
+│  │  Physiotherapy Required:   [No]                                       │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ STATUS                                                               │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  Status: [Active ▼]                                                  │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ AUDIT TRAIL                                                           │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  ⚠️ Last edited by Admin User on 2026-09-01 at 10:30                 │ │
+│  │                                                                       │ │
+│  │  📝 Edit History: (2 edits)                                          │ │
+│  │     ┌─────────────────────────────────────────────────────────────────┐ │
+│  │     │ Admin User - 2026-09-01 10:30                                 │ │
+│  │     │   bedNumber: B-10 → B-12                                      │ │
+│  │     │   painScore: 5 → 4                                           │ │
+│  │     │ Super Admin - 2026-08-31 14:20                               │ │
+│  │     │   ppsScore: 55 → 60                                          │ │
+│  │     └─────────────────────────────────────────────────────────────────┘ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│                        [Cancel]              [Save Changes]                │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 6.7 DischargeModal (Updated - Admin Only)
+
+**Purpose:** Modal for discharging a patient from admission (Admin Only)
 
 **Props:**
 
@@ -494,30 +822,14 @@ interface DischargeModalProps {
   patientName: string;
   onClose: () => void;
   onConfirm: (data: UpdateAdmissionRequest) => void;
+  isAdmin: boolean;
 }
 ```
 
-**Visual Design:**
-
-```
-+-----------------------------------------------------------+
-| +-------------------------------------------------------+ |
-| | Discharge Patient                                      | |
-| | ----------------------------------------------------- | |
-| |                                                       | |
-| | Are you sure you want to discharge Sarah Johnson?    | |
-| |                                                       | |
-| | Discharge Date: [__/__/____]                         | |
-| |                                                       | |
-| | Reason for Discharge:                                 | |
-| | ( ) Improved                                          | |
-| | ( ) Deceased                                          | |
-| |                                                       | |
-| |              [Cancel] [Confirm Discharge]             | |
-| |                                                       | |
-| +-------------------------------------------------------+ |
-+-----------------------------------------------------------+
-```
+**Behavior:**
+- Only visible to Admin users
+- Staff users should not see this button (per FR-55c)
+- Validates discharge date and reason before submitting
 
 ---
 
@@ -544,7 +856,7 @@ interface DischargeModalProps {
 
 **Components:**
 
-- `AdmissionForm`
+- `AdmissionForm` (updated with MRN field)
 
 **States:**
 
@@ -557,7 +869,7 @@ interface DischargeModalProps {
 
 ---
 
-### 7.2 AdmissionListPage
+### 7.2 AdmissionListPage (Existing - kept as is)
 
 **Purpose:** View all admissions for a patient
 
@@ -568,24 +880,9 @@ interface DischargeModalProps {
 3. Filter by status (Active/Discharged)
 4. View details or discharge patient
 
-**Components:**
-
-- `StatusFilter`
-- `AdmissionList`
-- `Pagination`
-
-**States:**
-
-| State | UI |
-|---|---|
-| Loading | Skeleton list |
-| Error | Error message with retry |
-| Empty | "No admissions" |
-| Success | Full admission list |
-
 ---
 
-### 7.3 AdmissionDetailPage
+### 7.3 AdmissionDetailPage (Updated - Discharge Button Admin Only)
 
 **Route:** `/patients/:id/admissions/:admissionId`
 
@@ -593,19 +890,14 @@ interface DischargeModalProps {
 
 **Guard:** `ProtectedRoute` (staff)
 
-**Purpose:** View admission details and discharge patient
+**Purpose:** View admission details and discharge patient (Admin only)
 
 **Behavior:**
 
 1. Uses `useAdmissionDetail(id, admissionId)` hook
 2. Displays complete admission information
-3. Discharge button (if status is Active)
+3. **Discharge button only visible to Admin users** (per FR-55c)
 4. Back button
-
-**Components:**
-
-- `AdmissionDetail`
-- `DischargeModal`
 
 **States:**
 
@@ -617,7 +909,45 @@ interface DischargeModalProps {
 
 ---
 
-## 8. Form Validation Schema
+### 7.4 AdminPatientDetailPage (With Admission Editing)
+
+**Route:** `/admin/patients/:patientId`
+
+**Layout:** `DashboardLayout`
+
+**Guard:** `ProtectedRoute` (admin only)
+
+**Purpose:** View patient details with full records and edit admissions
+
+**Behavior:**
+
+1. Uses `useAdminPatientFullDetail(patientId)` hook
+2. Displays patient demographics, diagnosis, and KPS/PPS graph
+3. Displays tabs with FULL DATA:
+   - Visits: Full visit details with Edit button
+   - Medications: Full medication details
+   - Labs: Full lab test details
+   - Referrals: Full referral details
+   - **Admissions:** Full admission details with Edit button (NEW)
+4. Each admission has an "Edit" button (admin only)
+5. Click "Edit" opens AdmissionEditModal
+6. After edit, admission data refreshes and shows audit trail
+
+**Components:**
+
+- `PatientDemographics`
+- `PatientDiagnosis`
+- `PatientProgressGraph`
+- `AdminVisitList`
+- `AdminMedicationList`
+- `AdminLabList`
+- `AdminReferralList`
+- `AdminAdmissionList` (NEW)
+- `AdmissionEditModal` (NEW)
+
+---
+
+## 8. Form Validation Schemas
 
 ```typescript
 // src/schemas/admission.schema.ts
@@ -627,6 +957,7 @@ import { z } from 'zod';
 export const createAdmissionSchema = z.object({
   referralId: z.string().min(1, 'Referral is required'),
   admissionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
+  hospitalPatientId: z.string().optional(),
   bedNumber: z.string().min(1, 'Bed number is required'),
   ward: z.string().min(1, 'Ward is required'),
   admittingPhysician: z.string().min(1, 'Admitting physician is required'),
@@ -660,182 +991,48 @@ export const updateAdmissionSchema = z.object({
   status: z.enum(['Active', 'Discharged']),
 });
 
+export const updateAdminAdmissionSchema = z.object({
+  body: z.object({
+    admissionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').optional(),
+    bedNumber: z.string().optional(),
+    ward: z.string().optional(),
+    admittingPhysician: z.string().optional(),
+    careTeam: z.string().optional(),
+    primaryDiagnosis: z.string().optional(),
+    secondaryDiagnoses: z.array(z.string()).optional(),
+    diseaseStage: z.enum(['Early', 'Advanced', 'Terminal']).optional(),
+    comorbidities: z.array(z.string()).optional(),
+    estimatedPrognosis: z.enum(['Days', 'Weeks', 'Months', 'Uncertain']).optional(),
+    ppsScore: z.number().min(0, 'PPS score must be between 0 and 100').max(100, 'PPS score must be between 0 and 100').optional(),
+    functionalStatus: z.enum(['FullyIndependent', 'PartiallyDependent', 'FullyDependent']).optional(),
+    painScore: z.number().min(0, 'Pain score must be between 0 and 10').max(10, 'Pain score must be between 0 and 10').optional(),
+    painType: z.enum(['Acute', 'Chronic', 'Neuropathic', 'Mixed']).optional(),
+    symptomsPresent: z.array(z.string()).optional(),
+    emotionalStatus: z.enum(['Stable', 'Anxious', 'Depressed', 'Distressed']).optional(),
+    familySupport: z.enum(['Strong', 'Moderate', 'Weak', 'None']).optional(),
+    socialChallenges: z.string().optional(),
+    spiritualConcerns: z.boolean().optional(),
+    spiritualSupportPreferred: z.enum(['ReligiousLeader', 'Counselor', 'Other']).optional(),
+    painManagementPlan: z.string().optional(),
+    medicationPlan: z.string().optional(),
+    nursingCarePlan: z.string().optional(),
+    homeBasedCareRequired: z.boolean().optional(),
+    psychosocialSupportPlan: z.string().optional(),
+    physiotherapyRequired: z.boolean().optional(),
+    status: z.enum(['Active', 'Discharged']).optional(),
+    dischargeDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').optional(),
+    dischargeReason: z.enum(['Improved', 'Deceased']).optional(),
+  }),
+});
+
 export type CreateAdmissionFormData = z.infer<typeof createAdmissionSchema>;
 export type UpdateAdmissionFormData = z.infer<typeof updateAdmissionSchema>;
+export type UpdateAdminAdmissionFormData = z.infer<typeof updateAdminAdmissionSchema>;
 ```
 
 ---
 
-## 9. Page Implementations
-
-### RecordAdmissionPage
-
-```typescript
-// src/pages/staff/RecordAdmissionPage.tsx
-
-import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { usePatient } from '@/hooks/usePatients';
-import { usePatientReferrals } from '@/hooks/useReferrals';
-import { useRecordAdmission } from '@/hooks/useAdmissions';
-import { AdmissionForm } from '@/components/admissions/AdmissionForm';
-import { createAdmissionSchema, CreateAdmissionFormData } from '@/schemas/admission.schema';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { ErrorState } from '@/components/common/ErrorState';
-
-export const RecordAdmissionPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const patientId = id!;
-
-  const { data: patient, isLoading: patientLoading, error: patientError } = usePatient(patientId);
-  const { data: referralsData, isLoading: referralsLoading } = usePatientReferrals(patientId);
-  const recordMutation = useRecordAdmission(patientId);
-
-  const form = useForm<CreateAdmissionFormData>({
-    resolver: zodResolver(createAdmissionSchema),
-    defaultValues: {
-      admissionDate: new Date().toISOString().split('T')[0],
-      diseaseStage: 'Advanced',
-      functionalStatus: 'PartiallyDependent',
-      painType: 'Mixed',
-      emotionalStatus: 'Stable',
-      familySupport: 'Moderate',
-      spiritualConcerns: false,
-      homeBasedCareRequired: false,
-      physiotherapyRequired: false,
-    },
-  });
-
-  const onSubmit = (data: CreateAdmissionFormData) => {
-    recordMutation.mutate(data, {
-      onSuccess: () => {
-        navigate(`/patients/${patientId}`);
-      },
-    });
-  };
-
-  if (patientLoading || referralsLoading) {
-    return <LoadingSpinner />;
-  }
-
-  if (patientError || !patient) {
-    return <ErrorState onRetry={() => window.location.reload()} />;
-  }
-
-  const acceptedReferrals = referralsData?.items.filter(
-    (r) => r.status === 'Accepted'
-  ) || [];
-
-  return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">
-        Record Hospital Admission - {patient.firstName} {patient.lastName}
-      </h1>
-      <AdmissionForm
-        form={form}
-        onSubmit={onSubmit}
-        isSubmitting={recordMutation.isPending}
-        error={recordMutation.error}
-        referrals={acceptedReferrals}
-      />
-    </div>
-  );
-};
-```
-
-### AdmissionList Component
-
-```typescript
-// src/components/admissions/AdmissionList.tsx
-
-import React from 'react';
-import { HospitalAdmission } from '@/types/admission.types';
-import { StatusBadge } from '@/components/common/StatusBadge';
-import { Button } from '@/components/ui/Button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-
-interface AdmissionListProps {
-  admissions: HospitalAdmission[];
-  loading?: boolean;
-  onViewDetail?: (id: string) => void;
-  onDischarge?: (id: string) => void;
-}
-
-export const AdmissionList: React.FC<AdmissionListProps> = ({
-  admissions,
-  loading,
-  onViewDetail,
-  onDischarge,
-}) => {
-  if (loading) {
-    return <div className="animate-pulse">Loading admissions...</div>;
-  }
-
-  if (admissions.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        No hospital admissions have been recorded for this patient.
-      </div>
-    );
-  }
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Admission Date</TableHead>
-          <TableHead>Bed</TableHead>
-          <TableHead>Ward</TableHead>
-          <TableHead>Physician</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Action</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {admissions.map((admission) => (
-          <TableRow key={admission.id}>
-            <TableCell>{new Date(admission.admissionDate).toLocaleDateString()}</TableCell>
-            <TableCell>{admission.bedNumber}</TableCell>
-            <TableCell>{admission.ward}</TableCell>
-            <TableCell>{admission.admittingPhysician}</TableCell>
-            <TableCell>
-              <StatusBadge status={admission.status} />
-            </TableCell>
-            <TableCell>
-              {onViewDetail && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onViewDetail(admission.id)}
-                >
-                  View
-                </Button>
-              )}
-              {onDischarge && admission.status === 'Active' && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="ml-2"
-                  onClick={() => onDischarge(admission.id)}
-                >
-                  Discharge
-                </Button>
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-};
-```
-
----
-
-## 10. Route Configuration
+## 9. Route Configuration
 
 ```typescript
 // src/routes/index.tsx (admissions section)
@@ -862,7 +1059,7 @@ export const AdmissionList: React.FC<AdmissionListProps> = ({
 
 ---
 
-## 11. Flow Diagram
+## 10. Flow Diagram (UPDATED)
 
 ```
 +-----------------------------------------------------------+
@@ -878,7 +1075,7 @@ export const AdmissionList: React.FC<AdmissionListProps> = ({
 |  |                    -> Get patient name               | |
 |  |                    -> usePatientReferrals(id)        | |
 |  |                    -> Get accepted referrals         | |
-|  |                    -> Fill form                      | |
+|  |                    -> Fill form (includes MRN)       | |
 |  |                    -> Submit -> useRecordAdmission() | |
 |  |                    -> POST /patients/:id/admissions  | |
 |  |                    -> Success -> /patients/:id       | |
@@ -900,16 +1097,35 @@ export const AdmissionList: React.FC<AdmissionListProps> = ({
 |                           |                               |
 |                           v                               |
 |  +-----------------------------------------------------+ |
-|  |                    DISCHARGE FLOW                    | |
+|  |                    DISCHARGE FLOW (ADMIN ONLY)       | |
 |  |                                                     | |
-|  |  Staff -> /patients/:id/admissions/:admissionId     | |
+|  |  Admin -> /patients/:id/admissions/:admissionId     | |
 |  |                    -> AdmissionDetailPage            | |
-|  |                    -> Click Discharge                 | |
+|  |                    -> Click Discharge (Admin only)   | |
 |  |                    -> Open DischargeModal            | |
 |  |                    -> Select reason & date           | |
 |  |                    -> Confirm -> useUpdateAdmission()| |
 |  |                    -> PUT /patients/:id/admissions   | |
 |  |                    -> Refresh list and details       | |
+|  |                                                     | |
+|  |  Staff -> Same page - Discharge button hidden       | |
+|  +-----------------------------------------------------+ |
+|                           |                               |
+|                           v                               |
+|  +-----------------------------------------------------+ |
+|  |                    ADMIN EDIT FLOW (NEW)             | |
+|  |                                                     | |
+|  |  Admin -> /admin/patients/:id -> AdminPatientDetailPage| |
+|  |                    -> Admissions tab                 | |
+|  |                    -> Identify admission with error  | |
+|  |                    -> Click "Edit" button            | |
+|  |                    -> Open AdmissionEditModal        | |
+|  |                    -> Modify incorrect fields        | |
+|  |                    -> Submit -> useUpdateAdminAdmission()| |
+|  |                    -> PUT /admin/admissions/:admissionId| |
+|  |                    -> Audit trail created            | |
+|  |                    -> Success -> Refresh list        | |
 |  +-----------------------------------------------------+ |
 |                                                           |
 +-----------------------------------------------------------+
+```

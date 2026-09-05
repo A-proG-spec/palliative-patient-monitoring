@@ -22,6 +22,9 @@
 | FR-12 | Admin dashboard shows notifications for new referrals | Must | Admin |
 | FR-13 | Admin dashboard shows notifications for recent case closures | Must | Admin |
 | FR-14 | Staff can view and update their profile (name, phone) | Should | Staff |
+| FR-14a | Users can change their password with current password verification | Should | Staff, Admin |
+| FR-14b | Users can view their activity statistics (visits, patients, last login) | Should | Staff, Admin |
+| FR-14c | Unauthorized access attempts redirect to a dedicated unauthorized page | Must | System |
 
 ### B. Patient Management
 
@@ -36,6 +39,7 @@
 | FR-21 | Admin can close patient cases (case closed) | Must | Admin |
 | FR-22 | Admin can view patient details with full records (visits, medications, labs, referrals, admissions) | Must | Admin |
 | FR-23 | Admin can click on patient name in any admin table to navigate to patient detail page | Must | Admin |
+| FR-23a | Hospital MRN (Medical Record Number) is stored when patient is admitted | Should | Staff |
 
 ### C. Home Visits
 
@@ -51,6 +55,9 @@
 | FR-31 | Admin can edit visit records to correct errors | Must | Admin |
 | FR-32 | All admin edits to visit records are tracked with audit trail (who, when, what changed) | Must | Admin |
 | FR-33 | Staff cannot edit visit records after submission | Must | System |
+| FR-33a | Team members (Physician, Nurse) can sign visit records using email + password verification | Should | Staff |
+| FR-33b | Team Leader is automatically signed when creating a visit | Should | Staff |
+| FR-33c | Visit cannot be finalized until all required team members have signed | Should | Staff |
 
 ### D. Medications
 
@@ -93,6 +100,10 @@
 | FR-53 | Admission records include pain assessment and initial care plan | Must | Staff |
 | FR-54 | Admission records include assigned bed and care team | Must | Staff |
 | FR-55 | Admission status changes to Discharged upon hospital discharge | Must | System |
+| FR-55a | Admin can edit admission records to correct errors | Must | Admin |
+| FR-55b | All admin edits to admission records are tracked with audit trail (who, when, what changed) | Must | Admin |
+| FR-55c | Staff cannot edit admission records after submission | Must | System |
+| FR-55d | Hospital MRN (Medical Record Number) is captured during admission | Should | Staff |
 
 ### H. Staff Dashboard
 
@@ -118,6 +129,17 @@
 | FR-68 | Staff and Admin can print/export patient history as PDF | Should | Staff, Admin |
 | FR-69 | Printable patient history includes all data: demographics, visits, medications, lab tests, referrals, admissions, KPS/PPS progress | Should | Staff, Admin |
 | FR-70 | Print view is formatted for professional presentation with institution header | Should | System |
+| FR-70a | Print view includes all visit details (vitals, pain scores, ADL, symptoms, red flags, team members, signatures) | Should | System |
+
+### J. Toast Notifications
+
+| ID | Requirement | Priority | Actor |
+|---|---|---|---|
+| FR-71 | System shows success toast notifications for successful operations | Must | System |
+| FR-72 | System shows error toast notifications for failed operations | Must | System |
+| FR-73 | System shows warning toast notifications for validation errors | Must | System |
+| FR-74 | System shows info toast notifications for informational messages | Must | System |
+| FR-75 | System shows loading toast notifications for in-progress operations | Should | System |
 
 ## 2. Non-Functional Requirements
 
@@ -129,12 +151,17 @@
 | Security | Role-based access control enforced | Manual testing |
 | Security | Email verification required before login | Manual testing |
 | Security | Admin edit actions are logged with audit trail | Code review |
+| Security | Digital signatures require email + password verification | Code review |
 | Usability | Mobile-responsive design | Manual testing |
 | Usability | Print-ready format for patient records | Visual inspection |
+| Usability | Toast notifications for all user actions | Visual inspection |
+| Usability | Dedicated unauthorized page for access denial | Manual testing |
 | Availability | 99% uptime target | Monitoring |
-| Data Integrity | Patient records immutable (no updates except admin edits to visits) | Code review |
+| Data Integrity | Patient records immutable (no updates except admin edits to visits/admissions) | Code review |
 | Data Integrity | Visit edits tracked with audit trail | Code review |
+| Data Integrity | Admission edits tracked with audit trail | Code review |
 | Data Accuracy | All forms validated before submission | Code review |
+| Accessibility | Toast notifications support screen readers | Manual testing |
 
 ## 3. Explicitly Out of Scope
 
@@ -149,25 +176,4 @@
 - No social login (Google, Facebook, etc.)
 - No staff editing of patient records (admin only)
 - No bulk edit of visits
-
-## 4. Summary of Changes
-
-| Change | Before | After |
-|---|---|---|
-| Admin patient detail view | Basic info only | Full patient records like staff view |
-| Admin click patient name | Not available | Navigate to patient detail from any admin table |
-| Admin edit visits | Not allowed | Admin can edit visit records with audit trail |
-| Visit edit audit trail | Not tracked | Who, when, what changed tracked |
-| Staff visit edit | Not allowed | Still not allowed (unchanged) |
-| Print patient history | Not available | Staff and Admin can print/export |
-| Printable format | Not defined | Professional layout with institution header |
-| FR-22 | Not present | Admin full patient detail view |
-| FR-23 | Not present | Admin click patient name navigation |
-| FR-31 | Not present | Admin edit visits |
-| FR-32 | Not present | Audit trail for edits |
-| FR-49 | Not present | Admin click patient name in referrals |
-| FR-68 | Not present | Print/export patient history |
-| FR-69 | Not present | Printable patient history content |
-| FR-70 | Not present | Print professional formatting |
-```
-```
+- No physical signature (digital signatures with email + password instead)

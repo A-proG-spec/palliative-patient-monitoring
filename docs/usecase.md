@@ -135,6 +135,8 @@
 - Staff account not verified: system returns "Please verify your email before logging in"
 - Staff account pending: system returns "Account pending admin approval"
 - Staff account rejected: system returns "Account has been rejected"
+- Staff tries to access admin route: system redirects to unauthorized page
+- Admin tries to access staff route: system redirects to unauthorized page
 
 **Postcondition:** User is logged in and redirected to appropriate dashboard
 
@@ -170,7 +172,7 @@
 | Actor | Staff |
 | Precondition | Patient exists and is active |
 | Trigger | Staff conducts home visit |
-| Linked FR | FR-24 through FR-30 |
+| Linked FR | FR-24 through FR-30, FR-33a, FR-33b, FR-33c |
 
 **Main Flow:**
 1. Staff selects patient
@@ -192,13 +194,17 @@
 17. Staff documents any referrals made
 18. Staff records outcome
 19. Staff schedules next visit if needed
-20. Team members sign the visit record
+20. Team Leader is automatically signed (logged-in user)
+21. Physician signs using email + password verification
+22. Nurse signs using email + password verification
+23. System verifies all signatures are complete before allowing finalization
 
 **Alternate Flows:**
 - Red flags present: staff takes immediate action and documents it
 - No referral needed: skip referral section
+- Invalid credentials for signature: system shows error message
 
-**Postcondition:** Home visit recorded in patient history
+**Postcondition:** Home visit recorded in patient history with all team signatures
 
 ---
 
@@ -253,10 +259,11 @@
    - Complete medication list
    - Complete lab test results
    - Complete referral history
-   - Complete admission records
+   - Complete admission records (with Edit button)
    - KPS/PPS progress graph (if available)
 5. Admin can click "Edit" on any visit to correct errors
-6. Admin can click patient name in any table to navigate
+6. Admin can click "Edit" on any admission to correct errors
+7. Admin can click patient name in any table to navigate
 
 **Postcondition:** Admin sees complete patient data, same as staff view
 
@@ -340,30 +347,63 @@
 
 | Field | Detail |
 |---|---|
-| Actor | Staff |
+| Actor | Staff (Any staff member - Nurse, Physician, Team Leader) |
 | Precondition | Referral has been accepted |
 | Trigger | Patient is admitted to hospital |
-| Linked FR | FR-50 through FR-55 |
+| Linked FR | FR-50 through FR-55, FR-55d |
 
 **Main Flow:**
 1. Staff selects patient with accepted referral
 2. Staff creates admission record
 3. Staff enters patient identification details
-4. Staff documents referral information
-5. Staff records medical diagnosis
-6. Staff assesses palliative eligibility
-7. Staff performs pain and symptom assessment
-8. Staff documents psychosocial and spiritual assessment
-9. Staff creates initial care plan
-10. Staff records admission decision (bed number, care team)
-11. Staff submits admission record
-12. System updates patient location to "ReferredHospital"
+4. Staff enters Hospital MRN (Medical Record Number) assigned by hospital
+5. Staff documents referral information
+6. Staff records medical diagnosis
+7. Staff assesses palliative eligibility
+8. Staff performs pain and symptom assessment
+9. Staff documents psychosocial and spiritual assessment
+10. Staff creates initial care plan
+11. Staff records admission decision (bed number, care team)
+12. Staff submits admission record
+13. System updates patient location to "ReferredHospital"
+14. System stores Hospital MRN in patient record
 
-**Postcondition:** Hospital admission record created
+**Postcondition:** Hospital admission record created, Hospital MRN stored
 
 ---
 
-## UC-14: Admin Closes Patient Case
+## UC-14: Admin Edits Admission Record
+
+| Field | Detail |
+|---|---|
+| Actor | Admin |
+| Precondition | Admission record exists and contains errors |
+| Trigger | Admin identifies error in admission record |
+| Linked FR | FR-55a, FR-55b, FR-55c |
+
+**Main Flow:**
+1. Admin navigates to patient detail page
+2. Admin views the admissions tab
+3. Admin identifies admission with error
+4. Admin clicks "Edit" button on the admission
+5. System opens edit modal with pre-filled admission data
+6. Admin modifies the incorrect fields
+7. Admin submits changes
+8. System validates the updated data
+9. System updates the admission record
+10. System logs the edit in audit trail (admin ID, timestamp, fields changed)
+11. System displays success message: "Admission updated successfully"
+12. System shows "Edited by [Admin Name]" on the admission
+
+**Alternate Flows:**
+- Validation fails: system shows field-specific errors
+- Staff tries to edit: system returns "Permission denied" error
+
+**Postcondition:** Admission record updated, audit trail created
+
+---
+
+## UC-15: Admin Closes Patient Case
 
 | Field | Detail |
 |---|---|
@@ -386,7 +426,7 @@
 
 ---
 
-## UC-15: View Patient Summary Report
+## UC-16: View Patient Summary Report
 
 | Field | Detail |
 |---|---|
@@ -410,14 +450,14 @@
 
 ---
 
-## UC-16: Print Patient History
+## UC-17: Print Patient History
 
 | Field | Detail |
 |---|---|
 | Actor | Staff, Admin |
 | Precondition | Patient exists and has records |
 | Trigger | User clicks "Print" or "Export PDF" on patient summary |
-| Linked FR | FR-68, FR-69, FR-70 |
+| Linked FR | FR-68, FR-69, FR-70, FR-70a |
 
 **Main Flow:**
 1. User navigates to patient summary page
@@ -426,12 +466,12 @@
 4. System displays:
    - Institution header (Yekatit 12 Hospital Medical College)
    - Patient demographics and ID
-   - All visits (chronological)
-   - All medications
-   - All lab tests
-   - All referrals
-   - All admissions
    - KPS/PPS progress graph (if available)
+   - All visits with FULL details (chronological)
+   - All medications with complete details
+   - All lab tests with complete details
+   - All referrals with complete details
+   - All admissions with complete details
    - Generated date
 5. User selects "Save as PDF" or prints
 6. System generates PDF/printout
@@ -439,11 +479,11 @@
 **Alternate Flows:**
 - No data available: system shows "No records to print" message
 
-**Postcondition:** Patient history printed/exported as PDF
+**Postcondition:** Patient history printed/exported as PDF with all full details
 
 ---
 
-## UC-17: Admin Views Dashboard Notifications
+## UC-18: Admin Views Dashboard Notifications
 
 | Field | Detail |
 |---|---|
@@ -469,7 +509,7 @@
 
 ---
 
-## UC-18: Staff Views Dashboard
+## UC-19: Staff Views Dashboard
 
 | Field | Detail |
 |---|---|
@@ -497,64 +537,143 @@
 
 ---
 
-## UC-19: Staff Views Profile
+## UC-20: User Manages Profile
 
 | Field | Detail |
 |---|---|
-| Actor | Staff |
-| Precondition | Staff is authenticated, email verified, and active |
-| Trigger | Staff navigates to profile page |
-| Linked FR | FR-08 |
+| Actor | Staff, Admin |
+| Precondition | User is authenticated, email verified, and active (if staff) |
+| Trigger | User navigates to profile page |
+| Linked FR | FR-14, FR-14a, FR-14b |
 
 **Main Flow:**
-1. Staff navigates to profile page
-2. System displays staff profile information (name, email, phone, role, status, email verification status)
-3. Staff can view their assigned patients count
-4. Staff can view their today's visits count
-
-**Postcondition:** Staff profile information displayed
-
----
-
-## UC-20: Staff Updates Profile
-
-| Field | Detail |
-|---|---|
-| Actor | Staff |
-| Precondition | Staff is authenticated, email verified, and active |
-| Trigger | Staff updates profile information |
-| Linked FR | FR-14 |
-
-**Main Flow:**
-1. Staff navigates to profile page
-2. Staff updates name or phone number
-3. Staff submits changes
-4. System validates input
-5. System updates staff record
-6. System returns updated profile
+1. User navigates to profile page
+2. System displays user profile information (name, email, phone, role, status)
+3. User can view their activity statistics (visits, patients, last login)
+4. User updates name or phone number
+5. User submits changes
+6. System validates input
+7. System updates user record
+8. System returns updated profile with success message
 
 **Alternate Flows:**
 - Validation fails: system shows field-specific errors
 
-**Postcondition:** Staff profile updated
+**Postcondition:** User profile updated
 
 ---
 
-## UC-21: Staff Views Alerts
+## UC-21: User Changes Password
 
 | Field | Detail |
 |---|---|
-| Actor | Staff |
-| Precondition | Staff is authenticated, email verified, and active |
-| Trigger | Staff navigates to alerts section |
-| Linked FR | FR-61 |
+| Actor | Staff, Admin |
+| Precondition | User is authenticated |
+| Trigger | User navigates to profile page and clicks "Change Password" |
+| Linked FR | FR-14a |
 
 **Main Flow:**
-1. Staff navigates to alerts section
-2. System displays list of alerts
-3. System shows unread count
-4. Staff can filter by read status or type
-5. Staff clicks alert to view patient details
-6. Staff marks alert as read
+1. User navigates to profile page
+2. User clicks "Change Password" section
+3. User enters current password
+4. User enters new password (meets requirements)
+5. User confirms new password
+6. User submits changes
+7. System validates current password
+8. System validates new password meets requirements
+9. System hashes and saves new password
+10. System displays success message: "Password changed successfully"
 
-**Postcondition:** Alert read status updated
+**Alternate Flows:**
+- Current password incorrect: system shows error message
+- New password doesn't meet requirements: system shows field-specific errors
+- Passwords don't match: system shows error message
+
+**Postcondition:** User password changed
+
+---
+
+## UC-22: Team Member Signs Visit (Digital Signature)
+
+| Field | Detail |
+|---|---|
+| Actor | Staff (Physician, Nurse) |
+| Precondition | Visit record exists and is not finalized |
+| Trigger | Team member needs to sign the visit |
+| Linked FR | FR-33a, FR-33b, FR-33c |
+
+**Main Flow:**
+1. Staff creates visit record (Team Leader auto-signed)
+2. Physician enters their email and password
+3. System verifies credentials
+4. System checks physician is assigned to the visit
+5. System records signature with timestamp
+6. Nurse enters their email and password
+7. System verifies credentials
+8. System checks nurse is assigned to the visit
+9. System records signature with timestamp
+10. System checks all required signatures are complete
+11. System enables "Finalize Visit" button
+
+**Alternate Flows:**
+- Invalid credentials: system shows error message
+- Staff not assigned to visit: system shows "Not authorized to sign" error
+- Account not active: system shows "Account is not active" error
+
+**Postcondition:** Visit has all required signatures and can be finalized
+
+---
+
+## UC-23: User Access Denied (Unauthorized Page)
+
+| Field | Detail |
+|---|---|
+| Actor | Staff, Admin |
+| Precondition | User is authenticated |
+| Trigger | User attempts to access a route they don't have permission for |
+| Linked FR | FR-14c |
+
+**Main Flow:**
+1. Staff user attempts to access `/admin` route
+2. System detects user type is "staff"
+3. System redirects to `/unauthorized`
+4. System displays "Access Denied" message
+5. System shows user's name and role
+6. System provides "Return to Dashboard" button
+7. User clicks button and navigates to appropriate dashboard
+
+**Alternate Flows:**
+- Admin user attempts to access `/dashboard` route
+- System detects user type is "admin"
+- System redirects to `/unauthorized`
+
+**Postcondition:** User is informed they don't have permission and can return to their dashboard
+
+---
+
+## UC-24: Toast Notifications
+
+| Field | Detail |
+|---|---|
+| Actor | System |
+| Precondition | User performs an action |
+| Trigger | Action completes (success, error, warning) or is in progress |
+| Linked FR | FR-71, FR-72, FR-73, FR-74, FR-75 |
+
+**Main Flow:**
+1. User performs an action (register, login, save visit, etc.)
+2. System processes the action
+3. System displays appropriate toast notification:
+   - Success: Green toast with success message
+   - Error: Red toast with error message
+   - Warning: Amber toast with warning message
+   - Info: Blue toast with informational message
+   - Loading: Gray toast with loading indicator
+4. Toast auto-dismisses after duration (3-5 seconds)
+5. User can manually dismiss toast by clicking close button
+
+**Alternate Flows:**
+- Network error: system shows error toast
+- Validation error: system shows warning toast with field information
+
+**Postcondition:** User receives immediate feedback on their action
