@@ -16,6 +16,7 @@ This document defines the shared conventions, architecture, and patterns used th
 - Zustand (State Management)
 - React Hook Form + Zod
 - Recharts (for graphs)
+- Sonner (Toast Notifications)
 
 **Folder Structure Reference:**
 See `folder-structure/frontend-structure.md` for the complete file and folder organization.
@@ -65,13 +66,15 @@ All API calls are organized by feature in the `src/api/` folder:
 |---|---|
 | `client.ts` | Axios instance configuration with interceptors |
 | `auth.ts` | Authentication API calls (register, login, logout, get user) |
+| `profile.ts` | Profile API calls (get profile, update profile, change password, activity stats) |
 | `patients.ts` | Patient API calls (CRUD operations, print/export) |
 | `visits.ts` | Home visit API calls |
+| `signatures.ts` | Digital signature API calls |
 | `medications.ts` | Medication API calls |
 | `labs.ts` | Laboratory test API calls |
 | `referrals.ts` | Referral API calls |
 | `admissions.ts` | Hospital admission API calls |
-| `admin.ts` | Admin API calls (staff approval, dashboard stats, notifications, full patient detail, visit edit, print/export) |
+| `admin.ts` | Admin API calls (staff approval, dashboard stats, notifications, full patient detail, visit edit, admission edit, print/export) |
 | `staff.ts` | Staff API calls (dashboard stats, alerts, profile) |
 | `index.ts` | API exports |
 
@@ -228,7 +231,7 @@ export interface PatientProgressData {
 }
 ```
 
-### 4.3 Print Types (`src/types/print.types.ts`) - NEW
+### 4.3 Print Types (`src/types/print.types.ts`)
 
 ```typescript
 export interface PrintButtonProps {
@@ -242,6 +245,18 @@ export interface PrintButtonProps {
 
 export interface PrintLayoutProps {
   children: React.ReactNode;
+}
+```
+
+### 4.4 Toast Types (`src/types/toast.types.ts`)
+
+```typescript
+export type ToastType = 'success' | 'error' | 'warning' | 'info' | 'loading';
+
+export interface ToastOptions {
+  duration?: number;
+  position?: 'top-right' | 'top-center' | 'top-left' | 'bottom-right' | 'bottom-center' | 'bottom-left';
+  description?: string;
 }
 ```
 
@@ -264,7 +279,7 @@ interface PatientProgressGraphProps {
     kps: { trend: 'improving' | 'stable' | 'declining'; percentageChange: number };
     pps: { trend: 'improving' | 'stable' | 'declining'; percentageChange: number };
   };
-  isPrintView?: boolean; // NEW - disables interactivity for print
+  isPrintView?: boolean; // Disables interactivity for print
 }
 ```
 
@@ -318,7 +333,7 @@ export function usePatientProgress(patientId: string) {
 
 ---
 
-## 6. Print/Export Conventions (NEW)
+## 6. Print/Export Conventions
 
 ### 6.1 Print Layout
 
@@ -428,7 +443,7 @@ export const PrintButton: React.FC<PrintButtonProps> = ({
     background: white !important;
     color: black !important;
     font-size: 12pt;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
   }
 
   /* Preserve colors in print */
@@ -623,9 +638,125 @@ export const PrintButton: React.FC<PrintButtonProps> = ({
 
 ---
 
-## 7. Route Guards
+## 7. Toast Notifications Conventions
 
-### 7.1 ProtectedRoute.tsx
+### 7.1 Overview
+
+Toast notifications provide real-time feedback for user actions.
+
+**Library:** `sonner`
+
+### 7.2 Toast Types
+
+| Type | Color | Duration | Usage |
+|---|---|---|---|
+| Success | Green (#43B982) | 3000ms | Operation completed successfully |
+| Error | Red (#E74F3D) | 5000ms | Operation failed |
+| Warning | Amber (#F5A34A) | 4000ms | User needs attention |
+| Info | Blue (#002395) | 3000ms | Informational message |
+| Loading | Gray (#6B7280) | Until resolved | Operation in progress |
+
+### 7.3 Toast Utility
+
+```typescript
+// src/lib/toast.ts
+
+import { toast } from 'sonner';
+
+export const toastUtils = {
+  success: (message: string, description?: string) => {
+    toast.success(message, { description });
+  },
+  error: (message: string, description?: string) => {
+    toast.error(message, { description });
+  },
+  warning: (message: string, description?: string) => {
+    toast.warning(message, { description });
+  },
+  info: (message: string, description?: string) => {
+    toast.info(message, { description });
+  },
+  loading: (message: string) => {
+    return toast.loading(message);
+  },
+  dismiss: (id: string | number) => {
+    toast.dismiss(id);
+  },
+  promise: <T>(
+    promise: Promise<T>,
+    messages: {
+      loading: string;
+      success: string | ((data: T) => string);
+      error: string | ((error: any) => string);
+    }
+  ) => {
+    return toast.promise(promise, messages);
+  },
+};
+
+export default toastUtils;
+```
+
+### 7.4 Toast Usage in Hooks
+
+```typescript
+// Example: src/hooks/useAuth.ts
+
+import { toastUtils } from '@/lib/toast';
+
+export function useLogin() {
+  const navigate = useNavigate();
+  const setAuth = useAuthStore((s) => s.setAuth);
+
+  return useMutation({
+    mutationFn: (data: LoginRequest) => authApi.login(data),
+    onSuccess: (response) => {
+      const { token, user } = response;
+      setAuth(user, token);
+      toastUtils.success('Login successful', `Welcome back, ${user.name}!`);
+      // ... redirect
+    },
+    onError: (error: any) => {
+      toastUtils.error('Login failed', error.response?.data?.message);
+    },
+  });
+}
+```
+
+### 7.5 Toast Provider Setup
+
+```typescript
+// src/App.tsx
+
+import { Toaster } from 'sonner';
+import '@/styles/globals.css';
+
+function App() {
+  return (
+    <>
+      <Toaster
+        position="top-right"
+        richColors
+        closeButton
+        visibleToasts={5}
+        toastOptions={{
+          style: {
+            fontFamily: 'Outfit, system-ui, sans-serif',
+            borderRadius: '8px',
+          },
+        }}
+      />
+      <Router />
+    </>
+  );
+}
+```
+
+---
+
+## 8. Route Guards
+
+### 8.1 ProtectedRoute.tsx
 
 ```typescript
 // src/routes/ProtectedRoute.tsx
@@ -655,21 +786,21 @@ export const ProtectedRoute = () => {
 
 ---
 
-## 8. Component Reusability Guidelines
+## 9. Component Reusability Guidelines
 
-### 8.1 When to Create a UI Component
+### 9.1 When to Create a UI Component
 
 - Used in multiple places
 - Has consistent styling
 - Is generic (button, input, card)
 
-### 8.2 When to Create a Feature Component
+### 9.2 When to Create a Feature Component
 
 - Specific to a feature (patient card, visit form)
 - Contains business logic
 - Fetches or manipulates data
 
-### 8.3 When to Create a Page
+### 9.3 When to Create a Page
 
 - Represents a route
 - Composes multiple components
@@ -677,20 +808,22 @@ export const ProtectedRoute = () => {
 
 ---
 
-## 9. Error Handling Strategy
+## 10. Error Handling Strategy
 
-| Error Type | Handling |
-|---|---|
-| API Validation (400) | Display field-specific errors |
-| Unauthorized (401) | Redirect to login |
-| Forbidden (403) | Show permission error |
-| Not Found (404) | Show 404 page or component |
-| Server Error (500) | Show generic error with retry |
-| Network Error | Show offline/connection error |
+| Error Type | Handling | Toast Type |
+|---|---|---|
+| API Validation (400) | Display field-specific errors | Warning |
+| Unauthorized (401) | Redirect to login + toast | Error |
+| Forbidden (403) | Show permission error + toast | Error |
+| Not Found (404) | Show 404 page or component | Warning |
+| Server Error (500) | Show generic error with retry + toast | Error |
+| Network Error | Show offline/connection error + toast | Error |
+| Success | Show success message | Success |
+| Info | Show informational message | Info |
 
 ---
 
-## 10. Performance Optimizations
+## 11. Performance Optimizations
 
 | Strategy | Implementation |
 |---|---|
@@ -702,7 +835,7 @@ export const ProtectedRoute = () => {
 
 ---
 
-## 11. Naming Conventions
+## 12. Naming Conventions
 
 | File Type | Naming Convention | Example |
 |---|---|---|
@@ -711,12 +844,12 @@ export const ProtectedRoute = () => {
 | Hooks | `use*.ts` | `usePatients.ts` |
 | Types | `*.types.ts` | `patient.types.ts` |
 | Constants | `*.ts` (index) | `index.ts` |
-| Styles | `*.css` | `globals.css` |
+| Styles | `*.css` | `globals.css`, `print.css` |
 | Tests | `*.test.tsx` | `LoginPage.test.tsx` |
 
 ---
 
-## 12. Route Summary (UPDATED)
+## 13. Route Summary (UPDATED)
 
 | Route | Component | Layout | Auth |
 |---|---|---|---|
@@ -725,6 +858,7 @@ export const ProtectedRoute = () => {
 | `/register` | `RegisterPage` | `AuthLayout` | None |
 | `/verify-email` | `VerifyEmailPage` | `PublicLayout` | None |
 | `/resend-verification` | `ResendVerificationPage` | `PublicLayout` | None |
+| `/unauthorized` | `UnauthorizedPage` | `PublicLayout` | None |
 | `/admin` | `AdminDashboardPage` | `DashboardLayout` | Admin |
 | `/admin/patients` | `AdminPatientListPage` | `DashboardLayout` | Admin |
 | `/admin/patients/:id` | `AdminPatientDetailPage` | `DashboardLayout` | Admin |
@@ -734,6 +868,7 @@ export const ProtectedRoute = () => {
 | `/admin/reports` | `ReportsPage` | `DashboardLayout` | Admin |
 | `/admin/settings` | `SettingsPage` | `DashboardLayout` | Admin |
 | `/dashboard` | `DashboardPage` | `DashboardLayout` | Staff |
+| `/profile` | `ProfilePage` | `DashboardLayout` | Staff, Admin |
 | `/patients` | `PatientListPage` | `DashboardLayout` | Staff |
 | `/patients/new` | `PatientRegistrationPage` | `DashboardLayout` | Staff |
 | `/patients/:id` | `PatientDetailPage` | `DashboardLayout` | Staff |
@@ -746,3 +881,4 @@ export const ProtectedRoute = () => {
 | `/patients/:id/admissions` | `RecordAdmissionPage` | `DashboardLayout` | Staff |
 | `/patients/:id/print` | `PatientPrintPage` | `PrintLayout` | Staff, Admin |
 | `*` | `NotFoundPage` | None | None |
+

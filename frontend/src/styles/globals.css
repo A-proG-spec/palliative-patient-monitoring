@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── CSS Custom Properties ─────────────────────────────── */
+:root {
+  --color-primary: #002395;
+  --color-primary-hover: #001B73;
+  --color-primary-light: #E8ECF7;
+  --color-background: #F7F9FE;
+  --color-surface: #FFFFFF;
+  --color-on-surface: #181C20;
+  --color-on-surface-variant: #424754;
+  --color-text-secondary: #52627A;
+  --color-text-muted: #8290A7;
+  --color-border: #E6EBF4;
+  --color-success: #43B982;
+  --color-success-bg: #EAF8F2;
+  --color-warning: #F5A34A;
+  --color-warning-bg: #FFF3E0;
+  --color-error: #E74F3D;
+  --color-error-bg: #FCE8E8;
+
+  --shadow-card: 0 12px 35px rgba(50, 88, 150, 0.08);
+  --shadow-nav: 0 2px 10px rgba(50, 88, 150, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+}
+
+/* ─── Base Resets ─────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-on-surface);
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Focus Styles (Accessibility) ───────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Scrollbar Styling ──────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-outline-variant, #C2C6D6);
+}
+
+/* ─── Pulse Line Animation (heartbeat motif) ─────────────── */
+@keyframes pulse-line {
+  0%, 100% { stroke-dashoffset: 0; }
+  50% { stroke-dashoffset: -20; }
+}
+
+.pulse-line {
+  stroke-dasharray: 8 4;
+  animation: pulse-line 2s ease-in-out infinite;
+}
+
+/* ─── Status Pulse Animation ─────────────────────────────── */
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.95); }
+}
+
+.status-pulse {
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+/* ─── Page Transition Container ──────────────────────────── */
+.page-transition-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+}
+.page-transition-exit {
+  opacity: 1;
+}
+.page-transition-exit-active {
+  opacity: 0;
+  transition: opacity 150ms ease-in;
+}
+
+/* ─── Skeleton Loader ─────────────────────────────────────── */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #f0f2f7 25%,
+    #e8ebf2 50%,
+    #f0f2f7 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+/* ─── Print Styles ────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
+}

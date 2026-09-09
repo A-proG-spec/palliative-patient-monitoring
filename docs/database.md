@@ -1,318 +1,189 @@
-# database.md
-
-```markdown
-# PALLIATIVE PATIENT MONITORING SYSTEM - DATABASE & DATA MODEL
-
-## 1. Entity List
-
-| Entity | Collection Name | Purpose |
-|---|---|---|
-| Admin | admins | System administrator with elevated permissions |
-| Staff | staff | Healthcare workers (Team Leaders, Physicians, Nurses) |
-| Patient | patients | Person receiving palliative care |
-| HomeVisit | homevisits | Record of each home visit |
-| Medication | medications | Medications ordered for patients |
-| LaboratoryTest | labtests | Lab tests ordered for patients |
-| Referral | referrals | Patient referral requests |
-| HospitalAdmission | hospitaladmissions | Hospital admission records |
-| Notification | notifications | Admin dashboard notifications |
-| Counter | counters | Auto-increment counter for patient display IDs |
-
-## 2. Mongoose Schema Definitions
-
-### Admin Schema
-
-```typescript
-import mongoose, { Schema, Document } from 'mongoose';
-
-export interface IAdmin extends Document {
-  name: string;
-  email: string;
-  password: string;
-  createdAt: Date;
-}
-
-const AdminSchema = new Schema<IAdmin>({
-  name: { 
-    type: String, 
-    required: true 
-  },
-  email: { 
-    type: String, 
-    required: true, 
-    unique: true 
-  },
-  password: { 
-    type: String, 
-    required: true 
-  },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  }
-});
-
-export const Admin = mongoose.model<IAdmin>('Admin', AdminSchema);
-```
+## `docs/database.md`
 
 ---
 
-### Staff Schema
+# Database Schema — Palliative Patient Monitoring System
+
+## 1.0 Overview
+
+### 1.1 Database Technology
+
+| Property | Value |
+|----------|-------|
+| **Database** | MongoDB |
+| **ODM** | Mongoose |
+| **Version** | 6.0+ |
+| **Hosting** | Production: MongoDB Atlas / Self-hosted |
+
+### 1.2 Naming Conventions
+
+| Convention | Rule |
+|------------|------|
+| **Collection Names** | Plural, PascalCase (e.g., `Patients`, `HomeVisits`) |
+| **Field Names** | camelCase |
+| **Primary Key** | `_id` (MongoDB ObjectId) |
+| **Foreign Keys** | `{entity}Id` (e.g., `patientId`, `staffId`) |
+| **Timestamps** | `createdAt`, `updatedAt` (ISO strings) |
+
+---
+
+## 2.0 Core Collections
+
+### 2.1 Staff
+
+**Collection:** `Staff`
+
+**Description:** Healthcare staff members who provide palliative care services.
 
 ```typescript
-import mongoose, { Schema, Document } from 'mongoose';
-
-export interface IStaff extends Document {
-  name: string;
-  email: string;
+{
+  _id: ObjectId;
+  name: string;                 // Full name
+  email: string;                // Unique, indexed
   phone: string;
-  password: string;
-  role: 'TeamLeader' | 'Physician' | 'Nurse' | null;
+  password: string;             // Hashed with bcrypt
+  role: 'TeamLeader' | 'Physician' | 'Nurse';
   status: 'Pending' | 'Active' | 'Rejected';
   isEmailVerified: boolean;
-  emailVerificationToken: string | null;
-  emailVerificationTokenExpires: Date | null;
-  assignedBy: mongoose.Types.ObjectId;
+  emailVerificationToken?: string;
+  emailVerificationExpiry?: Date;
+  resetPasswordToken?: string;
+  resetPasswordExpiry?: Date;
+  approvedBy?: ObjectId;        // Reference to Admin
+  approvedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
-
-const StaffSchema = new Schema<IStaff>({
-  name: { 
-    type: String, 
-    required: true 
-  },
-  email: { 
-    type: String, 
-    required: true, 
-    unique: true 
-  },
-  phone: { 
-    type: String, 
-    required: true 
-  },
-  password: { 
-    type: String, 
-    required: true 
-  },
-  role: { 
-    type: String, 
-    enum: ['TeamLeader', 'Physician', 'Nurse'], 
-    default: null 
-  },
-  status: { 
-    type: String, 
-    enum: ['Pending', 'Active', 'Rejected'], 
-    default: 'Pending' 
-  },
-  isEmailVerified: { 
-    type: Boolean, 
-    default: false 
-  },
-  emailVerificationToken: { 
-    type: String, 
-    default: null 
-  },
-  emailVerificationTokenExpires: { 
-    type: Date, 
-    default: null 
-  },
-  assignedBy: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Admin' 
-  },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  },
-  updatedAt: { 
-    type: Date, 
-    default: Date.now 
-  }
-});
-
-export const Staff = mongoose.model<IStaff>('Staff', StaffSchema);
 ```
+
+**Indexes:**
+- `email` (unique)
+- `status`
 
 ---
 
-### Patient Schema
+### 2.2 Admin
+
+**Collection:** `Admin`
+
+**Description:** System administrators with full access.
 
 ```typescript
-import mongoose, { Schema, Document } from 'mongoose';
+{
+  _id: ObjectId;
+  name: string;
+  email: string;                // Unique, indexed
+  password: string;             // Hashed with bcrypt
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
 
-export interface IPatient extends Document {
-  patientDisplayId?: string;
+**Indexes:**
+- `email` (unique)
+
+---
+
+### 2.3 Patients
+
+**Collection:** `Patients`
+
+**Description:** Palliative care patients receiving services.
+
+```typescript
+{
+  _id: ObjectId;
+  patientDisplayId: string;     // PAT-001, PAT-002, etc. (unique)
+  
+  // Personal Information
   firstName: string;
   lastName: string;
   age: number;
   sex: 'Male' | 'Female';
-  dateOfBirth: Date;
+  dateOfBirth: string;          // YYYY-MM-DD
   address: string;
   phone: string;
+  
+  // Emergency Contact
   emergencyContactName: string;
   emergencyContactPhone: string;
+  
+  // Caregiver Information
   caregiverName: string;
   caregiverPhone: string;
+  
+  // Medical Information
   primaryDiagnosis: string;
   secondaryDiagnoses: string[];
   diseaseStage: 'Early' | 'Advanced' | 'EndStage';
   comorbidities: string[];
   estimatedPrognosis: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
+  
+  // Status
   status: 'Active' | 'Discharged';
   currentLocation: 'Home' | 'ReferredHospital';
-  registeredBy: mongoose.Types.ObjectId;
+  
+  // Meta
+  registeredBy: ObjectId;       // Reference to Staff
   createdAt: Date;
+  updatedAt: Date;
 }
-
-const PatientSchema = new Schema<IPatient>({
-  patientDisplayId: { 
-    type: String 
-  },
-  firstName: { 
-    type: String, 
-    required: true 
-  },
-  lastName: { 
-    type: String, 
-    required: true 
-  },
-  age: { 
-    type: Number, 
-    required: true 
-  },
-  sex: { 
-    type: String, 
-    enum: ['Male', 'Female'], 
-    required: true 
-  },
-  dateOfBirth: { 
-    type: Date, 
-    required: true 
-  },
-  address: { 
-    type: String, 
-    required: true 
-  },
-  phone: { 
-    type: String, 
-    required: true 
-  },
-  emergencyContactName: { 
-    type: String, 
-    required: true 
-  },
-  emergencyContactPhone: { 
-    type: String, 
-    required: true 
-  },
-  caregiverName: { 
-    type: String, 
-    required: true 
-  },
-  caregiverPhone: { 
-    type: String, 
-    required: true 
-  },
-  primaryDiagnosis: { 
-    type: String, 
-    required: true 
-  },
-  secondaryDiagnoses: { 
-    type: [String] 
-  },
-  diseaseStage: { 
-    type: String, 
-    enum: ['Early', 'Advanced', 'EndStage'], 
-    required: true 
-  },
-  comorbidities: { 
-    type: [String] 
-  },
-  estimatedPrognosis: { 
-    type: String, 
-    enum: ['Days', 'Weeks', 'Months', 'Uncertain'], 
-    required: true 
-  },
-  status: { 
-    type: String, 
-    enum: ['Active', 'Discharged'], 
-    default: 'Active' 
-  },
-  currentLocation: { 
-    type: String, 
-    enum: ['Home', 'ReferredHospital'], 
-    default: 'Home' 
-  },
-  registeredBy: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Staff', 
-    required: true 
-  },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  }
-});
-
-export const Patient = mongoose.model<IPatient>('Patient', PatientSchema);
 ```
+
+**Indexes:**
+- `patientDisplayId` (unique)
+- `status`
+- `currentLocation`
+- `firstName`, `lastName` (text search)
 
 ---
 
-### Counter Schema (for Patient Display ID Generation)
+### 2.4 HomeVisits
+
+**Collection:** `HomeVisits`
+
+**Description:** Recorded home visits with comprehensive clinical checklists.
 
 ```typescript
-import mongoose, { Schema, Document } from 'mongoose';
-
-export interface ICounter extends Document {
-  name: string;
-  value: number;
-}
-
-const CounterSchema = new Schema<ICounter>({
-  name: { 
-    type: String, 
-    required: true, 
-    unique: true 
-  },
-  value: { 
-    type: Number, 
-    default: 0 
-  }
-});
-
-export const Counter = mongoose.model<ICounter>('Counter', CounterSchema);
-```
-
----
-
-### HomeVisit Schema
-
-```typescript
-import mongoose, { Schema, Document } from 'mongoose';
-
-export interface IHomeVisit extends Document {
-  patientId: mongoose.Types.ObjectId;
-  visitDate: Date;
-  timeStarted: string;
-  timeEnded: string;
+{
+  _id: ObjectId;
+  patientId: ObjectId;          // Reference to Patient
+  
+  // ── Visit Details ──
+  visitDate: string;            // YYYY-MM-DD
+  timeStarted: string;          // HH:mm
+  timeEnded: string;            // HH:mm
   visitType: 'Routine' | 'Emergency' | 'FirstAssessment' | 'PostDischarge' | 'EndOfLife' | 'Bereavement';
-  teamMembers: Array<{ staffId: mongoose.Types.ObjectId; role: 'TeamLeader' | 'Physician' | 'Nurse'; name: string }>;
+  teamMembers: {
+    role: 'TeamLeader' | 'Physician' | 'Nurse';
+    name: string;
+  }[];
+  
+  // ── General Condition ──
   overallStatus: 'Stable' | 'Deteriorating' | 'Critical' | 'BedBound';
   mobility: 'Ambulatory' | 'RequiresAssistance' | 'Bedridden';
+  
+  // ── Vital Signs ──
   vitals?: {
-    temperature: number;
-    pulse: number;
-    bp: string;
-    respiration: number;
-    spo2: number;
+    temperature?: number;
+    pulse?: number;
+    bp?: string;                // e.g., "120/80"
+    respiration?: number;
+    spo2?: number;
   };
-  painScore: number;
-  painLocation: Array<'Head' | 'Neck' | 'Chest' | 'Abdomen' | 'Back' | 'Limbs' | 'Generalized' | 'Other'>;
-  painCharacteristics: Array<'Sharp' | 'Dull' | 'Burning' | 'Cramping' | 'Intermittent' | 'Continuous'>;
+  
+  // ── Pain Assessment ──
+  painScore: number;            // 0-10
+  painLocation: string[];       // Head, Neck, Chest, etc.
+  painCharacteristics: string[]; // Sharp, Dull, Burning, etc.
   painMedicationEffective: boolean;
-  symptoms: Array<'Dyspnea' | 'Nausea' | 'Constipation' | 'Anxiety' | 'Fatigue' | 'PoorAppetite' | 'PressureSores' | 'Other'>;
+  painManagementIneffectiveReason?: string;
+  
+  // ── Symptoms ──
+  symptoms: string[];           // Dyspnea, Nausea, Constipation, etc.
+  symptomsOther?: string;
+  
+  // ── Functional Status ──
   adl: {
     feeding: 'Independent' | 'NeedsAssistance' | 'FullyDependent';
     bathing: 'Independent' | 'NeedsAssistance' | 'FullyDependent';
@@ -320,1073 +191,974 @@ export interface IHomeVisit extends Document {
     toileting: 'Independent' | 'NeedsAssistance' | 'FullyDependent';
     mobility: 'Independent' | 'NeedsAssistance' | 'FullyDependent';
   };
-  ppsScore: number;
-  kpsScore: number;
+  ppsScore: number;             // 0-100
+  kpsScore: number;             // 0-100
+  
+  // ── Nutrition ──
   appetite: 'Good' | 'Fair' | 'Poor' | 'UnableToEat';
   oralIntake: 'Adequate' | 'Reduced' | 'Minimal';
   hydrationStatus: 'Adequate' | 'MildDehydration' | 'SevereDehydration';
+  nutritionComments?: string;
+  
+  // ── Psychosocial ──
   emotionalStatus: 'Stable' | 'Anxious' | 'Depressed' | 'Fearful' | 'Distressed';
+  emotionalComments?: string;
   familySupport: 'Excellent' | 'Good' | 'Limited' | 'None';
   financialDifficulty: boolean;
+  financialComments?: string;
+  
+  // ── Spiritual ──
   spiritualNeeds: boolean;
+  spiritualNeedsDescription?: string;
   religiousSupportRequested: boolean;
+  religiousSupportSpecify?: string;
+  
+  // ── Medication Review ──
   medicationAvailable: boolean;
   medicationCorrectlyTaken: boolean;
   medicationSideEffects: boolean;
   medicationRefillNeeded: boolean;
   morphineAvailable: boolean;
   adherenceLevel: 'Good' | 'Partial' | 'Poor';
-  currentMedications: Array<{ name: string; dosage: string; frequency: string; route: string }>;
+  currentMedications: {
+    name: string;
+    dosage: string;
+    frequency: string;
+    route: string;
+  }[];
+  medicationIssues?: string;
+  
+  // ── Caregiver Assessment ──
+  primaryCaregiver?: string;
   caregiverBurden: 'Low' | 'Moderate' | 'High';
   caregiverUnderstanding: 'Good' | 'Fair' | 'Poor';
   caregivingCapacity: 'Strong' | 'Moderate' | 'Weak';
   familyEmotionalStatus: 'Stable' | 'Stressed' | 'Overwhelmed';
-  educationProvided: Array<'MedicationAdministration' | 'PainManagement' | 'NutritionSupport' | 'SkinCare' | 'PressureSorePrevention' | 'EndOfLifeCare' | 'EmergencySigns' | 'EmotionalSupport' | 'Other'>;
+  
+  // ── Education ──
+  educationProvided: string[];
+  educationProvidedOther?: string;
+  trainingNeeds: string[];
+  additionalSupportNeeded?: boolean;
+  additionalSupportSpecify?: string;
+  
+  // ── Home Environment ──
   homeCondition: 'Clean' | 'Fair' | 'Poor';
-  homeObservations: Array<'AdequateLighting' | 'Ventilation' | 'SafeBed' | 'CleanWater' | 'SanitationIssues'>;
-  nursingCareGiven: Array<'Hygiene' | 'WoundCare' | 'MedicationAdmin' | 'PositionChange' | 'FeedingAssistance' | 'Counseling' | 'Other'>;
-  redFlags: Array<'SevereUncontrolledPain' | 'SevereShortnessOfBreath' | 'MassiveBleeding' | 'UncontrolledSeizures' | 'AlteredMentalStatus' | 'SevereDehydration' | 'None'>;
+  homeObservations: string[];   // AdequateLighting, Ventilation, etc.
+  homeEnvironmentDetails?: string;
+  
+  // ── Nursing Care ──
+  nursingCareGiven: string[];
+  nursingCareOther?: string;
+  
+  // ── Red Flags ──
+  redFlags: string[];
   redFlagActions?: string;
-  referralsMade: Array<'PhysicianReview' | 'HospitalAdmission' | 'SocialWorker' | 'Psychologist' | 'SpiritualCare' | 'NutritionSupport'>;
+  
+  // ── Referrals ──
+  referralsMade: string[];
+  
+  // ── Issues and Plan ──
+  keyIssues?: string;
+  immediateActions?: string;
+  followUpPlan?: string;
+  nextVisitDate?: string;       // YYYY-MM-DD
+  
+  // ── Outcome ──
   outcome: 'Stable' | 'SymptomsImproved' | 'SymptomsUnchanged' | 'SymptomsWorsened' | 'ReferredToFacility' | 'Deceased';
-  nextVisitDate?: Date;
-  teamLeaderId: mongoose.Types.ObjectId;
-  physicianId: mongoose.Types.ObjectId;
-  nurseId: mongoose.Types.ObjectId;
+  dateOfDeath?: string;         // YYYY-MM-DD
+  
+  // ── Signatures ──
+  teamLeaderId: string;
+  physicianId: string;
+  nurseId: string;
+  
+  // ── Meta ──
+  createdBy: ObjectId;          // Reference to Staff
   createdAt: Date;
+  updatedAt: Date;
 }
-
-const HomeVisitSchema = new Schema<IHomeVisit>({
-  patientId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Patient', 
-    required: true 
-  },
-  visitDate: { 
-    type: Date, 
-    required: true 
-  },
-  timeStarted: { 
-    type: String, 
-    required: true 
-  },
-  timeEnded: { 
-    type: String, 
-    required: true 
-  },
-  visitType: { 
-    type: String, 
-    enum: ['Routine', 'Emergency', 'FirstAssessment', 'PostDischarge', 'EndOfLife', 'Bereavement'],
-    required: true 
-  },
-  teamMembers: [{
-    staffId: { 
-      type: Schema.Types.ObjectId, 
-      ref: 'Staff' 
-    },
-    role: { 
-      type: String, 
-      enum: ['TeamLeader', 'Physician', 'Nurse'] 
-    },
-    name: { 
-      type: String 
-    }
-  }],
-  overallStatus: { 
-    type: String, 
-    enum: ['Stable', 'Deteriorating', 'Critical', 'BedBound'],
-    required: true 
-  },
-  mobility: { 
-    type: String, 
-    enum: ['Ambulatory', 'RequiresAssistance', 'Bedridden'],
-    required: true 
-  },
-  vitals: {
-    temperature: Number,
-    pulse: Number,
-    bp: String,
-    respiration: Number,
-    spo2: Number
-  },
-  painScore: { 
-    type: Number, 
-    min: 0, 
-    max: 10, 
-    required: true 
-  },
-  painLocation: [{ 
-    type: String, 
-    enum: ['Head', 'Neck', 'Chest', 'Abdomen', 'Back', 'Limbs', 'Generalized', 'Other'] 
-  }],
-  painCharacteristics: [{ 
-    type: String, 
-    enum: ['Sharp', 'Dull', 'Burning', 'Cramping', 'Intermittent', 'Continuous'] 
-  }],
-  painMedicationEffective: { 
-    type: Boolean, 
-    required: true 
-  },
-  symptoms: [{ 
-    type: String, 
-    enum: ['Dyspnea', 'Nausea', 'Constipation', 'Anxiety', 'Fatigue', 'PoorAppetite', 'PressureSores', 'Other'] 
-  }],
-  adl: {
-    feeding: { 
-      type: String, 
-      enum: ['Independent', 'NeedsAssistance', 'FullyDependent'] 
-    },
-    bathing: { 
-      type: String, 
-      enum: ['Independent', 'NeedsAssistance', 'FullyDependent'] 
-    },
-    dressing: { 
-      type: String, 
-      enum: ['Independent', 'NeedsAssistance', 'FullyDependent'] 
-    },
-    toileting: { 
-      type: String, 
-      enum: ['Independent', 'NeedsAssistance', 'FullyDependent'] 
-    },
-    mobility: { 
-      type: String, 
-      enum: ['Independent', 'NeedsAssistance', 'FullyDependent'] 
-    }
-  },
-  ppsScore: { 
-    type: Number, 
-    min: 0, 
-    max: 100, 
-    required: true 
-  },
-  kpsScore: { 
-    type: Number, 
-    min: 0, 
-    max: 100, 
-    required: true 
-  },
-  appetite: { 
-    type: String, 
-    enum: ['Good', 'Fair', 'Poor', 'UnableToEat'],
-    required: true 
-  },
-  oralIntake: { 
-    type: String, 
-    enum: ['Adequate', 'Reduced', 'Minimal'],
-    required: true 
-  },
-  hydrationStatus: { 
-    type: String, 
-    enum: ['Adequate', 'MildDehydration', 'SevereDehydration'],
-    required: true 
-  },
-  emotionalStatus: { 
-    type: String, 
-    enum: ['Stable', 'Anxious', 'Depressed', 'Fearful', 'Distressed'],
-    required: true 
-  },
-  familySupport: { 
-    type: String, 
-    enum: ['Excellent', 'Good', 'Limited', 'None'],
-    required: true 
-  },
-  financialDifficulty: { 
-    type: Boolean, 
-    required: true 
-  },
-  spiritualNeeds: { 
-    type: Boolean, 
-    required: true 
-  },
-  religiousSupportRequested: { 
-    type: Boolean, 
-    required: true 
-  },
-  medicationAvailable: { 
-    type: Boolean, 
-    required: true 
-  },
-  medicationCorrectlyTaken: { 
-    type: Boolean, 
-    required: true 
-  },
-  medicationSideEffects: { 
-    type: Boolean, 
-    required: true 
-  },
-  medicationRefillNeeded: { 
-    type: Boolean, 
-    required: true 
-  },
-  morphineAvailable: { 
-    type: Boolean, 
-    required: true 
-  },
-  adherenceLevel: { 
-    type: String, 
-    enum: ['Good', 'Partial', 'Poor'],
-    required: true 
-  },
-  currentMedications: [{
-    name: String,
-    dosage: String,
-    frequency: String,
-    route: String
-  }],
-  caregiverBurden: { 
-    type: String, 
-    enum: ['Low', 'Moderate', 'High'],
-    required: true 
-  },
-  caregiverUnderstanding: { 
-    type: String, 
-    enum: ['Good', 'Fair', 'Poor'],
-    required: true 
-  },
-  caregivingCapacity: { 
-    type: String, 
-    enum: ['Strong', 'Moderate', 'Weak'],
-    required: true 
-  },
-  familyEmotionalStatus: { 
-    type: String, 
-    enum: ['Stable', 'Stressed', 'Overwhelmed'],
-    required: true 
-  },
-  educationProvided: [{ 
-    type: String, 
-    enum: ['MedicationAdministration', 'PainManagement', 'NutritionSupport', 'SkinCare', 'PressureSorePrevention', 'EndOfLifeCare', 'EmergencySigns', 'EmotionalSupport', 'Other'] 
-  }],
-  homeCondition: { 
-    type: String, 
-    enum: ['Clean', 'Fair', 'Poor'],
-    required: true 
-  },
-  homeObservations: [{ 
-    type: String, 
-    enum: ['AdequateLighting', 'Ventilation', 'SafeBed', 'CleanWater', 'SanitationIssues'] 
-  }],
-  nursingCareGiven: [{ 
-    type: String, 
-    enum: ['Hygiene', 'WoundCare', 'MedicationAdmin', 'PositionChange', 'FeedingAssistance', 'Counseling', 'Other'] 
-  }],
-  redFlags: [{ 
-    type: String, 
-    enum: ['SevereUncontrolledPain', 'SevereShortnessOfBreath', 'MassiveBleeding', 'UncontrolledSeizures', 'AlteredMentalStatus', 'SevereDehydration', 'None'] 
-  }],
-  redFlagActions: String,
-  referralsMade: [{ 
-    type: String, 
-    enum: ['PhysicianReview', 'HospitalAdmission', 'SocialWorker', 'Psychologist', 'SpiritualCare', 'NutritionSupport'] 
-  }],
-  outcome: { 
-    type: String, 
-    enum: ['Stable', 'SymptomsImproved', 'SymptomsUnchanged', 'SymptomsWorsened', 'ReferredToFacility', 'Deceased'],
-    required: true 
-  },
-  nextVisitDate: Date,
-  teamLeaderId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Staff', 
-    required: true 
-  },
-  physicianId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Staff', 
-    required: true 
-  },
-  nurseId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Staff', 
-    required: true 
-  },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  }
-});
-
-export const HomeVisit = mongoose.model<IHomeVisit>('HomeVisit', HomeVisitSchema);
 ```
+
+**Indexes:**
+- `patientId`
+- `visitDate`
+- `outcome`
+- `teamLeaderId`, `physicianId`, `nurseId`
 
 ---
 
-### Medication Schema
+### 2.5 Medications
+
+**Collection:** `Medications`
+
+**Description:** Medication orders for patients.
 
 ```typescript
-import mongoose, { Schema, Document } from 'mongoose';
-
-export interface IMedication extends Document {
-  patientId: mongoose.Types.ObjectId;
+{
+  _id: ObjectId;
+  patientId: ObjectId;          // Reference to Patient
+  
   name: string;
   dosage: string;
   frequency: string;
   route: string;
-  prescribedBy: mongoose.Types.ObjectId;
+  
   administeredAt: 'Home' | 'Hospital';
   status: 'Ordered' | 'Given';
-  visitId?: mongoose.Types.ObjectId;
-  admissionId?: mongoose.Types.ObjectId;
+  
+  prescribedBy: ObjectId;       // Reference to Staff
+  visitId?: ObjectId;           // Reference to HomeVisit (if ordered during visit)
+  admissionId?: ObjectId;       // Reference to HospitalAdmission (if ordered during admission)
+  
   createdAt: Date;
+  updatedAt: Date;
 }
-
-const MedicationSchema = new Schema<IMedication>({
-  patientId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Patient', 
-    required: true 
-  },
-  name: { 
-    type: String, 
-    required: true 
-  },
-  dosage: { 
-    type: String, 
-    required: true 
-  },
-  frequency: { 
-    type: String, 
-    required: true 
-  },
-  route: { 
-    type: String, 
-    required: true 
-  },
-  prescribedBy: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Staff', 
-    required: true 
-  },
-  administeredAt: { 
-    type: String, 
-    enum: ['Home', 'Hospital'],
-    required: true 
-  },
-  status: { 
-    type: String, 
-    enum: ['Ordered', 'Given'],
-    default: 'Ordered' 
-  },
-  visitId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'HomeVisit' 
-  },
-  admissionId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'HospitalAdmission' 
-  },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  }
-});
-
-export const Medication = mongoose.model<IMedication>('Medication', MedicationSchema);
 ```
+
+**Indexes:**
+- `patientId`
+- `status`
+- `prescribedBy`
 
 ---
 
-### LaboratoryTest Schema
+### 2.6 LaboratoryTests
+
+**Collection:** `LaboratoryTests`
+
+**Description:** Laboratory test orders and results.
 
 ```typescript
-import mongoose, { Schema, Document } from 'mongoose';
-
-export interface ILaboratoryTest extends Document {
-  patientId: mongoose.Types.ObjectId;
+{
+  _id: ObjectId;
+  patientId: ObjectId;          // Reference to Patient
+  
   testName: string;
-  orderedBy: mongoose.Types.ObjectId;
-  dateOrdered: Date;
-  datePerformed?: Date;
-  result?: string;
+  testCategory?: 'Hematology' | 'Chemistry' | 'Hormone' | 'Urinalysis' | 'Stool' | 'Microbiology' | 'Histopathology' | 'Immunology' | 'Cardiac';
+  specimenType?: string;
+  specimenSite?: string;
+  clinicalHistory?: string;
+  priority: 'Routine' | 'Urgent' | 'Emergency';
+  
   location: 'Home' | 'Hospital';
-  visitId?: mongoose.Types.ObjectId;
-  admissionId?: mongoose.Types.ObjectId;
+  status: 'Ordered' | 'Completed';
+  
+  orderedBy: ObjectId;          // Reference to Staff
+  dateOrdered: string;          // YYYY-MM-DD
+  
+  // Result fields
+  datePerformed?: string;       // YYYY-MM-DD
+  result?: string;
+  performedBy?: string;
+  notes?: string;
+  
+  visitId?: ObjectId;           // Reference to HomeVisit
+  admissionId?: ObjectId;       // Reference to HospitalAdmission
+  
   createdAt: Date;
+  updatedAt: Date;
 }
-
-const LaboratoryTestSchema = new Schema<ILaboratoryTest>({
-  patientId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Patient', 
-    required: true 
-  },
-  testName: { 
-    type: String, 
-    required: true 
-  },
-  orderedBy: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Staff', 
-    required: true 
-  },
-  dateOrdered: { 
-    type: Date, 
-    required: true 
-  },
-  datePerformed: Date,
-  result: String,
-  location: { 
-    type: String, 
-    enum: ['Home', 'Hospital'],
-    required: true 
-  },
-  visitId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'HomeVisit' 
-  },
-  admissionId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'HospitalAdmission' 
-  },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  }
-});
-
-export const LaboratoryTest = mongoose.model<ILaboratoryTest>('LaboratoryTest', LaboratoryTestSchema);
 ```
+
+**Indexes:**
+- `patientId`
+- `status`
+- `orderedBy`
 
 ---
 
-### Referral Schema
+### 2.7 ImagingOrders
+
+**Collection:** `ImagingOrders`
+
+**Description:** Imaging examination orders and reports.
 
 ```typescript
-import mongoose, { Schema, Document } from 'mongoose';
+{
+  _id: ObjectId;
+  patientId: ObjectId;          // Reference to Patient
+  
+  // ── Clinical Information ──
+  clinicalDiagnosis?: string;
+  presentingSymptoms?: string;
+  relevantHistory?: string;
+  previousImaging: 'None' | 'Yes';
+  previousImagingDetails?: string;
+  clinicalQuestion?: string;
+  
+  // ── Imaging Request ──
+  modality: 'XRay' | 'Ultrasound' | 'CT' | 'MRI' | 'Mammography' | 'Fluoroscopy' | 'Interventional' | 'NuclearMedicine' | 'Other';
+  bodyRegion: string;
+  specificSite?: string;
+  laterality: 'Right' | 'Left' | 'Bilateral' | 'NotApplicable';
+  protocol?: string;
+  contrast: 'No' | 'Yes' | 'ToBeDetermined';
+  
+  // ── Contrast Info ──
+  previousContrastReaction?: 'No' | 'Yes';
+  previousContrastReactionDetails?: string;
+  allergies?: string;
+  creatinine?: string;
+  egfr?: string;
+  otherRelevantMedication?: string;
+  
+  // ── Safety Screening ──
+  pregnancyStatus: 'NotPregnant' | 'Pregnant' | 'PossiblyPregnant' | 'NotApplicable';
+  implantedDevice: boolean;
+  deviceDetails?: string;
+  metallicForeignBody: 'No' | 'Yes' | 'Unknown';
+  otherSafetyConsiderations?: string;
+  
+  // ── Preparation ──
+  preparation: string[];        // None, Fasting, FullBladder, etc.
+  preparationInstructions?: string;
+  
+  // ── Priority ──
+  priority: 'Routine' | 'Urgent' | 'Emergency';
+  reasonForUrgency?: string;
+  
+  // ── Clinician ──
+  clinicianName: string;
+  clinicianDepartment?: string;
+  clinicianLicenseNo?: string;
+  clinicianContact?: string;
+  
+  // ── Status ──
+  status: 'Ordered' | 'Completed';
+  orderedBy: ObjectId;          // Reference to Staff
+  dateOrdered: string;          // YYYY-MM-DD
+  
+  // ── Imaging Department ──
+  examinationPerformed?: string;
+  modalityPerformed?: string;
+  technologist?: string;
+  radiologist?: string;
+  datePerformed?: string;
+  imageQuality?: 'Diagnostic' | 'Limited' | 'NonDiagnostic' | 'RepeatRequired';
+  
+  // ── Report ──
+  findings?: string;
+  impression?: string;
+  recommendations?: string;
+  reportNumber?: string;
+  reportingPhysician?: string;
+  reportDate?: string;
+  reportNotes?: string;
+  
+  visitId?: ObjectId;           // Reference to HomeVisit
+  admissionId?: ObjectId;       // Reference to HospitalAdmission
+  
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
 
-export interface IReferral extends Document {
-  patientId: mongoose.Types.ObjectId;
+**Indexes:**
+- `patientId`
+- `status`
+- `modality`
+- `orderedBy`
+
+---
+
+### 2.8 Referrals
+
+**Collection:** `Referrals`
+
+**Description:** Patient referral requests between facilities.
+
+```typescript
+{
+  _id: ObjectId;
+  patientId: ObjectId;          // Reference to Patient
+  
   referralType: 'Incoming' | 'Outgoing';
-  referralDate: Date;
+  referralDate: string;         // YYYY-MM-DD
+  
   primaryDiagnosis: string;
   diseaseStage: 'Early' | 'Advanced' | 'EndStage';
-  ppsScore: number;
-  kpsScore: number;
+  ppsScore: number;             // 0-100
+  kpsScore: number;             // 0-100
+  
   currentSymptoms: {
-    pain: number;
-    dyspnea: number;
-    fatigue: number;
-    anxiety: number;
-    depression: number;
+    pain: number;               // 0-10
+    dyspnea: number;            // 0-10
+    fatigue: number;            // 0-10
+    anxiety: number;            // 0-10
+    depression: number;         // 0-10
   };
-  reasons: Array<'PainManagement' | 'SymptomControl' | 'EndOfLifeCare' | 'HomeHospiceCare' | 'InpatientAdmission' | 'PsychologicalSupport' | 'SpiritualCare' | 'CaregiverSupport' | 'BereavementServices' | 'EmergencyCare' | 'DiagnosticEvaluation' | 'Other'>;
+  
+  reasons: string[];            // PainManagement, SymptomControl, etc.
   otherReason?: string;
+  
   referringFacility: string;
   receivingFacility: string;
   contactPerson: string;
   contactNumber: string;
+  
   status: 'Pending' | 'Accepted' | 'Declined' | 'Admitted' | 'InfoRequested';
-  actionTaken: 'ReferralAccepted' | 'AppointmentScheduled' | 'AdditionalInfoRequested' | 'ReferralDeclined' | 'PatientAdmitted' | 'PatientTransferred' | null;
-  outcome: string;
-  followUpDate?: Date;
+  actionTaken?: 'ReferralAccepted' | 'AppointmentScheduled' | 'AdditionalInfoRequested' | 'ReferralDeclined' | 'PatientAdmitted' | 'PatientTransferred';
+  outcome?: string;
+  
+  followUpDate?: string;        // YYYY-MM-DD
   followUpStatus?: 'Completed' | 'Pending' | 'UnableToContact';
-  requestedBy: mongoose.Types.ObjectId;
-  approvedBy?: mongoose.Types.ObjectId;
+  
+  requestedBy: ObjectId;        // Reference to Staff
+  approvedBy?: ObjectId;        // Reference to Admin
+  
   preparedBy: string;
   preparedByDesignation: string;
   signature: string;
+  
   createdAt: Date;
   updatedAt: Date;
 }
-
-const ReferralSchema = new Schema<IReferral>({
-  patientId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Patient', 
-    required: true 
-  },
-  referralType: { 
-    type: String, 
-    enum: ['Incoming', 'Outgoing'],
-    required: true 
-  },
-  referralDate: { 
-    type: Date, 
-    required: true 
-  },
-  primaryDiagnosis: { 
-    type: String, 
-    required: true 
-  },
-  diseaseStage: { 
-    type: String, 
-    enum: ['Early', 'Advanced', 'EndStage'],
-    required: true 
-  },
-  ppsScore: { 
-    type: Number, 
-    min: 0,
-    max: 100,
-    required: true 
-  },
-  kpsScore: { 
-    type: Number, 
-    min: 0,
-    max: 100,
-    required: true 
-  },
-  currentSymptoms: {
-    pain: { 
-      type: Number, 
-      min: 0, 
-      max: 10 
-    },
-    dyspnea: { 
-      type: Number, 
-      min: 0, 
-      max: 10 
-    },
-    fatigue: { 
-      type: Number, 
-      min: 0, 
-      max: 10 
-    },
-    anxiety: { 
-      type: Number, 
-      min: 0, 
-      max: 10 
-    },
-    depression: { 
-      type: Number, 
-      min: 0, 
-      max: 10 
-    }
-  },
-  reasons: [{ 
-    type: String, 
-    enum: ['PainManagement', 'SymptomControl', 'EndOfLifeCare', 'HomeHospiceCare', 'InpatientAdmission', 'PsychologicalSupport', 'SpiritualCare', 'CaregiverSupport', 'BereavementServices', 'EmergencyCare', 'DiagnosticEvaluation', 'Other'] 
-  }],
-  otherReason: String,
-  referringFacility: { 
-    type: String, 
-    required: true 
-  },
-  receivingFacility: { 
-    type: String, 
-    required: true 
-  },
-  contactPerson: { 
-    type: String, 
-    required: true 
-  },
-  contactNumber: { 
-    type: String, 
-    required: true 
-  },
-  status: { 
-    type: String, 
-    enum: ['Pending', 'Accepted', 'Declined', 'Admitted', 'InfoRequested'],
-    default: 'Pending' 
-  },
-  actionTaken: { 
-    type: String, 
-    enum: ['ReferralAccepted', 'AppointmentScheduled', 'AdditionalInfoRequested', 'ReferralDeclined', 'PatientAdmitted', 'PatientTransferred'],
-    default: null 
-  },
-  outcome: { 
-    type: String,
-    default: ''
-  },
-  followUpDate: Date,
-  followUpStatus: { 
-    type: String, 
-    enum: ['Completed', 'Pending', 'UnableToContact'] 
-  },
-  requestedBy: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Staff', 
-    required: true 
-  },
-  approvedBy: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Admin' 
-  },
-  preparedBy: { 
-    type: String, 
-    required: true 
-  },
-  preparedByDesignation: { 
-    type: String, 
-    required: true 
-  },
-  signature: { 
-    type: String, 
-    required: true 
-  },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  },
-  updatedAt: { 
-    type: Date, 
-    default: Date.now 
-  }
-});
-
-export const Referral = mongoose.model<IReferral>('Referral', ReferralSchema);
 ```
+
+**Indexes:**
+- `patientId`
+- `status`
+- `requestedBy`
 
 ---
 
-### HospitalAdmission Schema
+### 2.9 HospitalAdmissions
+
+**Collection:** `HospitalAdmissions`
+
+**Description:** Patient hospital admissions.
 
 ```typescript
-import mongoose, { Schema, Document } from 'mongoose';
-
-export interface IHospitalAdmission extends Document {
-  patientId: mongoose.Types.ObjectId;
-  referralId: mongoose.Types.ObjectId;
-  admissionDate: Date;
-  dischargeDate?: Date;
+{
+  _id: ObjectId;
+  patientId: ObjectId;          // Reference to Patient
+  referralId: ObjectId;         // Reference to Referral (accepted)
+  
+  admissionDate: string;        // YYYY-MM-DD
+  dischargeDate?: string;       // YYYY-MM-DD
+  
   bedNumber: string;
   ward: string;
   admittingPhysician: string;
   careTeam: string;
+  
   primaryDiagnosis: string;
   secondaryDiagnoses: string[];
   diseaseStage: 'Early' | 'Advanced' | 'Terminal';
   comorbidities: string[];
   estimatedPrognosis: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
-  ppsScore: number;
+  
+  ppsScore: number;             // 0-100
   functionalStatus: 'FullyIndependent' | 'PartiallyDependent' | 'FullyDependent';
-  painScore: number;
+  
+  painScore: number;            // 0-10
   painType: 'Acute' | 'Chronic' | 'Neuropathic' | 'Mixed';
-  symptomsPresent: Array<'Dyspnea' | 'Nausea' | 'Fatigue' | 'Anxiety' | 'Depression' | 'Insomnia' | 'Other'>;
+  symptomsPresent: string[];    // Dyspnea, Nausea, Fatigue, etc.
+  
   emotionalStatus: 'Stable' | 'Anxious' | 'Depressed' | 'Distressed';
   familySupport: 'Strong' | 'Moderate' | 'Weak' | 'None';
   socialChallenges?: string;
+  
   spiritualConcerns: boolean;
   spiritualSupportPreferred?: 'ReligiousLeader' | 'Counselor' | 'Other';
+  
   painManagementPlan: string;
   medicationPlan: string;
   nursingCarePlan: string;
   homeBasedCareRequired: boolean;
   psychosocialSupportPlan?: string;
   physiotherapyRequired: boolean;
+  
   dischargeReason?: 'Improved' | 'Deceased';
   status: 'Active' | 'Discharged';
-  createdBy: mongoose.Types.ObjectId;
+  
+  createdBy: ObjectId;          // Reference to Staff
+  
   createdAt: Date;
   updatedAt: Date;
 }
-
-const HospitalAdmissionSchema = new Schema<IHospitalAdmission>({
-  patientId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Patient', 
-    required: true 
-  },
-  referralId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Referral', 
-    required: true 
-  },
-  admissionDate: { 
-    type: Date, 
-    required: true 
-  },
-  dischargeDate: Date,
-  bedNumber: { 
-    type: String, 
-    required: true 
-  },
-  ward: { 
-    type: String, 
-    required: true 
-  },
-  admittingPhysician: { 
-    type: String, 
-    required: true 
-  },
-  careTeam: { 
-    type: String, 
-    required: true 
-  },
-  primaryDiagnosis: { 
-    type: String, 
-    required: true 
-  },
-  secondaryDiagnoses: [String],
-  diseaseStage: { 
-    type: String, 
-    enum: ['Early', 'Advanced', 'Terminal'],
-    required: true 
-  },
-  comorbidities: [String],
-  estimatedPrognosis: { 
-    type: String, 
-    enum: ['Days', 'Weeks', 'Months', 'Uncertain'],
-    required: true 
-  },
-  ppsScore: { 
-    type: Number, 
-    min: 0,
-    max: 100,
-    required: true 
-  },
-  functionalStatus: { 
-    type: String, 
-    enum: ['FullyIndependent', 'PartiallyDependent', 'FullyDependent'],
-    required: true 
-  },
-  painScore: { 
-    type: Number, 
-    min: 0, 
-    max: 10, 
-    required: true 
-  },
-  painType: { 
-    type: String, 
-    enum: ['Acute', 'Chronic', 'Neuropathic', 'Mixed'],
-    required: true 
-  },
-  symptomsPresent: [{ 
-    type: String, 
-    enum: ['Dyspnea', 'Nausea', 'Fatigue', 'Anxiety', 'Depression', 'Insomnia', 'Other'] 
-  }],
-  emotionalStatus: { 
-    type: String, 
-    enum: ['Stable', 'Anxious', 'Depressed', 'Distressed'],
-    required: true 
-  },
-  familySupport: { 
-    type: String, 
-    enum: ['Strong', 'Moderate', 'Weak', 'None'],
-    required: true 
-  },
-  socialChallenges: String,
-  spiritualConcerns: { 
-    type: Boolean, 
-    required: true 
-  },
-  spiritualSupportPreferred: { 
-    type: String, 
-    enum: ['ReligiousLeader', 'Counselor', 'Other'] 
-  },
-  painManagementPlan: { 
-    type: String, 
-    required: true 
-  },
-  medicationPlan: { 
-    type: String, 
-    required: true 
-  },
-  nursingCarePlan: { 
-    type: String, 
-    required: true 
-  },
-  homeBasedCareRequired: { 
-    type: Boolean, 
-    required: true 
-  },
-  psychosocialSupportPlan: String,
-  physiotherapyRequired: { 
-    type: Boolean, 
-    required: true 
-  },
-  dischargeReason: { 
-    type: String, 
-    enum: ['Improved', 'Deceased'] 
-  },
-  status: { 
-    type: String, 
-    enum: ['Active', 'Discharged'],
-    default: 'Active' 
-  },
-  createdBy: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Staff', 
-    required: true 
-  },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  },
-  updatedAt: { 
-    type: Date, 
-    default: Date.now 
-  }
-});
-
-export const HospitalAdmission = mongoose.model<IHospitalAdmission>('HospitalAdmission', HospitalAdmissionSchema);
 ```
+
+**Indexes:**
+- `patientId`
+- `referralId`
+- `status`
 
 ---
 
-### Notification Schema
+### 2.10 ProgressNotes
+
+**Collection:** `ProgressNotes`
+
+**Description:** Patient progress notes (clinical documentation).
 
 ```typescript
-import mongoose, { Schema, Document } from 'mongoose';
+{
+  _id: ObjectId;
+  patientId: ObjectId;          // Reference to Patient
+  
+  // ── Header ──
+  hospitalName: string;
+  palliativeCareUnit: string;
+  patientName: string;
+  patientMRN: string;
+  date: string;                 // YYYY-MM-DD
+  time: string;                 // HH:mm
+  dayOfAdmission: string;
+  attendingClinician: string;
+  
+  // ── 1. Current Clinical Status ──
+  generalCondition: 'Stable' | 'Improving' | 'Deteriorating' | 'Critical' | 'ActivelyDying';
+  levelOfConsciousness: 'Alert' | 'Drowsy' | 'Confused' | 'Delirious' | 'Unresponsive';
+  orientation: 'Oriented' | 'PartiallyOriented' | 'Disoriented' | 'UnableToAssess';
+  functionalStatus: 'Independent' | 'RequiresAssistance' | 'Bedbound' | 'FullyDependent';
+  changesSincePreviousReview: string;
+  
+  // ── 2. Vital Signs ──
+  vitals: {
+    temperature: { current: string; previous: string };
+    pulse: { current: string; previous: string };
+    respiratoryRate: { current: string; previous: string };
+    bloodPressure: { current: string; previous: string };
+    spo2: { current: string; previous: string };
+    oxygenFlow: { current: string; previous: string };
+  };
+  otherRelevantObservations: string;
+  
+  // ── 3. Symptom Assessment ──
+  symptoms: {
+    [symptom: string]: {
+      severity: 'None' | 'Mild' | 'Moderate' | 'Severe';
+      notes: string;
+    };
+  };
+  painScore: string;
+  painLocation: string;
+  painCharacter: string;
+  currentPainManagement: string;
+  responseToTreatment: 'Good' | 'Partial' | 'Poor' | 'NotApplicable';
+  breakthroughPainEpisodes: 'Yes' | 'No';
+  breakthroughPainFrequency: string;
+  
+  // ── 4. Respiratory Status ──
+  breathing: 'Comfortable' | 'MildDistress' | 'ModerateDistress' | 'SevereDistress';
+  oxygenTherapy: 'Yes' | 'No';
+  oxygenDelivery: 'NasalCannula' | 'Mask' | 'Other';
+  oxygenDeliveryOther?: string;
+  respiratorySecretions: 'None' | 'Mild' | 'Moderate' | 'Excessive';
+  cough: 'Yes' | 'No';
+  otherRespiratoryFindings: string;
+  
+  // ── 5. Nutrition and Hydration ──
+  oralIntake: 'Good' | 'Reduced' | 'Minimal' | 'None';
+  diet: string;
+  fluidIntake: string;
+  feedingAssistance: 'Yes' | 'No';
+  enteralFeeding: 'Yes' | 'No';
+  ivFluids: 'Yes' | 'No';
+  nauseaVomitingAffectingIntake: 'Yes' | 'No';
+  nutritionHydrationConcerns: string;
+  
+  // ── 6. Elimination ──
+  urineOutput: 'Normal' | 'Reduced' | 'Minimal' | 'UnableToAssess';
+  urinaryCatheter: 'Yes' | 'No';
+  bowelMovement: 'Normal' | 'Constipated' | 'Diarrhea' | 'NoRecentBM';
+  lastBowelMovement: string;
+  otherEliminationConcerns: string;
+  
+  // ── 7. Skin and Wound ──
+  skin: 'Intact' | 'Dry' | 'Fragile' | 'Edematous' | 'Other';
+  skinOther?: string;
+  pressureInjury: 'Yes' | 'No';
+  pressureInjuryLocationStage: string;
+  woundCareProvided: 'Yes' | 'No';
+  woundChanges: string;
+  
+  // ── 8. Psychological ──
+  moodBehavior: ('Calm' | 'Anxious' | 'Fearful' | 'Sad' | 'Depressed' | 'Agitated' | 'Withdrawn')[];
+  psychologicalDistress: 'None' | 'Mild' | 'Moderate' | 'Severe';
+  patientMainConcerns: string;
+  counselingProvided: 'Yes' | 'No';
+  
+  // ── 9. Spiritual ──
+  spiritualDistress: 'Yes' | 'No';
+  spiritualCulturalConcerns: string;
+  spiritualCareProvided: 'Yes' | 'No';
+  spiritualReferralRequired: 'Yes' | 'No';
+  spiritualNotes: string;
+  
+  // ── 10. Family/Caregiver ──
+  familyCaregiverPresent: 'Yes' | 'No';
+  familyCaregiverConcerns: string;
+  educationSupportProvided: string;
+  familyMeetingHeld: 'Yes' | 'No';
+  familyMeetingParticipants: string;
+  
+  // ── 11. Goals of Care ──
+  currentGoalsOfCare: string[];
+  currentGoalsOfCareOther?: string;
+  goalsReviewedToday: 'Yes' | 'No';
+  changeInGoals: 'Yes' | 'No';
+  patientDecisionMakerPreferences: string;
+  codeStatus: 'FullResuscitation' | 'DNAR/DNR' | 'Other';
+  codeStatusOther?: string;
+  advanceCarePlanReviewed: 'Yes' | 'No';
+  
+  // ── 12. Medication Review ──
+  medicationRegimenReviewed: 'Yes' | 'No';
+  medicationChangesMade: 'Yes' | 'No';
+  prnMedicationUsed: 'Yes' | 'No';
+  prnEffectiveness: 'Effective' | 'PartiallyEffective' | 'Ineffective';
+  medicationSideEffects: 'None' | 'Yes';
+  medicationSideEffectsDetail: string;
+  medications: {
+    medicationTreatment: string;
+    dose: string;
+    route: string;
+    frequency: string;
+    reasonResponse: string;
+  }[];
+  
+  // ── 13. Nursing Care ──
+  nursingCareProvided: string[];
+  nursingCareOther?: string;
+  responseToSupportiveCare: string;
+  
+  // ── 14. Investigations ──
+  investigationsPerformed: string[];
+  investigationsOther?: string;
+  significantResults: string;
+  clinicalSignificanceAction: string;
+  
+  // ── 15. MDT Review ──
+  mdtReview: {
+    discipline: string;
+    reviewIntervention: string;
+    followUpRequired: 'Yes' | 'No';
+  }[];
+  
+  // ── 16. Clinical Assessment ──
+  overallAssessment: string;
+  problemsIdentifiedToday: string;
+  
+  // ── 17. Plan ──
+  symptomManagementPlan: string;
+  medicationPlan: string;
+  nursingCarePlan: string;
+  investigationsMonitoring: string;
+  familyCaregiverPlan: string;
+  referralsConsultations: string;
+  dischargeTransferHospicePlanning: string;
+  
+  // ── 18. SOAP ──
+  soapSubjective: string;
+  soapObjective: string;
+  soapAssessment: string;
+  soapPlan: string;
+  
+  // ── 19. Additional Notes ──
+  additionalNotes: {
+    id: string;
+    date: string;
+    time: string;
+    note: string;
+    clinicianName: string;
+    signature: string;
+  }[];
+  
+  // ── 20. Authorization ──
+  responsibleClinician: string;
+  responsibleClinicianSignature: string;
+  responsibleClinicianDateTime: string;
+  palliativeCareNurse: string;
+  palliativeCareNurseSignature: string;
+  palliativeCareNurseDateTime: string;
+  reviewedBy: string;
+  reviewedBySignature: string;
+  reviewedByDateTime: string;
+  facilityStamp: string;
+  
+  // ── Meta ──
+  createdBy: ObjectId;          // Reference to Staff
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
 
-export interface INotification extends Document {
+**Indexes:**
+- `patientId`
+- `date`
+- `attendingClinician`
+
+---
+
+### 2.11 DischargeSummaries
+
+**Collection:** `DischargeSummaries`
+
+**Description:** Patient discharge summaries.
+
+```typescript
+{
+  _id: ObjectId;
+  patientId: ObjectId;          // Reference to Patient
+  
+  // ── Header ──
+  hospitalName: string;
+  palliativeCareUnit: string;
+  dateOfAdmission: string;      // YYYY-MM-DD
+  dateOfDischarge: string;      // YYYY-MM-DD
+  timeOfDischarge: string;      // HH:mm
+  dischargeType: string;
+  dischargeTypeOther?: string;
+  
+  // ── A. Patient Identification ──
+  fullName: string;
+  dateOfBirth: string;          // YYYY-MM-DD
+  age: string;
+  sex: string;
+  address: string;
+  telephone: string;
+  primaryCaregiver: string;
+  caregiverRelationship: string;
+  caregiverTelephone: string;
+  
+  // ── B. Admission Information ──
+  primaryDiagnosis: string;
+  secondaryDiagnoses: string;
+  reasonForAdmission: string;
+  referringPhysicianFacility: string;
+  
+  // ── C. Discharge Diagnosis ──
+  finalDischargeDiagnosis: string;
+  clinicalProblemsManaged: string[];
+  summaryOfClinicalCourse: string;
+  importantInvestigations: string;
+  
+  // ── D. Condition at Discharge ──
+  overallCondition: string;
+  levelOfConsciousness: string;
+  functionalStatus: string;
+  mobility: string;
+  oralIntake: string;
+  
+  // ── E. Vital Signs ──
+  temperature: string;
+  pulse: string;
+  respiratoryRate: string;
+  bloodPressure: string;
+  oxygenSaturation: string;
+  oxygenRequirement: string;
+  
+  // ── F. Symptom Status ──
+  symptoms: {
+    [symptom: string]: {
+      severity: 'None' | 'Mild' | 'Moderate' | 'Severe';
+      notes: string;
+    };
+  };
+  painScore: string;
+  painControl: string;
+  
+  // ── G. Medications ──
+  dischargeMedications: {
+    medication: string;
+    dose: string;
+    route: string;
+    frequency: string;
+    purpose: string;
+    instructions: string;
+  }[];
+  prnMedications: string;
+  medicationChanges: string;
+  medicationReconciliation: string;
+  
+  // ── H. Symptom Management ──
+  painManagementInstructions: string;
+  breathlessnessManagement: string;
+  nauseaVomitingManagement: string;
+  constipationManagement: string;
+  anxietyDeliriumManagement: string;
+  otherSymptomManagement: string;
+  
+  // ── I. Nutrition ──
+  diet: string;
+  feedingAssistance: string;
+  enteralFeeding: string;
+  feedingTube: string;
+  feedingTubeOther?: string;
+  hydrationInstructions: string;
+  nutritionFollowUp: string;
+  
+  // ── J. Wound/Skin ──
+  woundPresent: string;
+  woundLocation: string;
+  woundCareInstructions: string;
+  dressingChanges: string;
+  pressureInjuryPrevention: string;
+  
+  // ── K. Equipment ──
+  oxygenRequired: string;
+  oxygenDeliveryMethod: string;
+  oxygenDeliveryOther?: string;
+  oxygenFlowRate: string;
+  equipmentRequired: string[];
+  equipmentOther?: string;
+  equipmentArranged: string;
+  
+  // ── L. Goals of Care ──
+  goalsOfCare: string[];
+  goalsOfCareOther?: string;
+  goalsOfCareReviewed: string;
+  patientDecisionMakerPreferences: string;
+  codeStatus: string;
+  codeStatusOther?: string;
+  advanceCarePlan: string;
+  
+  // ── M. Destination ──
+  dischargedTo: string;
+  dischargedToOther?: string;
+  destinationAddress: string;
+  transport: string;
+  transportOther?: string;
+  escortCaregiver: string;
+  
+  // ── N. Home/Hospice ──
+  homePalliativeCareRequired: string;
+  hospiceReferral: string;
+  communityNursingRequired: string;
+  homeVisitsRequired: string;
+  caregiverSupportRequired: string;
+  servicesArranged: string;
+  responsibleProvider: string;
+  responsibleProviderPhone: string;
+  
+  // ── O. Education ──
+  educationTopics: string[];
+  educationOther?: string;
+  patientUnderstanding: string;
+  additionalEducationRequired: string;
+  
+  // ── P. Warning Signs ──
+  warningSigns: string[];
+  warningSignsOther?: string;
+  warningSignsSpecificInstructions: string;
+  
+  // ── Q. Follow-Up ──
+  palliativeCareFollowUp: string;
+  palliativeCareFollowUpDate: string;
+  palliativeCareFollowUpTime: string;
+  physicianSpecialistFollowUp: string;
+  primaryCareFollowUp: string;
+  hospiceHomeCareFollowUp: string;
+  otherAppointments: string;
+  
+  // ── R. Contacts ──
+  palliativeCareUnitContact: string;
+  palliativeCareUnitPhone: string;
+  attendingClinician: string;
+  attendingClinicianPhone: string;
+  emergencyContactInfo: string;
+  homeHospiceService: string;
+  homeHospiceServicePhone: string;
+  
+  // ── S. Notes ──
+  dischargeNotes: string;
+  
+  // ── Meta ──
+  submittedBy: string;
+  submittedAt: string;
+  createdBy: ObjectId;          // Reference to Staff/Admin
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+**Indexes:**
+- `patientId`
+- `dateOfDischarge`
+
+---
+
+### 2.12 Notifications
+
+**Collection:** `Notifications`
+
+**Description:** System notifications for admin and staff.
+
+```typescript
+{
+  _id: ObjectId;
   type: 'StaffApproval' | 'ReferralApproval' | 'CloseCase';
   message: string;
   data: {
-    staffId?: mongoose.Types.ObjectId;
-    referralId?: mongoose.Types.ObjectId;
-    patientId?: mongoose.Types.ObjectId;
+    staffId?: string;
+    referralId?: string;
+    patientId?: string;
     patientName?: string;
     staffName?: string;
   };
   read: boolean;
+  userId: ObjectId;             // Reference to Admin or Staff
   createdAt: Date;
 }
-
-const NotificationSchema = new Schema<INotification>({
-  type: { 
-    type: String, 
-    enum: ['StaffApproval', 'ReferralApproval', 'CloseCase'],
-    required: true 
-  },
-  message: { 
-    type: String, 
-    required: true 
-  },
-  data: {
-    staffId: Schema.Types.ObjectId,
-    referralId: Schema.Types.ObjectId,
-    patientId: Schema.Types.ObjectId,
-    patientName: String,
-    staffName: String
-  },
-  read: { 
-    type: Boolean, 
-    default: false 
-  },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  }
-});
-
-export const Notification = mongoose.model<INotification>('Notification', NotificationSchema);
 ```
+
+**Indexes:**
+- `userId`
+- `read`
+- `createdAt`
 
 ---
 
-## 3. Database Indexes
+### 2.13 Signatures
+
+**Collection:** `Signatures`
+
+**Description:** Digital signatures for visit records.
 
 ```typescript
-// Create indexes for performance optimization
+{
+  _id: ObjectId;
+  visitId: ObjectId;            // Reference to HomeVisit
+  staffId: ObjectId;            // Reference to Staff
+  staffName: string;
+  role: 'TeamLeader' | 'Physician' | 'Nurse';
+  signedAt: Date;
+  autoSigned: boolean;          // Team Leader only
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt: Date;
+}
+```
 
-// Staff indexes
-StaffSchema.index({ email: 1 }, { unique: true });
-StaffSchema.index({ status: 1 });
-StaffSchema.index({ isEmailVerified: 1 });
-StaffSchema.index({ emailVerificationToken: 1 });
+**Indexes:**
+- `visitId`
+- `staffId`
 
-// Patient indexes
-PatientSchema.index({ status: 1 });
-PatientSchema.index({ currentLocation: 1 });
-PatientSchema.index({ registeredBy: 1 });
-PatientSchema.index({ patientDisplayId: 1 });
+---
 
-// HomeVisit indexes
-HomeVisitSchema.index({ patientId: 1 });
-HomeVisitSchema.index({ visitDate: -1 });
+## 3.0 Relationships Diagram
 
-// Medication indexes
-MedicationSchema.index({ patientId: 1 });
-MedicationSchema.index({ createdAt: -1 });
-
-// LaboratoryTest indexes
-LaboratoryTestSchema.index({ patientId: 1 });
-LaboratoryTestSchema.index({ dateOrdered: -1 });
-
-// Referral indexes
-ReferralSchema.index({ patientId: 1 });
-ReferralSchema.index({ status: 1 });
-ReferralSchema.index({ createdAt: -1 });
-
-// HospitalAdmission indexes
-HospitalAdmissionSchema.index({ patientId: 1 });
-HospitalAdmissionSchema.index({ status: 1 });
-
-// Notification indexes
-NotificationSchema.index({ read: 1 });
-NotificationSchema.index({ createdAt: -1 });
-
-// Counter indexes
-CounterSchema.index({ name: 1 }, { unique: true });
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Admin                                   │
+│  (System administrators with full access)                      │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ approves
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         Staff                                   │
+│  (Team Leader, Physician, Nurse)                               │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ registers
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        Patient                                  │
+│  (Palliative care patient)                                     │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+        ▼                     ▼                     ▼
+┌───────────────┐    ┌───────────────┐    ┌───────────────┐
+│  HomeVisit    │    │  Medication   │    │LaboratoryTest │
+│  (Visit record│    │  (Med orders) │    │  (Lab orders) │
+│   with        │    │               │    │               │
+│   signatures) │    └───────────────┘    └───────────────┘
+└───────────────┘
+        │                     │                     │
+        ▼                     ▼                     ▼
+┌───────────────┐    ┌───────────────┐    ┌───────────────┐
+│  Signature    │    │               │    │  ImagingOrder │
+│  (Digital     │    │               │    │  (Imaging     │
+│   signatures) │    │               │    │   orders)     │
+└───────────────┘    └───────────────┘    └───────────────┘
+        │                     │                     │
+        ▼                     ▼                     ▼
+┌───────────────┐    ┌───────────────┐    ┌───────────────┐
+│  Referral     │    │   Admission   │    │ProgressNote   │
+│  (Referral    │    │  (Hospital    │    │  (Clinical    │
+│   requests)   │    │   admission)  │    │   notes)      │
+└───────────────┘    └───────────────┘    └───────────────┘
+        │
+        ▼
+┌───────────────┐    ┌───────────────┐    ┌───────────────┐
+│DischargeSumm  │    │ Notification  │    │               │
+│  (Discharge   │    │  (System      │    │               │
+│   summaries)  │    │   alerts)     │    │               │
+└───────────────┘    └───────────────┘    └───────────────┘
 ```
 
 ---
 
-## 4. Database Connection
+## 4.0 Collection Sizes & Growth Projections
+
+| Collection | Estimated Size (per 100 patients) | Growth Rate |
+|------------|----------------------------------|-------------|
+| Patients | 100 documents | +1 per week |
+| Staff | 10-20 documents | +1 per month |
+| Admin | 1-3 documents | Rare |
+| HomeVisits | 500-1,000 documents | +5-10 per week |
+| Medications | 300-500 documents | +3-5 per week |
+| LaboratoryTests | 200-400 documents | +2-4 per week |
+| ImagingOrders | 100-200 documents | +1-2 per week |
+| Referrals | 100-200 documents | +1-2 per week |
+| HospitalAdmissions | 100-200 documents | +1-2 per week |
+| ProgressNotes | 500-1,000 documents | +5-10 per week |
+| DischargeSummaries | 50-100 documents | +1 per week |
+| Notifications | 500+ documents | +10 per week |
+| Signatures | 1,500-3,000 documents | +15-30 per week |
+
+---
+
+## 5.0 Validation Rules
+
+### 5.1 Patient Validation
 
 ```typescript
-// src/config/database.ts
-
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/palliative-care';
-
-export const connectDB = async (): Promise<void> => {
-  try {
-    await mongoose.connect(MONGODB_URI);
-    console.log('MongoDB connected successfully');
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
-  }
-};
-
-// Handle connection events
-mongoose.connection.on('error', (error) => {
-  console.error('MongoDB connection error:', error);
-});
-
-mongoose.connection.on('disconnected', () => {
-  console.log('MongoDB disconnected');
-});
-
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  await mongoose.connection.close();
-  process.exit(0);
-});
+// patientDisplayId: Must be unique, format PAT-XXX
+// age: Must be > 0 and < 150
+// phone: Must be valid phone number format
+// dateOfBirth: Must be in the past
+// status: Must be 'Active' or 'Discharged'
+// currentLocation: Must be 'Home' or 'ReferredHospital'
+// diseaseStage: Must be 'Early', 'Advanced', or 'EndStage'
+// estimatedPrognosis: Must be 'Days', 'Weeks', 'Months', or 'Uncertain'
 ```
 
----
-
-## 5. Environment Variables
-
-```env
-# .env.example
-MONGODB_URI=mongodb://localhost:27017/palliative-care
-JWT_SECRET=your_jwt_secret_key_here
-JWT_EXPIRE=7d
-BCRYPT_SALT_ROUNDS=10
-PORT=5000
-NODE_ENV=development
-
-# Email Configuration
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-EMAIL_FROM=noreply@yourdomain.com
-
-# Admin Seed (for first-time setup)
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=adminpassword
-ADMIN_NAME=Admin User
-```
-
----
-
-## 6. Seed Script
+### 5.2 Visit Validation
 
 ```typescript
-//  scripts/seed-admin.ts
+// visitDate: Must be valid date (YYYY-MM-DD)
+// timeStarted: Must be valid time (HH:mm)
+// timeEnded: Must be valid time (HH:mm), after timeStarted
+// painScore: 0-10
+// ppsScore: 0-100
+// kpsScore: 0-100
+// outcome: Must be one of enum values
+```
 
-import { Admin } from '../src/models/Admin';
-import { Counter } from '../src/models/Counter';
-import bcrypt from 'bcrypt';
-import dotenv from 'dotenv';
+### 5.3 Medication Validation
 
-dotenv.config();
+```typescript
+// name: Required, non-empty
+// dosage: Required, non-empty
+// frequency: Required, non-empty
+// route: Required, non-empty
+// status: 'Ordered' or 'Given'
+```
 
-const seedAdmin = async () => {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const adminPassword = process.env.ADMIN_PASSWORD;
-  const adminName = process.env.ADMIN_NAME;
+### 5.4 Referral Validation
 
-  if (!adminEmail || !adminPassword || !adminName) {
-    console.error('Admin seed credentials missing in environment variables');
-    process.exit(1);
-  }
-
-  const existingAdmin = await Admin.findOne({ email: adminEmail });
-  if (existingAdmin) {
-    console.log('Admin already exists. Skipping seed.');
-    return;
-  }
-
-  const hashedPassword = await bcrypt.hash(adminPassword, 10);
-
-  await Admin.create({
-    name: adminName,
-    email: adminEmail,
-    password: hashedPassword,
-  });
-
-  console.log('Admin user seeded successfully');
-
-  // Initialize counter for patient display IDs
-  await Counter.findOneAndUpdate(
-    { name: 'patientId' },
-    { $setOnInsert: { value: 0 } },
-    { upsert: true }
-  );
-  console.log('Counter initialized for patient display IDs');
-};
-
-seedAdmin()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error('Seed error:', error);
-    process.exit(1);
-  });
+```typescript
+// ppsScore: 0-100
+// kpsScore: 0-100
+// currentSymptoms: Each symptom score 0-10
+// status: Pending, Accepted, Declined, Admitted, InfoRequested
 ```
 
 ---
-
-## 7. Data Relationships Diagram
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│      ADMIN      │     │      STAFF      │     │    PATIENT      │
-│                 │     │                 │     │                 │
-│  _id            │────▶│  assignedBy     │     │  _id            │
-│  name           │     │  _id            │     │  registeredBy   │◀──┐
-│  email          │     │  name           │     │  patientDisplayId│  │
-│  password       │     │  email          │     │  firstName      │  │
-│  createdAt      │     │  phone          │     │  lastName       │  │
-└─────────────────┘     │  password       │     │  status         │  │
-                        │  role (nullable)│     │  currentLocation│  │
-                        │  status         │     └─────────────────┘  │
-                        │  isEmailVerified│              │           │
-                        │  emailVerificationToken│      │           │
-                        │  emailVerificationTokenExpires│           │
-                        │  createdAt      │              │           │
-                        │  updatedAt      │              │           │
-                        └─────────────────┘              │           │
-                              │     ▲                    │           │
-                              │     │                    │           │
-                              │     │                    │           │
-                              ▼     │                    ▼           │
-┌─────────────────────────────────────────────────────────────────────┐
-│                                                                     │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐    │
-│  │  HOME_VISIT     │  │  MEDICATION     │  │  LABORATORY_TEST│    │
-│  │                 │  │                 │  │                 │    │
-│  │  _id            │  │  _id            │  │  _id            │    │
-│  │  patientId      │──│  patientId      │──│  patientId      │    │
-│  │  teamLeaderId   │  │  prescribedBy   │  │  orderedBy      │    │
-│  │  physicianId    │  │  visitId        │  │  visitId        │    │
-│  │  nurseId        │  │  admissionId    │  │  admissionId    │    │
-│  │  teamMembers    │  │  name           │  │  testName       │    │
-│  │  (staffId refs) │  │  status         │  │  result         │    │
-│  │  visitDate      │  └─────────────────┘  └─────────────────┘    │
-│  │  outcome        │                                              │
-│  └─────────────────┘                                              │
-│         │                                                         │
-│         ▼                                                         │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐    │
-│  │   REFERRAL      │  │ HOSPITAL_       │  │  NOTIFICATION   │    │
-│  │                 │  │ ADMISSION       │  │                 │    │
-│  │  _id            │──│  _id            │  │  _id            │    │
-│  │  patientId      │  │  patientId      │  │  type           │    │
-│  │  requestedBy    │  │  referralId     │  │  message        │    │
-│  │  approvedBy     │  │  createdBy      │  │  read           │    │
-│  │  preparedBy     │  │  status         │  │  createdAt      │    │
-│  │  signature      │  │  admissionDate  │  └─────────────────┘    │
-│  │  status         │  └─────────────────┘                        │
-│  │  createdAt      │                                              │
-│  └─────────────────┘                                              │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘

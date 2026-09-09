@@ -5,9 +5,9 @@
 
 ## 1. Overview
 
-This document defines the frontend implementation for home visit features including recording home visits and viewing visit history.
+This document defines the frontend implementation for home visit features including recording home visits, viewing visit history, and digital signatures for team members.
 
-**API Reference:** `api/04-visits.md`
+**API Reference:** `api/04-visits.md`, `api/14-signatures.md`
 
 ---
 
@@ -88,6 +88,7 @@ export interface HomeVisit {
   physicianId: string;
   nurseId: string;
   createdAt: string;
+  isFinalized?: boolean;
 }
 
 export interface CreateVisitRequest {
@@ -160,6 +161,55 @@ export interface VisitListResponse {
 }
 ```
 
+```typescript
+// src/types/signature.types.ts
+
+export interface Signature {
+  id: string;
+  visitId: string;
+  staffId: string;
+  staffName: string;
+  role: 'TeamLeader' | 'Physician' | 'Nurse';
+  signedAt: string;
+  autoSigned: boolean;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export interface SignVisitRequest {
+  email: string;
+  password: string;
+  role: 'TeamLeader' | 'Physician' | 'Nurse';
+}
+
+export interface SignVisitResponse {
+  id: string;
+  visitId: string;
+  staffId: string;
+  staffName: string;
+  role: string;
+  signedAt: string;
+  ipAddress?: string;
+}
+
+export interface VisitSignaturesResponse {
+  visitId: string;
+  visitDate: string;
+  teamLeader: Signature | null;
+  physician: Signature | null;
+  nurse: Signature | null;
+  allSigned: boolean;
+  totalSignatures: number;
+}
+
+export interface SignatureStatus {
+  teamLeaderSigned: boolean;
+  physicianSigned: boolean;
+  nurseSigned: boolean;
+  allSigned: boolean;
+}
+```
+
 ---
 
 ## 4. API Calls
@@ -196,6 +246,35 @@ export const visitApi = {
    */
   getById: (patientId: string, visitId: string): Promise<HomeVisit> => {
     return api.get<HomeVisit>(`/patients/${patientId}/visits/${visitId}`).then((res) => res.data);
+  },
+};
+```
+
+```typescript
+// src/api/signatures.ts
+
+import api from './client';
+import { 
+  SignVisitRequest,
+  SignVisitResponse,
+  VisitSignaturesResponse
+} from '@/types/signature.types';
+
+export const signatureApi = {
+  /**
+   * Sign a visit as a team member
+   * POST /visits/:visitId/sign
+   */
+  signVisit: (visitId: string, data: SignVisitRequest): Promise<SignVisitResponse> => {
+    return api.post<SignVisitResponse>(`/visits/${visitId}/sign`, data).then((res) => res.data);
+  },
+
+  /**
+   * Get all signatures for a visit
+   * GET /visits/:visitId/signatures
+   */
+  getVisitSignatures: (visitId: string): Promise<VisitSignaturesResponse> => {
+    return api.get<VisitSignaturesResponse>(`/visits/${visitId}/signatures`).then((res) => res.data);
   },
 };
 ```
@@ -252,6 +331,44 @@ export function useRecordVisit(patientId: string) {
 }
 ```
 
+```typescript
+// src/hooks/useSignatures.ts
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { signatureApi } from '@/api/signatures';
+import { SignVisitRequest } from '@/types/signature.types';
+import { toastUtils } from '@/lib/toast';
+
+/**
+ * Get all signatures for a visit
+ */
+export function useVisitSignatures(visitId: string) {
+  return useQuery({
+    queryKey: ['visits', visitId, 'signatures'],
+    queryFn: () => signatureApi.getVisitSignatures(visitId),
+    enabled: !!visitId,
+  });
+}
+
+/**
+ * Sign a visit as a team member
+ */
+export function useSignVisit(visitId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: SignVisitRequest) => signatureApi.signVisit(visitId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['visits', visitId, 'signatures'] });
+      toastUtils.success('Signature added successfully');
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Failed to sign visit';
+      toastUtils.error('Signature failed', message);
+    },
+  });
+}
+```
+
 ---
 
 ## 6. Components
@@ -269,6 +386,7 @@ interface VisitFormProps {
   onSubmit: (data: CreateVisitRequest) => void;
   isSubmitting?: boolean;
   initialValues?: Partial<CreateVisitRequest>;
+  isFinalized?: boolean;
 }
 ```
 
@@ -292,146 +410,448 @@ interface VisitFormProps {
 | | | [Add Member]                                       | | |
 | | +---------------------------------------------------+ | |
 | |                                                       | |
-| | Patient General Condition                             | | |
+| | ... (all other visit fields)                          | |
+| |                                                       | |
 | | +---------------------------------------------------+ | |
-| | | Status: [Stable/Deteriorating/Critical/BedBound]   | | |
-| | | Mobility: [Ambulatory/RequiresAssistance/Bedridden]| | |
+| | | TEAM SIGNATURES                                   | | |
+| | | Team Leader: Dr. Smith                    ✅ Signed | | |
+| | | (Automatically signed)                             | | |
+| | |                                                   | | |
+| | | Physician: Dr. Kebede                    ⬜ Pending | | |
+| | | Email: [________________________]                  | | |
+| | | Password: [________________________]               | | |
+| | | [Sign as Physician]                               | | |
+| | |                                                   | | |
+| | | Nurse: Jane Doe                          ⬜ Pending | | |
+| | | Email: [________________________]                  | | |
+| | | Password: [________________________]               | | |
+| | | [Sign as Nurse]                                   | | |
 | | +---------------------------------------------------+ | |
 | |                                                       | |
-| | Vital Signs                                           | | |
-| | +---------------------------------------------------+ | |
-| | | Temp: [___]C  Pulse: [___]  BP: [___]             | | |
-| | | Resp: [___]  SpO2: [___]%                         | | |
-| | +---------------------------------------------------+ | |
+| | ⚠️ All team members must sign before finalizing.     | |
 | |                                                       | |
-| | Pain Assessment                                       | | |
-| | +---------------------------------------------------+ | |
-| | | Pain Score: [0-10]  Effective: [Yes/No]           | | |
-| | | Location: [Head/Neck/Chest/Abdomen/Back/Limbs]    | | |
-| | | Characteristics: [Sharp/Dull/Burning/...]         | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Symptoms                                              | | |
-| | +---------------------------------------------------+ | |
-| | | [ ] Dyspnea  [ ] Nausea  [ ] Constipation         | | |
-| | | [ ] Anxiety  [ ] Fatigue  [ ] Poor Appetite       | | |
-| | | [ ] Pressure Sores  [ ] Other: ______            | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Functional Status                                     | | |
-| | +---------------------------------------------------+ | |
-| | | ADL: Feeding [Ind/Assist/Dependent]               | | |
-| | |      Bathing [Ind/Assist/Dependent]               | | |
-| | |      Dressing [Ind/Assist/Dependent]              | | |
-| | |      Toileting [Ind/Assist/Dependent]             | | |
-| | |      Mobility [Ind/Assist/Dependent]              | | |
-| | | PPS Score: [0-100]  KPS Score: [0-100]            | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Nutrition & Hydration                                 | | |
-| | +---------------------------------------------------+ | |
-| | | Appetite: [Good/Fair/Poor/UnableToEat]            | | |
-| | | Oral Intake: [Adequate/Reduced/Minimal]           | | |
-| | | Hydration: [Adequate/Mild/Severe Dehydration]     | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Psychosocial Assessment                               | | |
-| | +---------------------------------------------------+ | |
-| | | Emotional Status: [Stable/Anxious/Depressed/...]  | | |
-| | | Family Support: [Excellent/Good/Limited/None]     | | |
-| | | Financial Difficulty: [Yes/No]                    | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Spiritual Assessment                                  | | |
-| | +---------------------------------------------------+ | |
-| | | Spiritual Needs: [Yes/No]                         | | |
-| | | Religious Support: [Yes/No]                       | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Medication Review                                     | | |
-| | +---------------------------------------------------+ | |
-| | | Medications Available: [Yes/No]                   | | |
-| | | Correctly Taken: [Yes/No]                         | | |
-| | | Side Effects: [Yes/No]                            | | |
-| | | Refill Needed: [Yes/No]                           | | |
-| | | Morphine Available: [Yes/No/N/A]                  | | |
-| | | Adherence: [Good/Partial/Poor]                    | | |
-| | | Current Medications:                              | | |
-| | |   [Medication 1] [Dosage] [Frequency] [Route]    | | |
-| | |   [Medication 2] [Dosage] [Frequency] [Route]    | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Caregiver Assessment                                  | | |
-| | +---------------------------------------------------+ | |
-| | | Caregiver Burden: [Low/Moderate/High]             | | |
-| | | Understanding: [Good/Fair/Poor]                   | | |
-| | | Capacity: [Strong/Moderate/Weak]                  | | |
-| | | Family Emotional Status: [Stable/Stressed/...]    | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Education Provided                                    | | |
-| | +---------------------------------------------------+ | |
-| | | [ ] Medication Admin  [ ] Pain Management         | | |
-| | | [ ] Nutrition Support  [ ] Skin Care              | | |
-| | | [ ] Pressure Sore Prevention  [ ] End-of-Life     | | |
-| | | [ ] Emergency Signs  [ ] Emotional Support        | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Home Environment                                      | | |
-| | +---------------------------------------------------+ | |
-| | | Condition: [Clean/Fair/Poor]                      | | |
-| | | [ ] Adequate Lighting  [ ] Ventilation            | | |
-| | | [ ] Safe Bed  [ ] Clean Water  [ ] Sanitation     | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Nursing Care Provided                                 | | |
-| | +---------------------------------------------------+ | |
-| | | [ ] Hygiene  [ ] Wound Care  [ ] Medication Admin | | |
-| | | [ ] Position Change  [ ] Feeding  [ ] Counseling  | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Red Flag Assessment                                   | | |
-| | +---------------------------------------------------+ | |
-| | | [ ] Severe Uncontrolled Pain                      | | |
-| | | [ ] Severe Shortness of Breath                    | | |
-| | | [ ] Massive Bleeding                              | | |
-| | | [ ] Uncontrolled Seizures                         | | |
-| | | [ ] Altered Mental Status                         | | |
-| | | [ ] Severe Dehydration                            | | |
-| | | [ ] None                                          | | |
-| | | Action Taken: [________________________]           | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Referrals Made                                        | | |
-| | +---------------------------------------------------+ | |
-| | | [ ] Physician Review  [ ] Hospital Admission      | | |
-| | | [ ] Social Worker  [ ] Psychologist               | | |
-| | | [ ] Spiritual Care  [ ] Nutrition Support         | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Outcome & Follow-up                                   | | |
-| | +---------------------------------------------------+ | |
-| | | Outcome: [Stable/Improved/Unchanged/Worsened/...]  | | |
-| | | Next Visit: [__/__/____]                          | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| | Team Signatures                                       | | |
-| | +---------------------------------------------------+ | |
-| | | Team Leader: [________] Signature: [________]     | | |
-| | | Physician: [________] Signature: [________]       | | |
-| | | Nurse: [________] Signature: [________]           | | |
-| | +---------------------------------------------------+ | |
-| |                                                       | |
-| |                          [Cancel] [Save Visit]       | | |
+| |                          [Cancel] [Finalize Visit]    | |
 | +-------------------------------------------------------+ |
 +-----------------------------------------------------------+
 ```
 
 ---
 
-### 6.2 VisitList
+### 6.2 SignatureSection
 
-**Purpose:** Display list of visits for a patient
+**Purpose:** Display signature status and provide signature functionality for team members
+
+**Props:**
+
+```typescript
+interface SignatureSectionProps {
+  visitId: string;
+  visitDate: string;
+  teamLeaderId?: string;
+  physicianId?: string;
+  nurseId?: string;
+  onAllSigned?: () => void;
+}
+```
+
+**Behavior:**
+- Displays signature status for each team member
+- Shows visual indicators (✅ Signed / ⬜ Pending)
+- Team Leader is auto-signed (no action needed)
+- Physician and Nurse can sign by entering email + password
+- Prevents form submission until all required signatures are complete
+
+**Visual Design:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TEAM SIGNATURES                                                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  Team Leader: Dr. Smith                                    ✅ Signed │ │
+│  │  Signed at: 2026-09-05 10:30 AM                                     │ │
+│  │  (Automatically signed as the logged-in user)                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  Physician: Dr. Kebede                                    ⬜ Pending │ │
+│  │  ──────────────────────────────────────────────────────────────────── │ │
+│  │  Enter Email: [________________________]                             │ │
+│  │  Enter Password: [________________________]                          │ │
+│  │  [Sign as Physician]                                                │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  Nurse: Jane Doe                                          ⬜ Pending │ │
+│  │  ──────────────────────────────────────────────────────────────────── │ │
+│  │  Enter Email: [________________________]                             │ │
+│  │  Enter Password: [________________________]                          │ │
+│  │  [Sign as Nurse]                                                    │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ⚠️ All team members must sign before the visit can be finalized.         │
+│                                                                             │
+│  [Save Visit (All signatures required)]                                    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Implementation:**
+
+```typescript
+// src/components/visits/SignatureSection.tsx
+
+import React, { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useVisitSignatures, useSignVisit } from '@/hooks/useSignatures';
+import { signVisitSchema, SignVisitFormData } from '@/schemas/signature.schema';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Label } from '@/components/ui/Label';
+import { Badge } from '@/components/ui/Badge';
+import { format } from 'date-fns';
+import { CheckCircle, Clock, AlertCircle } from 'lucide-react';
+
+interface SignatureSectionProps {
+  visitId: string;
+  visitDate: string;
+  teamLeaderId?: string;
+  physicianId?: string;
+  nurseId?: string;
+  onAllSigned?: () => void;
+}
+
+export const SignatureSection: React.FC<SignatureSectionProps> = ({
+  visitId,
+  visitDate,
+  teamLeaderId,
+  physicianId,
+  nurseId,
+  onAllSigned,
+}) => {
+  const [signingRole, setSigningRole] = useState<'Physician' | 'Nurse' | null>(null);
+
+  const { data: signatures, isLoading, refetch } = useVisitSignatures(visitId);
+  const signMutation = useSignVisit(visitId);
+
+  const form = useForm<SignVisitFormData>({
+    resolver: zodResolver(signVisitSchema),
+    defaultValues: {
+      role: 'Physician',
+      email: '',
+      password: '',
+    },
+  });
+
+  const handleSign = (role: 'Physician' | 'Nurse') => {
+    const values = form.getValues();
+    signMutation.mutate(
+      { ...values, role },
+      {
+        onSuccess: () => {
+          setSigningRole(null);
+          form.reset({ role: 'Physician', email: '', password: '' });
+          refetch();
+          if (signatures?.allSigned) {
+            onAllSigned?.();
+          }
+        },
+      }
+    );
+  };
+
+  const isTeamLeaderSigned = signatures?.teamLeader !== null;
+  const isPhysicianSigned = signatures?.physician !== null;
+  const isNurseSigned = signatures?.nurse !== null;
+  const allSigned = signatures?.allSigned || false;
+
+  const getSignatureBadge = (signed: boolean) => {
+    return signed ? (
+      <Badge className="bg-green-100 text-green-800 border-green-200">
+        <CheckCircle className="h-3 w-3 mr-1" />
+        Signed
+      </Badge>
+    ) : (
+      <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+        <Clock className="h-3 w-3 mr-1" />
+        Pending
+      </Badge>
+    );
+  };
+
+  if (isLoading) {
+    return <div className="animate-pulse">Loading signatures...</div>;
+  }
+
+  return (
+    <div className="space-y-4 border rounded-lg p-4">
+      <div className="flex justify-between items-center">
+        <h3 className="font-medium">Team Signatures</h3>
+        {allSigned && (
+          <Badge className="bg-green-100 text-green-800 border-green-200">
+            ✅ All Signed
+          </Badge>
+        )}
+      </div>
+
+      {/* Team Leader */}
+      <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+        <div>
+          <p className="font-medium">Team Leader</p>
+          <p className="text-sm text-muted-foreground">
+            {signatures?.teamLeader?.staffName || 'Not assigned'}
+          </p>
+          {signatures?.teamLeader?.signedAt && (
+            <p className="text-xs text-muted-foreground">
+              Signed at: {format(new Date(signatures.teamLeader.signedAt), 'MMM dd, yyyy HH:mm')}
+            </p>
+          )}
+        </div>
+        <div>
+          {getSignatureBadge(isTeamLeaderSigned)}
+          {signatures?.teamLeader?.autoSigned && (
+            <span className="text-xs text-muted-foreground block text-center">
+              Auto-signed
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Physician */}
+      <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+        <div>
+          <p className="font-medium">Physician</p>
+          <p className="text-sm text-muted-foreground">
+            {signatures?.physician?.staffName || 'Not signed'}
+          </p>
+          {signatures?.physician?.signedAt && (
+            <p className="text-xs text-muted-foreground">
+              Signed at: {format(new Date(signatures.physician.signedAt), 'MMM dd, yyyy HH:mm')}
+            </p>
+          )}
+        </div>
+        <div>
+          {getSignatureBadge(isPhysicianSigned)}
+          {!isPhysicianSigned && signingRole !== 'Physician' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSigningRole('Physician')}
+            >
+              Sign as Physician
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Physician Sign Form */}
+      {signingRole === 'Physician' && !isPhysicianSigned && (
+        <div className="p-3 border rounded-lg space-y-3">
+          <p className="text-sm font-medium">Sign as Physician</p>
+          <div className="space-y-2">
+            <div>
+              <Label htmlFor="physician-email">Email</Label>
+              <Input
+                id="physician-email"
+                type="email"
+                placeholder="physician@example.com"
+                {...form.register('email')}
+                className={form.formState.errors.email ? 'border-red-500' : ''}
+              />
+            </div>
+            <div>
+              <Label htmlFor="physician-password">Password</Label>
+              <Input
+                id="physician-password"
+                type="password"
+                placeholder="Enter your password"
+                {...form.register('password')}
+                className={form.formState.errors.password ? 'border-red-500' : ''}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => handleSign('Physician')}
+              disabled={signMutation.isPending}
+            >
+              {signMutation.isPending ? 'Verifying...' : 'Confirm Signature'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setSigningRole(null);
+                form.reset({ role: 'Physician', email: '', password: '' });
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+          {form.formState.errors.root && (
+            <p className="text-sm text-red-500">{form.formState.errors.root.message}</p>
+          )}
+        </div>
+      )}
+
+      {/* Nurse */}
+      <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+        <div>
+          <p className="font-medium">Nurse</p>
+          <p className="text-sm text-muted-foreground">
+            {signatures?.nurse?.staffName || 'Not signed'}
+          </p>
+          {signatures?.nurse?.signedAt && (
+            <p className="text-xs text-muted-foreground">
+              Signed at: {format(new Date(signatures.nurse.signedAt), 'MMM dd, yyyy HH:mm')}
+            </p>
+          )}
+        </div>
+        <div>
+          {getSignatureBadge(isNurseSigned)}
+          {!isNurseSigned && signingRole !== 'Nurse' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSigningRole('Nurse')}
+            >
+              Sign as Nurse
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Nurse Sign Form */}
+      {signingRole === 'Nurse' && !isNurseSigned && (
+        <div className="p-3 border rounded-lg space-y-3">
+          <p className="text-sm font-medium">Sign as Nurse</p>
+          <div className="space-y-2">
+            <div>
+              <Label htmlFor="nurse-email">Email</Label>
+              <Input
+                id="nurse-email"
+                type="email"
+                placeholder="nurse@example.com"
+                {...form.register('email')}
+                className={form.formState.errors.email ? 'border-red-500' : ''}
+              />
+            </div>
+            <div>
+              <Label htmlFor="nurse-password">Password</Label>
+              <Input
+                id="nurse-password"
+                type="password"
+                placeholder="Enter your password"
+                {...form.register('password')}
+                className={form.formState.errors.password ? 'border-red-500' : ''}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => handleSign('Nurse')}
+              disabled={signMutation.isPending}
+            >
+              {signMutation.isPending ? 'Verifying...' : 'Confirm Signature'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setSigningRole(null);
+                form.reset({ role: 'Physician', email: '', password: '' });
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+          {form.formState.errors.root && (
+            <p className="text-sm text-red-500">{form.formState.errors.root.message}</p>
+          )}
+        </div>
+      )}
+
+      {/* Status Message */}
+      {!allSigned && (
+        <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
+          <p className="text-sm text-yellow-700">
+            All team members must sign before the visit can be finalized.
+            {!isPhysicianSigned && ' Physician needs to sign.'}
+            {!isNurseSigned && ' Nurse needs to sign.'}
+          </p>
+        </div>
+      )}
+
+      {allSigned && (
+        <div className="flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+          <p className="text-sm text-green-700">
+            All team members have signed. This visit is ready to be finalized.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+```
+
+---
+
+### 6.3 SignatureStatus
+
+**Purpose:** Display signature status in visit detail page (read-only)
+
+**Props:**
+
+```typescript
+interface SignatureStatusProps {
+  visitId: string;
+  compact?: boolean;
+}
+```
+
+**Behavior:**
+- Displays signature status for each team member
+- Shows who signed and when
+- Read-only view (no sign buttons)
+
+**Visual Design (Compact):**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Signatures: ✅ TL · ✅ MD · ⬜ RN                                         │
+│ Last signed: 2026-09-01 10:30 AM                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Visual Design (Full):**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TEAM SIGNATURES                                                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Team Leader: Dr. Smith                                    ✅ Signed      │
+│  Signed at: 2026-09-05 10:30 AM                                           │
+│                                                                             │
+│  Physician: Dr. Kebede                                    ✅ Signed      │
+│  Signed at: 2026-09-05 10:35 AM                                           │
+│                                                                             │
+│  Nurse: Jane Doe                                            ⬜ Pending    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 6.4 VisitList (UPDATED)
+
+**Purpose:** Display list of visits for a patient with signature status
 
 **Props:**
 
@@ -443,7 +863,7 @@ interface VisitListProps {
 }
 ```
 
-**Visual Design:**
+**Visual Design (UPDATED):**
 
 ```
 +-----------------------------------------------------------+
@@ -453,12 +873,12 @@ interface VisitListProps {
 | | Date       | Type        | Status     | Outcome  | Staff| |
 | +------------+-------------+------------+----------+------+ |
 | | 2026-08-29 | Routine     | Stable     | Stable   | Jane | |
-| |            |             |            |          | Doe  | |
+| |            |             | ✅ Signed  |          | Doe  | |
 | | 2026-08-22 | Emergency   | Critical   | Referred | John | |
-| |            |             |            | to       | Smith| |
+| |            |             | ⬜ Pending | to       | Smith| |
 | |            |             |            | Facility |      | |
 | | 2026-08-15 | First       | Stable     | Stable   | Jane | |
-| |            | Assessment  |            |          | Doe  | |
+| |            | Assessment  | ✅ Signed  |          | Doe  | |
 | +------------+-------------+------------+----------+------+ |
 |                                                           |
 |                          [Page 1] [Page 2] [Page 3]        |
@@ -467,9 +887,9 @@ interface VisitListProps {
 
 ---
 
-### 6.3 VisitDetail
+### 6.5 VisitDetail (UPDATED)
 
-**Purpose:** Display detailed visit information
+**Purpose:** Display detailed visit information with signatures
 
 **Props:**
 
@@ -481,11 +901,16 @@ interface VisitDetailProps {
 }
 ```
 
+**Behavior:**
+- Displays all visit details
+- Includes signature section showing who signed and when
+- Shows if visit is finalized
+
 ---
 
 ## 7. Pages
 
-### 7.1 RecordVisitPage
+### 7.1 RecordVisitPage (UPDATED)
 
 **Route:** `/patients/:id/visits`
 
@@ -493,32 +918,179 @@ interface VisitDetailProps {
 
 **Guard:** `ProtectedRoute` (staff)
 
-**Purpose:** Record a home visit
+**Purpose:** Record a home visit with digital signatures
 
 **Behavior:**
 
 1. Uses `usePatient(id)` to get patient name
 2. Uses `useRecordVisit(id)` mutation
-3. React Hook Form with Zod validation
-4. On success, navigates back to patient detail
-5. On error, displays validation errors
+3. Uses `useVisitSignatures()` to track signature status
+4. React Hook Form with Zod validation
+5. **Signature Section** displayed after visit is created
+6. **Save button is disabled until ALL signatures are complete**
+7. On success, navigates back to patient detail
 
 **Components:**
 
 - `VisitForm`
+- `SignatureSection`
 
 **States:**
 
 | State | UI |
 |---|---|
-| Idle | Form enabled |
+| Idle | Form enabled, signatures pending |
+| Signing | Signature form processing |
+| All Signed | Save button enabled |
 | Submitting | Form disabled with spinner |
-| Error | Field-level and form-level errors |
 | Success | Redirect to patient detail |
+
+**Implementation:**
+
+```typescript
+// src/pages/staff/RecordVisitPage.tsx
+
+import React, { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { usePatient } from '@/hooks/usePatients';
+import { useRecordVisit } from '@/hooks/useVisits';
+import { useVisitSignatures } from '@/hooks/useSignatures';
+import { VisitForm } from '@/components/visits/VisitForm';
+import { SignatureSection } from '@/components/visits/SignatureSection';
+import { createVisitSchema, CreateVisitFormData } from '@/schemas/visit.schema';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { ErrorState } from '@/components/common/ErrorState';
+import { useAuthStore } from '@/store/auth.store';
+
+export const RecordVisitPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const patientId = id!;
+  const user = useAuthStore((s) => s.user);
+
+  const [visitId, setVisitId] = useState<string | null>(null);
+  const [allSigned, setAllSigned] = useState(false);
+
+  const { data: patient, isLoading: patientLoading, error: patientError } = usePatient(patientId);
+  const recordMutation = useRecordVisit(patientId);
+  const { data: signatures, refetch: refetchSignatures } = useVisitSignatures(visitId || '');
+
+  const form = useForm<CreateVisitFormData>({
+    resolver: zodResolver(createVisitSchema),
+    defaultValues: {
+      visitDate: new Date().toISOString().split('T')[0],
+      timeStarted: '09:00',
+      timeEnded: '10:00',
+      visitType: 'Routine',
+      teamMembers: [{ role: 'TeamLeader', name: '' }],
+      overallStatus: 'Stable',
+      mobility: 'Ambulatory',
+      painScore: 0,
+      painMedicationEffective: false,
+      ppsScore: 100,
+      kpsScore: 100,
+      appetite: 'Good',
+      oralIntake: 'Adequate',
+      hydrationStatus: 'Adequate',
+      emotionalStatus: 'Stable',
+      familySupport: 'Good',
+      financialDifficulty: false,
+      spiritualNeeds: false,
+      religiousSupportRequested: false,
+      medicationAvailable: false,
+      medicationCorrectlyTaken: false,
+      medicationSideEffects: false,
+      medicationRefillNeeded: false,
+      morphineAvailable: false,
+      adherenceLevel: 'Good',
+      caregiverBurden: 'Low',
+      caregiverUnderstanding: 'Good',
+      caregivingCapacity: 'Strong',
+      familyEmotionalStatus: 'Stable',
+      homeCondition: 'Clean',
+      outcome: 'Stable',
+      teamLeaderId: user?.id || '',
+      physicianId: '',
+      nurseId: '',
+    },
+  });
+
+  const onSubmit = (data: CreateVisitFormData) => {
+    // Save the visit first
+    recordMutation.mutate(data, {
+      onSuccess: (response) => {
+        setVisitId(response.id);
+        // Signatures will be handled separately
+      },
+    });
+  };
+
+  const handleAllSigned = () => {
+    setAllSigned(true);
+    // Navigate after all signatures are complete
+    setTimeout(() => {
+      navigate(`/patients/${patientId}`);
+    }, 1000);
+  };
+
+  if (patientLoading) {
+    return <LoadingSpinner />;
+  }
+
+  if (patientError || !patient) {
+    return <ErrorState onRetry={() => window.location.reload()} />;
+  }
+
+  const isSaveDisabled = recordMutation.isPending || (visitId && !allSigned);
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">
+        Record Home Visit - {patient.firstName} {patient.lastName}
+      </h1>
+
+      <VisitForm
+        form={form}
+        onSubmit={onSubmit}
+        isSubmitting={recordMutation.isPending}
+        error={recordMutation.error}
+      />
+
+      {/* Signature Section */}
+      {visitId && (
+        <div className="mt-6">
+          <SignatureSection
+            visitId={visitId}
+            visitDate={form.getValues('visitDate')}
+            teamLeaderId={form.getValues('teamLeaderId')}
+            physicianId={form.getValues('physicianId')}
+            nurseId={form.getValues('nurseId')}
+            onAllSigned={handleAllSigned}
+          />
+        </div>
+      )}
+
+      {/* Submit Button */}
+      <div className="mt-6 flex justify-end">
+        <Button
+          type="button"
+          onClick={form.handleSubmit(onSubmit)}
+          disabled={isSaveDisabled}
+          className="w-full"
+        >
+          {recordMutation.isPending ? 'Saving...' : 'Save Visit'}
+        </Button>
+      </div>
+    </div>
+  );
+};
+```
 
 ---
 
-### 7.2 VisitDetailPage
+### 7.2 VisitDetailPage (UPDATED)
 
 **Route:** `/patients/:id/visits/:visitId`
 
@@ -526,29 +1098,24 @@ interface VisitDetailProps {
 
 **Guard:** `ProtectedRoute` (staff)
 
-**Purpose:** View visit details
+**Purpose:** View visit details with signatures
 
 **Behavior:**
 
 1. Uses `useVisitDetail(id, visitId)` hook
-2. Displays complete visit information
-3. Back button to patient detail
+2. Uses `useVisitSignatures(visitId)` hook
+3. Displays complete visit information
+4. Displays signature status (who signed, when)
+5. Back button to patient detail
 
 **Components:**
 
 - `VisitDetail`
-
-**States:**
-
-| State | UI |
-|---|---|
-| Loading | Skeleton details |
-| Error | Error message with retry |
-| Success | Full visit details |
+- `SignatureStatus`
 
 ---
 
-## 8. Form Validation Schema
+## 8. Validation Schemas
 
 ```typescript
 // src/schemas/visit.schema.ts
@@ -628,6 +1195,22 @@ export const createVisitSchema = z.object({
 export type CreateVisitFormData = z.infer<typeof createVisitSchema>;
 ```
 
+```typescript
+// src/schemas/signature.schema.ts
+
+import { z } from 'zod';
+
+export const signVisitSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(1, 'Password is required'),
+  role: z.enum(['TeamLeader', 'Physician', 'Nurse'], {
+    message: 'Invalid role. Must be TeamLeader, Physician, or Nurse',
+  }),
+});
+
+export type SignVisitFormData = z.infer<typeof signVisitSchema>;
+```
+
 ---
 
 ## 9. Route Configuration
@@ -657,11 +1240,11 @@ export type CreateVisitFormData = z.infer<typeof createVisitSchema>;
 
 ---
 
-## 10. Flow Diagram
+## 10. Flow Diagram (UPDATED)
 
 ```
 +-----------------------------------------------------------+
-|                    VISITS FLOW (FRONTEND)                  |
+|              VISITS FLOW WITH SIGNATURES (FRONTEND)        |
 +-----------------------------------------------------------+
 |                                                           |
 |  +-----------------------------------------------------+ |
@@ -673,7 +1256,33 @@ export type CreateVisitFormData = z.infer<typeof createVisitSchema>;
 |  |                    -> Fill form                      | |
 |  |                    -> Submit -> useRecordVisit()     | |
 |  |                    -> POST /patients/:id/visits      | |
-|  |                    -> Success -> /patients/:id       | |
+|  |                    -> Visit created → visitId set   | |
+|  +-----------------------------------------------------+ |
+|                           |                               |
+|                           v                               |
+|  +-----------------------------------------------------+ |
+|  |                    SIGNATURE FLOW                    | |
+|  |                                                     | |
+|  |  Team Leader: ✅ Auto-signed                        | |
+|  |  Physician:   Enter email + password → Sign        | |
+|  |  Nurse:       Enter email + password → Sign        | |
+|  |                                                     | |
+|  |  useSignVisit() → POST /visits/:visitId/sign       | |
+|  |  Success → ✅ Signed   Error → ❌ Error message    | |
+|  +-----------------------------------------------------+ |
+|                           |                               |
+|                           v                               |
+|  +-----------------------------------------------------+ |
+|  |                    COMPLETION FLOW                   | |
+|  |                                                     | |
+|  |  All team members signed?                           | |
+|  |    ↓                                                | |
+|  |  YES → ✅ "All Signed" badge                        | |
+|  |         → Save button enabled                        | |
+|  |         → Click Save → Navigate to patient detail   | |
+|  |                                                     | |
+|  |  NO → ⬜ "Pending signatures" message               | |
+|  |       → Save button disabled                         | |
 |  +-----------------------------------------------------+ |
 |                           |                               |
 |                           v                               |
@@ -684,8 +1293,11 @@ export type CreateVisitFormData = z.infer<typeof createVisitSchema>;
 |  |                    -> VisitDetailPage                | |
 |  |                    -> useVisitDetail(id, visitId)    | |
 |  |                    -> GET /patients/:id/visits/:id   | |
+|  |                    -> useVisitSignatures(visitId)    | |
 |  |                    -> Display full visit details     | |
+|  |                    -> Display signature status       | |
 |  |                    -> Back to patient                | |
 |  +-----------------------------------------------------+ |
 |                                                           |
 +-----------------------------------------------------------+
+```

@@ -1,443 +1,334 @@
-# folder-structure/backend-structure.md
+## `docs/folder-structure/backend-structure.md`
 
+---
 
-# PALLIATIVE PATIENT MONITORING SYSTEM - BACKEND FOLDER & FILE STRUCTURE
+# Backend Project Structure
 
-## 1. Overview
-
-This document defines the complete backend folder structure for the Palliative Patient Monitoring System. The structure follows the MERN stack architecture with TypeScript and Mongoose ODM.
+## 1.0 Overview
 
 **Technology Stack:**
 - Node.js + Express.js
 - TypeScript
-- MongoDB + Mongoose (ODM)
+- MongoDB + Mongoose ODM
 - JWT Authentication
-- Nodemailer (Email Service)
 - Zod Validation
-- Winston Logger
 
-## 2. Complete Folder Structure
+**Base Directory:** `/backend`
+
+---
+
+## 2.0 Complete Directory Tree
 
 ```
 backend/
+├── scripts/
+│   └── seed-admin.ts                      # Admin user seeding script
 ├── src/
 │   ├── config/
-│   │   ├── database.ts
-|   |   ├── email.ts
-│   │   ├── env.ts
-│   │   └── logger.ts
+│   │   ├── database.ts                    # MongoDB connection
+│   │   ├── email.ts                       # Nodemailer configuration
+│   │   ├── env.ts                         # Environment variables
+│   │   ├── index.ts                       # Config exports
+│   │   └── logger.ts                      # Winston logger
 │   ├── constants/
-│   │   └── index.ts
+│   │   └── index.ts                       # Application constants
 │   ├── controllers/
-│   │   ├── admin.controller.ts
-│   │   ├── admission.controller.ts
-│   │   ├── auth.controller.ts
-│   │   ├── lab.controller.ts
-│   │   ├── medication.controller.ts
-│   │   ├── patient.controller.ts
-│   │   ├── referral.controller.ts
-│   │   ├── staff.controller.ts
-│   │   └── visit.controller.ts
+│   │   ├── admin.controller.ts            # Admin endpoints
+│   │   ├── admission.controller.ts        # Hospital admission endpoints
+│   │   ├── auth.controller.ts             # Authentication endpoints
+│   │   ├── index.ts                       # Controller exports
+│   │   ├── lab.controller.ts              # Laboratory test endpoints
+│   │   ├── medication.controller.ts       # Medication endpoints
+│   │   ├── patient.controller.ts          # Patient endpoints
+│   │   ├── referral.controller.ts         # Referral endpoints
+│   │   ├── staff.controller.ts            # Staff endpoints
+│   │   └── visit.controller.ts            # Home visit endpoints
 │   ├── middlewares/
-│   │   ├── auth.middleware.ts
-│   │   ├── error.middleware.ts
-│   │   ├── rateLimiter.middleware.ts
-│   │   ├── role.middleware.ts
-│   │   └── validate.middleware.ts
+│   │   ├── auth.middleware.ts             # JWT authentication
+│   │   ├── error.middleware.ts            # Global error handler
+│   │   ├── index.ts                       # Middleware exports
+│   │   ├── rateLimiter.middleware.ts      # Rate limiting
+│   │   ├── role.middleware.ts             # Role-based access control
+│   │   └── validate.middleware.ts         # Request validation
 │   ├── models/
-│   │   ├── Admin.ts
-│   │   ├── Counter.ts
-│   │   ├── HospitalAdmission.ts
-│   │   ├── LaboratoryTest.ts
-│   │   ├── Medication.ts
-│   │   ├── Notification.ts
-│   │   ├── Patient.ts
-│   │   ├── Referral.ts
-│   │   ├── Staff.ts
-│   │   └── HomeVisit.ts
+│   │   ├── Admin.ts                       # Admin model
+│   │   ├── Counter.ts                     # Auto-increment counter
+│   │   ├── HomeVisit.ts                   # Home visit model
+│   │   ├── HospitalAdmission.ts           # Hospital admission model
+│   │   ├── index.ts                       # Model exports
+│   │   ├── LaboratoryTest.ts              # Lab test model
+│   │   ├── Medication.ts                  # Medication model
+│   │   ├── Notification.ts                # Notification model
+│   │   ├── Patient.ts                     # Patient model
+│   │   ├── Referral.ts                    # Referral model
+│   │   └── Staff.ts                       # Staff model
 │   ├── routes/
-│   │   ├── admin.routes.ts
-│   │   ├── admission.routes.ts
-│   │   ├── auth.routes.ts
-│   │   ├── lab.routes.ts
-│   │   ├── medication.routes.ts
-│   │   ├── patient.routes.ts
-│   │   ├── referral.routes.ts
-│   │   ├── staff.routes.ts
-│   │   ├── visit.routes.ts
-│   │   └── index.ts
+│   │   ├── admin.routes.ts                # Admin routes
+│   │   ├── admission.routes.ts            # Admission routes
+│   │   ├── auth.routes.ts                 # Auth routes
+│   │   ├── index.ts                       # Route exports
+│   │   ├── lab.routes.ts                  # Lab routes
+│   │   ├── medication.routes.ts           # Medication routes
+│   │   ├── patient.routes.ts              # Patient routes
+│   │   ├── referral.routes.ts             # Referral routes
+│   │   ├── staff.routes.ts                # Staff routes
+│   │   └── visit.routes.ts                # Visit routes
 │   ├── schemas/
-│   │   ├── admin.schema.ts
-│   │   ├── admission.schema.ts
-│   │   ├── auth.schema.ts
-│   │   ├── lab.schema.ts
-│   │   ├── medication.schema.ts
-│   │   ├── patient.schema.ts
-│   │   ├── referral.schema.ts
-│   │   ├── staff.schema.ts
-│   │   └── visit.schema.ts
+│   │   ├── admin.schema.ts                # Admin validation schemas
+│   │   ├── admission.schema.ts            # Admission validation schemas
+│   │   ├── auth.schema.ts                 # Auth validation schemas
+│   │   ├── index.ts                       # Schema exports
+│   │   ├── lab.schema.ts                  # Lab validation schemas
+│   │   ├── medication.schema.ts           # Medication validation schemas
+│   │   ├── patient.schema.ts              # Patient validation schemas
+│   │   ├── referral.schema.ts             # Referral validation schemas
+│   │   ├── staff.schema.ts                # Staff validation schemas
+│   │   └── visit.schema.ts                # Visit validation schemas
 │   ├── services/
-│   │   ├── admin.service.ts
-│   │   ├── admission.service.ts
-│   │   ├── auth.service.ts
-│   │   ├── lab.service.ts
-│   │   ├── medication.service.ts
-│   │   ├── patient.service.ts
-│   │   ├── referral.service.ts
-│   │   ├── staff.service.ts
-│   │   └── visit.service.ts
+│   │   ├── admin.service.ts               # Admin business logic
+│   │   ├── admission.service.ts           # Admission business logic
+│   │   ├── auth.service.ts                # Auth business logic
+│   │   ├── lab.service.ts                 # Lab business logic
+│   │   ├── medication.service.ts          # Medication business logic
+│   │   ├── patient.service.ts             # Patient business logic
+│   │   ├── referral.service.ts            # Referral business logic
+│   │   ├── staff.service.ts               # Staff business logic
+│   │   └── visit.service.ts               # Visit business logic
 │   ├── types/
-│   │   ├── admin.types.ts
-│   │   ├── admission.types.ts
-│   │   ├── auth.types.ts
-│   │   ├── lab.types.ts
-│   │   ├── medication.types.ts
-│   │   ├── patient.types.ts
-│   │   ├── referral.types.ts
-│   │   ├── staff.types.ts
-│   │   ├── visit.types.ts
-│   │   └── index.ts
+│   │   └── index.ts                       # TypeScript type definitions
 │   ├── utils/
-│   │   ├── ApiError.ts
-│   │   ├── ApiResponse.ts
-│   │   ├── asyncHandler.ts
-│   │   ├── jwt.ts
-│   │   ├── password.ts
-│   │   └── token.ts
-│   ├── app.ts
-│   └── server.ts
-├── scripts/
-│   └── seed-admin.ts
-├── tests/
-│   ├── controllers/
-│   │   ├── admin.controller.test.ts
-│   │   ├── admission.controller.test.ts
-│   │   ├── auth.controller.test.ts
-│   │   ├── lab.controller.test.ts
-│   │   ├── medication.controller.test.ts
-│   │   ├── patient.controller.test.ts
-│   │   ├── referral.controller.test.ts
-│   │   ├── staff.controller.test.ts
-│   │   └── visit.controller.test.ts
-│   ├── services/
-│   │   ├── admin.service.test.ts
-│   │   ├── admission.service.test.ts
-│   │   ├── auth.service.test.ts
-│   │   ├── lab.service.test.ts
-│   │   ├── medication.service.test.ts
-│   │   ├── patient.service.test.ts
-│   │   ├── referral.service.test.ts
-│   │   ├── staff.service.test.ts
-│   │   └── visit.service.test.ts
-│   ├── setup.ts
-│   └── utils/
-│       └── testHelpers.ts
-├── .env.example
-├── .eslintrc.js
-├── .gitignore
+│   │   ├── ApiError.ts                    # Custom API error class
+│   │   ├── ApiResponse.ts                 # API response formatter
+│   │   ├── asyncHandler.ts                # Async route handler
+│   │   ├── email.ts                       # Email utilities
+│   │   ├── index.ts                       # Utility exports
+│   │   ├── jwt.ts                         # JWT utilities
+│   │   ├── password.ts                    # Password hashing utilities
+│   │   └── token.ts                       # Token generation utilities
+│   ├── app.ts                             # Express app configuration
+│   └── server.ts                          # Server entry point
+├── package-lock.json
 ├── package.json
-├── tsconfig.json
-└── README.md
+└── tsconfig.json
 ```
 
-## 3. File Descriptions
+---
+
+## 3.0 File Descriptions
 
 ### 3.1 Config Files (`src/config/`)
 
-| File | Purpose |
-|---|---|
-| `database.ts` | MongoDB connection setup using Mongoose |
-| `env.ts` | Environment variables validation and loading |
+| File | Description |
+|------|-------------|
+| `database.ts` | MongoDB connection setup with Mongoose |
+| `email.ts` | Nodemailer transport configuration |
+| `env.ts` | Environment variable validation and loading |
+| `index.ts` | Central export of all config modules |
 | `logger.ts` | Winston logger configuration |
 
 ### 3.2 Constants (`src/constants/`)
 
-| File | Purpose |
-|---|---|
-| `index.ts` | Application-wide constants (status codes, messages, enums) |
+| File | Description |
+|------|-------------|
+| `index.ts` | Application-wide constants (enums, status codes, roles, etc.) |
 
 ### 3.3 Controllers (`src/controllers/`)
 
-| File | Purpose | Depends On |
-|---|---|---|
-| `auth.controller.ts` | Handles authentication requests (register, login, verify email, resend verification) | `auth.service.ts` |
-| `admin.controller.ts` | Handles admin operations (staff approval, dashboard stats, close case, full patient detail, visit edit, print/export) | `admin.service.ts` |
-| `patient.controller.ts` | Handles patient CRUD operations and print/export | `patient.service.ts` |
-| `visit.controller.ts` | Handles home visit records | `visit.service.ts` |
-| `medication.controller.ts` | Handles medication orders | `medication.service.ts` |
-| `lab.controller.ts` | Handles laboratory test orders | `lab.service.ts` |
-| `referral.controller.ts` | Handles referral requests | `referral.service.ts` |
-| `admission.controller.ts` | Handles hospital admissions | `admission.service.ts` |
-| `staff.controller.ts` | Handles staff dashboard and profile | `staff.service.ts` |
+| File | Description |
+|------|-------------|
+| `admin.controller.ts` | Admin dashboard, staff approval, referral approval, reports |
+| `admission.controller.ts` | CRUD operations for hospital admissions |
+| `auth.controller.ts` | Registration, login, email verification, password reset |
+| `lab.controller.ts` | CRUD operations for laboratory tests |
+| `medication.controller.ts` | CRUD operations for medications |
+| `patient.controller.ts` | CRUD operations for patients, summary, progress |
+| `referral.controller.ts` | CRUD operations for referrals |
+| `staff.controller.ts` | Staff dashboard, profile, activity |
+| `visit.controller.ts` | CRUD operations for home visits |
 
 ### 3.4 Middlewares (`src/middlewares/`)
 
-| File | Purpose |
-|---|---|
-| `auth.middleware.ts` | JWT token verification and user authentication |
-| `role.middleware.ts` | Role-based access control (Admin, Staff) |
-| `validate.middleware.ts` | Zod schema validation for requests |
-| `error.middleware.ts` | Global error handling |
+| File | Description |
+|------|-------------|
+| `auth.middleware.ts` | JWT token validation and user extraction |
+| `error.middleware.ts` | Global error handling middleware |
+| `index.ts` | Central export of all middleware |
 | `rateLimiter.middleware.ts` | Rate limiting for API endpoints |
+| `role.middleware.ts` | Role-based access control (Admin vs Staff) |
+| `validate.middleware.ts` | Zod-based request validation |
 
 ### 3.5 Models (`src/models/`)
 
-| File | Purpose | Schema Reference |
-|---|---|---|
-| `Admin.ts` | Admin user model | `IAdmin` |
-| `Staff.ts` | Staff member model with email verification fields | `IStaff` |
-| `Patient.ts` | Patient model | `IPatient` |
-| `Counter.ts` | Auto-increment counter for patient display IDs | `ICounter` |
-| `HomeVisit.ts` | Home visit record model (includes editHistory for admin edits) | `IHomeVisit` |
-| `Medication.ts` | Medication record model | `IMedication` |
-| `LaboratoryTest.ts` | Lab test record model | `ILaboratoryTest` |
-| `Referral.ts` | Referral record model | `IReferral` |
-| `HospitalAdmission.ts` | Admission record model | `IHospitalAdmission` |
-| `Notification.ts` | Notification model | `INotification` |
+| File | Description |
+|------|-------------|
+| `Admin.ts` | Admin schema (name, email, password) |
+| `Counter.ts` | Auto-increment counter for patient IDs |
+| `HomeVisit.ts` | Home visit schema (21 sections) |
+| `HospitalAdmission.ts` | Hospital admission schema |
+| `index.ts` | Central export of all models |
+| `LaboratoryTest.ts` | Lab test schema |
+| `Medication.ts` | Medication schema |
+| `Notification.ts` | System notification schema |
+| `Patient.ts` | Patient schema |
+| `Referral.ts` | Referral schema |
+| `Staff.ts` | Staff schema |
 
 ### 3.6 Routes (`src/routes/`)
 
-| File | Mount Path | Auth |
-|---|---|---|
-| `auth.routes.ts` | `/api/v1/auth` | Public |
-| `admin.routes.ts` | `/api/v1/admin` | Admin |
-| `patient.routes.ts` | `/api/v1/patients` | Staff |
-| `visit.routes.ts` | `/api/v1/patients/:patientId/visits` | Staff |
-| `medication.routes.ts` | `/api/v1/patients/:patientId/medications` | Staff |
-| `lab.routes.ts` | `/api/v1/patients/:patientId/labs` | Staff |
-| `referral.routes.ts` | `/api/v1/patients/:patientId/referrals` | Staff |
-| `admission.routes.ts` | `/api/v1/patients/:patientId/admissions` | Staff |
-| `staff.routes.ts` | `/api/v1/staff` | Staff |
-| `index.ts` | Router registration | - |
+| File | Description |
+|------|-------------|
+| `admin.routes.ts` | Admin endpoints (dashboard, staff, referrals, reports) |
+| `admission.routes.ts` | Admission endpoints (CRUD) |
+| `auth.routes.ts` | Auth endpoints (register, login, verify, reset) |
+| `index.ts` | Central export of all routes |
+| `lab.routes.ts` | Lab endpoints (CRUD) |
+| `medication.routes.ts` | Medication endpoints (CRUD) |
+| `patient.routes.ts` | Patient endpoints (CRUD, summary, progress) |
+| `referral.routes.ts` | Referral endpoints (CRUD) |
+| `staff.routes.ts` | Staff endpoints (dashboard, profile) |
+| `visit.routes.ts` | Visit endpoints (CRUD) |
 
 ### 3.7 Schemas (`src/schemas/`)
 
-| File | Purpose | Zod Schemas |
-|---|---|---|
-| `auth.schema.ts` | Auth request validation | `registerSchema`, `loginSchema`, `verifyEmailQuerySchema`, `resendVerificationSchema` |
-| `admin.schema.ts` | Admin request validation | `approveStaffSchema`, `closeCaseSchema`, `updateVisitSchema`, `getVisitParamsSchema` |
-| `patient.schema.ts` | Patient request validation | `createPatientSchema`, `getPatientsQuerySchema` |
-| `visit.schema.ts` | Visit request validation | `createVisitSchema` |
-| `medication.schema.ts` | Medication request validation | `createMedicationSchema`, `updateMedicationSchema` |
-| `lab.schema.ts` | Lab request validation | `createLabSchema`, `updateLabSchema` |
-| `referral.schema.ts` | Referral request validation | `createReferralSchema` |
-| `admission.schema.ts` | Admission request validation | `createAdmissionSchema`, `updateAdmissionSchema` |
-| `staff.schema.ts` | Staff dashboard request validation | `getDashboardStatsSchema`, `getAssignedPatientsQuerySchema` |
+| File | Description |
+|------|-------------|
+| `admin.schema.ts` | Zod schemas for admin requests |
+| `admission.schema.ts` | Zod schemas for admission requests |
+| `auth.schema.ts` | Zod schemas for auth requests |
+| `index.ts` | Central export of all schemas |
+| `lab.schema.ts` | Zod schemas for lab requests |
+| `medication.schema.ts` | Zod schemas for medication requests |
+| `patient.schema.ts` | Zod schemas for patient requests |
+| `referral.schema.ts` | Zod schemas for referral requests |
+| `staff.schema.ts` | Zod schemas for staff requests |
+| `visit.schema.ts` | Zod schemas for visit requests |
 
 ### 3.8 Services (`src/services/`)
 
-| File | Purpose | Depends On |
-|---|---|---|
-| `auth.service.ts` | Authentication business logic (register, login, verify email, resend verification) | `models/Staff`, `models/Admin`, `utils/jwt`, `utils/password`, `utils/token`, `utils/email` |
-| `admin.service.ts` | Admin business logic (staff approval, dashboard stats, notifications, full patient detail, visit edit with audit trail, print/export) | `models/Staff`, `models/Patient`, `models/Referral`, `models/Notification`, `models/HomeVisit`, `models/Medication`, `models/LaboratoryTest`, `models/HospitalAdmission` |
-| `patient.service.ts` | Patient business logic (CRUD, summary, progress, print/export) | `models/Patient`, `models/Staff`, `models/Counter`, `models/HomeVisit`, `models/Medication`, `models/LaboratoryTest`, `models/Referral`, `models/HospitalAdmission` |
-| `visit.service.ts` | Visit business logic | `models/HomeVisit`, `models/Patient` |
-| `medication.service.ts` | Medication business logic | `models/Medication`, `models/Patient` |
-| `lab.service.ts` | Lab business logic | `models/LaboratoryTest`, `models/Patient` |
-| `referral.service.ts` | Referral business logic | `models/Referral`, `models/Patient`, `models/Notification` |
-| `admission.service.ts` | Admission business logic | `models/HospitalAdmission`, `models/Patient`, `models/Referral` |
-| `staff.service.ts` | Staff dashboard and profile logic | `models/Staff`, `models/HomeVisit`, `models/Patient`, `models/Referral` |
+| File | Description |
+|------|-------------|
+| `admin.service.ts` | Admin business logic (approvals, reports, stats) |
+| `admission.service.ts` | Admission business logic (create, update, discharge) |
+| `auth.service.ts` | Auth business logic (register, login, verify) |
+| `lab.service.ts` | Lab business logic (create, update result) |
+| `medication.service.ts` | Medication business logic (order, update status) |
+| `patient.service.ts` | Patient business logic (register, get, summary, progress) |
+| `referral.service.ts` | Referral business logic (request, approve, decline) |
+| `staff.service.ts` | Staff business logic (dashboard, profile) |
+| `visit.service.ts` | Visit business logic (record, get, sign) |
 
 ### 3.9 Types (`src/types/`)
 
-| File | Purpose |
-|---|---|
-| `auth.types.ts` | Authentication types |
-| `admin.types.ts` | Admin types (includes full patient detail, visit edit, print types) |
-| `patient.types.ts` | Patient types (includes print/export types) |
-| `visit.types.ts` | Visit types |
-| `medication.types.ts` | Medication types |
-| `lab.types.ts` | Lab types |
-| `referral.types.ts` | Referral types |
-| `admission.types.ts` | Admission types |
-| `staff.types.ts` | Staff types |
-| `index.ts` | All types exported |
+| File | Description |
+|------|-------------|
+| `index.ts` | TypeScript type definitions for all entities |
 
 ### 3.10 Utils (`src/utils/`)
 
-| File | Purpose |
-|---|---|
-| `ApiError.ts` | Custom error class |
-| `ApiResponse.ts` | Standard API response formatter |
-| `asyncHandler.ts` | Async request handler wrapper |
-| `email.ts` | Email service (verification emails using Nodemailer) |
-| `jwt.ts` | JWT token generation and verification |
-| `password.ts` | Password hashing and comparison |
-| `token.ts` | Verification token generation |
+| File | Description |
+|------|-------------|
+| `ApiError.ts` | Custom error class with status codes |
+| `ApiResponse.ts` | Standardised API response formatter |
+| `asyncHandler.ts` | Wrapper for async route handlers |
+| `email.ts` | Email sending utilities (verification, notifications) |
+| `index.ts` | Central export of all utilities |
+| `jwt.ts` | JWT generation and verification |
+| `password.ts` | Bcrypt password hashing and comparison |
+| `token.ts` | Token generation (verification, reset) |
 
-### 3.11 Scripts (`scripts/`)
+---
 
-| File | Purpose |
-|---|---|
-| `seed-admin.ts` | Admin user seed script (Mongoose-based) |
+## 4.0 Module Dependencies
 
-### 3.12 Root Files
-
-| File | Purpose |
-|---|---|
-| `app.ts` | Express app configuration |
-| `server.ts` | Server startup and initialization |
-| `.env.example` | Environment variables template |
-| `package.json` | Project dependencies and scripts |
-| `tsconfig.json` | TypeScript configuration |
-| `README.md` | Project documentation |
-
-## 4. File Creation Order
-
-### Phase 1: Configuration
-1. `.env.example`
-2. `src/config/env.ts`
-3. `src/config/database.ts`
-4. `src/config/logger.ts`
-
-### Phase 2: Utils & Types
-5. `src/types/` (all type files)
-6. `src/utils/ApiError.ts`
-7. `src/utils/ApiResponse.ts`
-8. `src/utils/asyncHandler.ts`
-9. `src/utils/jwt.ts`
-10. `src/utils/password.ts`
-11. `src/utils/token.ts`
-12. `src/utils/email.ts`
-
-### Phase 3: Models
-13. `src/models/Counter.ts`
-14. `src/models/Admin.ts`
-15. `src/models/Staff.ts`
-16. `src/models/Patient.ts`
-17. `src/models/HomeVisit.ts` (includes editHistory field)
-18. `src/models/Medication.ts`
-19. `src/models/LaboratoryTest.ts`
-20. `src/models/Referral.ts`
-21. `src/models/HospitalAdmission.ts`
-22. `src/models/Notification.ts`
-
-### Phase 4: Services
-23. `src/services/auth.service.ts`
-24. `src/services/admin.service.ts` (includes full patient detail, visit edit with audit trail, print/export)
-25. `src/services/patient.service.ts` (includes print/export)
-26. `src/services/visit.service.ts`
-27. `src/services/medication.service.ts`
-28. `src/services/lab.service.ts`
-29. `src/services/referral.service.ts`
-30. `src/services/admission.service.ts`
-31. `src/services/staff.service.ts`
-
-### Phase 5: Schemas
-32. `src/schemas/auth.schema.ts`
-33. `src/schemas/admin.schema.ts` (includes updateVisitSchema)
-34. `src/schemas/patient.schema.ts`
-35. `src/schemas/visit.schema.ts`
-36. `src/schemas/medication.schema.ts`
-37. `src/schemas/lab.schema.ts`
-38. `src/schemas/referral.schema.ts`
-39. `src/schemas/admission.schema.ts`
-40. `src/schemas/staff.schema.ts`
-
-### Phase 6: Middlewares
-41. `src/middlewares/auth.middleware.ts`
-42. `src/middlewares/role.middleware.ts`
-43. `src/middlewares/validate.middleware.ts`
-44. `src/middlewares/error.middleware.ts`
-45. `src/middlewares/rateLimiter.middleware.ts`
-
-### Phase 7: Controllers
-46. `src/controllers/auth.controller.ts`
-47. `src/controllers/admin.controller.ts` (includes full patient detail, visit edit, print/export)
-48. `src/controllers/patient.controller.ts` (includes print/export)
-49. `src/controllers/visit.controller.ts`
-50. `src/controllers/medication.controller.ts`
-51. `src/controllers/lab.controller.ts`
-52. `src/controllers/referral.controller.ts`
-53. `src/controllers/admission.controller.ts`
-54. `src/controllers/staff.controller.ts`
-
-### Phase 8: Routes
-55. `src/routes/auth.routes.ts`
-56. `src/routes/admin.routes.ts` (includes full patient detail, visit edit, print/export routes)
-57. `src/routes/patient.routes.ts` (includes print/export routes)
-58. `src/routes/visit.routes.ts`
-59. `src/routes/medication.routes.ts`
-60. `src/routes/lab.routes.ts`
-61. `src/routes/referral.routes.ts`
-62. `src/routes/admission.routes.ts`
-63. `src/routes/staff.routes.ts`
-64. `src/routes/index.ts`
-
-### Phase 9: App & Server
-65. `src/constants/index.ts`
-66. `src/app.ts`
-67. `src/server.ts`
-
-### Phase 10: Seed Script
-68. `scripts/seed-admin.ts`
-
-## 5. Import Path Aliases
-
-Configure `tsconfig.json` with these path aliases:
-
-```json
-{
-  "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"],
-      "@config/*": ["src/config/*"],
-      "@controllers/*": ["src/controllers/*"],
-      "@models/*": ["src/models/*"],
-      "@routes/*": ["src/routes/*"],
-      "@schemas/*": ["src/schemas/*"],
-      "@services/*": ["src/services/*"],
-      "@types/*": ["src/types/*"],
-      "@utils/*": ["src/utils/*"],
-      "@constants/*": ["src/constants/*"],
-      "@middlewares/*": ["src/middlewares/*"]
-    }
-  }
-}
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Server.ts                               │
+│                     (Entry Point)                               │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                           App.ts                                │
+│              (Express App Configuration)                        │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+        ▼                     ▼                     ▼
+┌───────────────┐    ┌───────────────┐    ┌───────────────┐
+│   Routes      │    │  Middlewares  │    │   Configs     │
+│  (Routing)    │    │  (Auth, Role, │    │  (DB, Email,  │
+│               │    │   Validation) │    │   Logger)     │
+└───────────────┘    └───────────────┘    └───────────────┘
+        │                     │
+        ▼                     ▼
+┌───────────────┐    ┌───────────────┐
+│  Controllers  │    │  Schemas      │
+│  (Handlers)   │    │  (Validation) │
+└───────────────┘    └───────────────┘
+        │                     │
+        ▼                     ▼
+┌───────────────┐    ┌───────────────┐
+│   Services    │    │   Utils       │
+│  (Business    │    │  (Helpers,    │
+│   Logic)      │    │   JWT, Email) │
+└───────────────┘    └───────────────┘
+        │
+        ▼
+┌───────────────┐
+│    Models     │
+│  (Database)   │
+└───────────────┘
 ```
 
-## 6. Naming Conventions
+---
 
-| File Type | Naming Convention | Example |
-|---|---|---|
-| Controllers | `*.controller.ts` | `auth.controller.ts` |
-| Services | `*.service.ts` | `auth.service.ts` |
-| Models | `*.ts` (PascalCase) | `Staff.ts` |
-| Routes | `*.routes.ts` | `auth.routes.ts` |
-| Schemas | `*.schema.ts` | `auth.schema.ts` |
-| Types | `*.types.ts` | `auth.types.ts` |
-| Middlewares | `*.middleware.ts` | `auth.middleware.ts` |
-| Tests | `*.test.ts` | `auth.service.test.ts` |
+## 5.0 File Naming Conventions
 
-## 7. Environment Variables
+| Type | Convention | Example |
+|------|------------|---------|
+| Controller | `*.controller.ts` | `patient.controller.ts` |
+| Model | `*.ts` (PascalCase) | `Patient.ts` |
+| Route | `*.routes.ts` | `patient.routes.ts` |
+| Schema | `*.schema.ts` | `patient.schema.ts` |
+| Service | `*.service.ts` | `patient.service.ts` |
+| Middleware | `*.middleware.ts` | `auth.middleware.ts` |
+| Utility | `*.ts` (camelCase) | `jwt.ts` |
+| Type | `*.types.ts` | `patient.types.ts` |
 
-```env
-# .env.example
+---
 
-# Server
-PORT=5000
-NODE_ENV=development
+## 6.0 Environment Variables
 
-# Database
-MONGODB_URI=mongodb://localhost:27017/palliative-care
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `NODE_ENV` | Environment (development, staging, production) | Yes |
+| `PORT` | Server port | Yes |
+| `MONGODB_URI` | MongoDB connection string | Yes |
+| `JWT_SECRET` | JWT signing secret | Yes |
+| `JWT_EXPIRY` | JWT expiry time (e.g., "24h") | Yes |
+| `EMAIL_HOST` | SMTP host | Yes |
+| `EMAIL_PORT` | SMTP port | Yes |
+| `EMAIL_USER` | SMTP username | Yes |
+| `EMAIL_PASS` | SMTP password | Yes |
+| `EMAIL_FROM` | From email address | Yes |
+| `FRONTEND_URL` | Frontend URL for email links | Yes |
+| `BCRYPT_ROUNDS` | Bcrypt salt rounds (default: 10) | No |
 
-# JWT
-JWT_SECRET=your_jwt_secret_key_here
-JWT_EXPIRE=7d
+---
 
-# Password
-BCRYPT_SALT_ROUNDS=10
+## 7.0 Scripts
 
-# Email Configuration
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-EMAIL_FROM=noreply@yourdomain.com
-VERIFICATION_TOKEN_EXPIRY=86400
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start development server with hot reload |
+| `npm run build` | Build TypeScript to JavaScript |
+| `npm start` | Start production server |
+| `npm run lint` | Run ESLint |
+| `npm run seed` | Seed database with initial data |
+| `npm run seed:admin` | Seed admin user |
 
-# Admin Seed (for first-time setup)
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=adminpassword
-ADMIN_NAME=Admin User
+---
+
+## 8.0 Version History
+=

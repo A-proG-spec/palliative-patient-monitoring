@@ -1,6 +1,3 @@
-# frontend-specification/07-referrals.md
-
-
 # PALLIATIVE PATIENT MONITORING SYSTEM - FRONTEND REFERRALS SPECIFICATION
 
 ## 1. Overview
@@ -244,7 +241,7 @@ export const createReferralSchema = z.object({
 - Default referralType: Outgoing
 - Default referralDate: today
 - Default diseaseStage: Advanced
-- **NEW:** preparedBy, preparedByDesignation, and signature fields added
+- preparedBy, preparedByDesignation, and signature fields are required
 
 ---
 

@@ -5,9 +5,9 @@
 
 ## 1. Overview
 
-This document defines the frontend implementation for admin features including dashboard, patient management (with full detail view like staff), staff management, referral management (with clickable patient names), reports, settings, admin edit visits, and print/export patient history.
+This document defines the frontend implementation for admin features including dashboard, patient management (with full detail view like staff), staff management, referral management (with clickable patient names), reports, settings, admin edit visits, admin edit admissions, and print/export patient history.
 
-**API Reference:** `api/02-admin.md`, `api/11-admin-visits.md`
+**API Reference:** `api/02-admin.md`, `api/11-admin-visits.md`, `api/12-admin-admissions.md`
 
 ---
 
@@ -29,6 +29,7 @@ The admin sidebar contains the following navigation items in order:
 |  ------------------------------------------------- |
 |  Admin Name                                        |
 |  admin@example.com                                 |
+|  [Profile]                                         |
 |  [Logout]                                          |
 +---------------------------------------------------+
 ```
@@ -43,6 +44,7 @@ The admin sidebar contains the following navigation items in order:
 | 4 | Referrals | `/admin/referrals` | Pending referrals count |
 | 5 | Reports | `/admin/reports` | - |
 | 6 | Settings | `/admin/settings` | - |
+| 7 | Profile | `/profile` | - |
 
 ---
 
@@ -58,6 +60,7 @@ The admin sidebar contains the following navigation items in order:
 | `/admin/referrals` | `ReferralManagementPage` | `DashboardLayout` | Admin |
 | `/admin/reports` | `ReportsPage` | `DashboardLayout` | Admin |
 | `/admin/settings` | `SettingsPage` | `DashboardLayout` | Admin |
+| `/profile` | `ProfilePage` | `DashboardLayout` | Admin |
 
 ---
 
@@ -343,6 +346,12 @@ export interface AdminAdmissionDetail {
   createdBy: { id: string; name: string };
   createdAt: string;
   updatedAt: string;
+  canEdit: boolean;
+  editHistory?: Array<{
+    editedBy: { id: string; name: string };
+    editedAt: string;
+    changes: Array<{ field: string; from: any; to: any }>;
+  }>;
 }
 
 export interface AdminPatientFullDetail extends AdminPatient {
@@ -455,6 +464,69 @@ export interface UpdateVisitResponse {
 }
 
 // ============================================
+// ADMIN ADMISSION UPDATE TYPES
+// ============================================
+
+export interface UpdateAdminAdmissionRequest {
+  admissionDate?: string;
+  bedNumber?: string;
+  ward?: string;
+  admittingPhysician?: string;
+  careTeam?: string;
+  primaryDiagnosis?: string;
+  secondaryDiagnoses?: string[];
+  diseaseStage?: 'Early' | 'Advanced' | 'Terminal';
+  comorbidities?: string[];
+  estimatedPrognosis?: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
+  ppsScore?: number;
+  functionalStatus?: 'FullyIndependent' | 'PartiallyDependent' | 'FullyDependent';
+  painScore?: number;
+  painType?: 'Acute' | 'Chronic' | 'Neuropathic' | 'Mixed';
+  symptomsPresent?: string[];
+  emotionalStatus?: 'Stable' | 'Anxious' | 'Depressed' | 'Distressed';
+  familySupport?: 'Strong' | 'Moderate' | 'Weak' | 'None';
+  socialChallenges?: string;
+  spiritualConcerns?: boolean;
+  spiritualSupportPreferred?: 'ReligiousLeader' | 'Counselor' | 'Other';
+  painManagementPlan?: string;
+  medicationPlan?: string;
+  nursingCarePlan?: string;
+  homeBasedCareRequired?: boolean;
+  psychosocialSupportPlan?: string;
+  physiotherapyRequired?: boolean;
+  status?: 'Active' | 'Discharged';
+  dischargeDate?: string;
+  dischargeReason?: 'Improved' | 'Deceased';
+}
+
+export interface UpdateAdminAdmissionResponse {
+  id: string;
+  updatedAt: string;
+  updatedBy: {
+    id: string;
+    name: string;
+  };
+  changes: Array<{
+    field: string;
+    from: any;
+    to: any;
+  }>;
+  admission: {
+    id: string;
+    admissionDate: string;
+    bedNumber: string;
+    painScore: number;
+    status: string;
+  };
+}
+
+export interface AdmissionEditHistoryEntry {
+  editedBy: { id: string; name: string };
+  editedAt: string;
+  changes: Array<{ field: string; from: any; to: any }>;
+}
+
+// ============================================
 // ADMIN PRINT TYPES
 // ============================================
 
@@ -538,6 +610,9 @@ import {
   AdminPrintData,
   UpdateVisitRequest,
   UpdateVisitResponse,
+  UpdateAdminAdmissionRequest,
+  UpdateAdminAdmissionResponse,
+  AdmissionEditHistoryEntry,
   ReportData
 } from '@/types/admin.types';
 import { Referral } from '@/types/referral.types';
@@ -572,6 +647,19 @@ export const adminApi = {
 
   getVisitEditHistory: (visitId: string): Promise<Array<{ editedBy: { id: string; name: string }; editedAt: string; changes: Array<{ field: string; from: any; to: any }> }>> => {
     return api.get(`/admin/visits/${visitId}/history`).then((res) => res.data);
+  },
+
+  // Admin Admission Management
+  getAdmissionById: (admissionId: string): Promise<AdminAdmissionDetail> => {
+    return api.get<AdminAdmissionDetail>(`/admin/admissions/${admissionId}`).then((res) => res.data);
+  },
+
+  updateAdmission: (admissionId: string, data: UpdateAdminAdmissionRequest): Promise<UpdateAdminAdmissionResponse> => {
+    return api.put<UpdateAdminAdmissionResponse>(`/admin/admissions/${admissionId}`, data).then((res) => res.data);
+  },
+
+  getAdmissionEditHistory: (admissionId: string): Promise<AdmissionEditHistoryEntry[]> => {
+    return api.get<AdmissionEditHistoryEntry[]>(`/admin/admissions/${admissionId}/history`).then((res) => res.data);
   },
 
   // Admin Print/Export
@@ -634,7 +722,8 @@ export const adminApi = {
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/api/admin';
-import { ApproveStaffRequest, CloseCaseRequest, UpdateVisitRequest } from '@/types/admin.types';
+import { ApproveStaffRequest, CloseCaseRequest, UpdateVisitRequest, UpdateAdminAdmissionRequest } from '@/types/admin.types';
+import { toastUtils } from '@/lib/toast';
 
 // Dashboard Hooks
 export function useDashboardStats() {
@@ -702,6 +791,10 @@ export function useUpdateVisit() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'patients', variables.visitId, 'full'] });
+      toastUtils.success('Visit updated successfully');
+    },
+    onError: (error: any) => {
+      toastUtils.error('Update failed', error.response?.data?.message || 'Failed to update visit');
     },
   });
 }
@@ -711,6 +804,40 @@ export function useVisitEditHistory(visitId: string) {
     queryKey: ['admin', 'visits', visitId, 'history'],
     queryFn: () => adminApi.getVisitEditHistory(visitId),
     enabled: !!visitId,
+  });
+}
+
+// Admin Admission Management Hooks
+export function useAdminAdmissionDetail(admissionId: string) {
+  return useQuery({
+    queryKey: ['admin', 'admissions', admissionId],
+    queryFn: () => adminApi.getAdmissionById(admissionId),
+    enabled: !!admissionId,
+  });
+}
+
+export function useUpdateAdminAdmission() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ admissionId, data }: { admissionId: string; data: UpdateAdminAdmissionRequest }) =>
+      adminApi.updateAdmission(admissionId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'admissions', variables.admissionId] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'admissions', variables.admissionId, 'history'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
+      toastUtils.success('Admission updated successfully');
+    },
+    onError: (error: any) => {
+      toastUtils.error('Update failed', error.response?.data?.message || 'Failed to update admission');
+    },
+  });
+}
+
+export function useAdminAdmissionEditHistory(admissionId: string) {
+  return useQuery({
+    queryKey: ['admin', 'admissions', admissionId, 'history'],
+    queryFn: () => adminApi.getAdmissionEditHistory(admissionId),
+    enabled: !!admissionId,
   });
 }
 
@@ -1063,7 +1190,141 @@ interface VisitEditModalProps {
 
 ---
 
-### 7.7 PrintButton (Admin & Staff)
+### 7.7 AdmissionEditModal (Admin Only)
+
+**Purpose:** Modal for admin to edit admission records
+
+**Props:**
+
+```typescript
+interface AdmissionEditModalProps {
+  open: boolean;
+  admissionId: string;
+  patientName: string;
+  admissionData: AdminAdmissionDetail;
+  onClose: () => void;
+  onSave: (data: UpdateAdminAdmissionRequest) => void;
+  isSubmitting?: boolean;
+  editHistory?: AdmissionEditHistoryEntry[];
+}
+```
+
+**Behavior:**
+- Opens when admin clicks "Edit" button on any admission
+- Pre-filled with existing admission data
+- Admin can modify any admission field
+- Shows audit trail: "Last edited by [Admin Name] on [Date]"
+- Shows field-by-field change history
+- Validates input before saving
+- After save, refreshes admission list and shows success message
+
+**Visual Design:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Edit Admission Record - Sarah Johnson                                     │
+│ PAT-001  |  MRN: MRN-2026-0845                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ ADMISSION INFORMATION                                                 │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  Admission Date: [2026-08-30]                                         │ │
+│  │  Bed Number:    [B-12]                                                │ │
+│  │  Ward:          [Palliative Care Ward]                                │ │
+│  │  Physician:     [Dr. Kebede]                                          │ │
+│  │  Care Team:     [Team A]                                              │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ MEDICAL DIAGNOSIS                                                     │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  Primary Diagnosis:   [Stage IV Breast Cancer]                        │ │
+│  │  Secondary Diagnoses: [Metastatic to bone]                            │ │
+│  │  Disease Stage:       [Advanced ▼]                                   │ │
+│  │  Co-morbidities:      [Hypertension]                                  │ │
+│  │  Estimated Prognosis: [Months ▼]                                     │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ PALLIATIVE ASSESSMENT                                                 │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  PPS Score:        [60]                                               │ │
+│  │  Functional Status: [PartiallyDependent ▼]                           │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ PAIN & SYMPTOM ASSESSMENT                                             │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  Pain Score:        [4]                                               │ │
+│  │  Pain Type:         [Mixed ▼]                                        │ │
+│  │  Symptoms Present:  [Fatigue, Anxiety]                                │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ PSYCHOSOCIAL & SPIRITUAL                                              │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  Emotional Status:     [Anxious ▼]                                   │ │
+│  │  Family Support:       [Moderate ▼]                                  │ │
+│  │  Social Challenges:    [Financial constraints]                        │ │
+│  │  Spiritual Concerns:   [No]                                           │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ CARE PLAN                                                             │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  Pain Management Plan:    [Morphine 10mg every 6 hours]              │ │
+│  │  Medication Plan:         [Continue current medications]             │ │
+│  │  Nursing Care Plan:       [Daily monitoring and pain assessment]     │ │
+│  │  Home-Based Care Required: [No]                                       │ │
+│  │  Physiotherapy Required:   [No]                                       │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ STATUS                                                               │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  Status: [Active ▼]                                                  │ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ AUDIT TRAIL                                                           │ │
+│  │ ───────────────────────────────────────────────────────────────────── │ │
+│  │                                                                       │ │
+│  │  ⚠️ Last edited by Admin User on 2026-09-01 at 10:30                 │ │
+│  │                                                                       │ │
+│  │  📝 Edit History: (2 edits)                                          │ │
+│  │     ┌─────────────────────────────────────────────────────────────────┐ │
+│  │     │ Admin User - 2026-09-01 10:30                                 │ │
+│  │     │   bedNumber: B-10 → B-12                                      │ │
+│  │     │   painScore: 5 → 4                                           │ │
+│  │     │ Super Admin - 2026-08-31 14:20                               │ │
+│  │     │   ppsScore: 55 → 60                                          │ │
+│  │     └─────────────────────────────────────────────────────────────────┘ │
+│  │                                                                       │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│                        [Cancel]              [Save Changes]                │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 7.8 PrintButton (Admin & Staff)
 
 **Purpose:** Print/export patient history as PDF with full visit details
 
@@ -1094,209 +1355,9 @@ interface PrintButtonProps {
 - Professional print-ready formatting
 - Available to both Admin and Staff
 
-**Print View Structure:**
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    YEKATIT 12 HOSPITAL MEDICAL COLLEGE                    │
-│                    Palliative Care Unit                                   │
-│                    Tel: +251-XXX-XXXXXX                                   │
-│                                                                             │
-│                    PATIENT HISTORY REPORT                                  │
-│                    Generated: 2026-09-01 10:30 AM                         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  PATIENT INFORMATION                                                       │
-│  ┌───────────────────────────────────────────────────────────────────────┐ │
-│  │  Patient ID: PAT-001                                                 │ │
-│  │  Name: Sarah Johnson                                                │ │
-│  │  Age: 65   Sex: Female   DOB: 1961-08-15                           │ │
-│  │  Address: Bole, Addis Ababa   Phone: +251922222222                  │ │
-│  │  Emergency Contact: Michael Johnson (+251933333333)                 │ │
-│  │  Caregiver: Michael Johnson (+251933333333)                         │ │
-│  │  Status: Active   Location: Home                                   │ │
-│  │  Primary Diagnosis: Stage IV Breast Cancer                         │ │
-│  │  Secondary Diagnoses: Metastatic to bone                           │ │
-│  │  Disease Stage: Advanced                                            │ │
-│  │  Comorbidities: Hypertension                                        │ │
-│  │  Estimated Prognosis: Months                                       │ │
-│  │  Registered: 2026-08-29 by John Doe                               │ │
-│  └───────────────────────────────────────────────────────────────────────┘ │
-│                                                                             │
-│  PATIENT PROGRESS (KPS/PPS)                                               │
-│  ┌───────────────────────────────────────────────────────────────────────┐ │
-│  │  [KPS/PPS PROGRESS GRAPH - showing trends over all visits]          │ │
-│  │                                                                       │ │
-│  │  KPS: 60 → 55 → 50 → 45 → 40 → 35 (Declining -25%)                 │ │
-│  │  PPS: 70 → 65 → 60 → 55 → 50 → 45 (Declining -25%)                 │ │
-│  │                                                                       │ │
-│  │  Data Points:                                                         │ │
-│  │  08/01: KPS=60, PPS=70                                               │ │
-│  │  08/08: KPS=55, PPS=65                                               │ │
-│  │  08/15: KPS=50, PPS=60                                               │ │
-│  │  08/22: KPS=45, PPS=55                                               │ │
-│  │  08/29: KPS=40, PPS=50                                               │ │
-│  │  09/05: KPS=35, PPS=45                                               │ │
-│  └───────────────────────────────────────────────────────────────────────┘ │
-│                                                                             │
-│  VISIT HISTORY (12 visits) - FULL DETAILS                                  │
-│  ┌───────────────────────────────────────────────────────────────────────┐ │
-│  │  Visit 1 - 2026-08-29                                                │ │
-│  │  ──────────────────────────────────────────────────────────────────── │ │
-│  │  Time: 09:00 - 10:30   Type: Routine                                │ │
-│  │  Team: Dr. Smith (TeamLeader), Jane Doe (Nurse)                     │ │
-│  │                                                                       │ │
-│  │  General Condition:                                                   │ │
-│  │    Overall Status: Stable                                            │ │
-│  │    Mobility: Requires Assistance                                     │ │
-│  │                                                                       │ │
-│  │  Vital Signs:                                                         │ │
-│  │    Temperature: 36.8°C   Pulse: 78 bpm   BP: 120/80 mmHg            │ │
-│  │    Respiration: 18/min   SpO2: 97%                                  │ │
-│  │                                                                       │ │
-│  │  Pain Assessment:                                                     │ │
-│  │    Pain Score: 3/10   Medication Effective: Yes                     │ │
-│  │    Location: Back   Characteristics: Dull, Intermittent             │ │
-│  │                                                                       │ │
-│  │  Symptoms: Fatigue, Anxiety                                          │ │
-│  │                                                                       │ │
-│  │  Functional Status:                                                   │ │
-│  │    ADL: Feeding (NeedsAssistance), Bathing (NeedsAssistance),        │ │
-│  │         Dressing (Independent), Toileting (NeedsAssistance),         │ │
-│  │         Mobility (NeedsAssistance)                                   │ │
-│  │    PPS: 60   KPS: 60                                                 │ │
-│  │                                                                       │ │
-│  │  Nutrition & Hydration:                                               │ │
-│  │    Appetite: Fair   Oral Intake: Reduced   Hydration: Adequate      │ │
-│  │                                                                       │ │
-│  │  Psychosocial:                                                        │ │
-│  │    Emotional Status: Stable   Family Support: Good                   │ │
-│  │    Financial Difficulty: No                                         │ │
-│  │                                                                       │ │
-│  │  Spiritual: Spiritual Needs: No   Religious Support: No              │ │
-│  │                                                                       │ │
-│  │  Medication Review:                                                   │ │
-│  │    Medications Available: Yes   Correctly Taken: Yes                 │ │
-│  │    Side Effects: No   Refill Needed: No                             │ │
-│  │    Morphine Available: Yes   Adherence: Good                        │ │
-│  │    Current Medications: Morphine 10mg Every 6h Oral                 │ │
-│  │                                                                       │ │
-│  │  Caregiver Assessment:                                                │ │
-│  │    Burden: Moderate   Understanding: Good   Capacity: Moderate       │ │
-│  │    Family Emotional Status: Stable                                   │ │
-│  │                                                                       │ │
-│  │  Education Provided: Pain Management, Medication Administration     │ │
-│  │                                                                       │ │
-│  │  Home Environment: Clean   Observations: Adequate Lighting,          │ │
-│  │    Ventilation                                                        │ │
-│  │                                                                       │ │
-│  │  Nursing Care Given: Medication Admin, Counseling                    │ │
-│  │                                                                       │ │
-│  │  Red Flags: None                                                     │ │
-│  │                                                                       │ │
-│  │  Outcome: Stable                                                     │ │
-│  │  Next Visit: 2026-09-05                                              │ │
-│  │                                                                       │ │
-│  │  Signatures:                                                          │ │
-│  │    Team Leader: Dr. Smith   Physician: Dr. Kebede                   │ │
-│  │    Nurse: Jane Doe                                                   │ │
-│  │                                                                       │ │
-│  │  ──────────────────────────────────────────────────────────────────── │ │
-│  │  Visit 2 - 2026-08-22                                                │ │
-│  │  ──────────────────────────────────────────────────────────────────── │ │
-│  │  [Full details of visit 2...]                                       │ │
-│  │  ──────────────────────────────────────────────────────────────────── │ │
-│  │  [All visits listed chronologically with FULL details]              │ │
-│  └───────────────────────────────────────────────────────────────────────┘ │
-│                                                                             │
-│  MEDICATIONS (5 records) - FULL DETAILS                                   │
-│  ┌───────────────────────────────────────────────────────────────────────┐ │
-│  │  Medication: Morphine                                               │ │
-│  │    Dosage: 10mg   Frequency: Every 6 hours   Route: Oral            │ │
-│  │    Status: Given   Administered At: Home                            │ │
-│  │    Prescribed By: Dr. Smith   Prescribed: 2026-08-29                │ │
-│  │  ──────────────────────────────────────────────────────────────────── │ │
-│  │  Medication: Oxycodone                                              │ │
-│  │    Dosage: 5mg   Frequency: Every 8 hours   Route: Oral             │ │
-│  │    Status: Given   Administered At: Home                            │ │
-│  │    Prescribed By: Dr. Kebede   Prescribed: 2026-08-22               │ │
-│  │  ──────────────────────────────────────────────────────────────────── │ │
-│  │  [All medications listed with full details]                         │ │
-│  └───────────────────────────────────────────────────────────────────────┘ │
-│                                                                             │
-│  LABORATORY TESTS (8 records) - FULL DETAILS                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐ │
-│  │  Test: Complete Blood Count                                          │ │
-│  │    Date Ordered: 2026-08-29   Date Performed: 2026-08-30            │ │
-│  │    Location: Home   Status: Completed                                │ │
-│  │    Ordered By: Dr. Smith                                            │ │
-│  │    Result: Normal - WBC: 6.5, RBC: 4.2, HGB: 13.5, PLT: 250        │ │
-│  │  ──────────────────────────────────────────────────────────────────── │ │
-│  │  Test: Urinalysis                                                    │ │
-│  │    Date Ordered: 2026-08-28   Date Performed: 2026-08-29            │ │
-│  │    Location: Home   Status: Completed                                │ │
-│  │    Ordered By: Dr. Kebede                                           │ │
-│  │    Result: Abnormal - Protein: 2+, Blood: 1+                        │ │
-│  │  ──────────────────────────────────────────────────────────────────── │ │
-│  │  [All lab tests listed with full details]                           │ │
-│  └───────────────────────────────────────────────────────────────────────┘ │
-│                                                                             │
-│  REFERRALS (3 records) - FULL DETAILS                                     │
-│  ┌───────────────────────────────────────────────────────────────────────┐ │
-│  │  Referral 1 - 2026-08-29                                             │ │
-│  │  ──────────────────────────────────────────────────────────────────── │ │
-│  │  Type: Outgoing   Status: Accepted                                  │ │
-│  │  Diagnosis: Stage IV Breast Cancer                                  │ │
-│  │  Disease Stage: Advanced                                            │ │
-│  │  PPS: 60   KPS: 60                                                  │ │
-│  │  Symptoms: Pain: 3, Dyspnea: 2, Fatigue: 5, Anxiety: 2, Depression: 1│ │
-│  │  Reasons: Pain Management, Symptom Control                          │ │
-│  │  From: Home Care Unit   To: Yekatit 12 Hospital                    │ │
-│  │  Contact: Dr. Alem (+251944444444)                                  │ │
-│  │  Prepared By: Dr. Smith (Physician)                                │ │
-│  │  Signature: Dr. Smith                                               │ │
-│  │  Action Taken: Referral Accepted                                    │ │
-│  │  Outcome: Patient transferred for inpatient care                    │ │
-│  │  Follow-up: 2026-09-05 (Pending)                                   │ │
-│  │  ──────────────────────────────────────────────────────────────────── │ │
-│  │  [All referrals listed with full details]                           │ │
-│  └───────────────────────────────────────────────────────────────────────┘ │
-│                                                                             │
-│  ADMISSIONS (2 records) - FULL DETAILS                                    │
-│  ┌───────────────────────────────────────────────────────────────────────┐ │
-│  │  Admission 1 - 2026-08-30                                            │ │
-│  │  ──────────────────────────────────────────────────────────────────── │ │
-│  │  Bed: B-12   Ward: Palliative Care Ward                            │ │
-│  │  Admitting Physician: Dr. Kebede   Care Team: Team A               │ │
-│  │  Status: Active                                                     │ │
-│  │  Primary Diagnosis: Stage IV Breast Cancer                          │ │
-│  │  Secondary Diagnoses: Metastatic to bone                            │ │
-│  │  Disease Stage: Advanced   Prognosis: Months                        │ │
-│  │  PPS: 60   Functional Status: Partially Dependent                   │ │
-│  │  Pain: Score 4/10   Type: Mixed                                     │ │
-│  │  Symptoms: Fatigue, Anxiety                                         │ │
-│  │  Emotional Status: Anxious   Family Support: Moderate              │ │
-│  │  Spiritual Concerns: No                                             │ │
-│  │                                                                       │ │
-│  │  Care Plan:                                                          │ │
-│  │    Pain Management: Morphine 10mg every 6 hours                     │ │
-│  │    Medication Plan: Continue current medications                     │ │
-│  │    Nursing Care: Daily monitoring and pain assessment               │ │
-│  │    Home-Based Care Required: No                                     │ │
-│  │    Physiotherapy Required: No                                       │ │
-│  │  ──────────────────────────────────────────────────────────────────── │ │
-│  │  [All admissions listed with full details]                          │ │
-│  └───────────────────────────────────────────────────────────────────────┘ │
-│                                                                             │
-│  ─────────────────────────────────────────────────────────────────────────  │
-│  Report Generated By: Admin User (Admin) on 2026-09-01                    │
-│  This is a computer-generated document.                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
 ---
 
-### 7.8 AdminVisitList (Full Detail View)
+### 7.9 AdminVisitList (Full Detail View)
 
 **Purpose:** Display full visit list with all details and edit capability
 
@@ -1319,34 +1380,9 @@ interface AdminVisitListProps {
 - "View History" button showing edit audit trail
 - Expandable rows for full visit details
 
-**Visual Design:**
-
-```
-+-----------------------------------------------------------+
-| Visit History - Full Details                               |
-+-----------------------------------------------------------+
-| +-------------------------------------------------------+ |
-| | Date  | Type   | Status   | Outcome   | PPS | KPS |   | |
-| +-------+--------+----------+-----------+-----+-----+---+ |
-| | 08-29 | Routin | Stable   | Stable    | 60  | 60  |   | |
-| |       | e      |          |           |     |     |   | |
-| |       |        |          |           |     |     |   | |
-| | 08-22 | Emerg. | Critical | Referred  | 40  | 35  |   | |
-| |       |        |          | to        |     |     |   | |
-| |       |        |          | Facility  |     |     |   | |
-| | 08-15 | First  | Stable   | Stable    | 70  | 65  |   | |
-| |       | Assess |          |           |     |     |   | |
-| +-------+--------+----------+-----------+-----+-----+---+ |
-|                                                           |
-| Click [View Details] to see full visit record            |
-| Click [Edit] to modify visit (admin only)               |
-| Click [History] to view edit audit trail                |
-+-----------------------------------------------------------+
-```
-
 ---
 
-### 7.9 AdminMedicationList (Full Detail View)
+### 7.10 AdminMedicationList (Full Detail View)
 
 **Purpose:** Display full medication list with all details
 
@@ -1359,26 +1395,9 @@ interface AdminMedicationListProps {
 }
 ```
 
-**Visual Design:**
-
-```
-+-----------------------------------------------------------+
-| Medications - Full Details                                 |
-+-----------------------------------------------------------+
-| +-------------------------------------------------------+ |
-| | Name     | Dosage | Freq   | Route | Status | Admin At | |
-| +----------+--------+--------+-------+--------+----------+ |
-| | Morphine | 10mg   | Every  | Oral  | Given  | Home     | |
-| |          |        | 6h     |       |        |          | |
-| | Oxycodon | 5mg    | Every  | Oral  | Given  | Home     | |
-| | e        |        | 8h     |       |        |          | |
-| +----------+--------+--------+-------+--------+----------+ |
-+-----------------------------------------------------------+
-```
-
 ---
 
-### 7.10 AdminLabList (Full Detail View)
+### 7.11 AdminLabList (Full Detail View)
 
 **Purpose:** Display full lab test list with all details
 
@@ -1391,26 +1410,9 @@ interface AdminLabListProps {
 }
 ```
 
-**Visual Design:**
-
-```
-+-----------------------------------------------------------+
-| Laboratory Tests - Full Details                            |
-+-----------------------------------------------------------+
-| +-------------------------------------------------------+ |
-| | Test Name       | Ordered  | Performed | Result | Status| |
-| +-----------------+----------+-----------+--------+-------+ |
-| | Complete Blood  | 2026-08- | 2026-08- | Normal | Com-  | |
-| | Count           | 29       | 30       |        | pleted| |
-| | Urinalysis      | 2026-08- | 2026-08- | Abnor- | Com-  | |
-| |                 | 28       | 29       | mal    | pleted| |
-| +-----------------+----------+-----------+--------+-------+ |
-+-----------------------------------------------------------+
-```
-
 ---
 
-### 7.11 AdminReferralList (Full Detail View)
+### 7.12 AdminReferralList (Full Detail View)
 
 **Purpose:** Display full referral list with all details
 
@@ -1425,18 +1427,28 @@ interface AdminReferralListProps {
 
 ---
 
-### 7.12 AdminAdmissionList (Full Detail View)
+### 7.13 AdminAdmissionList (Full Detail View with Edit)
 
-**Purpose:** Display full admission list with all details
+**Purpose:** Display full admission list with all details and edit capability
 
 **Props:**
 
 ```typescript
 interface AdminAdmissionListProps {
   admissions: AdminAdmissionDetail[];
+  patientId: string;
   loading?: boolean;
+  onEdit?: (admissionId: string) => void;
+  onViewHistory?: (admissionId: string) => void;
 }
 ```
+
+**Behavior:**
+- Renders table of admissions with ALL fields displayed
+- Each admission row shows: Date, Bed, Ward, MRN, Physician, Status, Actions
+- "Edit" button for each admission (admin only)
+- "View History" button showing edit audit trail
+- Expandable rows for full admission details
 
 ---
 
@@ -1524,7 +1536,7 @@ interface AdminAdmissionListProps {
 
 **Guard:** `ProtectedRoute` (admin only)
 
-**Purpose:** View patient details with full records (like staff view) and edit visits
+**Purpose:** View patient details with full records (like staff view), edit visits, and edit admissions
 
 **Behavior:**
 
@@ -1537,12 +1549,14 @@ interface AdminAdmissionListProps {
    - **Medications:** Full medication details
    - **Labs:** Full lab test details
    - **Referrals:** Full referral details
-   - **Admissions:** Full admission details
+   - **Admissions:** Full admission details with Edit button
 6. Each visit has an "Edit" button (admin only)
-7. Click "Edit" opens VisitEditModal with full visit data
-8. After edit, visit data refreshes and shows audit trail
-9. Print/Export button
-10. Close Case button opens modal
+7. Each admission has an "Edit" button (admin only)
+8. Click "Edit" on visit opens VisitEditModal with full visit data
+9. Click "Edit" on admission opens AdmissionEditModal with full admission data
+10. After edit, data refreshes and shows audit trail
+11. Print/Export button
+12. Close Case button opens modal
 
 **Components:**
 
@@ -1554,8 +1568,9 @@ interface AdminAdmissionListProps {
   - `AdminMedicationList`
   - `AdminLabList`
   - `AdminReferralList`
-  - `AdminAdmissionList`
+  - `AdminAdmissionList` (with Edit & History)
 - `VisitEditModal`
+- `AdmissionEditModal`
 - `PrintButton`
 - `CloseCaseButton`
 - `CloseCaseModal`
@@ -1567,189 +1582,6 @@ interface AdminAdmissionListProps {
 | Loading | Skeleton details |
 | Error | Error message with retry |
 | Success | Full patient details with all records |
-
-**Page Implementation:**
-
-```typescript
-// src/pages/admin/AdminPatientDetailPage.tsx
-
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useAdminPatientFullDetail, useUpdateVisit, useCloseCase } from '@/hooks/useAdmin';
-import { PatientDemographics } from '@/components/patients/PatientDemographics';
-import { PatientDiagnosis } from '@/components/patients/PatientDiagnosis';
-import { PatientProgressGraph } from '@/components/patients/PatientProgressGraph';
-import { AdminVisitList } from '@/components/admin/AdminVisitList';
-import { AdminMedicationList } from '@/components/admin/AdminMedicationList';
-import { AdminLabList } from '@/components/admin/AdminLabList';
-import { AdminReferralList } from '@/components/admin/AdminReferralList';
-import { AdminAdmissionList } from '@/components/admin/AdminAdmissionList';
-import { VisitEditModal } from '@/components/admin/VisitEditModal';
-import { CloseCaseModal } from '@/components/admin/CloseCaseModal';
-import { PrintButton } from '@/components/common/PrintButton';
-import { Button } from '@/components/ui/Button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { ErrorState } from '@/components/common/ErrorState';
-
-export const AdminPatientDetailPage: React.FC = () => {
-  const { patientId } = useParams<{ patientId: string }>();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('visits');
-  const [editingVisit, setEditingVisit] = useState<string | null>(null);
-  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
-
-  const { data, isLoading, error, refetch } = useAdminPatientFullDetail(patientId!);
-  const updateVisitMutation = useUpdateVisit();
-  const closeCaseMutation = useCloseCase();
-
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
-
-  if (error || !data) {
-    return <ErrorState onRetry={refetch} />;
-  }
-
-  const handleEditVisit = (visitId: string) => {
-    setEditingVisit(visitId);
-  };
-
-  const handleSaveVisit = (visitId: string, updatedData: any) => {
-    updateVisitMutation.mutate(
-      { visitId, data: updatedData },
-      {
-        onSuccess: () => {
-          setEditingVisit(null);
-          refetch();
-        },
-      }
-    );
-  };
-
-  const handleCloseCase = (reason: 'Improved' | 'Deceased') => {
-    closeCaseMutation.mutate(
-      { patientId: patientId!, data: { reason } },
-      {
-        onSuccess: () => {
-          setIsCloseModalOpen(false);
-          refetch();
-        },
-      }
-    );
-  };
-
-  const currentVisit = editingVisit 
-    ? data.visits.find(v => v.id === editingVisit) 
-    : null;
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-bold">
-            {data.firstName} {data.lastName}
-          </h1>
-          <p className="text-muted-foreground">
-            {data.patientDisplayId} · {data.status}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <PrintButton 
-            patientId={patientId!} 
-            patientName={`${data.firstName} ${data.lastName}`}
-          />
-          {data.status === 'Active' && (
-            <Button 
-              variant="destructive" 
-              onClick={() => setIsCloseModalOpen(true)}
-            >
-              Close Case
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => navigate('/admin/patients')}>
-            Back
-          </Button>
-        </div>
-      </div>
-
-      {/* Patient Demographics */}
-      <PatientDemographics patient={data} />
-
-      {/* Diagnosis */}
-      <PatientDiagnosis diagnosis={data} />
-
-      {/* KPS/PPS Progress Graph */}
-      {data.progress && data.progress.data.length > 0 && (
-        <PatientProgressGraph
-          patientName={`${data.firstName} ${data.lastName}`}
-          data={data.progress.data}
-          trends={data.progress.trends}
-        />
-      )}
-
-      {/* Tabs with Full Data */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="visits">Visits ({data.visits.length})</TabsTrigger>
-          <TabsTrigger value="medications">Medications ({data.medications.length})</TabsTrigger>
-          <TabsTrigger value="labs">Lab Tests ({data.labTests.length})</TabsTrigger>
-          <TabsTrigger value="referrals">Referrals ({data.referrals.length})</TabsTrigger>
-          <TabsTrigger value="admissions">Admissions ({data.admissions.length})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="visits">
-          <AdminVisitList
-            visits={data.visits}
-            patientId={patientId!}
-            onEdit={handleEditVisit}
-          />
-        </TabsContent>
-
-        <TabsContent value="medications">
-          <AdminMedicationList medications={data.medications} />
-        </TabsContent>
-
-        <TabsContent value="labs">
-          <AdminLabList labTests={data.labTests} />
-        </TabsContent>
-
-        <TabsContent value="referrals">
-          <AdminReferralList referrals={data.referrals} />
-        </TabsContent>
-
-        <TabsContent value="admissions">
-          <AdminAdmissionList admissions={data.admissions} />
-        </TabsContent>
-      </Tabs>
-
-      {/* Edit Visit Modal */}
-      {currentVisit && (
-        <VisitEditModal
-          open={!!editingVisit}
-          visitId={editingVisit!}
-          patientName={`${data.firstName} ${data.lastName}`}
-          visitData={currentVisit}
-          onClose={() => setEditingVisit(null)}
-          onSave={(data) => handleSaveVisit(editingVisit!, data)}
-          isSubmitting={updateVisitMutation.isPending}
-          editHistory={currentVisit.editHistory}
-        />
-      )}
-
-      {/* Close Case Modal */}
-      <CloseCaseModal
-        open={isCloseModalOpen}
-        patientId={patientId!}
-        patientName={`${data.firstName} ${data.lastName}`}
-        onClose={() => setIsCloseModalOpen(false)}
-        onConfirm={handleCloseCase}
-      />
-    </div>
-  );
-};
-```
 
 ---
 
@@ -1870,7 +1702,7 @@ export const AdminPatientDetailPage: React.FC = () => {
 
 ---
 
-### 8.8 AdminPatientPrintPage (NEW)
+### 8.8 AdminPatientPrintPage
 
 **Route:** `/admin/patients/:patientId/print`
 
@@ -1910,66 +1742,7 @@ export const AdminPatientDetailPage: React.FC = () => {
 
 ---
 
-## 9. Page Implementations
-
-### AdminDashboardPage
-
-```typescript
-// src/pages/admin/AdminDashboardPage.tsx
-
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useDashboardStats, useNotifications, useMarkNotificationRead } from '@/hooks/useAdmin';
-import { DashboardStats } from '@/components/admin/DashboardStats';
-import { NotificationList } from '@/components/admin/NotificationList';
-import { StaffApprovalList } from '@/components/admin/StaffApprovalList';
-import { ReferralApprovalList } from '@/components/admin/ReferralApprovalList';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { ErrorState } from '@/components/common/ErrorState';
-
-export const AdminDashboardPage: React.FC = () => {
-  const navigate = useNavigate();
-  const { data: stats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useDashboardStats();
-  const { data: notificationsData, isLoading: notifLoading } = useNotifications({ limit: 10 });
-  const markReadMutation = useMarkNotificationRead();
-
-  const handlePatientClick = (patientId: string) => {
-    navigate(`/admin/patients/${patientId}`);
-  };
-
-  if (statsLoading) {
-    return <LoadingSpinner />;
-  }
-
-  if (statsError) {
-    return <ErrorState onRetry={refetchStats} />;
-  }
-
-  return (
-    <div className="space-y-6">
-      <DashboardStats stats={stats!} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <NotificationList
-          notifications={notificationsData?.notifications || []}
-          unreadCount={notificationsData?.unreadCount || 0}
-          loading={notifLoading}
-          onMarkRead={(id) => markReadMutation.mutate(id)}
-          onPatientClick={handlePatientClick}
-        />
-
-        <StaffApprovalList />
-      </div>
-
-      <ReferralApprovalList />
-    </div>
-  );
-};
-```
-
----
-
-## 10. Route Configuration
+## 9. Route Configuration
 
 ```typescript
 // src/routes/index.tsx (admin section)
@@ -2008,6 +1781,10 @@ export const AdminDashboardPage: React.FC = () => {
           path: '/admin/settings', 
           element: withSuspense(SettingsPage) 
         },
+        { 
+          path: '/profile', 
+          element: withSuspense(ProfilePage) 
+        },
       ],
     },
     // Print route with minimal layout
@@ -2031,7 +1808,7 @@ export const AdminDashboardPage: React.FC = () => {
 
 ---
 
-## 11. Flow Diagram (UPDATED)
+## 10. Flow Diagram (UPDATED)
 
 ```
 +-----------------------------------------------------------+
@@ -2068,9 +1845,11 @@ export const AdminDashboardPage: React.FC = () => {
 |  |            - Medications (FULL details)             | |
 |  |            - Labs (FULL details)                    | |
 |  |            - Referrals (FULL details)               | |
-|  |            - Admissions (FULL details)              | |
+|  |            - Admissions (FULL details + Edit)       | |
 |  |         -> Edit visit -> useUpdateVisit()           | |
 |  |         -> PUT /admin/visits/:visitId               | |
+|  |         -> Edit admission -> useUpdateAdminAdmission()| |
+|  |         -> PUT /admin/admissions/:admissionId       | |
 |  |         -> Close case -> useCloseCase()             | |
 |  |         -> PUT /admin/patients/:id/close-case       | |
 |  |         -> Print -> /admin/patients/:id/print       | |
@@ -2078,7 +1857,7 @@ export const AdminDashboardPage: React.FC = () => {
 |                           |                               |
 |                           v                               |
 |  +-----------------------------------------------------+ |
-|  |                    PRINT FLOW (NEW)                  | |
+|  |                    PRINT FLOW                        | |
 |  |                                                     | |
 |  |  Admin clicks Print -> /admin/patients/:id/print    | |
 |  |         -> AdminPatientPrintPage                    | |
@@ -2129,26 +1908,40 @@ export const AdminDashboardPage: React.FC = () => {
 |  |         -> Filter by date range                     | |
 |  |         -> Export PDF/Excel                         | |
 |  +-----------------------------------------------------+ |
+|                           |                               |
+|                           v                               |
+|  +-----------------------------------------------------+ |
+|  |                    PROFILE FLOW                      | |
+|  |                                                     | |
+|  |  Admin clicks Profile in sidebar -> /profile        | |
+|  |         -> ProfilePage                              | |
+|  |         -> View profile information                 | |
+|  |         -> Edit name and phone                      | |
+|  |         -> Change password                          | |
+|  |         -> View activity statistics                 | |
+|  +-----------------------------------------------------+ |
 |                                                           |
 +-----------------------------------------------------------+
 ```
 
 ---
 
-## 12. Audit Trail Display
+## 11. Audit Trail Display
 
-When an admin edits a visit, the audit trail is displayed:
+When an admin edits a visit or admission, the audit trail is displayed:
 
 ```
 +-----------------------------------------------------------+
-| Visit Edit History                                         |
+| Edit History                                               |
 | +-------------------------------------------------------+ |
 | | Edited By     | Edited At          | Changes           | |
 | +--------------+-------------------+---------------------+ |
 | | Admin User   | 2026-09-01 10:30 | painScore: 5 → 3   | |
 | |              |                   | outcome: Symptoms   | |
 | |              |                   | Worsened → Stable   | |
+| |              |                   | bedNumber: B-10→B-12| |
 | | Dr. Smith    | 2026-08-30 14:20 | ppsScore: 55 → 60  | |
 | +--------------+-------------------+---------------------+ |
 +-----------------------------------------------------------+
 ```
+
