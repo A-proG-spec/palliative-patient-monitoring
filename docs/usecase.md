@@ -1,679 +1,589 @@
-# usecases.md
+# 📄 Document 3 of 9
 
-# PALLIATIVE PATIENT MONITORING SYSTEM - USE CASES
-
-## UC-01: Staff Registration
-
-| Field | Detail |
-|---|---|
-| Actor | Staff (Nurse, Physician, Team Leader) |
-| Precondition | None |
-| Trigger | Staff submits registration form |
-| Linked FR | FR-01, FR-02 |
-
-**Main Flow:**
-1. Staff navigates to registration page
-2. Staff fills in email, password, name, phone number
-3. Staff submits form
-4. System validates input
-5. System creates staff record with status "Pending"
-6. System generates email verification token
-7. System sends verification email to staff's email address
-8. System displays success message: "Verification email sent. Please check your inbox."
-
-**Alternate Flows:**
-- If email already exists: system returns validation error
-- If validation fails: system shows field-specific errors
-- If email sending fails: system logs error and allows resend
-
-**Postcondition:** Staff record exists with "Pending" status, verification email sent
+## `docs/usecase.md`
 
 ---
 
-## UC-02: Staff Verifies Email
+# Use Cases — Palliative Patient Monitoring System
 
-| Field | Detail |
-|---|---|
-| Actor | Staff |
-| Precondition | Staff has registered and received verification email |
-| Trigger | Staff clicks verification link in email |
-| Linked FR | FR-02, FR-03 |
+## 1.0 Actors
 
-**Main Flow:**
-1. Staff receives verification email with link
-2. Staff clicks verification link
-3. System validates verification token
-4. System marks staff email as verified (`isEmailVerified = true`)
-5. System displays success message: "Email verified successfully. Please wait for admin approval."
-6. System creates notification for admin about new pending staff
-
-**Alternate Flows:**
-- Token is expired: system displays "Verification link has expired. Please request a new one."
-- Token is invalid: system displays "Invalid verification link."
-- Email already verified: system displays "Email already verified."
-
-**Postcondition:** Staff email is verified, admin notification created
+| Actor | Description |
+|-------|-------------|
+| **Admin** | System administrator responsible for staff approvals, referral approvals, and system oversight |
+| **Team Leader** | Senior staff member who leads palliative care teams and auto-signs visit records |
+| **Physician** | Medical doctor who orders treatments, reviews patients, and signs clinical records |
+| **Nurse** | Clinical nurse who records visits, administers medications, and documents patient observations |
+| **Staff** | Generic role encompassing Team Leader, Physician, and Nurse (any authenticated clinical user) |
+| **Patient** | Recipient of palliative care services (indirect actor — data subject) |
+| **Caregiver** | Family member or caregiver involved in patient care (indirect actor) |
 
 ---
 
-## UC-03: Staff Requests New Verification Email
+## 2.0 Use Case Diagram Overview
 
-| Field | Detail |
-|---|---|
-| Actor | Staff |
-| Precondition | Staff has registered but not verified email |
-| Trigger | Staff requests new verification email |
-| Linked FR | FR-04 |
-
-**Main Flow:**
-1. Staff navigates to login page
-2. Staff clicks "Resend verification email" link
-3. Staff enters email address
-4. System validates email exists and is not verified
-5. System generates new verification token
-6. System sends new verification email
-7. System displays success message: "Verification email sent. Please check your inbox."
-
-**Alternate Flows:**
-- Email not found: system displays "No account found with this email"
-- Email already verified: system displays "Email already verified. Please login."
-- Too many requests: system displays "Please wait before requesting another email"
-
-**Postcondition:** New verification email sent
-
----
-
-## UC-04: Admin Approves Staff Registration
-
-| Field | Detail |
-|---|---|
-| Actor | Admin |
-| Precondition | Staff email is verified and pending registrations exist |
-| Trigger | Admin navigates to pending approvals |
-| Linked FR | FR-05, FR-06, FR-07, FR-11 |
-
-**Main Flow:**
-1. Admin views dashboard with pending staff notification
-2. Admin navigates to pending approvals
-3. Admin reviews staff credentials
-4. Admin approves registration
-5. Admin assigns role (Team Leader, Physician, Nurse)
-6. System updates staff status to "Active"
-7. System assigns selected role
-8. Staff can now login
-
-**Alternate Flows:**
-- Admin rejects registration: system removes from pending list
-- Admin does not assign role: system returns validation error
-
-**Postcondition:** Staff is active with assigned role
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     PALLIATIVE CARE SYSTEM                      │
+│                                                                 │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐     │
+│  │    ADMIN     │    │  TEAM LEADER │    │  PHYSICIAN   │     │
+│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘     │
+│         │                   │                   │              │
+│         ▼                   ▼                   ▼              │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐     │
+│  │ Manage Staff │    │ Record Visits│    │ Order Meds   │     │
+│  │ Approve Refer│    │ Auto-Sign    │    │ Order Labs   │     │
+│  │ View Reports │    │ View Patients│    │ Sign Records │     │
+│  └──────────────┘    └──────────────┘    └──────────────┘     │
+│                                                                 │
+│  ┌──────────────┐                                               │
+│  │    NURSE     │                                               │
+│  └──────┬───────┘                                               │
+│         │                                                       │
+│         ▼                                                       │
+│  ┌──────────────┐                                               │
+│  │ Record Visits│                                               │
+│  │ Order Meds   │                                               │
+│  │ Document Care│                                               │
+│  └──────────────┘                                               │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │                    STAFF (Common)                      │    │
+│  │  Register Patients  |  View Patient Records            │    │
+│  │  Record Admissions  |  Order Imaging                   │    │
+│  │  Request Referrals  |  Record Progress Notes           │    │
+│  │  Enter Lab Results  |  Enter Imaging Reports           │    │
+│  │  View Dashboard     |  Manage Profile                  │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## UC-05: User Login with Role-Based Redirect
+## 3.0 Authentication Use Cases
 
-| Field | Detail |
-|---|---|
-| Actor | Staff, Admin |
-| Precondition | User is registered, email verified, and approved (if staff) |
-| Trigger | User submits login credentials |
-| Linked FR | FR-08, FR-09 |
+### UC-AUTH-01: Register as Staff
 
-**Main Flow:**
-1. User navigates to login page
-2. User enters email and password
-3. System validates credentials
-4. System checks if email is verified
-5. System checks user role (Admin or Staff)
-6. System returns user data with role
-7. Frontend redirects based on role:
-   - Admin → /admin/dashboard
-   - Staff → /dashboard
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff (new user) |
+| **Precondition** | None |
+| **Trigger** | User navigates to registration page |
+| **Main Flow** | 1. User enters name, email, phone, password<br>2. System validates input<br>3. System creates pending staff account<br>4. System sends verification email<br>5. System displays success message |
+| **Postcondition** | Staff account created with status `Pending` |
+| **Extensions** | 2a. Validation fails → Display error messages<br>3a. Email already exists → Show "email already registered" |
 
-**Alternate Flows:**
-- Invalid credentials: system returns error
-- Staff account not verified: system returns "Please verify your email before logging in"
-- Staff account pending: system returns "Account pending admin approval"
-- Staff account rejected: system returns "Account has been rejected"
-- Staff tries to access admin route: system redirects to unauthorized page
-- Admin tries to access staff route: system redirects to unauthorized page
+### UC-AUTH-02: Verify Email
 
-**Postcondition:** User is logged in and redirected to appropriate dashboard
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | User has registered and received verification email |
+| **Trigger** | User clicks verification link in email |
+| **Main Flow** | 1. System validates verification token<br>2. System marks email as verified<br>3. System displays success message |
+| **Postcondition** | Email marked as `isEmailVerified: true` |
+| **Extensions** | 1a. Token expired → Show "link expired" with option to resend<br>1b. Token invalid → Show "invalid link" |
 
----
+### UC-AUTH-03: Login
 
-## UC-06: Patient Registration
-
-| Field | Detail |
-|---|---|
-| Actor | Staff |
-| Precondition | Staff is authenticated, email verified, and active |
-| Trigger | Staff initiates patient registration |
-| Linked FR | FR-15, FR-16 |
-
-**Main Flow:**
-1. Staff navigates to patient registration
-2. Staff enters patient demographics (name, age, sex, DOB, address, phone)
-3. Staff enters emergency contact details
-4. Staff enters caregiver information
-5. Staff enters medical diagnosis (primary, secondary, stage, comorbidities)
-6. Staff enters palliative eligibility
-7. Staff submits form
-8. System creates patient record with status "Active" and location "Home"
-
-**Postcondition:** Patient record created with "Active" status
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | Account exists and is approved (if staff) |
+| **Trigger** | User navigates to login page and submits credentials |
+| **Main Flow** | 1. User enters email and password<br>2. System validates credentials<br>3. System generates JWT token<br>4. System redirects to dashboard based on role |
+| **Postcondition** | User is authenticated and session established |
+| **Extensions** | 2a. Invalid credentials → Show error<br>2b. Email not verified → Show "verify email first"<br>2c. Account pending approval → Show "waiting for admin approval" |
 
 ---
 
-## UC-07: Record Home Visit
+## 4.0 Patient Management Use Cases
 
-| Field | Detail |
-|---|---|
-| Actor | Staff |
-| Precondition | Patient exists and is active |
-| Trigger | Staff conducts home visit |
-| Linked FR | FR-24 through FR-30, FR-33a, FR-33b, FR-33c |
+### UC-PAT-01: Register New Patient
 
-**Main Flow:**
-1. Staff selects patient
-2. Staff records visit details (date, time, team members)
-3. Staff assesses general condition and mobility
-4. Staff records vital signs
-5. Staff performs pain assessment (score, location, characteristics)
-6. Staff assesses symptoms
-7. Staff evaluates functional status (ADL, PPS, KPS)
-8. Staff assesses nutrition and hydration
-9. Staff performs psychosocial assessment
-10. Staff documents spiritual needs
-11. Staff reviews medications
-12. Staff assesses caregiver
-13. Staff documents education provided
-14. Staff evaluates home environment
-15. Staff records nursing care provided
-16. Staff checks for red flags
-17. Staff documents any referrals made
-18. Staff records outcome
-19. Staff schedules next visit if needed
-20. Team Leader is automatically signed (logged-in user)
-21. Physician signs using email + password verification
-22. Nurse signs using email + password verification
-23. System verifies all signatures are complete before allowing finalization
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Staff is authenticated and approved |
+| **Trigger** | Staff clicks "Register Patient" |
+| **Main Flow** | 1. Staff fills patient registration form<br>2. Staff submits form<br>3. System validates all fields<br>4. System generates patient display ID (PAT-XXX)<br>5. System saves patient record<br>6. System displays success message |
+| **Postcondition** | Patient is registered with status `Active` and location `Home` |
+| **Extensions** | 3a. Validation fails → Display field errors |
 
-**Alternate Flows:**
-- Red flags present: staff takes immediate action and documents it
-- No referral needed: skip referral section
-- Invalid credentials for signature: system shows error message
+### UC-PAT-02: View Patient List
 
-**Postcondition:** Home visit recorded in patient history with all team signatures
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | User is authenticated |
+| **Trigger** | User navigates to patient list page |
+| **Main Flow** | 1. System displays list of patients<br>2. User can search by name or ID<br>3. User can filter by status<br>4. User can paginate through results |
+| **Postcondition** | Patient list displayed |
 
----
+### UC-PAT-03: View Patient Detail
 
-## UC-08: Admin Edits Visit Record
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | Patient exists |
+| **Trigger** | User clicks on a patient card |
+| **Main Flow** | 1. System displays patient demographics<br>2. System displays medical information<br>3. System displays tabbed records (visits, meds, labs, etc.)<br>4. User can navigate to any record type |
+| **Postcondition** | Patient detail view displayed |
 
-| Field | Detail |
-|---|---|
-| Actor | Admin |
-| Precondition | Visit record exists and contains errors |
-| Trigger | Admin identifies error in visit record |
-| Linked FR | FR-31, FR-32, FR-33 |
+### UC-PAT-04: View Patient Summary
 
-**Main Flow:**
-1. Admin navigates to patient detail page
-2. Admin views the visit records tab
-3. Admin identifies visit with error
-4. Admin clicks "Edit" button on the visit
-5. System opens edit modal with pre-filled visit data
-6. Admin modifies the incorrect fields
-7. Admin submits changes
-8. System validates the updated data
-9. System updates the visit record
-10. System logs the edit in audit trail (admin ID, timestamp, fields changed)
-11. System displays success message: "Visit updated successfully"
-12. System shows "Edited by [Admin Name]" on the visit
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Patient exists |
+| **Trigger** | Staff clicks "Summary" button |
+| **Main Flow** | 1. System compiles patient summary<br>2. System displays diagnosis, visits, medications, labs, referrals, admissions<br>3. Summary is presented in a concise, printable format |
+| **Postcondition** | Patient summary displayed |
 
-**Alternate Flows:**
-- Validation fails: system shows field-specific errors
-- Staff tries to edit: system returns "Permission denied" error
+### UC-PAT-05: View Patient Progress
 
-**Postcondition:** Visit record updated, audit trail created
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Patient has at least one visit record |
+| **Trigger** | Staff clicks "Progress" button |
+| **Main Flow** | 1. System retrieves KPS/PPS scores from visits<br>2. System displays trend chart<br>3. System displays trend analysis (improving, stable, declining)<br>4. System shows percentage change over time |
+| **Postcondition** | Progress chart displayed |
 
 ---
 
-## UC-09: Admin Views Patient Detail with Full Records
+## 5.0 Home Visit Use Cases
 
-| Field | Detail |
-|---|---|
-| Actor | Admin |
-| Precondition | Patient exists |
-| Trigger | Admin navigates to patient detail |
-| Linked FR | FR-18, FR-22, FR-23 |
+### UC-VIS-01: Record Home Visit
 
-**Main Flow:**
-1. Admin navigates to patient list
-2. Admin clicks on patient name or "View Details"
-3. System displays full patient detail view
-4. System shows all sections:
-   - Patient demographics
-   - Medical diagnosis
-   - Complete visit history (with Edit button)
-   - Complete medication list
-   - Complete lab test results
-   - Complete referral history
-   - Complete admission records (with Edit button)
-   - KPS/PPS progress graph (if available)
-5. Admin can click "Edit" on any visit to correct errors
-6. Admin can click "Edit" on any admission to correct errors
-7. Admin can click patient name in any table to navigate
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff (Team Leader, Physician, Nurse) |
+| **Precondition** | Patient is registered and active |
+| **Trigger** | Staff clicks "Record Visit" from patient detail page |
+| **Main Flow** | 1. Staff completes 21-section home visit form<br>2. Sections: Patient ID, Visit Details, General Condition, Vital Signs, Pain Assessment, Symptoms, Functional Status, Nutrition, Psychosocial, Spiritual, Medication Review, Caregiver Assessment, Education, Home Environment, Nursing Care, Red Flags, Referrals, Key Issues, Action Plan, Outcome, Signatures<br>3. Staff submits form<br>4. System validates all sections<br>5. System saves visit record<br>6. Staff can add digital signatures<br>7. System displays success message |
+| **Postcondition** | Visit is recorded and linked to patient |
+| **Extensions** | 4a. Validation fails → Display field errors |
 
-**Postcondition:** Admin sees complete patient data, same as staff view
+### UC-VIS-02: View Visit History
 
----
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | Patient exists |
+| **Trigger** | User navigates to "Visits" tab |
+| **Main Flow** | 1. System displays list of visits<br>2. Each visit shows date, type, status, outcome, scores<br>3. User can click on a visit for details |
+| **Postcondition** | Visit history displayed |
 
-## UC-10: Admin Clicks Patient Name to Navigate
+### UC-VIS-03: Sign Visit (Team Leader)
 
-| Field | Detail |
-|---|---|
-| Actor | Admin |
-| Precondition | Patient name appears in any admin table (referrals, notifications, etc.) |
-| Trigger | Admin clicks on patient name |
-| Linked FR | FR-23, FR-49 |
+| Element | Description |
+|---------|-------------|
+| **Actor** | Team Leader |
+| **Precondition** | Visit is recorded and saved |
+| **Trigger** | Team Leader signs visit after saving |
+| **Main Flow** | 1. System auto-signs as Team Leader using logged-in user<br>2. System records signature with timestamp<br>3. System marks Team Leader signature as complete |
+| **Postcondition** | Team Leader signature is recorded |
 
-**Main Flow:**
-1. Admin views an admin table (referral list, notification list, patient list)
-2. Admin clicks on any patient name displayed
-3. System navigates to patient detail page: `/admin/patients/:patientId`
-4. System displays full patient details
+### UC-VIS-04: Sign Visit (Physician)
 
-**Alternate Flows:**
-- Patient not found: system shows 404 error
+| Element | Description |
+|---------|-------------|
+| **Actor** | Physician |
+| **Precondition** | Visit is recorded and saved |
+| **Trigger** | Physician enters email and password to sign |
+| **Main Flow** | 1. Physician enters email and password<br>2. System validates credentials<br>3. System records signature with timestamp<br>4. System marks Physician signature as complete |
+| **Postcondition** | Physician signature is recorded |
+| **Extensions** | 2a. Invalid credentials → Show error |
 
-**Postcondition:** Admin is on patient detail page
+### UC-VIS-05: Sign Visit (Nurse)
 
----
-
-## UC-11: Request Referral
-
-| Field | Detail |
-|---|---|
-| Actor | Staff |
-| Precondition | Patient is active and being monitored |
-| Trigger | Staff identifies need for hospital care |
-| Linked FR | FR-42, FR-43, FR-44 |
-
-**Main Flow:**
-1. Staff selects patient
-2. Staff creates referral request
-3. Staff enters referral type (Incoming/Outgoing)
-4. Staff enters clinical information (diagnosis, stage, PPS, KPS)
-5. Staff documents current symptoms and scores
-6. Staff selects reason for referral
-7. Staff enters referring and receiving facility details
-8. Staff enters prepared by details (name, designation, signature)
-9. Staff submits referral request
-10. System creates referral with status "Pending"
-11. System creates notification for admin
-
-**Postcondition:** Referral request created with "Pending" status, admin notification created
+| Element | Description |
+|---------|-------------|
+| **Actor** | Nurse |
+| **Precondition** | Visit is recorded and saved |
+| **Trigger** | Nurse enters email and password to sign |
+| **Main Flow** | 1. Nurse enters email and password<br>2. System validates credentials<br>3. System records signature with timestamp<br>4. System marks Nurse signature as complete |
+| **Postcondition** | Nurse signature is recorded |
 
 ---
 
-## UC-12: Admin Approves Referral
+## 6.0 Medication Use Cases
 
-| Field | Detail |
-|---|---|
-| Actor | Admin |
-| Precondition | Pending referral requests exist |
-| Trigger | Admin reviews referral requests |
-| Linked FR | FR-45, FR-46, FR-47, FR-12, FR-49 |
+### UC-MED-01: Order Medication
 
-**Main Flow:**
-1. Admin views dashboard with pending referral notification
-2. Admin reviews clinical justification
-3. Admin approves referral
-4. System updates referral status to "Accepted"
-5. System changes patient location to "ReferredHospital"
-6. Admin schedules appointment or admission
-7. System records action taken
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Patient is registered and active |
+| **Trigger** | Staff clicks "Order Medication" |
+| **Main Flow** | 1. Staff enters medication details (name, dosage, frequency, route)<br>2. Staff selects administered at (Home or Hospital)<br>3. Staff submits form<br>4. System validates input<br>5. System saves medication order with status `Ordered` |
+| **Postcondition** | Medication order is created |
 
-**Alternate Flows:**
-- Admin declines referral: system updates status to "Declined"
-- Admin requests additional info: system updates status to "InfoRequested"
+### UC-MED-02: Mark Medication as Given
 
-**Postcondition:** Referral approved and patient location updated
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Medication exists with status `Ordered` |
+| **Trigger** | Staff clicks "Mark as Given" |
+| **Main Flow** | 1. System updates medication status to `Given`<br>2. System records the update |
+| **Postcondition** | Medication status is `Given` |
 
----
+### UC-MED-03: View Medication History
 
-## UC-13: Record Hospital Admission
-
-| Field | Detail |
-|---|---|
-| Actor | Staff (Any staff member - Nurse, Physician, Team Leader) |
-| Precondition | Referral has been accepted |
-| Trigger | Patient is admitted to hospital |
-| Linked FR | FR-50 through FR-55, FR-55d |
-
-**Main Flow:**
-1. Staff selects patient with accepted referral
-2. Staff creates admission record
-3. Staff enters patient identification details
-4. Staff enters Hospital MRN (Medical Record Number) assigned by hospital
-5. Staff documents referral information
-6. Staff records medical diagnosis
-7. Staff assesses palliative eligibility
-8. Staff performs pain and symptom assessment
-9. Staff documents psychosocial and spiritual assessment
-10. Staff creates initial care plan
-11. Staff records admission decision (bed number, care team)
-12. Staff submits admission record
-13. System updates patient location to "ReferredHospital"
-14. System stores Hospital MRN in patient record
-
-**Postcondition:** Hospital admission record created, Hospital MRN stored
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | Patient exists |
+| **Trigger** | User navigates to "Medications" tab |
+| **Main Flow** | 1. System displays list of medications<br>2. Each medication shows name, dosage, frequency, route, status<br>3. User can click on a medication for details |
+| **Postcondition** | Medication history displayed |
 
 ---
 
-## UC-14: Admin Edits Admission Record
+## 7.0 Laboratory Test Use Cases
 
-| Field | Detail |
-|---|---|
-| Actor | Admin |
-| Precondition | Admission record exists and contains errors |
-| Trigger | Admin identifies error in admission record |
-| Linked FR | FR-55a, FR-55b, FR-55c |
+### UC-LAB-01: Order Lab Test
 
-**Main Flow:**
-1. Admin navigates to patient detail page
-2. Admin views the admissions tab
-3. Admin identifies admission with error
-4. Admin clicks "Edit" button on the admission
-5. System opens edit modal with pre-filled admission data
-6. Admin modifies the incorrect fields
-7. Admin submits changes
-8. System validates the updated data
-9. System updates the admission record
-10. System logs the edit in audit trail (admin ID, timestamp, fields changed)
-11. System displays success message: "Admission updated successfully"
-12. System shows "Edited by [Admin Name]" on the admission
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Patient is registered and active |
+| **Trigger** | Staff clicks "Order Lab Test" |
+| **Main Flow** | 1. Staff selects test category (Hematology, Chemistry, etc.)<br>2. Staff selects test name<br>3. Staff enters specimen type and site<br>4. Staff selects priority (Routine, Urgent, Emergency)<br>5. Staff submits form<br>6. System validates input<br>7. System saves lab order with status `Ordered` |
+| **Postcondition** | Lab test order is created |
 
-**Alternate Flows:**
-- Validation fails: system shows field-specific errors
-- Staff tries to edit: system returns "Permission denied" error
+### UC-LAB-02: Enter Lab Result
 
-**Postcondition:** Admission record updated, audit trail created
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Lab test exists with status `Ordered` |
+| **Trigger** | Staff clicks "Enter Result" |
+| **Main Flow** | 1. Staff enters date performed<br>2. Staff enters result text<br>3. Staff submits result<br>4. System validates input<br>5. System updates lab status to `Completed`<br>6. System saves result |
+| **Postcondition** | Lab result is recorded and status is `Completed` |
 
----
+### UC-LAB-03: View Lab History
 
-## UC-15: Admin Closes Patient Case
-
-| Field | Detail |
-|---|---|
-| Actor | Admin |
-| Precondition | Patient is active |
-| Trigger | Patient has improved or passed away |
-| Linked FR | FR-21, FR-55, FR-13 |
-
-**Main Flow:**
-1. Admin selects patient
-2. Admin initiates case closure
-3. Admin selects close reason (Improved or Deceased)
-4. Admin confirms closure
-5. System updates patient status to "Discharged"
-6. System records close date
-7. System creates notification for admin dashboard (case closed)
-8. Case is closed
-
-**Postcondition:** Patient status changed to "Discharged"
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | Patient exists |
+| **Trigger** | User navigates to "Labs" tab |
+| **Main Flow** | 1. System displays list of lab tests<br>2. Each test shows name, ordered date, status, result<br>3. User can click on a test for details |
+| **Postcondition** | Lab history displayed |
 
 ---
 
-## UC-16: View Patient Summary Report
+## 8.0 Imaging Examination Use Cases
 
-| Field | Detail |
-|---|---|
-| Actor | Staff, Admin |
-| Precondition | Patient exists |
-| Trigger | User views patient details |
-| Linked FR | FR-63 through FR-66 |
+### UC-IMG-01: Order Imaging Examination
 
-**Main Flow:**
-1. User selects patient
-2. System displays patient demographics
-3. System displays medical diagnosis
-4. System displays all home visits (chronological)
-5. System displays all medications
-6. System displays all lab tests
-7. System displays referral history
-8. System displays admission records
-9. System displays current status and location
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Patient is registered and active |
+| **Trigger** | Staff clicks "Order Imaging" |
+| **Main Flow** | 1. Staff completes imaging order form<br>2. Sections: Patient Info, Clinical Info, Imaging Requested (modality, body region, laterality, contrast), Contrast/Medication Info, Safety Screening, Patient Preparation, Priority, Referring Clinician<br>3. Staff submits form<br>4. System validates input<br>5. System saves imaging order with status `Ordered`<br>6. System records ordered by and date |
+| **Postcondition** | Imaging order is created |
 
-**Postcondition:** Complete patient summary displayed
+### UC-IMG-02: Enter Imaging Report
 
----
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Imaging order exists with status `Ordered` |
+| **Trigger** | Staff clicks "Enter Report" |
+| **Main Flow** | 1. Staff enters imaging department information (technologist, radiologist, date performed)<br>2. Staff enters report findings, impression, recommendations<br>3. Staff selects image quality (Diagnostic, Limited, NonDiagnostic, RepeatRequired)<br>4. Staff enters reporting physician and report date<br>5. Staff submits report<br>6. System validates input<br>7. System updates imaging status to `Completed`<br>8. System saves report |
+| **Postcondition** | Imaging report is recorded and status is `Completed` |
 
-## UC-17: Print Patient History
+### UC-IMG-03: View Imaging History
 
-| Field | Detail |
-|---|---|
-| Actor | Staff, Admin |
-| Precondition | Patient exists and has records |
-| Trigger | User clicks "Print" or "Export PDF" on patient summary |
-| Linked FR | FR-68, FR-69, FR-70, FR-70a |
-
-**Main Flow:**
-1. User navigates to patient summary page
-2. User clicks "Print/Export PDF" button
-3. System opens print dialog with formatted patient data
-4. System displays:
-   - Institution header (Yekatit 12 Hospital Medical College)
-   - Patient demographics and ID
-   - KPS/PPS progress graph (if available)
-   - All visits with FULL details (chronological)
-   - All medications with complete details
-   - All lab tests with complete details
-   - All referrals with complete details
-   - All admissions with complete details
-   - Generated date
-5. User selects "Save as PDF" or prints
-6. System generates PDF/printout
-
-**Alternate Flows:**
-- No data available: system shows "No records to print" message
-
-**Postcondition:** Patient history printed/exported as PDF with all full details
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | Patient exists |
+| **Trigger** | User navigates to "Imaging" tab |
+| **Main Flow** | 1. System displays list of imaging orders<br>2. Each order shows modality, body region, ordered date, status, report date<br>3. User can click on an order for details |
+| **Postcondition** | Imaging history displayed |
 
 ---
 
-## UC-18: Admin Views Dashboard Notifications
+## 9.0 Referral Use Cases
 
-| Field | Detail |
-|---|---|
-| Actor | Admin |
-| Precondition | Admin is authenticated |
-| Trigger | Admin logs in or navigates to dashboard |
-| Linked FR | FR-10, FR-11, FR-12, FR-13 |
+### UC-REF-01: Request Referral
 
-**Main Flow:**
-1. Admin logs in
-2. System displays dashboard with notification counts
-3. System shows count of pending staff approvals (email verified only)
-4. System shows count of pending referrals
-5. System shows count of recent case closures
-6. Admin clicks on notification to view details
-7. If notification is referral-related, admin can click patient name to view details
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Patient is registered and active |
+| **Trigger** | Staff clicks "Request Referral" |
+| **Main Flow** | 1. Staff completes referral form<br>2. Sections: Referral Information (type, date), Patient Information, Clinical Information (diagnosis, stage, PPS, KPS, symptoms), Reason for Referral (multi-select), Referral Details (referring facility, receiving facility, contact person), Staff Documentation<br>3. Staff submits form<br>4. System validates input<br>5. System saves referral with status `Pending`<br>6. Admin notification is created |
+| **Postcondition** | Referral is created with status `Pending` |
 
-**Alternate Flows:**
-- No pending items: system shows "All clear" message
-- Multiple pending items: system shows aggregated counts
+### UC-REF-02: Admin Approve Referral
 
-**Postcondition:** Admin is aware of all pending actions
+| Element | Description |
+|---------|-------------|
+| **Actor** | Admin |
+| **Precondition** | Referral exists with status `Pending` |
+| **Trigger** | Admin clicks "Approve" on referral |
+| **Main Flow** | 1. System updates referral status to `Accepted`<br>2. System updates patient location to `ReferredHospital`<br>3. System records approval by admin<br>4. System creates notification |
+| **Postcondition** | Referral is `Accepted`, patient location updated |
 
----
+### UC-REF-03: Admin Decline Referral
 
-## UC-19: Staff Views Dashboard
+| Element | Description |
+|---------|-------------|
+| **Actor** | Admin |
+| **Precondition** | Referral exists with status `Pending` |
+| **Trigger** | Admin clicks "Decline" on referral |
+| **Main Flow** | 1. System updates referral status to `Declined`<br>2. System records decision by admin |
+| **Postcondition** | Referral is `Declined` |
 
-| Field | Detail |
-|---|---|
-| Actor | Staff |
-| Precondition | Staff is authenticated, email verified, and active |
-| Trigger | Staff logs in or navigates to dashboard |
-| Linked FR | FR-56 through FR-62 |
+### UC-REF-04: View Referral History
 
-**Main Flow:**
-1. Staff logs in
-2. System redirects to staff dashboard
-3. System displays staff name and role
-4. System displays statistics cards (Today's Visits, Total Patients, Active Patients, Pending Tasks)
-5. System displays list of assigned patients
-6. System displays recent visits
-7. System displays upcoming scheduled visits
-8. System displays alerts (red flags, pending referrals, overdue visits)
-9. Auto-refreshes every 60 seconds
-
-**Alternate Flows:**
-- No assigned patients: system shows empty state
-- No alerts: system shows "No alerts" message
-
-**Postcondition:** Staff has complete overview of their assignments and tasks
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | Patient exists |
+| **Trigger** | User navigates to "Referrals" tab |
+| **Main Flow** | 1. System displays list of referrals<br>2. Each referral shows date, type, receiving facility, status<br>3. User can click on a referral for details |
+| **Postcondition** | Referral history displayed |
 
 ---
 
-## UC-20: User Manages Profile
+## 10.0 Hospital Admission Use Cases
 
-| Field | Detail |
-|---|---|
-| Actor | Staff, Admin |
-| Precondition | User is authenticated, email verified, and active (if staff) |
-| Trigger | User navigates to profile page |
-| Linked FR | FR-14, FR-14a, FR-14b |
+### UC-ADM-01: Record Hospital Admission
 
-**Main Flow:**
-1. User navigates to profile page
-2. System displays user profile information (name, email, phone, role, status)
-3. User can view their activity statistics (visits, patients, last login)
-4. User updates name or phone number
-5. User submits changes
-6. System validates input
-7. System updates user record
-8. System returns updated profile with success message
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Patient is registered and active, referral exists (accepted) |
+| **Trigger** | Staff clicks "Record Admission" |
+| **Main Flow** | 1. Staff selects linked referral<br>2. Staff enters admission details (date, bed number, ward, admitting physician, care team)<br>3. Staff enters medical diagnosis (primary, secondary, disease stage, prognosis)<br>4. Staff enters PPS score and functional status<br>5. Staff enters pain and symptom assessment<br>6. Staff enters psychosocial and spiritual assessment<br>7. Staff enters initial care plan (pain management, medication, nursing care)<br>8. Staff submits form<br>9. System validates input<br>10. System saves admission with status `Active` |
+| **Postcondition** | Admission is created with status `Active` |
 
-**Alternate Flows:**
-- Validation fails: system shows field-specific errors
+### UC-ADM-02: Discharge from Admission
 
-**Postcondition:** User profile updated
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Admission exists with status `Active` |
+| **Trigger** | Staff clicks "Discharge" on admission |
+| **Main Flow** | 1. Staff enters discharge date<br>2. Staff selects discharge reason (Improved or Deceased)<br>3. Staff confirms discharge<br>4. System validates input<br>5. System updates admission status to `Discharged`<br>6. System records discharge details |
+| **Postcondition** | Admission status is `Discharged` |
 
----
+### UC-ADM-03: View Admission History
 
-## UC-21: User Changes Password
-
-| Field | Detail |
-|---|---|
-| Actor | Staff, Admin |
-| Precondition | User is authenticated |
-| Trigger | User navigates to profile page and clicks "Change Password" |
-| Linked FR | FR-14a |
-
-**Main Flow:**
-1. User navigates to profile page
-2. User clicks "Change Password" section
-3. User enters current password
-4. User enters new password (meets requirements)
-5. User confirms new password
-6. User submits changes
-7. System validates current password
-8. System validates new password meets requirements
-9. System hashes and saves new password
-10. System displays success message: "Password changed successfully"
-
-**Alternate Flows:**
-- Current password incorrect: system shows error message
-- New password doesn't meet requirements: system shows field-specific errors
-- Passwords don't match: system shows error message
-
-**Postcondition:** User password changed
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | Patient exists |
+| **Trigger** | User navigates to "Admissions" tab |
+| **Main Flow** | 1. System displays list of admissions<br>2. Each admission shows date, bed, ward, physician, status<br>3. User can click on an admission for details |
+| **Postcondition** | Admission history displayed |
 
 ---
 
-## UC-22: Team Member Signs Visit (Digital Signature)
+## 11.0 Progress Note Use Cases
 
-| Field | Detail |
-|---|---|
-| Actor | Staff (Physician, Nurse) |
-| Precondition | Visit record exists and is not finalized |
-| Trigger | Team member needs to sign the visit |
-| Linked FR | FR-33a, FR-33b, FR-33c |
+### UC-PN-01: Record Progress Note
 
-**Main Flow:**
-1. Staff creates visit record (Team Leader auto-signed)
-2. Physician enters their email and password
-3. System verifies credentials
-4. System checks physician is assigned to the visit
-5. System records signature with timestamp
-6. Nurse enters their email and password
-7. System verifies credentials
-8. System checks nurse is assigned to the visit
-9. System records signature with timestamp
-10. System checks all required signatures are complete
-11. System enables "Finalize Visit" button
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Patient is registered and active (hospitalised) |
+| **Trigger** | Staff clicks "Record Progress Note" |
+| **Main Flow** | 1. Staff completes 20-section progress note form<br>2. Sections: Header, Current Clinical Status, Vital Signs, Symptom Assessment, Respiratory Status, Nutrition/Hydration, Elimination, Skin/Wound, Psychological, Spiritual, Family/Caregiver, Goals of Care, Medication Review, Nursing Care, Investigations, MDT Review, Clinical Assessment, Plan, SOAP, Additional Notes, Authorization<br>3. Staff submits form<br>4. System validates input<br>5. System saves progress note<br>6. System displays success message |
+| **Postcondition** | Progress note is recorded |
 
-**Alternate Flows:**
-- Invalid credentials: system shows error message
-- Staff not assigned to visit: system shows "Not authorized to sign" error
-- Account not active: system shows "Account is not active" error
+### UC-PN-02: View Progress Notes
 
-**Postcondition:** Visit has all required signatures and can be finalized
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | Patient exists |
+| **Trigger** | User navigates to "Progress Notes" tab |
+| **Main Flow** | 1. System displays list of progress notes<br>2. Each note shows date, time, attending clinician, general condition<br>3. User can click on a note for details |
+| **Postcondition** | Progress notes displayed |
 
 ---
 
-## UC-23: User Access Denied (Unauthorized Page)
+## 12.0 Discharge Summary Use Cases
 
-| Field | Detail |
-|---|---|
-| Actor | Staff, Admin |
-| Precondition | User is authenticated |
-| Trigger | User attempts to access a route they don't have permission for |
-| Linked FR | FR-14c |
+### UC-DIS-01: Generate Discharge Summary
 
-**Main Flow:**
-1. Staff user attempts to access `/admin` route
-2. System detects user type is "staff"
-3. System redirects to `/unauthorized`
-4. System displays "Access Denied" message
-5. System shows user's name and role
-6. System provides "Return to Dashboard" button
-7. User clicks button and navigates to appropriate dashboard
+| Element | Description |
+|---------|-------------|
+| **Actor** | Admin, Staff |
+| **Precondition** | Patient is registered and active |
+| **Trigger** | User clicks "Discharge Patient" |
+| **Main Flow** | 1. User completes 20-section discharge summary form<br>2. Sections: Header, Patient ID, Admission Information, Discharge Diagnosis, Condition at Discharge, Discharge Vital Signs, Symptom Status, Discharge Medications, Symptom Management Instructions, Nutrition/Hydration, Wound/Skin Care, Oxygen/Equipment, Goals of Care, Discharge Destination, Home/Hospice Care, Education, Warning Signs, Follow-Up Plan, Contact Information, Discharge Notes<br>3. User submits form<br>4. System validates input<br>5. System updates patient status to `Discharged`<br>6. System saves discharge summary<br>7. System displays success message |
+| **Postcondition** | Patient status is `Discharged`, discharge summary is saved |
 
-**Alternate Flows:**
-- Admin user attempts to access `/dashboard` route
-- System detects user type is "admin"
-- System redirects to `/unauthorized`
+### UC-DIS-02: Print Discharge Summary
 
-**Postcondition:** User is informed they don't have permission and can return to their dashboard
+| Element | Description |
+|---------|-------------|
+| **Actor** | Admin, Staff |
+| **Precondition** | Discharge summary exists |
+| **Trigger** | User clicks "Print/Save as PDF" |
+| **Main Flow** | 1. System renders discharge summary in print-friendly format<br>2. System opens browser print dialog<br>3. User can save as PDF or print |
+| **Postcondition** | Discharge summary is printed or saved as PDF |
 
 ---
 
-## UC-24: Toast Notifications
+## 13.0 Admin Use Cases
 
-| Field | Detail |
-|---|---|
-| Actor | System |
-| Precondition | User performs an action |
-| Trigger | Action completes (success, error, warning) or is in progress |
-| Linked FR | FR-71, FR-72, FR-73, FR-74, FR-75 |
+### UC-ADMIN-01: View Admin Dashboard
 
-**Main Flow:**
-1. User performs an action (register, login, save visit, etc.)
-2. System processes the action
-3. System displays appropriate toast notification:
-   - Success: Green toast with success message
-   - Error: Red toast with error message
-   - Warning: Amber toast with warning message
-   - Info: Blue toast with informational message
-   - Loading: Gray toast with loading indicator
-4. Toast auto-dismisses after duration (3-5 seconds)
-5. User can manually dismiss toast by clicking close button
+| Element | Description |
+|---------|-------------|
+| **Actor** | Admin |
+| **Precondition** | Admin is authenticated |
+| **Trigger** | Admin navigates to admin dashboard |
+| **Main Flow** | 1. System displays statistics (total patients, active, hospitalised, discharged)<br>2. System displays pending referrals count<br>3. System displays pending staff approvals count<br>4. System displays notifications<br>5. System displays recent referrals<br>6. System displays recent visits |
+| **Postcondition** | Dashboard displayed |
 
-**Alternate Flows:**
-- Network error: system shows error toast
-- Validation error: system shows warning toast with field information
+### UC-ADMIN-02: Approve Staff Registration
 
-**Postcondition:** User receives immediate feedback on their action
+| Element | Description |
+|---------|-------------|
+| **Actor** | Admin |
+| **Precondition** | Staff registration exists with status `Pending` |
+| **Trigger** | Admin views pending staff list |
+| **Main Flow** | 1. Admin selects a staff member<br>2. Admin assigns a role (Team Leader, Physician, Nurse)<br>3. Admin clicks "Approve"<br>4. System updates staff status to `Active`<br>5. System records approved by admin<br>6. System removes from pending list |
+| **Postcondition** | Staff is approved and can login |
+
+### UC-ADMIN-03: Reject Staff Registration
+
+| Element | Description |
+|---------|-------------|
+| **Actor** | Admin |
+| **Precondition** | Staff registration exists with status `Pending` |
+| **Trigger** | Admin selects a staff member and clicks "Reject" |
+| **Main Flow** | 1. Admin clicks "Reject"<br>2. System updates staff status to `Rejected`<br>3. System removes from pending list |
+| **Postcondition** | Staff registration is rejected |
+
+### UC-ADMIN-04: View All Patients
+
+| Element | Description |
+|---------|-------------|
+| **Actor** | Admin |
+| **Precondition** | Admin is authenticated |
+| **Trigger** | Admin navigates to patient list page |
+| **Main Flow** | 1. System displays all patients<br>2. Admin can search by name or ID<br>3. Admin can filter by status<br>4. Admin can paginate through results |
+| **Postcondition** | Patient list displayed |
+
+### UC-ADMIN-05: View Patient Detail (Admin)
+
+| Element | Description |
+|---------|-------------|
+| **Actor** | Admin |
+| **Precondition** | Patient exists |
+| **Trigger** | Admin clicks on a patient card |
+| **Main Flow** | 1. System displays patient demographics<br>2. System displays medical information<br>3. System displays tabbed records (visits, meds, labs, imaging, referrals, admissions, progress notes)<br>4. Admin can navigate to any record type |
+| **Postcondition** | Patient detail view displayed |
+
+### UC-ADMIN-06: Edit Visit (Audit)
+
+| Element | Description |
+|---------|-------------|
+| **Actor** | Admin |
+| **Precondition** | Visit exists |
+| **Trigger** | Admin clicks "Edit" on a visit |
+| **Main Flow** | 1. Admin edits visit fields (pain score, outcome, overall status, PPS, KPS, dates, times)<br>2. Admin saves changes<br>3. System validates input<br>4. System updates visit record<br>5. System logs edit in audit trail (who, when, what changed) |
+| **Postcondition** | Visit is updated, audit trail is recorded |
+
+### UC-ADMIN-07: View Reports
+
+| Element | Description |
+|---------|-------------|
+| **Actor** | Admin |
+| **Precondition** | Admin is authenticated |
+| **Trigger** | Admin navigates to reports page |
+| **Main Flow** | 1. System displays statistics (total, active, discharged, hospitalised patients)<br>2. System displays visits by month chart<br>3. System displays patients by location chart<br>4. System displays patients by disease stage chart<br>5. System displays referrals by status chart |
+| **Postcondition** | Reports displayed |
+
+### UC-ADMIN-08: Export Report
+
+| Element | Description |
+|---------|-------------|
+| **Actor** | Admin |
+| **Precondition** | Report data exists |
+| **Trigger** | Admin clicks "Export" (PDF or Excel) |
+| **Main Flow** | 1. System generates report file<br>2. System downloads file |
+| **Postcondition** | Report file is downloaded |
+
+---
+
+## 14.0 Staff Dashboard Use Cases
+
+### UC-STAFF-01: View Staff Dashboard
+
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff |
+| **Precondition** | Staff is authenticated |
+| **Trigger** | Staff navigates to dashboard |
+| **Main Flow** | 1. System displays welcome message<br>2. System displays statistics (today's visits, total patients, active patients, pending tasks)<br>3. System displays alerts (red flags, pending referrals, overdue visits)<br>4. System displays assigned patients<br>5. System displays recent visits<br>6. System displays upcoming visits |
+| **Postcondition** | Dashboard displayed |
+
+---
+
+## 15.0 Profile Use Cases
+
+### UC-PRO-01: View Profile
+
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | User is authenticated |
+| **Trigger** | User navigates to profile page |
+| **Main Flow** | 1. System displays user information (name, email, phone, role, status)<br>2. System displays activity statistics (visits, patients, etc.) |
+| **Postcondition** | Profile displayed |
+
+### UC-PRO-02: Edit Profile
+
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | User is authenticated |
+| **Trigger** | User clicks "Edit Profile" |
+| **Main Flow** | 1. User edits name or phone<br>2. User saves changes<br>3. System validates input<br>4. System updates profile<br>5. System displays success message |
+| **Postcondition** | Profile is updated |
+
+### UC-PRO-03: Change Password
+
+| Element | Description |
+|---------|-------------|
+| **Actor** | Staff, Admin |
+| **Precondition** | User is authenticated |
+| **Trigger** | User navigates to "Change Password" section |
+| **Main Flow** | 1. User enters current password<br>2. User enters new password<br>3. User confirms new password<br>4. User submits<br>5. System validates current password<br>6. System validates new password requirements<br>7. System updates password<br>8. System displays success message |
+| **Postcondition** | Password is changed |
+
+---
+
+## 16.0 Use Case Relationships
+
+### 16.1 Includes Relationships
+
+| Use Case | Includes |
+|----------|----------|
+| UC-VIS-01 (Record Visit) | UC-VIS-03, UC-VIS-04, UC-VIS-05 (Signatures) |
+| UC-REF-01 (Request Referral) | UC-REF-02, UC-REF-03 (Admin Approval) |
+| UC-ADMIN-05 (View Patient Detail - Admin) | UC-PAT-03 (View Patient Detail) |
+
+### 16.2 Extends Relationships
+
+| Use Case | Extends |
+|----------|---------|
+| UC-AUTH-01 (Register) | UC-AUTH-02 (Verify Email) |
+| UC-ADM-01 (Record Admission) | UC-ADM-02 (Discharge) |
+
+---

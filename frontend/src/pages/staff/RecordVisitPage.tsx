@@ -1,0 +1,921 @@
+import React, { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useForm, useFieldArray } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Plus, Trash2, ChevronDown } from 'lucide-react';
+import { createVisitSchema, type CreateVisitFormData } from '@/schemas/visit.schema';
+import { useRecordVisit } from '@/hooks/useVisits';
+import { usePatient } from '@/hooks/usePatients';
+import { useVisitSignatures } from '@/hooks/useSignatures';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { BackButton } from '@/components/common/BackButton';
+import { PageLoader } from '@/components/common/LoadingSpinner';
+import { cn } from '@/lib/utils';
+import { PAIN_LOCATION_LABELS, SYMPTOM_LABELS, EDUCATION_LABELS, RED_FLAG_LABELS } from '@/constants';
+import { SignatureSection } from '@/components/visits/SignatureSection';
+import { useAuthStore } from '@/store/auth.store';
+
+// ── Collapsible section wrapper ──────────────────────────────────
+const Section: React.FC<{ title: string; defaultOpen?: boolean; children: React.ReactNode }> = ({
+  title, defaultOpen = true, children
+}) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Card padding="none">
+      <button
+        type="button"
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-surface-low transition-colors"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="text-sm font-semibold text-on-surface">{title}</span>
+        <ChevronDown size={16} className={cn('text-text-muted transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && <div className="px-5 pb-5 space-y-4">{children}</div>}
+    </Card>
+  );
+};
+
+// ── Checkbox group component ──────────────────────────────────────
+const CheckboxGroup: React.FC<{
+  options: readonly string[];
+  labels: Record<string, string>;
+  name: string;
+  register: any;
+}> = ({ options, labels, name, register }) => (
+  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+    {options.map((value) => (
+      <label key={value} className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors">
+        <input type="checkbox" value={value} {...register(name)} className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary" />
+        {labels[value] || value}
+      </label>
+    ))}
+  </div>
+);
+
+const RecordVisitPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { data: patient, isLoading: patientLoading } = usePatient(id!);
+  const recordMutation = useRecordVisit(id!);
+  const user = useAuthStore((s) => s.user);
+  
+  // State for visit ID after creation (for signatures)
+  const [createdVisitId, setCreatedVisitId] = useState<string | null>(null);
+
+  const { register, handleSubmit, formState: { errors }, control, watch } = useForm<CreateVisitFormData>({
+    resolver: zodResolver(createVisitSchema),
+    defaultValues: {
+      visitDate: new Date().toISOString().split('T')[0],
+      timeStarted: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      timeEnded: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      visitType: 'Routine',
+      teamMembers: [{ role: 'TeamLeader', name: user?.name || '' }],
+      overallStatus: 'Stable',
+      mobility: 'RequiresAssistance',
+      painScore: 0,
+      painMedicationEffective: true,
+      adl: { 
+        feeding: 'NeedsAssistance', 
+        bathing: 'NeedsAssistance', 
+        dressing: 'NeedsAssistance', 
+        toileting: 'NeedsAssistance', 
+        mobility: 'NeedsAssistance' 
+      },
+      ppsScore: 50,
+      kpsScore: 50,
+      appetite: 'Fair',
+      oralIntake: 'Reduced',
+      hydrationStatus: 'Adequate',
+      emotionalStatus: 'Stable',
+      familySupport: 'Good',
+      financialDifficulty: false,
+      spiritualNeeds: false,
+      religiousSupportRequested: false,
+      medicationAvailable: true,
+      medicationCorrectlyTaken: true,
+      medicationSideEffects: false,
+      medicationRefillNeeded: false,
+      morphineAvailable: true,
+      adherenceLevel: 'Good',
+      currentMedications: [],
+      caregiverBurden: 'Moderate',
+      caregiverUnderstanding: 'Good',
+      caregivingCapacity: 'Moderate',
+      familyEmotionalStatus: 'Stable',
+      homeCondition: 'Clean',
+      outcome: 'Stable',
+      teamLeaderId: user?.id || '',
+      physicianId: '',
+      nurseId: '',
+      painLocation: [],
+      painCharacteristics: [],
+      symptoms: [],
+      educationProvided: [],
+      homeObservations: [],
+      nursingCareGiven: [],
+      redFlags: ['None'],
+      referralsMade: [],
+    },
+  });
+
+  const { fields: teamFields, append: appendTeam, remove: removeTeam } = useFieldArray({ 
+    control, 
+    name: 'teamMembers' 
+  });
+  
+  const { fields: medFields, append: appendMed, remove: removeMed } = useFieldArray({ 
+    control, 
+    name: 'currentMedications' 
+  });
+
+  const onSubmit = (data: CreateVisitFormData) => {
+    recordMutation.mutate(data, {
+      onSuccess: (response) => {
+        setCreatedVisitId(response.id);
+        // Navigate after a delay to allow signature to show
+        setTimeout(() => {
+          navigate(`/patients/${id}`);
+        }, 2000);
+      },
+    });
+  };
+
+  if (patientLoading) return <PageLoader />;
+
+  const adlOptions = [
+    { value: 'Independent', label: 'Independent' },
+    { value: 'NeedsAssistance', label: 'Needs Assistance' },
+    { value: 'FullyDependent', label: 'Fully Dependent' }
+  ];
+
+  const isSubmitting = recordMutation.isPending;
+  const hasVisitId = !!createdVisitId;
+
+  return (
+    <div className="max-w-3xl space-y-5">
+      {/* ── Header ── */}
+      <div className="flex items-center gap-3">
+        <BackButton to={`/patients/${id}`} label="Patient" />
+        <div>
+          <h1 className="text-xl font-bold text-on-surface">HOME VISIT CHECKLIST</h1>
+          <p className="text-sm text-text-secondary">Yekatit 12 Hospital Medical College (Y12HMC)</p>
+          {patient && (
+            <p className="text-sm text-text-muted mt-1">
+              {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+        {/* ── SECTION 1: PATIENT IDENTIFICATION ── */}
+        <Section title="1. PATIENT IDENTIFICATION">
+          <div className="grid md:grid-cols-2 gap-4">
+            <Input label="Patient Name" value={patient ? `${patient.firstName} ${patient.lastName}` : '—'} disabled />
+            <Input label="Hospital ID / MRN" value={patient?.patientDisplayId || '—'} disabled />
+            <Input label="Age" value={patient?.age ? `${patient.age} years` : '—'} disabled />
+            <Input label="Sex" value={patient?.sex || '—'} disabled />
+            <Input label="Address (Kebele/Sub-city)" value={patient?.address || '—'} disabled className="md:col-span-2" />
+            <Input label="Phone Number" value={patient?.phone || '—'} disabled />
+            <Input label="Primary Caregiver Name" value={patient?.caregiverName || '—'} disabled />
+            <Input label="Relationship" value="—" disabled />
+          </div>
+        </Section>
+
+        {/* ── SECTION 2: VISIT DETAILS ── */}
+        <Section title="2. VISIT DETAILS">
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Input 
+              label="Date of Visit" 
+              type="date" 
+              error={errors.visitDate?.message} 
+              {...register('visitDate')} 
+            />
+            <Input 
+              label="Time Started" 
+              type="time" 
+              error={errors.timeStarted?.message} 
+              {...register('timeStarted')} 
+            />
+            <Input 
+              label="Time Ended" 
+              type="time" 
+              error={errors.timeEnded?.message} 
+              {...register('timeEnded')} 
+            />
+          </div>
+          
+          <Select 
+            label="Visit Type" 
+            options={[
+              { value: 'Routine', label: 'Routine follow-up' },
+              { value: 'Emergency', label: 'Emergency visit' },
+              { value: 'FirstAssessment', label: 'First home assessment' },
+              { value: 'PostDischarge', label: 'Post-discharge follow-up' },
+              { value: 'EndOfLife', label: 'End-of-Life Visit' },
+              { value: 'Bereavement', label: 'Bereavement Follow-Up' },
+            ]} 
+            {...register('visitType')} 
+          />
+          
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">Visiting Team Members</p>
+            {teamFields.map((field, i) => (
+              <div key={field.id} className="flex gap-2 mb-2 items-start">
+                <Select 
+                  options={[
+                    { value: 'TeamLeader', label: 'Team Leader' },
+                    { value: 'Physician', label: 'Physician' },
+                    { value: 'Nurse', label: 'Nurse' }
+                  ]}
+                  placeholder="Role" 
+                  {...register(`teamMembers.${i}.role`)} 
+                  className="w-36" 
+                />
+                <Input 
+                  placeholder="Staff name" 
+                  {...register(`teamMembers.${i}.name`)} 
+                  className="flex-1" 
+                />
+                {teamFields.length > 1 && (
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-10 w-10 flex-shrink-0"
+                    onClick={() => removeTeam(i)}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              leftIcon={<Plus size={13} />} 
+              onClick={() => appendTeam({ role: 'Nurse', name: '' })}
+            >
+              Add Member
+            </Button>
+          </div>
+        </Section>
+
+        {/* ── SECTION 3: PATIENT GENERAL CONDITION ── */}
+        <Section title="3. PATIENT GENERAL CONDITION">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Select 
+              label="Overall Status" 
+              options={[
+                { value: 'Stable', label: 'Stable' },
+                { value: 'Deteriorating', label: 'Deteriorating' },
+                { value: 'Critical', label: 'Critical' },
+                { value: 'BedBound', label: 'Bed-bound' }
+              ]} 
+              {...register('overallStatus')} 
+            />
+            <Select 
+              label="Mobility" 
+              options={[
+                { value: 'Ambulatory', label: 'Ambulatory' },
+                { value: 'RequiresAssistance', label: 'Requires assistance' },
+                { value: 'Bedridden', label: 'Bedridden' }
+              ]} 
+              {...register('mobility')} 
+            />
+          </div>
+        </Section>
+
+        {/* ── SECTION 4: VITAL SIGNS ── */}
+        <Section title="4. VITAL SIGNS (IF AVAILABLE)" defaultOpen={false}>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <Input label="Temperature (°C)" type="number" step="0.1" {...register('vitals.temperature')} />
+            <Input label="Pulse (bpm)" type="number" {...register('vitals.pulse')} />
+            <Input label="Blood Pressure (mmHg)" placeholder="120/80" {...register('vitals.bp')} />
+            <Input label="Respiration (/min)" type="number" {...register('vitals.respiration')} />
+            <Input label="SpO₂ (%)" type="number" {...register('vitals.spo2')} />
+          </div>
+        </Section>
+
+        {/* ── SECTION 5: PAIN ASSESSMENT ── */}
+        <Section title="5. PAIN ASSESSMENT">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm font-medium text-on-surface mb-2">Pain Present</p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="true" {...register('painPresent')} className="h-4 w-4 text-primary" />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="false" {...register('painPresent')} className="h-4 w-4 text-primary" />
+                  No
+                </label>
+              </div>
+            </div>
+            <Input 
+              label="Pain Score (0–10)" 
+              type="number" 
+              min={0} 
+              max={10} 
+              error={errors.painScore?.message} 
+              {...register('painScore')} 
+            />
+          </div>
+          
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">Pain Location</p>
+            <CheckboxGroup 
+              options={['Head','Neck','Chest','Abdomen','Back','Limbs','Generalized','Other']}
+              labels={PAIN_LOCATION_LABELS}
+              name="painLocation"
+              register={register}
+            />
+            <Input 
+              placeholder="Other: specify" 
+              className="mt-2" 
+              {...register('painLocationOther')} 
+            />
+          </div>
+          
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">Pain Characteristics</p>
+            <CheckboxGroup 
+              options={['Sharp','Dull','Burning','Cramping','Intermittent','Continuous']}
+              labels={{
+                Sharp: 'Sharp',
+                Dull: 'Dull',
+                Burning: 'Burning',
+                Cramping: 'Cramping',
+                Intermittent: 'Intermittent',
+                Continuous: 'Continuous'
+              }}
+              name="painCharacteristics"
+              register={register}
+            />
+          </div>
+          
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm font-medium text-on-surface mb-2">Current Pain Medication</p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="true" {...register('currentPainMedication')} className="h-4 w-4 text-primary" />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="false" {...register('currentPainMedication')} className="h-4 w-4 text-primary" />
+                  No
+                </label>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-on-surface mb-2">Current Management Effective</p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="true" {...register('painMedicationEffective')} className="h-4 w-4 text-primary" />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="false" {...register('painMedicationEffective')} className="h-4 w-4 text-primary" />
+                  No
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          {!watch('painMedicationEffective') && (
+            <Textarea 
+              label="If No, explain:" 
+              rows={2} 
+              placeholder="Explain why pain management was not effective..."
+              {...register('painManagementIneffectiveReason')} 
+            />
+          )}
+        </Section>
+
+        {/* ── SECTION 6: SYMPTOMS ── */}
+        <Section title="6. SYMPTOMS">
+          <CheckboxGroup 
+            options={['Dyspnea','Nausea','Constipation','Anxiety','Fatigue','PoorAppetite','PressureSores','Other']}
+            labels={SYMPTOM_LABELS}
+            name="symptoms"
+            register={register}
+          />
+          <Input 
+            placeholder="Other: specify" 
+            className="mt-2" 
+            {...register('symptomsOther')} 
+          />
+        </Section>
+
+        {/* ── SECTION 7: FUNCTIONAL STATUS ASSESSMENT ── */}
+        <Section title="7. FUNCTIONAL STATUS ASSESSMENT">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Input 
+              label="PPS Score (%)" 
+              type="number" 
+              min={0} 
+              max={100} 
+              {...register('ppsScore')} 
+            />
+            <Input 
+              label="KPS Score (/100)" 
+              type="number" 
+              min={0} 
+              max={100} 
+              {...register('kpsScore')} 
+            />
+          </div>
+          
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">Activities of Daily Living (ADL)</p>
+            <div className="space-y-2">
+              {(['feeding', 'bathing', 'dressing', 'toileting', 'mobility'] as const).map((act) => (
+                <div key={act} className="flex items-center gap-4">
+                  <p className="text-sm w-24 capitalize flex-shrink-0">{act}</p>
+                  <Select 
+                    options={adlOptions} 
+                    {...register(`adl.${act}`)} 
+                    className="flex-1" 
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </Section>
+
+        {/* ── SECTION 8: NUTRITION AND HYDRATION ── */}
+        <Section title="8. NUTRITION AND HYDRATION ASSESSMENT" defaultOpen={false}>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Select 
+              label="Appetite" 
+              options={[
+                { value: 'Good', label: 'Good' },
+                { value: 'Fair', label: 'Fair' },
+                { value: 'Poor', label: 'Poor' },
+                { value: 'UnableToEat', label: 'Unable to Eat' }
+              ]} 
+              {...register('appetite')} 
+            />
+            <Select 
+              label="Oral Intake" 
+              options={[
+                { value: 'Adequate', label: 'Adequate' },
+                { value: 'Reduced', label: 'Reduced' },
+                { value: 'Minimal', label: 'Minimal' }
+              ]} 
+              {...register('oralIntake')} 
+            />
+            <Select 
+              label="Hydration Status" 
+              options={[
+                { value: 'Adequate', label: 'Adequate' },
+                { value: 'MildDehydration', label: 'Mild Dehydration' },
+                { value: 'SevereDehydration', label: 'Severe Dehydration' }
+              ]} 
+              {...register('hydrationStatus')} 
+            />
+          </div>
+          <Textarea label="Comments" rows={2} {...register('nutritionComments')} />
+        </Section>
+
+        {/* ── SECTION 9: PSYCHOSOCIAL ASSESSMENT ── */}
+        <Section title="9. PSYCHOSOCIAL ASSESSMENT" defaultOpen={false}>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Select 
+              label="Patient Emotional Status" 
+              options={[
+                { value: 'Stable', label: 'Stable' },
+                { value: 'Anxious', label: 'Anxious' },
+                { value: 'Depressed', label: 'Depressed' },
+                { value: 'Fearful', label: 'Fearful' },
+                { value: 'Distressed', label: 'Distressed' }
+              ]} 
+              {...register('emotionalStatus')} 
+            />
+            <Select 
+              label="Family Support" 
+              options={[
+                { value: 'Excellent', label: 'Excellent' },
+                { value: 'Good', label: 'Good' },
+                { value: 'Limited', label: 'Limited' },
+                { value: 'None', label: 'None' }
+              ]} 
+              {...register('familySupport')} 
+            />
+          </div>
+          <Textarea label="Comments" rows={2} {...register('emotionalComments')} />
+          
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">Financial Difficulty</p>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" value="true" {...register('financialDifficulty')} className="h-4 w-4 text-primary" />
+                Yes
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" value="false" {...register('financialDifficulty')} className="h-4 w-4 text-primary" />
+                No
+              </label>
+            </div>
+          </div>
+          <Textarea label="Comments" rows={2} {...register('financialComments')} />
+        </Section>
+
+        {/* ── SECTION 10: SPIRITUAL ASSESSMENT ── */}
+        <Section title="10. SPIRITUAL ASSESSMENT" defaultOpen={false}>
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">Spiritual Needs Identified</p>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" value="true" {...register('spiritualNeeds')} className="h-4 w-4 text-primary" />
+                Yes
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" value="false" {...register('spiritualNeeds')} className="h-4 w-4 text-primary" />
+                No
+              </label>
+            </div>
+          </div>
+          {watch('spiritualNeeds') && (
+            <Textarea label="If Yes, specify:" rows={2} {...register('spiritualNeedsDescription')} />
+          )}
+          
+          <div className="mt-4">
+            <p className="text-sm font-medium text-on-surface mb-2">Requested Religious Support</p>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" value="true" {...register('religiousSupportRequested')} className="h-4 w-4 text-primary" />
+                Yes
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" value="false" {...register('religiousSupportRequested')} className="h-4 w-4 text-primary" />
+                No
+              </label>
+            </div>
+          </div>
+          {watch('religiousSupportRequested') && (
+            <Textarea label="Specify:" rows={2} {...register('religiousSupportSpecify')} />
+          )}
+        </Section>
+
+        {/* ── SECTION 11: MEDICATION REVIEW ── */}
+        <Section title="11. MEDICATION REVIEW" defaultOpen={false}>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <p className="text-sm font-medium text-on-surface mb-2">Medications available at home?</p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="true" {...register('medicationAvailable')} className="h-4 w-4 text-primary" />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="false" {...register('medicationAvailable')} className="h-4 w-4 text-primary" />
+                  No
+                </label>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-on-surface mb-2">Taking medications correctly?</p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="true" {...register('medicationCorrectlyTaken')} className="h-4 w-4 text-primary" />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="false" {...register('medicationCorrectlyTaken')} className="h-4 w-4 text-primary" />
+                  No
+                </label>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-on-surface mb-2">Any side effects?</p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="true" {...register('medicationSideEffects')} className="h-4 w-4 text-primary" />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="false" {...register('medicationSideEffects')} className="h-4 w-4 text-primary" />
+                  No
+                </label>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-on-surface mb-2">Need medication refill?</p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="true" {...register('medicationRefillNeeded')} className="h-4 w-4 text-primary" />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="false" {...register('medicationRefillNeeded')} className="h-4 w-4 text-primary" />
+                  No
+                </label>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-on-surface mb-2">Morphine available?</p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="true" {...register('morphineAvailable')} className="h-4 w-4 text-primary" />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="false" {...register('morphineAvailable')} className="h-4 w-4 text-primary" />
+                  No
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="na" {...register('morphineAvailable')} className="h-4 w-4 text-primary" />
+                  N/A
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          <Select 
+            label="Adherence level" 
+            options={[
+              { value: 'Good', label: 'Good' },
+              { value: 'Partial', label: 'Partial' },
+              { value: 'Poor', label: 'Poor' }
+            ]} 
+            {...register('adherenceLevel')} 
+          />
+          
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">Medications Currently Being Used</p>
+            {medFields.map((field, i) => (
+              <div key={field.id} className="grid grid-cols-4 gap-2 mb-2">
+                <Input placeholder="Name" {...register(`currentMedications.${i}.name`)} />
+                <Input placeholder="Dosage" {...register(`currentMedications.${i}.dosage`)} />
+                <Input placeholder="Frequency" {...register(`currentMedications.${i}.frequency`)} />
+                <div className="flex gap-1">
+                  <Input placeholder="Route" {...register(`currentMedications.${i}.route`)} />
+                  <Button type="button" variant="ghost" size="icon" className="h-10 w-10 flex-shrink-0" onClick={() => removeMed(i)}>
+                    <Trash2 size={13} />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" leftIcon={<Plus size={13} />} onClick={() => appendMed({ name: '', dosage: '', frequency: '', route: '' })}>
+              Add Medication
+            </Button>
+          </div>
+          
+          <Textarea label="Issues Identified:" rows={2} {...register('medicationIssues')} />
+        </Section>
+
+        {/* ── SECTION 12: CAREGIVER ASSESSMENT ── */}
+        <Section title="12. CAREGIVER ASSESSMENT" defaultOpen={false}>
+          <Input label="Primary Caregiver" {...register('primaryCaregiver')} />
+          
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Select 
+              label="Caregiver Burden" 
+              options={[
+                { value: 'Low', label: 'Low' },
+                { value: 'Moderate', label: 'Moderate' },
+                { value: 'High', label: 'High' }
+              ]} 
+              {...register('caregiverBurden')} 
+            />
+            <Select 
+              label="Caregiver Understanding of Care Plan" 
+              options={[
+                { value: 'Good', label: 'Good' },
+                { value: 'Fair', label: 'Fair' },
+                { value: 'Poor', label: 'Poor' }
+              ]} 
+              {...register('caregiverUnderstanding')} 
+            />
+            <Select 
+              label="Caregiving Capacity" 
+              options={[
+                { value: 'Strong', label: 'Strong' },
+                { value: 'Moderate', label: 'Moderate' },
+                { value: 'Weak', label: 'Weak' }
+              ]} 
+              {...register('caregivingCapacity')} 
+            />
+            <Select 
+              label="Family emotional status" 
+              options={[
+                { value: 'Stable', label: 'Stable' },
+                { value: 'Stressed', label: 'Stressed' },
+                { value: 'Overwhelmed', label: 'Overwhelmed' }
+              ]} 
+              {...register('familyEmotionalStatus')} 
+            />
+          </div>
+        </Section>
+
+        {/* ── SECTION 13: EDUCATION PROVIDED ── */}
+        <Section title="13. EDUCATION PROVIDED" defaultOpen={false}>
+          <p className="text-sm font-medium text-on-surface mb-2">Education Provided During Visit</p>
+          <CheckboxGroup 
+            options={['MedicationAdministration','PainManagement','NutritionSupport','SkinCare','PressureSorePrevention','EndOfLifeCare','EmergencySigns','EmotionalSupport','Other']}
+            labels={EDUCATION_LABELS}
+            name="educationProvided"
+            register={register}
+          />
+          <Input 
+            placeholder="Other: specify" 
+            className="mt-2" 
+            {...register('educationProvidedOther')} 
+          />
+          
+          <div className="mt-4">
+            <p className="text-sm font-medium text-on-surface mb-2">Training Needs Identified</p>
+            <div className="grid grid-cols-2 gap-2">
+              {['Medication administration', 'Hygiene care', 'Feeding assistance', 'Pressure sore prevention', 'Emotional support'].map((item) => (
+                <label key={item} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" value={item} {...register('trainingNeeds')} className="h-4 w-4 rounded text-primary" />
+                  {item}
+                </label>
+              ))}
+            </div>
+          </div>
+          
+          <div className="mt-4">
+            <p className="text-sm font-medium text-on-surface mb-2">Additional Support Needed</p>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" value="true" {...register('additionalSupportNeeded')} className="h-4 w-4 text-primary" />
+                Yes
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" value="false" {...register('additionalSupportNeeded')} className="h-4 w-4 text-primary" />
+                No
+              </label>
+            </div>
+          </div>
+          {watch('additionalSupportNeeded') && (
+            <Textarea label="Specify:" rows={2} {...register('additionalSupportSpecify')} />
+          )}
+        </Section>
+
+        {/* ── SECTION 14: HOME ENVIRONMENT ASSESSMENT ── */}
+        <Section title="14. HOME ENVIRONMENT ASSESSMENT" defaultOpen={false}>
+          <Select 
+            label="Condition of Home" 
+            options={[
+              { value: 'Clean', label: 'Clean' },
+              { value: 'Fair', label: 'Fair' },
+              { value: 'Poor', label: 'Poor' }
+            ]} 
+            {...register('homeCondition')} 
+          />
+          
+          <p className="text-sm font-medium text-on-surface mb-2">Observations</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(['AdequateLighting','Ventilation','SafeBed','CleanWater','SanitationIssues'] as const).map((o) => (
+              <label key={o} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" value={o} {...register('homeObservations')} className="h-4 w-4 rounded text-primary" />
+                {o === 'AdequateLighting' ? 'Adequate lighting' :
+                 o === 'Ventilation' ? 'Ventilation adequate' :
+                 o === 'SafeBed' ? 'Safe bed arrangement' :
+                 o === 'CleanWater' ? 'Clean water available' :
+                 'Sanitation issues'}
+              </label>
+            ))}
+          </div>
+          <Textarea label="Details:" rows={2} {...register('homeEnvironmentDetails')} />
+        </Section>
+
+        {/* ── SECTION 15: NURSING CARE PROVIDED ── */}
+        <Section title="15. NURSING CARE PROVIDED" defaultOpen={false}>
+          <div className="grid grid-cols-2 gap-2">
+            {(['Hygiene','WoundCare','MedicationAdmin','PositionChange','FeedingAssistance','Counseling'] as const).map((n) => (
+              <label key={n} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" value={n} {...register('nursingCareGiven')} className="h-4 w-4 rounded text-primary" />
+                {n === 'Hygiene' ? 'Patient hygiene care' :
+                 n === 'WoundCare' ? 'Wound care' :
+                 n === 'MedicationAdmin' ? 'Medication administration' :
+                 n === 'PositionChange' ? 'Position change' :
+                 n === 'FeedingAssistance' ? 'Feeding assistance' :
+                 'Counseling provided'}
+              </label>
+            ))}
+          </div>
+          <Input 
+            placeholder="Other: specify" 
+            className="mt-2" 
+            {...register('nursingCareOther')} 
+          />
+        </Section>
+
+        {/* ── SECTION 16: RED FLAG ASSESSMENT ── */}
+        <Section title="16. RED FLAG ASSESSMENT">
+          <CheckboxGroup 
+            options={['SevereUncontrolledPain','SevereShortnessOfBreath','MassiveBleeding','UncontrolledSeizures','AlteredMentalStatus','SevereDehydration','None']}
+            labels={RED_FLAG_LABELS}
+            name="redFlags"
+            register={register}
+          />
+          <Textarea label="Action Taken:" rows={3} {...register('redFlagActions')} />
+        </Section>
+
+        {/* ── SECTION 17: REFERRALS MADE ── */}
+        <Section title="17. REFERRALS MADE" defaultOpen={false}>
+          <div className="grid grid-cols-2 gap-2">
+            {(['PhysicianReview','HospitalAdmission','SocialWorker','Psychologist','SpiritualCare','NutritionSupport'] as const).map((r) => (
+              <label key={r} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" value={r} {...register('referralsMade')} className="h-4 w-4 rounded text-primary" />
+                {r === 'PhysicianReview' ? 'Physician review' :
+                 r === 'HospitalAdmission' ? 'Hospital admission' :
+                 r === 'SocialWorker' ? 'Social worker follow-up' :
+                 r === 'Psychologist' ? 'Psychologist referral' :
+                 r === 'SpiritualCare' ? 'Spiritual care support' :
+                 'Nutrition support'}
+              </label>
+            ))}
+          </div>
+        </Section>
+
+        {/* ── SECTION 18: KEY ISSUES IDENTIFIED ── */}
+        <Section title="18. KEY ISSUES IDENTIFIED">
+          <Textarea rows={4} placeholder="List key issues identified during the visit..." {...register('keyIssues')} />
+        </Section>
+
+        {/* ── SECTION 19: ACTION PLAN ── */}
+        <Section title="19. ACTION PLAN">
+          <Textarea label="Immediate actions taken:" rows={3} {...register('immediateActions')} />
+          <Textarea label="Follow-up plan:" rows={3} {...register('followUpPlan')} />
+          <Input label="Next visit scheduled:" type="date" {...register('nextVisitDate')} />
+        </Section>
+
+        {/* ── SECTION 20: OUTCOME OF VISIT ── */}
+        <Section title="20. OUTCOME OF VISIT">
+          <Select 
+            label="Visit Outcome" 
+            options={[
+              { value: 'Stable', label: 'Patient stable' },
+              { value: 'SymptomsImproved', label: 'Symptoms improved' },
+              { value: 'SymptomsUnchanged', label: 'Symptoms unchanged' },
+              { value: 'SymptomsWorsened', label: 'Symptoms worsened' },
+              { value: 'ReferredToFacility', label: 'Referred to facility' },
+              { value: 'Deceased', label: 'Patient deceased' }
+            ]} 
+            error={errors.outcome?.message} 
+            {...register('outcome')} 
+          />
+          {watch('outcome') === 'Deceased' && (
+            <Input label="Date of Death (if applicable):" type="date" {...register('dateOfDeath')} />
+          )}
+        </Section>
+
+        {/* ── SECTION 21: TEAM SIGNATURES ── */}
+        <Section title="21. TEAM SIGNATURES">
+          {hasVisitId ? (
+            <SignatureSection
+              visitId={createdVisitId}
+              visitDate={watch('visitDate')}
+              teamMembers={watch('teamMembers')}
+              onAllSigned={() => {
+                // Auto-navigate after all signatures are complete
+                setTimeout(() => navigate(`/patients/${id}`), 1500);
+              }}
+            />
+          ) : (
+            <div className="p-4 bg-surface-low rounded-lg text-center text-text-muted">
+              <p>Save the visit first to enable team signatures</p>
+            </div>
+          )}
+          
+          <div className="mt-4 pt-4 border-t border-border-base text-sm text-text-muted">
+            <p className="font-medium text-on-surface mb-1">Team Members</p>
+            <div className="space-y-1">
+              {watch('teamMembers').map((member, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-text-muted">{member.role}:</span>
+                  <span className="text-on-surface">{member.name || '(not assigned)'}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-text-muted">Team Leader is auto-signed. Physician and Nurse must sign with email + password.</p>
+          </div>
+        </Section>
+
+        {/* ── Submit Buttons ── */}
+        <div className="flex gap-3 justify-end pb-8">
+          <Button type="button" variant="outline" onClick={() => navigate(`/patients/${id}`)}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={isSubmitting}>
+            {isSubmitting ? 'Saving...' : 'Save Visit'}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+export default RecordVisitPage;
