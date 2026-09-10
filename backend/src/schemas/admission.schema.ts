@@ -2,36 +2,98 @@ import { z } from 'zod';
 
 export const createAdmissionSchema = z.object({
   body: z.object({
-    referralId: z.string().min(1, 'Referral ID is required'),
+    // ── Section 1: Patient identification (snapshot — optional, filled from Patient) ──
+    patientName: z.string().optional(),
+    hospitalPatientId: z.string().optional(),
+    age: z.number().optional(),
+    sex: z.enum(['Male', 'Female']).optional(),
+    dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').optional(),
+    address: z.string().optional(),
+    phone: z.string().optional(),
+    emergencyContactName: z.string().optional(),
+    emergencyContactRelationship: z.string().optional(),
+    emergencyContactPhone: z.string().optional(),
+
+    // ── Section 2: Referral information ──
+    referralId: z.string().optional(),   // ← now optional
+    referredFrom: z
+      .enum([
+        'InternalWard',
+        'OutpatientDepartment',
+        'ICU',
+        'ExternalHospital',
+        'Community',
+        'Home',
+        'Other',
+      ])
+      .optional(),
+    referredFromOther: z.string().optional(),
+    referringClinician: z.string().optional(),
+    diagnosisAtReferral: z.string().optional(),
+    referralReason: z
+      .enum([
+        'PainManagement',
+        'EndOfLifeCare',
+        'SymptomControl',
+        'HomeBasedCare',
+        'PsychosocialSupport',
+        'Other',
+      ])
+      .optional(),
+    referralReasonOther: z.string().optional(),
+
+    // ── Admission Details ──
     admissionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
     bedNumber: z.string().min(1, 'Bed number is required'),
     ward: z.string().min(1, 'Ward is required'),
     admittingPhysician: z.string().min(1, 'Admitting physician is required'),
     careTeam: z.string().min(1, 'Care team is required'),
+
+    // ── Section 3: Medical Diagnosis ──
     primaryDiagnosis: z.string().min(1, 'Primary diagnosis is required'),
-    secondaryDiagnoses: z.array(z.string()).optional(),
+    secondaryDiagnoses: z.array(z.string()).optional().default([]),
     diseaseStage: z.enum(['Early', 'Advanced', 'Terminal']),
-    comorbidities: z.array(z.string()).optional(),
+    comorbidities: z.array(z.string()).optional().default([]),
+
+    // ── Section 4: Palliative Care Eligibility ──
     estimatedPrognosis: z.enum(['Days', 'Weeks', 'Months', 'Uncertain']),
-    ppsScore: z.number().min(0, 'PPS score must be between 0 and 100').max(100, 'PPS score must be between 0 and 100'),
+    ppsScore: z.number().min(0).max(100),
+    kpsScore: z.number().min(0).max(100).optional(),
     functionalStatus: z.enum(['FullyIndependent', 'PartiallyDependent', 'FullyDependent']),
-    painScore: z.number().min(0, 'Pain score must be between 0 and 10').max(10, 'Pain score must be between 0 and 10'),
+
+    // ── Section 5: Pain & Symptom Assessment ──
+    painScore: z.number().min(0).max(10),
     painType: z.enum(['Acute', 'Chronic', 'Neuropathic', 'Mixed']),
-    symptomsPresent: z.array(z.string()).optional(),
+    symptomsPresent: z.array(z.string()).optional().default([]),
+    symptomsPresentOther: z.string().optional(),
+
+    // ── Section 6: Psychosocial ──
     emotionalStatus: z.enum(['Stable', 'Anxious', 'Depressed', 'Distressed']),
     familySupport: z.enum(['Strong', 'Moderate', 'Weak', 'None']),
     socialChallenges: z.string().optional(),
+
+    // ── Section 7: Spiritual Care ──
     spiritualConcerns: z.boolean(),
+    spiritualNeedsDescription: z.string().optional(),
     spiritualSupportPreferred: z.enum(['ReligiousLeader', 'Counselor', 'Other']).optional(),
+    spiritualSupportPreferredOther: z.string().optional(),
+
+    // ── Section 8: Initial Care Plan ──
     painManagementPlan: z.string().min(1, 'Pain management plan is required'),
     medicationPlan: z.string().min(1, 'Medication plan is required'),
     nursingCarePlan: z.string().min(1, 'Nursing care plan is required'),
     homeBasedCareRequired: z.boolean(),
     psychosocialSupportPlan: z.string().optional(),
     physiotherapyRequired: z.boolean(),
+
+    // ── Section 10: Admission Decision ──
+    admittedToHospiceUnit: z.boolean().optional(),
   }),
 });
 
+// ─────────────────────────────────────────────────────────────
+// Update Admission (discharge / status change)
+// ─────────────────────────────────────────────────────────────
 export const updateAdmissionSchema = z.object({
   body: z.object({
     dischargeDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').optional(),
@@ -40,6 +102,9 @@ export const updateAdmissionSchema = z.object({
   }),
 });
 
+// ─────────────────────────────────────────────────────────────
+// Queries & Params
+// ─────────────────────────────────────────────────────────────
 export const getAdmissionsQuerySchema = z.object({
   query: z.object({
     status: z.enum(['Active', 'Discharged']).optional(),
@@ -54,6 +119,10 @@ export const getAdmissionParamsSchema = z.object({
   }),
 });
 
+// ─────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────
 export type CreateAdmissionSchema = z.infer<typeof createAdmissionSchema>;
 export type UpdateAdmissionSchema = z.infer<typeof updateAdmissionSchema>;
 export type GetAdmissionsQuerySchema = z.infer<typeof getAdmissionsQuerySchema>;
+export type GetAdmissionParamsSchema = z.infer<typeof getAdmissionParamsSchema>;

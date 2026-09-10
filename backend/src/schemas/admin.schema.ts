@@ -23,7 +23,6 @@ export const getNotificationsQuerySchema = z.object({
   }),
 });
 
-// Renamed to admin-specific name
 export const getAdminPatientsQuerySchema = z.object({
   query: z.object({
     page: z.coerce.number().int().positive().optional().default(1),
@@ -33,6 +32,9 @@ export const getAdminPatientsQuerySchema = z.object({
   }),
 });
 
+// ─────────────────────────────────────────────────────────────
+// Reports
+// ─────────────────────────────────────────────────────────────
 export const getReportsQuerySchema = z.object({
   query: z.object({
     startDate: z.string().date().optional(),
@@ -40,8 +42,41 @@ export const getReportsQuerySchema = z.object({
   }),
 });
 
+export const updateVisitSchema = z.object({
+  body: z.object({
+    visitDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').optional(),
+    timeStarted: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format').optional(),
+    timeEnded: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format').optional(),
+    overallStatus: z.enum(['Stable', 'Deteriorating', 'Critical', 'BedBound']).optional(),
+    painScore: z.number().min(0).max(10).optional(),
+    ppsScore: z.number().min(0).max(100).optional(),
+    kpsScore: z.number().min(0).max(100).optional(),
+    outcome: z
+      .enum([
+        'Stable',
+        'SymptomsImproved',
+        'SymptomsUnchanged',
+        'SymptomsWorsened',
+        'ReferredToFacility',
+        'Deceased',
+      ])
+      .optional(),
+  }),
+});
+
+export const getVisitEditHistoryParamsSchema = z.object({
+  params: z.object({
+    visitId: z.string().min(1, 'Visit ID is required'),
+  }),
+});
+
+// ─────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────
 export type ApproveStaffSchema = z.infer<typeof approveStaffSchema>;
 export type CloseCaseSchema = z.infer<typeof closeCaseSchema>;
 export type GetNotificationsQuerySchema = z.infer<typeof getNotificationsQuerySchema>;
 export type GetAdminPatientsQuerySchema = z.infer<typeof getAdminPatientsQuerySchema>;
 export type GetReportsQuerySchema = z.infer<typeof getReportsQuerySchema>;
+export type UpdateVisitSchema = z.infer<typeof updateVisitSchema>;
+export type GetVisitEditHistoryParamsSchema = z.infer<typeof getVisitEditHistoryParamsSchema>;

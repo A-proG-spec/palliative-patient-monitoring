@@ -7,3 +7,6 @@ export * from './lab.schema.js';
 export * from './referral.schema.js';
 export * from './admission.schema.js';
 export * from './staff.schema.js';
+export * from './imaging.schema.js';         
+export * from './progress-note.schema.js';   
+export * from './discharge.schema.js';       
