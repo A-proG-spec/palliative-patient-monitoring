@@ -10,8 +10,9 @@ export const staffApi = {
     return apiClient.get<StaffDashboardStats>('/staff/dashboard/stats').then((r) => r.data);
   },
 
+
   getProfile: (): Promise<StaffProfile> => {
     if (USE_MOCK) return mockStaffApi.getProfile();
-    return apiClient.get<StaffProfile>('/staff/me').then((r) => r.data);
+    return apiClient.get<StaffProfile>('/profile').then((r) => r.data);
   },
 };

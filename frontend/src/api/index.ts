@@ -7,3 +7,5 @@ export { referralApi } from './referrals';
 export { admissionApi } from './admissions';
 export { adminApi } from './admin';
 export { staffApi } from './staff';
+
+export { dischargeApi } from './discharge';

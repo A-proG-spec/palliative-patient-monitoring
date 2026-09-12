@@ -1,7 +1,11 @@
 import apiClient from './client';
 import { USE_MOCK } from '@/lib/config';
 import { mockReferralApi } from './mocks/referrals.mock';
-import type { Referral, CreateReferralRequest, ReferralListResponse } from '@/types/referral.types';
+import type {
+  Referral,
+  CreateReferralRequest,
+  ReferralListResponse,
+} from '@/types/referral.types';
 
 export const referralApi = {
   create: (patientId: string, data: CreateReferralRequest): Promise<Referral> => {
@@ -9,13 +13,39 @@ export const referralApi = {
     return apiClient.post<Referral>(`/patients/${patientId}/referrals`, data).then((r) => r.data);
   },
 
-  getByPatient: (patientId: string, params?: { status?: string; page?: number; limit?: number }): Promise<ReferralListResponse> => {
+  getByPatient: (
+    patientId: string,
+    params?: { status?: string; page?: number; limit?: number },
+  ): Promise<ReferralListResponse> => {
     if (USE_MOCK) return mockReferralApi.getByPatient(patientId, params);
-    return apiClient.get<ReferralListResponse>(`/patients/${patientId}/referrals`, { params }).then((r) => r.data);
+    return apiClient
+      .get<ReferralListResponse>(`/patients/${patientId}/referrals`, { params })
+      .then((r) => r.data);
   },
 
   getById: (patientId: string, referralId: string): Promise<Referral> => {
     if (USE_MOCK) return mockReferralApi.getById(patientId, referralId);
-    return apiClient.get<Referral>(`/patients/${patientId}/referrals/${referralId}`).then((r) => r.data);
+    return apiClient
+      .get<Referral>(`/patients/${patientId}/referrals/${referralId}`)
+      .then((r) => r.data);
+  },
+
+  /**
+   * Admin-only. Fetch all pending referrals (system-wide).
+   * Backend returns a lean DTO.
+   */
+  getPending: (): Promise<Referral[]> => {
+    if (USE_MOCK) return Promise.resolve([]);
+    return apiClient.get<Referral[]>('/admin/referrals/pending').then((r) => r.data);
+  },
+
+  approve: (referralId: string): Promise<Referral> => {
+    if (USE_MOCK) return Promise.resolve({} as Referral);
+    return apiClient.put<Referral>(`/admin/referrals/${referralId}/approve`).then((r) => r.data);
+  },
+
+  decline: (referralId: string): Promise<Referral> => {
+    if (USE_MOCK) return Promise.resolve({} as Referral);
+    return apiClient.put<Referral>(`/admin/referrals/${referralId}/decline`).then((r) => r.data);
   },
 };

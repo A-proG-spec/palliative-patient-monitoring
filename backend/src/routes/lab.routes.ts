@@ -5,6 +5,8 @@ import { validate } from '@middlewares/validate.middleware.js';
 import {
   createLabSchema,
   updateLabResultSchema,
+  cancelLabSchema,
+  deleteLabSchema,
   getLabsQuerySchema,
 } from '@schemas/lab.schema.js';
 import * as labController from '@controllers/lab.controller.js';
@@ -18,14 +20,14 @@ router.use(authMiddleware);
 router.post(
   '/',
   validate(createLabSchema),
-  labController.orderLabTest
+  labController.orderLabTest,
 );
 
 // ── List ──
 router.get(
   '/',
   validate(getLabsQuerySchema),
-  labController.getLabTests
+  labController.getLabTests,
 );
 
 // ── Read one ──
@@ -35,21 +37,29 @@ router.get('/:labId', labController.getLabTestById);
 router.put(
   '/:labId',
   validate(updateLabResultSchema),
-  labController.updateLabResult
+  labController.updateLabResult,
 );
 
-// ── Soft delete (admin only) ──  ← NEW
+// ── Cancel (staff can cancel their own pending orders) ──
+router.put(
+  '/:labId/cancel',
+  validate(cancelLabSchema),
+  labController.cancelLabTest,
+);
+
+// ── Soft delete (admin only) ──
 router.delete(
   '/:labId',
   roleMiddleware(['admin']),
-  labController.deleteLabTest
+  validate(deleteLabSchema),
+  labController.deleteLabTest,
 );
 
-// ── Restore (admin only) ──  ← NEW
-router.post(
+// ── Restore (admin only) ──
+router.put(
   '/:labId/restore',
   roleMiddleware(['admin']),
-  labController.restoreLabTest
+  labController.restoreLabTest,
 );
 
 export default router;

@@ -11,7 +11,7 @@ import admissionRoutes from './admission.routes.js';
 import progressNoteRoutes from './progress-note.routes.js';   
 import dischargeRoutes from './discharge.routes.js';          
 import staffRoutes from './staff.routes.js';
-
+import profileRoutes  from './profile.routes.js';
 const router = Router();
 
 // ── Health check ──
@@ -27,6 +27,7 @@ router.get('/health', (req, res) => {
 router.use('/auth', authRoutes);
 router.use('/admin', adminRoutes);
 router.use('/staff', staffRoutes);
+router.use('/profile', profileRoutes);
 router.use('/patients', patientRoutes);
 
 // ── Patient-scoped sub-resources ──

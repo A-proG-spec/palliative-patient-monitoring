@@ -1,7 +1,28 @@
 import apiClient from './client';
 import { USE_MOCK } from '@/lib/config';
 import { mockPatientApi } from './mocks/patients.mock';
-import type { Patient, CreatePatientRequest, PatientListResponse, PatientSummaryResponse, PatientProgressData } from '@/types/patient.types';
+import type {
+  Patient,
+  CreatePatientRequest,
+  PatientListResponse,
+  PatientSummaryResponse,
+  PatientProgressData,
+} from '@/types/patient.types';
+
+export interface UpdatePatientRequest {
+  firstName?: string;
+  lastName?: string;
+  age?: number;
+  sex?: 'Male' | 'Female';
+  dateOfBirth?: string;
+  address?: string;
+  phone?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  caregiverName?: string;
+  caregiverPhone?: string;
+  hospitalPatientId?: string;
+}
 
 export const patientApi = {
   register: (data: CreatePatientRequest): Promise<Patient> => {
@@ -9,7 +30,9 @@ export const patientApi = {
     return apiClient.post<Patient>('/patients', data).then((r) => r.data);
   },
 
-  getList: (params?: { page?: number; limit?: number; status?: 'Active' | 'Discharged'; search?: string }): Promise<PatientListResponse> => {
+  getList: (
+    params?: { page?: number; limit?: number; status?: 'Active' | 'Discharged'; search?: string },
+  ): Promise<PatientListResponse> => {
     if (USE_MOCK) return mockPatientApi.getList(params);
     return apiClient.get<PatientListResponse>('/patients', { params }).then((r) => r.data);
   },
@@ -17,6 +40,16 @@ export const patientApi = {
   getById: (patientId: string): Promise<Patient> => {
     if (USE_MOCK) return mockPatientApi.getById(patientId);
     return apiClient.get<Patient>(`/patients/${patientId}`).then((r) => r.data);
+  },
+
+  /**
+   * Admin-only. Whitelisted demographic fields only — see backend
+   * `updatePatientSchema`. Clinical fields (diagnosis, stage) are
+   * not editable through this endpoint.
+   */
+  update: (patientId: string, data: UpdatePatientRequest): Promise<Patient> => {
+    if (USE_MOCK) return mockPatientApi.getById(patientId);
+    return apiClient.put<Patient>(`/patients/${patientId}`, data).then((r) => r.data);
   },
 
   getSummary: (patientId: string): Promise<PatientSummaryResponse> => {

@@ -13,41 +13,47 @@ export type LabCategory =
   | 'Microbiology'         // F
   | 'Histopathology'       // G
   | 'Immunology'           // H
-  | 'Cardiac';             // I (cardiac biomarkers)
+  | 'Cardiac';             // I
 
 // ─────────────────────────────────────────────────────────────
 // Main document — ONE test per document
 // ─────────────────────────────────────────────────────────────
 export interface ILaboratoryTest extends Document {
-  // ── Patient reference ──
+  // ── Header (Section 0 of the form) ──
+  hospitalClinic: string;                          // performing facility
+  departmentLaboratory: string;                    // e.g. "Clinical Laboratory"
+  requestNo?: string;                              // LAB-2026-00001 (auto-generated)
+  dateOfRequest: Date;                             // header date
+
+  // ── Section 1: Patient (via reference only) ──
+  // patientName / age / sex / dateOfBirth / medicalRecordNo come from
+  // Patient via .populate('patientId').
   patientId: mongoose.Types.ObjectId;              // → Patient
-  patientName?: string;                            // denormalized snapshot
-  medicalRecordNo?: string;                        // form "Medical Record No."
-  wardClinic?: string;                             // form "Ward/Clinic"
-  physicianRequester?: string;                     // form "Physician/Requester"
+  wardClinic?: string;                             // where patient currently is
+  physicianRequester: string;                      // form "Physician/Requester"
   contactExtension?: string;                       // form "Contact/Extension"
 
-  // ── Section 3: Laboratory Investigation Requested (single test) ──
-  category: LabCategory;                           // which section A–I
-  testName: string;                                // e.g. "Complete Blood Count (CBC)"
-  otherText?: string;                              // when testName === 'Other'
+  // ── Section 2: Laboratory Investigation Requested ──
+  category: LabCategory;
+  testName: string;
+  otherText?: string;
+  specimenType?: string;
+  specimenSite?: string;
 
-  // ── Section 5: Priority ──
+  // ── Section 3: Clinical History / Reason ──
+  clinicalHistory?: string;
+
+  // ── Section 4: Priority ──
   priority: 'Routine' | 'Urgent' | 'Emergency';
 
-  // ── Specimen / Site ──
-  specimenType?: string;                           // e.g. Blood, Urine
-  specimenSite?: string;                           // e.g. Left forearm
-
-  // ── Ordering & collection timestamps ──
-  dateOrdered: Date;                               // when the order was placed (required)
+  // ── Section 5: Collection & Submission ──
   collectionDate?: Date;
-  collectionTime?: string;                         // "HH:mm"
+  collectionTime?: string;
   receivedDate?: Date;
-  receivedTime?: string;                           // "HH:mm"
+  receivedTime?: string;
 
-  // ── Clinical context ──
-  clinicalHistory?: string;                        // reason for ordering
+  // ── Ordering timestamp ──
+  dateOrdered: Date;
 
   // ── Location (home vs hospital) ──
   location: 'Home' | 'Hospital';
@@ -55,19 +61,19 @@ export interface ILaboratoryTest extends Document {
   // ── Workflow status ──
   status: 'Ordered' | 'Completed' | 'Cancelled';
 
-  // ── Result (single test, populated when completed) ──
+  // ── Result ──
   datePerformed?: Date;
-  result?: string;                                 // free-text result
+  result?: string;
   referenceRange?: string;
   abnormalFlag?: 'Low' | 'High' | 'Critical' | 'Normal';
   resultNotes?: string;
-  performedBy?: string;                            // technologist name
+  performedBy?: string;
 
-  // ── Links to source encounters ──// → HomeVisit
+  // ── Encounter links ──
   admissionId?: mongoose.Types.ObjectId;           // → HospitalAdmission
 
   // ── Meta ──
-  orderedBy: mongoose.Types.ObjectId;              // → Staff (who placed the order)
+  orderedBy: mongoose.Types.ObjectId;              // → Staff
   createdAt: Date;
   updatedAt: Date | null;
   deletedAt: Date | null;
@@ -81,19 +87,48 @@ export interface ILaboratoryTest extends Document {
 // ─────────────────────────────────────────────────────────────
 const LaboratoryTestSchema = new Schema<ILaboratoryTest>(
   {
-    // ── Patient reference ──────────────────────────────────────
+    // ── Header ─────────────────────────────────────────────────
+    hospitalClinic: {
+      type: String,
+      default: 'Yekatit 12 Hospital Medical College',
+      trim: true,
+    },
+    departmentLaboratory: {
+      type: String,
+      default: 'Clinical Laboratory',
+      trim: true,
+    },
+    requestNo: {
+      type: String,
+      trim: true,
+      // unique index defined below (sparse)
+    },
+    dateOfRequest: {
+      type: Date,
+      default: Date.now,
+    },
+
+    // ── Section 1: Patient reference only ──────────────────────
     patientId: {
       type: Schema.Types.ObjectId,
       ref: 'Patient',
       required: true,
     },
-    patientName: String,
-    medicalRecordNo: String,
-    wardClinic: String,
-    physicianRequester: String,
-    contactExtension: String,
+    wardClinic: {
+      type: String,
+      trim: true,
+    },
+    physicianRequester: {
+      type: String,
+      trim: true,
+      required: true,
+    },
+    contactExtension: {
+      type: String,
+      trim: true,
+    },
 
-    // ── Section 3: single test ─────────────────────────────────
+    // ── Section 2: Laboratory Investigation Requested ─────────
     category: {
       type: String,
       enum: [
@@ -110,10 +145,15 @@ const LaboratoryTestSchema = new Schema<ILaboratoryTest>(
       default: 'Hematology',
       required: true,
     },
-    testName: { type: String, required: true },
-    otherText: String,
+    testName: { type: String, required: true, trim: true },
+    otherText: { type: String, trim: true },
+    specimenType: { type: String, trim: true },
+    specimenSite: { type: String, trim: true },
 
-    // ── Priority ───────────────────────────────────────────────
+    // ── Section 3: Clinical History ────────────────────────────
+    clinicalHistory: { type: String, trim: true },
+
+    // ── Section 4: Priority ────────────────────────────────────
     priority: {
       type: String,
       enum: ['Routine', 'Urgent', 'Emergency'],
@@ -121,19 +161,14 @@ const LaboratoryTestSchema = new Schema<ILaboratoryTest>(
       required: true,
     },
 
-    // ── Specimen ───────────────────────────────────────────────
-    specimenType: String,
-    specimenSite: String,
-
-    // ── Timestamps ─────────────────────────────────────────────
-    dateOrdered: { type: Date, required: true },
+    // ── Section 5: Collection & Submission ─────────────────────
     collectionDate: Date,
     collectionTime: String,
     receivedDate: Date,
     receivedTime: String,
 
-    // ── Context ────────────────────────────────────────────────
-    clinicalHistory: String,
+    // ── Ordering timestamp ─────────────────────────────────────
+    dateOrdered: { type: Date, required: true },
 
     // ── Location ───────────────────────────────────────────────
     location: {
@@ -149,7 +184,7 @@ const LaboratoryTestSchema = new Schema<ILaboratoryTest>(
       default: 'Ordered',
     },
 
-    // ── Result (single) ────────────────────────────────────────
+    // ── Result ─────────────────────────────────────────────────
     datePerformed: Date,
     result: String,
     referenceRange: String,
@@ -161,7 +196,6 @@ const LaboratoryTestSchema = new Schema<ILaboratoryTest>(
     performedBy: String,
 
     // ── Encounter links ────────────────────────────────────────
-    
     admissionId: {
       type: Schema.Types.ObjectId,
       ref: 'HospitalAdmission',
@@ -186,11 +220,16 @@ const LaboratoryTestSchema = new Schema<ILaboratoryTest>(
 // Indexes
 // ─────────────────────────────────────────────────────────────
 LaboratoryTestSchema.index({ patientId: 1, dateOrdered: -1 });
+LaboratoryTestSchema.index({ patientId: 1, status: 1 });
 LaboratoryTestSchema.index({ status: 1 });
 LaboratoryTestSchema.index({ priority: 1 });
 LaboratoryTestSchema.index({ category: 1 });
 LaboratoryTestSchema.index({ testName: 1 });
-applySoftDeleteFilter(LaboratoryTestSchema)
+LaboratoryTestSchema.index({ requestNo: 1 }, { unique: true, sparse: true });
+LaboratoryTestSchema.index({ dateOfRequest: -1 });
+
+applySoftDeleteFilter(LaboratoryTestSchema);
+
 // ─────────────────────────────────────────────────────────────
 // Virtuals
 // ─────────────────────────────────────────────────────────────
@@ -198,9 +237,28 @@ LaboratoryTestSchema.virtual('isCompleted').get(function (this: ILaboratoryTest)
   return this.status === 'Completed';
 });
 
+LaboratoryTestSchema.virtual('isUrgent').get(function (this: ILaboratoryTest) {
+  return this.priority === 'Urgent' || this.priority === 'Emergency';
+});
+
 LaboratoryTestSchema.set('toJSON', { virtuals: true });
 LaboratoryTestSchema.set('toObject', { virtuals: true });
 
+// ─────────────────────────────────────────────────────────────
+// Pre-save hook — auto-generate requestNo if missing
+// ─────────────────────────────────────────────────────────────
+LaboratoryTestSchema.pre('save', async function () {
+  if (!this.requestNo) {
+    const year = new Date().getFullYear();
+    const count = await mongoose.model('LaboratoryTest').countDocuments({
+      createdAt: {
+        $gte: new Date(`${year}-01-01`),
+        $lt: new Date(`${year + 1}-01-01`),
+      },
+    });
+    this.requestNo = `LAB-${year}-${String(count + 1).padStart(5, '0')}`;
+  }
+});
 export const LaboratoryTest = mongoose.model<ILaboratoryTest>(
   'LaboratoryTest',
   LaboratoryTestSchema
