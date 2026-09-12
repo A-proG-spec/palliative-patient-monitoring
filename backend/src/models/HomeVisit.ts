@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
-
+import {applySoftDeleteFilter} from '@middlewares/softDelete.middleware'
 // ─────────────────────────────────────────────────────────────
 // Sub-document: Visit Signature
 // ─────────────────────────────────────────────────────────────
@@ -190,7 +190,11 @@ export interface IHomeVisit extends Document {
   // ── Meta ──
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
-  updatedAt: Date;
+  updatedAt:Date|null;
+  deletedAt: Date;
+  deletedBy:mongoose.Types.ObjectId |null;
+  deletionReason?:string |null;
+  updatedBy:mongoose.Types.ObjectId |null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -505,6 +509,11 @@ const HomeVisitSchema = new Schema<IHomeVisit>(
       ref: 'Staff',
       required: true,
     },
+    updatedAt:{type:Date, default:null},
+    deletedAt:{type:Date, default:null},
+    deletedBy:{type:Schema.Types.ObjectId, ref:'Admin', default:null},
+    deletionReason:{type:String},
+    updatedBy:{type:Schema.Types.ObjectId, ref:'Admin', default:null},
   },
   {
     timestamps: true,
@@ -519,7 +528,7 @@ HomeVisitSchema.index({ redFlags: 1 });
 HomeVisitSchema.index({ nextVisitDate: 1 });
 HomeVisitSchema.index({ teamLeaderId: 1 });
 HomeVisitSchema.index({ 'signatures.staffId': 1 });
-
+applySoftDeleteFilter(HomeVisitSchema);
 // ── Virtual: all required roles have signed ─────────────────────
 // Required signers are: TeamLeader (always present) + Physician + Nurse.
 HomeVisitSchema.virtual('allSigned').get(function (this: IHomeVisit) {
@@ -531,6 +540,6 @@ HomeVisitSchema.virtual('allSigned').get(function (this: IHomeVisit) {
 
 HomeVisitSchema.set('toJSON', { virtuals: true });
 HomeVisitSchema.set('toObject', { virtuals: true });
-
 export const HomeVisit = mongoose.model<IHomeVisit>('HomeVisit', HomeVisitSchema);
+
 export default HomeVisit;

@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { applySoftDeleteFilter } from '@middlewares/softDelete.middleware.js';
 
 // ─────────────────────────────────────────────────────────────
 // Test category identifiers — matches form Sections A–I
@@ -62,14 +63,17 @@ export interface ILaboratoryTest extends Document {
   resultNotes?: string;
   performedBy?: string;                            // technologist name
 
-  // ── Links to source encounters ──
-  visitId?: mongoose.Types.ObjectId;               // → HomeVisit
+  // ── Links to source encounters ──// → HomeVisit
   admissionId?: mongoose.Types.ObjectId;           // → HospitalAdmission
 
   // ── Meta ──
   orderedBy: mongoose.Types.ObjectId;              // → Staff (who placed the order)
   createdAt: Date;
-  updatedAt: Date;
+  updatedAt: Date | null;
+  deletedAt: Date | null;
+  deletedBy: mongoose.Types.ObjectId | null;
+  deletionReason?: string | null;
+  updatedBy: mongoose.Types.ObjectId | null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -157,10 +161,7 @@ const LaboratoryTestSchema = new Schema<ILaboratoryTest>(
     performedBy: String,
 
     // ── Encounter links ────────────────────────────────────────
-    visitId: {
-      type: Schema.Types.ObjectId,
-      ref: 'HomeVisit',
-    },
+    
     admissionId: {
       type: Schema.Types.ObjectId,
       ref: 'HospitalAdmission',
@@ -172,6 +173,11 @@ const LaboratoryTestSchema = new Schema<ILaboratoryTest>(
       ref: 'Staff',
       required: true,
     },
+    updatedAt: { type: Date, default: null },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: Schema.Types.ObjectId, ref: 'Admin', default: null },
+    deletionReason: { type: String, default: null },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'Admin', default: null },
   },
   { timestamps: true }
 );
@@ -184,7 +190,7 @@ LaboratoryTestSchema.index({ status: 1 });
 LaboratoryTestSchema.index({ priority: 1 });
 LaboratoryTestSchema.index({ category: 1 });
 LaboratoryTestSchema.index({ testName: 1 });
-
+applySoftDeleteFilter(LaboratoryTestSchema)
 // ─────────────────────────────────────────────────────────────
 // Virtuals
 // ─────────────────────────────────────────────────────────────

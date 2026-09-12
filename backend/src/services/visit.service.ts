@@ -10,7 +10,7 @@ import { ApiError } from '@utils/ApiError.js';
 export const recordVisit = async (
   patientId: string,
   data: any,
-  staffId: string
+  staffId: string,
 ) => {
   const [patient, teamLeader] = await Promise.all([
     Patient.findById(patientId),
@@ -20,7 +20,6 @@ export const recordVisit = async (
   if (!patient) throw new ApiError(404, 'Patient not found');
   if (!teamLeader) throw new ApiError(404, 'Team leader not found');
 
-  // Validate every team member that has a staffId (optional references)
   const memberIds = (data.teamMembers || [])
     .map((m: any) => m.staffId)
     .filter(Boolean);
@@ -35,7 +34,6 @@ export const recordVisit = async (
   const visit = await HomeVisit.create({
     patientId,
     ...data,
-    // Team leader is auto-signed at creation
     teamLeaderId: teamLeader._id,
     signatures: [
       {
@@ -65,7 +63,7 @@ export const recordVisit = async (
 export const getVisits = async (
   patientId: string,
   page: number = 1,
-  limit: number = 20
+  limit: number = 20,
 ) => {
   const patient = await Patient.findById(patientId);
   if (!patient) throw new ApiError(404, 'Patient not found');
@@ -134,17 +132,15 @@ export const getVisitById = async (patientId: string, visitId: string) => {
 export const signVisit = async (
   visitId: string,
   data: { email: string; password: string; role: 'TeamLeader' | 'Physician' | 'Nurse' },
-  _currentUserId: string    // not trusted for identity — we look up by email
+  _currentUserId: string,
 ) => {
   const visit = await HomeVisit.findById(visitId);
   if (!visit) throw new ApiError(404, 'Visit not found');
 
-  // 1. Look up the staff by email
   const email = data.email.toLowerCase().trim();
   const staff = await Staff.findOne({ email });
   if (!staff) throw new ApiError(401, 'Invalid credentials');
 
-  // 2. Must be active and verified
   if (staff.status !== 'Active') {
     throw new ApiError(403, 'Staff account is not active');
   }
@@ -152,29 +148,24 @@ export const signVisit = async (
     throw new ApiError(403, 'Staff email is not verified');
   }
 
-  // 3. Password check (bcrypt)
   const passwordOk = await bcrypt.compare(data.password, staff.password);
   if (!passwordOk) throw new ApiError(401, 'Invalid credentials');
 
-  // 4. Role must match what they claim
   if (staff.role !== data.role) {
     throw new ApiError(403, `You are not registered as a ${data.role}`);
   }
 
-  // 5. Team leader does not need to sign — already auto-signed
   if (data.role === 'TeamLeader') {
     throw new ApiError(400, 'The team leader is auto-signed and does not need to sign');
   }
 
-  // 6. Prevent duplicate signatures
   const alreadySigned = visit.signatures.some(
-    (s) => s.staffId.toString() === staff._id.toString()
+    (s) => s.staffId.toString() === staff._id.toString(),
   );
   if (alreadySigned) {
     throw new ApiError(400, 'You have already signed this visit');
   }
 
-  // 7. Append the new signature
   visit.signatures.push({
     staffId: staff._id,
     name: staff.name,
@@ -226,12 +217,12 @@ export const getVisitSignatures = async (visitId: string) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Update visit (admin edit workflow)
+// Update visit — admin only, records who made the change
 // ─────────────────────────────────────────────────────────────
 export const updateVisit = async (
   visitId: string,
   data: any,
-  adminId: string
+  adminId: string,
 ) => {
   const visit = await HomeVisit.findById(visitId);
   if (!visit) throw new ApiError(404, 'Visit not found');
@@ -255,6 +246,7 @@ export const updateVisit = async (
     }
   }
 
+  visit.updatedBy = adminId as any;   // ← audit
   await visit.save();
 
   return {
@@ -264,6 +256,51 @@ export const updateVisit = async (
   };
 };
 
+// ─────────────────────────────────────────────────────────────
+// Soft delete visit (admin only)
+// ─────────────────────────────────────────────────────────────
+export const deleteVisit = async (
+  visitId: string,
+  adminId: string,
+  reason?: string,
+) => {
+  const visit = await HomeVisit.findById(visitId);
+  if (!visit) throw new ApiError(404, 'Visit not found');
+
+  if (visit.deletedAt) {
+    throw new ApiError(400, 'Visit is already deleted');
+  }
+
+  visit.deletedAt = new Date();
+  visit.deletedBy = adminId as any;
+  visit.deletionReason = reason;
+  visit.updatedBy = adminId as any;
+  await visit.save();
+
+  return { id: visitId, success: true, deletedAt: visit.deletedAt };
+};
+
+// ─────────────────────────────────────────────────────────────
+// Restore a soft-deleted visit (admin only)
+// ─────────────────────────────────────────────────────────────
+export const restoreVisit = async (visitId: string, adminId: string) => {
+  const visit = await HomeVisit
+    .findById(visitId)
+    .setOptions({ includeDeleted: true });
+
+  if (!visit) throw new ApiError(404, 'Visit not found');
+  if (!visit.deletedAt) {
+    throw new ApiError(400, 'Visit is not deleted');
+  }
+
+  visit.deletedAt = null;
+  visit.deletedBy = null as any;
+  visit.deletionReason = undefined;
+  visit.updatedBy = adminId as any;
+  await visit.save();
+
+  return { id: visitId, restored: true };
+};
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -278,7 +315,6 @@ const formatSignatures = (signatures: any[]) =>
 
 const isAllSigned = (signatures: any[]): boolean => {
   const roles = new Set((signatures || []).map((s) => s.role));
-  // TeamLeader is always auto-signed at creation
   roles.add('TeamLeader');
   return roles.has('TeamLeader') && roles.has('Physician') && roles.has('Nurse');
 };
@@ -290,4 +326,6 @@ export default {
   signVisit,
   getVisitSignatures,
   updateVisit,
+  deleteVisit,
+  restoreVisit,
 };

@@ -35,7 +35,24 @@ export const getPatientParamsSchema = z.object({
     patientId: z.string().min(1, 'Patient ID is required'),
   }),
 });
+export const updatePatientSchema = z.object({
+  body: z.object({
+    firstName: z.string().min(2).optional(),
+    lastName: z.string().min(2).optional(),
+    age: z.number().min(1).max(150).optional(),
+    sex: z.enum(['Male', 'Female']).optional(),
+    dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    address: z.string().min(1).optional(),
+    phone: z.string().min(10).optional(),
+    emergencyContactName: z.string().min(1).optional(),
+    emergencyContactPhone: z.string().min(10).optional(),
+    caregiverName: z.string().min(1).optional(),
+    caregiverPhone: z.string().min(10).optional(),
+    hospitalPatientId: z.string().optional(),
+  }),
+});
 
 export type CreatePatientSchema = z.infer<typeof createPatientSchema>;
 export type GetPatientsQuerySchema = z.infer<typeof getPatientsQuerySchema>;
 export type GetPatientParamsSchema = z.infer<typeof getPatientParamsSchema>;
+export type UpdatePatientSchema = z.infer<typeof updatePatientSchema>;

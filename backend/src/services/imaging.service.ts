@@ -9,7 +9,7 @@ import { ApiError } from '@utils/ApiError.js';
 export const orderImaging = async (
   patientId: string,
   data: any,
-  staffId: string
+  staffId: string,
 ) => {
   const [patient, staff] = await Promise.all([
     Patient.findById(patientId),
@@ -21,7 +21,6 @@ export const orderImaging = async (
 
   const order = await ImagingOrder.create({
     patientId,
-    // Snapshot patient identity at order time
     patientName: `${patient.firstName} ${patient.lastName}`,
     medicalRecordNo: patient.patientDisplayId,
     ...data,
@@ -52,7 +51,7 @@ export const getImagingOrders = async (
   patientId: string,
   filters: { status?: string; modality?: string; priority?: string } = {},
   page: number = 1,
-  limit: number = 20
+  limit: number = 20,
 ) => {
   const patient = await Patient.findById(patientId);
   if (!patient) throw new ApiError(404, 'Patient not found');
@@ -103,9 +102,10 @@ export const getImagingOrders = async (
 // ─────────────────────────────────────────────────────────────
 export const getImagingOrderById = async (
   patientId: string,
-  imagingId: string
+  imagingId: string,
 ) => {
-  const order = await ImagingOrder.findOne({ _id: imagingId, patientId })
+  const order = await ImagingOrder
+    .findOne({ _id: imagingId, patientId })
     .populate('patientId', 'firstName lastName patientDisplayId age sex dateOfBirth')
     .populate('orderedBy', 'name role email');
 
@@ -123,14 +123,12 @@ export const getImagingOrderById = async (
     sex: p?.sex,
     dateOfBirth: p?.dateOfBirth,
 
-    // Section 2
     provisionalDiagnosis: order.provisionalDiagnosis,
     presentingSymptoms: order.presentingSymptoms,
     medicalHistory: order.medicalHistory,
     previousImaging: order.previousImaging,
     previousImagingDetails: order.previousImagingDetails,
 
-    // Section 3
     modality: order.modality,
     modalityOtherText: order.modalityOtherText,
     bodyRegion: order.bodyRegion,
@@ -138,12 +136,10 @@ export const getImagingOrderById = async (
     laterality: order.laterality,
     contrastRequested: order.contrastRequested,
 
-    // Section 4
     specificSite: order.specificSite,
     protocolViews: order.protocolViews,
     specialClinicalQuestion: order.specialClinicalQuestion,
 
-    // Section 5
     previousContrastReaction: order.previousContrastReaction,
     previousContrastReactionDetails: order.previousContrastReactionDetails,
     knownAllergies: order.knownAllergies,
@@ -151,22 +147,18 @@ export const getImagingOrderById = async (
     egfr: order.egfr,
     otherRelevantMedicationOrCondition: order.otherRelevantMedicationOrCondition,
 
-    // Section 6
     pregnancyStatus: order.pregnancyStatus,
     implantedMedicalDevice: order.implantedMedicalDevice,
     deviceImplantDetails: order.deviceImplantDetails,
     metallicForeignBody: order.metallicForeignBody,
     otherSafetyConsiderations: order.otherSafetyConsiderations,
 
-    // Section 7
     preparation: order.preparation,
     preparationInstructions: order.preparationInstructions,
 
-    // Section 8
     priority: order.priority,
     reasonForUrgency: order.reasonForUrgency,
 
-    // Section 9
     clinicianName: order.clinicianName,
     clinicianDepartment: order.clinicianDepartment,
     clinicianLicenseNo: order.clinicianLicenseNo,
@@ -174,7 +166,6 @@ export const getImagingOrderById = async (
     clinicianSignature: order.clinicianSignature,
     clinicianSignedAt: order.clinicianSignedAt,
 
-    // Section 10
     examinationPerformed: order.examinationPerformed,
     performedModality: order.performedModality,
     performedProtocol: order.performedProtocol,
@@ -184,9 +175,7 @@ export const getImagingOrderById = async (
     performedAt: order.performedAt,
     imageQuality: order.imageQuality,
 
-    // Report
     report: order.report,
-
     status: order.status,
 
     orderedBy: order.orderedBy
@@ -204,13 +193,13 @@ export const getImagingOrderById = async (
 };
 
 // ─────────────────────────────────────────────────────────────
-// Update imaging report (finalizes order)
+// Update imaging report — records who made the change
 // ─────────────────────────────────────────────────────────────
 export const updateImagingReport = async (
   patientId: string,
   imagingId: string,
   reportData: any,
-  staffId: string
+  adminId: string,
 ) => {
   const order = await ImagingOrder.findOne({ _id: imagingId, patientId });
   if (!order) throw new ApiError(404, 'Imaging order not found');
@@ -226,6 +215,7 @@ export const updateImagingReport = async (
     hospitalDepartmentStamp: reportData.hospitalDepartmentStamp,
   };
   order.status = 'Completed';
+  order.updatedBy = adminId as any;   // ← audit
   await order.save();
 
   return {
@@ -243,7 +233,7 @@ export const recordImagingPerformed = async (
   patientId: string,
   imagingId: string,
   departmentData: any,
-  staffId: string
+  adminId: string,
 ) => {
   const order = await ImagingOrder.findOne({ _id: imagingId, patientId });
   if (!order) throw new ApiError(404, 'Imaging order not found');
@@ -258,7 +248,7 @@ export const recordImagingPerformed = async (
     ? new Date(departmentData.performedAt)
     : new Date();
   order.imageQuality = departmentData.imageQuality;
-
+  order.updatedBy = adminId as any;   // ← audit
   await order.save();
 
   return {
@@ -270,17 +260,19 @@ export const recordImagingPerformed = async (
 };
 
 // ─────────────────────────────────────────────────────────────
-// Update status (Ordered ⇄ Completed ⇄ Cancelled)
+// Update status
 // ─────────────────────────────────────────────────────────────
 export const updateImagingStatus = async (
   patientId: string,
   imagingId: string,
-  status: 'Ordered' | 'Completed' | 'Cancelled'
+  status: 'Ordered' | 'Completed' | 'Cancelled',
+  adminId: string,
 ) => {
   const order = await ImagingOrder.findOne({ _id: imagingId, patientId });
   if (!order) throw new ApiError(404, 'Imaging order not found');
 
   order.status = status;
+  order.updatedBy = adminId as any;   // ← audit
   await order.save();
 
   return {
@@ -291,21 +283,54 @@ export const updateImagingStatus = async (
 };
 
 // ─────────────────────────────────────────────────────────────
-// Delete (admin-only, only if not yet completed)
+// Soft delete (admin only)
 // ─────────────────────────────────────────────────────────────
 export const deleteImagingOrder = async (
   patientId: string,
-  imagingId: string
+  imagingId: string,
+  adminId: string,
+  reason?: string,
 ) => {
   const order = await ImagingOrder.findOne({ _id: imagingId, patientId });
   if (!order) throw new ApiError(404, 'Imaging order not found');
 
-  if (order.status === 'Completed') {
-    throw new ApiError(400, 'Cannot delete a completed imaging order');
+  if (order.deletedAt) {
+    throw new ApiError(400, 'Imaging order is already deleted');
   }
 
-  await order.deleteOne();
-  return { id: imagingId, success: true };
+  order.deletedAt = new Date();
+  order.deletedBy = adminId as any;
+  order.deletionReason = reason;
+  order.updatedBy = adminId as any;
+  await order.save();
+
+  return { id: imagingId, success: true, deletedAt: order.deletedAt };
+};
+
+// ─────────────────────────────────────────────────────────────
+// Restore a soft-deleted imaging order (admin only)
+// ─────────────────────────────────────────────────────────────
+export const restoreImagingOrder = async (
+  patientId: string,
+  imagingId: string,
+  adminId: string,
+) => {
+  const order = await ImagingOrder
+    .findOne({ _id: imagingId, patientId })
+    .setOptions({ includeDeleted: true });
+
+  if (!order) throw new ApiError(404, 'Imaging order not found');
+  if (!order.deletedAt) {
+    throw new ApiError(400, 'Imaging order is not deleted');
+  }
+
+  order.deletedAt = null;
+  order.deletedBy = null as any;
+  order.deletionReason = undefined;
+  order.updatedBy = adminId as any;
+  await order.save();
+
+  return { id: imagingId, restored: true };
 };
 
 export default {
@@ -316,4 +341,5 @@ export default {
   recordImagingPerformed,
   updateImagingStatus,
   deleteImagingOrder,
+  restoreImagingOrder,
 };

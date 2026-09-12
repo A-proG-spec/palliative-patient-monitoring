@@ -54,11 +54,18 @@ router.put(
   imagingController.updateImagingStatus
 );
 
-// ── Delete (admin only) ──
+// ── Soft delete (admin only) ──
 router.delete(
   '/:imagingId',
   roleMiddleware(['admin']),
   imagingController.deleteImagingOrder
+);
+
+// ── Restore (admin only) ──  ← NEW
+router.post(
+  '/:imagingId/restore',
+  roleMiddleware(['admin']),
+  imagingController.restoreImagingOrder
 );
 
 export default router;

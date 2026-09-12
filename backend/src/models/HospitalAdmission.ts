@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import {applySoftDeleteFilter} from '@middlewares/softDelete.middleware'
 
 export interface IHospitalAdmission extends Document {
   // ── Patient Reference ──────────────────────────────────────────
@@ -14,23 +15,23 @@ export interface IHospitalAdmission extends Document {
   // ── Section 2: Referral Information ────────────────────────────
   referralId?: mongoose.Types.ObjectId;            // optional — direct admissions don't require it
   referredFrom?:
-    | 'InternalWard'
-    | 'OutpatientDepartment'
-    | 'ICU'
-    | 'ExternalHospital'
-    | 'Community'
-    | 'Home'
-    | 'Other';
+  | 'InternalWard'
+  | 'OutpatientDepartment'
+  | 'ICU'
+  | 'ExternalHospital'
+  | 'Community'
+  | 'Home'
+  | 'Other';
   referredFromOther?: string;
   referringClinician?: string;
   diagnosisAtReferral?: string;
   referralReason?:
-    | 'PainManagement'
-    | 'EndOfLifeCare'
-    | 'SymptomControl'
-    | 'HomeBasedCare'
-    | 'PsychosocialSupport'
-    | 'Other';
+  | 'PainManagement'
+  | 'EndOfLifeCare'
+  | 'SymptomControl'
+  | 'HomeBasedCare'
+  | 'PsychosocialSupport'
+  | 'Other';
   referralReasonOther?: string;
 
   // ── Admission Details ──────────────────────────────────────────
@@ -90,7 +91,11 @@ export interface IHospitalAdmission extends Document {
   // ── Meta ───────────────────────────────────────────────────────
   createdBy: mongoose.Types.ObjectId;              // Staff who recorded the admission
   createdAt: Date;
-  updatedAt: Date;
+  deletedAt: Date | null;
+  deletedBy: mongoose.Types.ObjectId | null;
+  deletionReason?: string | null;
+  updatedBy: mongoose.Types.ObjectId | null;
+  updatedAt:Date|null;
 }
 
 const HospitalAdmissionSchema = new Schema<IHospitalAdmission>(
@@ -240,6 +245,11 @@ const HospitalAdmissionSchema = new Schema<IHospitalAdmission>(
       ref: 'Staff',
       required: true,
     },
+    updatedAt: { type: Date, default: null },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: Schema.Types.ObjectId, ref: 'Admin', default: null },
+    deletionReason: { type: String, default: null },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'Admin', default: null },
   },
   {
     timestamps: true,
@@ -252,7 +262,7 @@ HospitalAdmissionSchema.index({ status: 1 });
 HospitalAdmissionSchema.index({ admissionDate: -1 });
 HospitalAdmissionSchema.index({ referralId: 1 });
 HospitalAdmissionSchema.index({ bedNumber: 1, status: 1 });   // bed-occupancy lookup
-
+applySoftDeleteFilter(HospitalAdmissionSchema)
 // ── Virtual: currently admitted ──────────────────────────────────
 HospitalAdmissionSchema.virtual('isActive').get(function (this: IHospitalAdmission) {
   return this.status === 'Active';

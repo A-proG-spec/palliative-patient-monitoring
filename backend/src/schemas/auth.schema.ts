@@ -16,12 +16,15 @@ export const loginSchema = z.object({
   }),
 });
 
-export const verifyEmailQuerySchema = z.object({
-  query: z.object({
-    token: z.string().min(1, 'Token is required'),
+export const verifyEmailSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email address'),
+    otp: z
+      .string()
+      .length(6, 'Code must be exactly 6 digits')
+      .regex(/^\d{6}$/, 'Code must contain only numbers'),
   }),
 });
-
 export const resendVerificationSchema = z.object({
   body: z.object({
     email: z.string().email('Invalid email address'),
@@ -30,5 +33,5 @@ export const resendVerificationSchema = z.object({
 
 export type RegisterSchema = z.infer<typeof registerSchema>;
 export type LoginSchema = z.infer<typeof loginSchema>;
-export type VerifyEmailQuerySchema = z.infer<typeof verifyEmailQuerySchema>;
+export type verifyEmailSchema = z.infer<typeof verifyEmailSchema>;
 export type ResendVerificationSchema = z.infer<typeof resendVerificationSchema>;

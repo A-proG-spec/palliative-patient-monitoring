@@ -212,6 +212,7 @@ export interface IDischargeSummary extends Document {
   createdBy: mongoose.Types.ObjectId;         // → Staff (admin)
   createdAt: Date;
   updatedAt: Date;
+  
 }
 
 // ─────────────────────────────────────────────────────────────

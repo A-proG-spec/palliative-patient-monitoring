@@ -4,7 +4,7 @@ import { Notification } from '@models/Notification.js';
 import { ApiError } from '@utils/ApiError.js';
 import { hashPassword, comparePassword } from '@utils/password.js';
 import { generateToken } from '@utils/jwt.js';
-import { generateVerificationToken } from '@utils/token.js';
+import { generateOtp, generateVerificationToken, hashOtp,compareOtpHash } from '@utils/token.js';
 import { sendVerificationEmail } from '@utils/email.js';
 import env from '@config/env.js';
 
@@ -24,9 +24,9 @@ export const registerStaff = async (
   const hashedPassword = await hashPassword(password);
 
   // Generate verification token
-  const verificationToken = generateVerificationToken();
-  const tokenExpiry = new Date();
-  tokenExpiry.setSeconds(tokenExpiry.getSeconds() + env.VERIFICATION_TOKEN_EXPIRY);
+  const otp = generateOtp();
+  const hashedOtp = hashOtp(otp)
+  const otpExpiry = new Date(Date.now()+10*60*1000);
 
   // Create staff
   const staff = await Staff.create({
@@ -36,13 +36,14 @@ export const registerStaff = async (
     password: hashedPassword,
     status: 'Pending',
     isEmailVerified: false,
-    emailVerificationToken: verificationToken,
-    emailVerificationTokenExpires: tokenExpiry,
+    emailVerificationOtp: hashedOtp,
+    emailVerificationOtpExpires: otpExpiry,
+    emailVerificationOtpAttempts:0,
   });
 
   // Send verification email
   try {
-    await sendVerificationEmail(email, name, verificationToken);
+    await sendVerificationEmail(email, name, otp);
   } catch (error) {
     console.error('Failed to send verification email:', error);
     // Don't throw error - staff is created, they can request resend
@@ -56,41 +57,68 @@ export const registerStaff = async (
   };
 };
 
-export const verifyEmail = async (token: string) => {
-  // Find staff by token
-  const staff = await Staff.findOne({
-    emailVerificationToken: token,
-    emailVerificationTokenExpires: { $gt: new Date() },
-  });
+export const verifyEmail = async (email: string, otp: string) => {
+  const normalizedEmail = email.toLowerCase().trim();
 
+  // 1. Find the staff by email
+  const staff = await Staff.findOne({ email: normalizedEmail });
   if (!staff) {
-    // Check if token exists but expired
-    const expiredStaff = await Staff.findOne({
-      emailVerificationToken: token,
-    });
-
-    if (expiredStaff) {
-      throw new ApiError(400, 'Verification link has expired. Please request a new one.');
-    }
-
-    throw new ApiError(400, 'Invalid verification link');
+    throw new ApiError(400, 'Invalid verification code');
   }
 
-  // Check if already verified
+  // 2. Check verified already
   if (staff.isEmailVerified) {
-    return {
-      email: staff.email,
-      isEmailVerified: true,
-    };
+    throw new ApiError(400, 'Email already verified. Please login.');
   }
 
-  // Update verification status
+  // 3. Check we have an active OTP
+  if (!staff.emailVerificationOtp || !staff.emailVerificationOtpExpires) {
+    throw new ApiError(400, 'No verification code found. Please request a new one.');
+  }
+
+  // 4. Check expiry
+  if (staff.emailVerificationOtpExpires.getTime() < Date.now()) {
+    // Clear the expired OTP
+    staff.emailVerificationOtp = null;
+    staff.emailVerificationOtpExpires = null;
+    staff.emailVerificationOtpAttempts = 0;
+    await staff.save();
+    throw new ApiError(400, 'Verification code has expired. Please request a new one.');
+  }
+
+  // 5. Check attempts limit (max 5 wrong tries)
+  if (staff.emailVerificationOtpAttempts >= 5) {
+    // Invalidate the OTP — too many failures
+    staff.emailVerificationOtp = null;
+    staff.emailVerificationOtpExpires = null;
+    staff.emailVerificationOtpAttempts = 0;
+    await staff.save();
+    throw new ApiError(
+      429,
+      'Too many incorrect attempts. Please request a new code.',
+    );
+  }
+
+  // 6. Compare OTP (constant-time)
+  const isMatch = compareOtpHash(otp, staff.emailVerificationOtp);
+  if (!isMatch) {
+    staff.emailVerificationOtpAttempts += 1;
+    await staff.save();
+    const remaining = 5 - staff.emailVerificationOtpAttempts;
+    throw new ApiError(
+      400,
+      `Invalid verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
+    );
+  }
+
+  // 7. Success — mark verified, clear OTP
   staff.isEmailVerified = true;
-  staff.emailVerificationToken = null;
-  staff.emailVerificationTokenExpires = null;
+  staff.emailVerificationOtp = null;
+  staff.emailVerificationOtpExpires = null;
+  staff.emailVerificationOtpAttempts = 0;
   await staff.save();
 
-  // Create notification for admin
+  // 8. Notify admins
   await Notification.create({
     type: 'StaffApproval',
     message: `New staff registration pending: ${staff.name}`,
@@ -108,38 +136,37 @@ export const verifyEmail = async (token: string) => {
 };
 
 export const resendVerificationEmail = async (email: string) => {
-  // Find staff by email
-  const staff = await Staff.findOne({ email });
+  const normalizedEmail = email.toLowerCase().trim();
 
+  const staff = await Staff.findOne({ email: normalizedEmail });
   if (!staff) {
     throw new ApiError(404, 'No account found with this email');
   }
 
-  // Check if already verified
   if (staff.isEmailVerified) {
     throw new ApiError(400, 'Email already verified. Please login.');
   }
 
-  // Check rate limiting (5 minutes)
-  const lastSent = staff.updatedAt;
-  const now = new Date();
-  const diffMinutes = (now.getTime() - lastSent.getTime()) / 1000 / 60;
-
-  if (diffMinutes < 5) {
-    throw new ApiError(429, 'Please wait before requesting another email');
+  // Rate limit: don't allow resend more than once every 60 seconds
+  if (staff.updatedAt) {
+    const secondsSinceUpdate = (Date.now() - staff.updatedAt.getTime()) / 1000;
+    if (secondsSinceUpdate < 60) {
+      const wait = Math.ceil(60 - secondsSinceUpdate);
+      throw new ApiError(429, `Please wait ${wait} seconds before requesting a new code.`);
+    }
   }
 
-  // Generate new token
-  const verificationToken = generateVerificationToken();
-  const tokenExpiry = new Date();
-  tokenExpiry.setSeconds(tokenExpiry.getSeconds() + env.VERIFICATION_TOKEN_EXPIRY);
+  // Generate a fresh OTP
+  const otp = generateOtp();
+  const hashedOtp = hashOtp(otp);
+  const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
-  staff.emailVerificationToken = verificationToken;
-  staff.emailVerificationTokenExpires = tokenExpiry;
+  staff.emailVerificationOtp = hashedOtp;
+  staff.emailVerificationOtpExpires = otpExpiry;
+  staff.emailVerificationOtpAttempts = 0;
   await staff.save();
 
-  // Send verification email
-  await sendVerificationEmail(email, staff.name, verificationToken);
+  await sendVerificationEmail(staff.email, staff.name, otp);
 
   return {
     email: staff.email,

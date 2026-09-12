@@ -1,16 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
-  XCircle, Phone, MapPin, User, Calendar, ClipboardEdit, Plus,
-  Pencil, Trash2, FileText, Printer, AlertTriangle, NotebookPen
+  XCircle, Phone, MapPin, User, Calendar, FileText, Printer,
+  AlertTriangle, NotebookPen,
 } from 'lucide-react';
-import { useAdminPatientDetail } from '@/hooks/useAdmin';
+import {
+  useAdminPatientDetail,
+  useUpdateVisit,
+  useVisitEditHistory,
+  useDischargeSummary,
+} from '@/hooks/useAdmin';
 import { usePatientVisits } from '@/hooks/useVisits';
 import { usePatientMedications } from '@/hooks/useMedications';
 import { usePatientLabs } from '@/hooks/useLabs';
 import { usePatientReferrals } from '@/hooks/useReferrals';
 import { usePatientAdmissions } from '@/hooks/useAdmissions';
-import { useProgressNotesStore } from '@/hooks/useProgressNotes';
+import { useProgressNotes } from '@/hooks/useProgressNotes';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -21,10 +26,8 @@ import { EmptyState, ErrorState } from '@/components/common/EmptyState';
 import { formatDate, cn } from '@/lib/utils';
 import { DISEASE_STAGE_LABELS as DSL, VISIT_TYPE_LABELS } from '@/constants';
 import { VisitEditModal } from '@/components/admin/VisitEditModal';
-import { useUpdateVisit, useVisitEditHistory } from '@/hooks/useAdmin';
 import type { DischargeSummary } from '@/components/admin/DischargePatientModal';
 import { printDischargeSummary } from '@/lib/printDischargeSummary';
-import { useToast } from '@/context/ToastContext';
 
 // ── Discharge summary viewer modal ────────────────────────────────
 interface DischargeSummaryViewerProps {
@@ -135,29 +138,29 @@ const AdminPatientDetailPage: React.FC = () => {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<Tab>('Visits');
 
-  // Discharge state — read from router location state (set by DischargePatientPage on success)
+  // Discharge summary — try router state first (set by DischargePatientPage
+  // immediately after a successful discharge), then fall back to the API.
+  // This means the summary survives a page refresh.
   const locationState = (location.state as {
     dischargeSummary?: DischargeSummary;
   } | null) ?? null;
 
-  const [dischargeSummary, setDischargeSummary] = useState<DischargeSummary | null>(
-    locationState?.dischargeSummary ?? null
-  );
-  const [showDischargeSummaryViewer, setShowDischargeSummaryViewer] = useState(false);
+  const { data: fetchedDischargeSummary } = useDischargeSummary(patientId!);
 
-  // Progress notes from Zustand store
-  const allProgressNotes = useProgressNotesStore((s) => s.notes);
-  const progressNotes = React.useMemo(
-    () => allProgressNotes.filter((n) => n.patientId === (patientId ?? '')),
-    [allProgressNotes, patientId],
-  );
+  const dischargeSummary: DischargeSummary | null =
+    locationState?.dischargeSummary ?? fetchedDischargeSummary ?? null;
+
+  const [showDischargeSummaryViewer, setShowDischargeSummaryViewer] = useState(false);
 
   // Primary patient data
   const { data: patient, isLoading, error, refetch } = useAdminPatientDetail(patientId!);
+
+  // Progress notes — fetched via React Query (same endpoint the staff page uses)
+  const { data: progressNotesData } = useProgressNotes(patientId!);
+  const progressNotes = progressNotesData?.items ?? [];
 
   // Sub-record data
   const { data: visitsData } = usePatientVisits(patientId!);
@@ -166,25 +169,20 @@ const AdminPatientDetailPage: React.FC = () => {
   const { data: refsData } = usePatientReferrals(patientId!);
   const { data: admsData } = usePatientAdmissions(patientId!);
 
-  // ── Filter lab tests to show only lab orders (not imaging) ──
-  const labOrders = labsData?.items?.filter(l => 
-    !l.testName?.includes('XRay') && 
-    !l.testName?.includes('Ultrasound') && 
-    !l.testName?.includes('CT') && 
-    !l.testName?.includes('MRI') &&
-    !l.testName?.includes('Mammography') &&
-    !l.testName?.includes('Fluoroscopy')
-  ) || [];
-
-  // ── Filter imaging orders ──
-  const imagingOrders = labsData?.items?.filter(l => 
-    l.testName?.includes('XRay') || 
-    l.testName?.includes('Ultrasound') || 
-    l.testName?.includes('CT') || 
-    l.testName?.includes('MRI') ||
-    l.testName?.includes('Mammography') ||
-    l.testName?.includes('Fluoroscopy')
-  ) || [];
+  // ── Lab vs imaging split (memoised so we don't refilter on every render) ──
+  const { labOrders, imagingOrders } = useMemo(() => {
+    const items = labsData?.items ?? [];
+    const labs: typeof items = [];
+    const imaging: typeof items = [];
+    for (const l of items) {
+      const n = l.testName ?? '';
+      const isImaging =
+        n.includes('XRay') || n.includes('Ultrasound') || n.includes('CT') ||
+        n.includes('MRI') || n.includes('Mammography') || n.includes('Fluoroscopy');
+      (isImaging ? imaging : labs).push(l);
+    }
+    return { labOrders: labs, imagingOrders: imaging };
+  }, [labsData]);
 
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
@@ -401,9 +399,9 @@ const AdminPatientDetailPage: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <EmptyState 
-                title="No progress notes recorded" 
-                description="Progress notes are recorded for hospitalised patients." 
+              <EmptyState
+                title="No progress notes recorded"
+                description="Progress notes are recorded for hospitalised patients."
               />
             )
           )}

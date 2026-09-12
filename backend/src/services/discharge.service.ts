@@ -131,7 +131,8 @@ export const updateDischargeSummary = async (
 // ─────────────────────────────────────────────────────────────
 export const finalizeDischargeSummary = async (
   patientId: string,
-  summaryId: string
+  summaryId: string,
+  adminId:string,
 ) => {
   const summary = await DischargeSummary.findOne({ _id: summaryId, patientId });
 
@@ -144,12 +145,12 @@ export const finalizeDischargeSummary = async (
   }
 
   summary.status = 'Final';
+  summary.createdBy = adminId as any;
   await summary.save();
 
   return {
     id: summary._id.toString(),
     status: summary.status,
-    updatedAt: summary.updatedAt,
   };
 };
 

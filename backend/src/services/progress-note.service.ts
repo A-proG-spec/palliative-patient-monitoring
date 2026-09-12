@@ -8,12 +8,14 @@ import { ApiError } from '@utils/ApiError.js';
 // ─────────────────────────────────────────────────────────────
 // Helper: compute "Day X" from an admission date
 // ─────────────────────────────────────────────────────────────
-const computeDayOfAdmission = (admissionDate: Date, noteDate: string): string => {
+const computeDayOfAdmission = (
+  admissionDate: Date,
+  noteDate: string,
+): string => {
   const start = new Date(admissionDate);
   const current = new Date(noteDate);
-  const diffDays = Math.floor(
-    (current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-  ) + 1;
+  const diffDays =
+    Math.floor((current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   return `Day ${diffDays}`;
 };
 
@@ -29,9 +31,8 @@ const formatSignatures = (signatures: any[]) =>
   }));
 
 // ─────────────────────────────────────────────────────────────
-// Helper: is the note fully signed by required roles?
-// Required on a progress note: Physician + Nurse
-// (Responsible clinician is auto-signed, so no need to check them.)
+// Helper: is the note fully signed?
+// Required: Physician + Nurse.
 // ─────────────────────────────────────────────────────────────
 const isAllSigned = (signatures: any[]): boolean => {
   const roles = new Set((signatures || []).map((s) => s.role));
@@ -39,12 +40,12 @@ const isAllSigned = (signatures: any[]): boolean => {
 };
 
 // ═════════════════════════════════════════════════════════════
-// Create progress note — auto-signs the responsible clinician
+// Create — auto-signs the responsible clinician
 // ═════════════════════════════════════════════════════════════
 export const createProgressNote = async (
   patientId: string,
   data: any,
-  staffId: string
+  staffId: string,
 ) => {
   const [patient, staff] = await Promise.all([
     Patient.findById(patientId),
@@ -54,12 +55,12 @@ export const createProgressNote = async (
   if (!patient) throw new ApiError(404, 'Patient not found');
   if (!staff) throw new ApiError(404, 'Staff member not found');
 
-  // Auto-link to the patient's current active admission if not provided
   let admissionId = data.admissionId;
   if (!admissionId) {
-    const activeAdmission = await HospitalAdmission
-      .findOne({ patientId, status: 'Active' })
-      .sort({ admissionDate: -1 });
+    const activeAdmission = await HospitalAdmission.findOne({
+      patientId,
+      status: 'Active',
+    }).sort({ admissionDate: -1 });
 
     if (activeAdmission) admissionId = activeAdmission._id.toString();
   }
@@ -68,8 +69,6 @@ export const createProgressNote = async (
     patientId,
     admissionId: admissionId || undefined,
     ...data,
-    // The logged-in staff member is the responsible clinician —
-    // auto-signed, same pattern as the team leader on a home visit.
     responsibleClinicianId: staff._id,
     signatures: [],
     createdBy: staffId,
@@ -94,7 +93,7 @@ export const getProgressNotes = async (
   patientId: string,
   filters: { admissionId?: string } = {},
   page: number = 1,
-  limit: number = 20
+  limit: number = 20,
 ) => {
   const patient = await Patient.findById(patientId);
   if (!patient) throw new ApiError(404, 'Patient not found');
@@ -127,6 +126,7 @@ export const getProgressNotes = async (
         bedNumber: admission?.bedNumber,
 
         attendingClinician: n.attendingClinician,
+        palliativeCareUnit: n.palliativeCareUnit,
         generalCondition: n.generalCondition,
         levelOfConsciousness: n.levelOfConsciousness,
         overallAssessment: n.overallAssessment,
@@ -166,7 +166,7 @@ export const getProgressNotes = async (
 // ═════════════════════════════════════════════════════════════
 export const getProgressNoteById = async (
   patientId: string,
-  noteId: string
+  noteId: string,
 ) => {
   const note = await PatientProgressNote
     .findOne({ _id: noteId, patientId })
@@ -179,10 +179,12 @@ export const getProgressNoteById = async (
   const rc = note.responsibleClinicianId as any;
   const admission = note.admissionId as any;
 
-  // Compute "Day X" from the admission date
   const dayOfAdmission =
     admission?.admissionDate && note.createdAt
-      ? computeDayOfAdmission(admission.admissionDate, note.createdAt.toISOString())
+      ? computeDayOfAdmission(
+          admission.admissionDate,
+          note.createdAt.toISOString(),
+        )
       : null;
 
   return {
@@ -199,20 +201,17 @@ export const getProgressNoteById = async (
       : null,
     dayOfAdmission,
 
-    // ── Header ──
     attendingClinician: note.attendingClinician,
+    palliativeCareUnit: note.palliativeCareUnit,
 
-    // ── 1. Current Clinical Status ──
     generalCondition: note.generalCondition,
     levelOfConsciousness: note.levelOfConsciousness,
     orientation: note.orientation,
     functionalStatus: note.functionalStatus,
     changesSincePreviousReview: note.changesSincePreviousReview,
 
-    // ── 2. Vital Signs ──
     vitals: note.vitals,
 
-    // ── 3. Symptom Assessment ──
     symptoms: note.symptoms,
     painScore: note.painScore,
     painLocation: note.painLocation,
@@ -222,7 +221,6 @@ export const getProgressNoteById = async (
     breakthroughPainEpisodes: note.breakthroughPainEpisodes,
     breakthroughPainFrequency: note.breakthroughPainFrequency,
 
-    // ── 4. Respiratory ──
     breathing: note.breathing,
     oxygenTherapy: note.oxygenTherapy,
     oxygenDelivery: note.oxygenDelivery,
@@ -231,7 +229,6 @@ export const getProgressNoteById = async (
     cough: note.cough,
     otherRespiratoryFindings: note.otherRespiratoryFindings,
 
-    // ── 5. Nutrition ──
     oralIntake: note.oralIntake,
     diet: note.diet,
     fluidIntake: note.fluidIntake,
@@ -241,14 +238,12 @@ export const getProgressNoteById = async (
     nauseaVomitingAffectingIntake: note.nauseaVomitingAffectingIntake,
     nutritionHydrationConcerns: note.nutritionHydrationConcerns,
 
-    // ── 6. Elimination ──
     urineOutput: note.urineOutput,
     urinaryCatheter: note.urinaryCatheter,
     bowelMovement: note.bowelMovement,
     lastBowelMovement: note.lastBowelMovement,
     otherEliminationConcerns: note.otherEliminationConcerns,
 
-    // ── 7. Skin ──
     skin: note.skin,
     skinOther: note.skinOther,
     pressureInjury: note.pressureInjury,
@@ -256,27 +251,24 @@ export const getProgressNoteById = async (
     woundCareProvided: note.woundCareProvided,
     woundPressureInjuryChanges: note.woundPressureInjuryChanges,
 
-    // ── 8. Psychological ──
     moodBehavior: note.moodBehavior,
     psychologicalDistress: note.psychologicalDistress,
     patientsMainConcernsToday: note.patientsMainConcernsToday,
-    counselingPsychologicalSupportProvided: note.counselingPsychologicalSupportProvided,
+    counselingPsychologicalSupportProvided:
+      note.counselingPsychologicalSupportProvided,
 
-    // ── 9. Spiritual ──
     spiritualDistressIdentified: note.spiritualDistressIdentified,
     patientsSpiritualCulturalConcerns: note.patientsSpiritualCulturalConcerns,
     spiritualCareProvided: note.spiritualCareProvided,
     spiritualReferralRequired: note.spiritualReferralRequired,
     spiritualNotes: note.spiritualNotes,
 
-    // ── 10. Family ──
     familyCaregiverPresent: note.familyCaregiverPresent,
     familyCaregiverConcerns: note.familyCaregiverConcerns,
     familyEducationSupportProvided: note.familyEducationSupportProvided,
     familyMeetingHeld: note.familyMeetingHeld,
     familyMeetingParticipants: note.familyMeetingParticipants,
 
-    // ── 11. Goals of Care ──
     currentGoalsOfCare: note.currentGoalsOfCare,
     currentGoalsOfCareOther: note.currentGoalsOfCareOther,
     goalsReviewedToday: note.goalsReviewedToday,
@@ -286,7 +278,6 @@ export const getProgressNoteById = async (
     codeStatusOther: note.codeStatusOther,
     advanceCarePlanReviewed: note.advanceCarePlanReviewed,
 
-    // ── 12. Medication Review ──
     currentMedicationRegimenReviewed: note.currentMedicationRegimenReviewed,
     changesMade: note.changesMade,
     medications: note.medications,
@@ -295,25 +286,21 @@ export const getProgressNoteById = async (
     medicationSideEffects: note.medicationSideEffects,
     medicationSideEffectsDetail: note.medicationSideEffectsDetail,
 
-    // ── 13. Nursing ──
     nursingSupportiveCareProvided: note.nursingSupportiveCareProvided,
     nursingSupportiveCareOther: note.nursingSupportiveCareOther,
     responseToSupportiveCare: note.responseToSupportiveCare,
 
-    // ── 14. Investigations ──
     investigationsPerformedReviewed: note.investigationsPerformedReviewed,
-    investigationsPerformedReviewedOther: note.investigationsPerformedReviewedOther,
+    investigationsPerformedReviewedOther:
+      note.investigationsPerformedReviewedOther,
     significantResults: note.significantResults,
     clinicalSignificanceActionTaken: note.clinicalSignificanceActionTaken,
 
-    // ── 15. MDT Review ──
     multidisciplinaryTeamReview: note.multidisciplinaryTeamReview,
 
-    // ── 16. Assessment ──
     overallAssessment: note.overallAssessment,
     problemsIdentifiedToday: note.problemsIdentifiedToday,
 
-    // ── 17. Plan ──
     symptomManagementPlan: note.symptomManagementPlan,
     medicationPlan: note.medicationPlan,
     nursingSupportiveCarePlan: note.nursingSupportiveCarePlan,
@@ -322,16 +309,13 @@ export const getProgressNoteById = async (
     referralsConsultations: note.referralsConsultations,
     dischargeTransferHospicePlanning: note.dischargeTransferHospicePlanning,
 
-    // ── 18. SOAP ──
     soapSubjective: note.soapSubjective,
     soapObjective: note.soapObjective,
     soapAssessment: note.soapAssessment,
     soapPlan: note.soapPlan,
 
-    // ── 19. Additional Notes ──
     additionalProgressNotes: note.additionalProgressNotes,
 
-    // ── 20. Authorization + Signatures ──
     responsibleClinician: rc
       ? {
           staffId: rc._id.toString(),
@@ -344,7 +328,6 @@ export const getProgressNoteById = async (
     allSigned: isAllSigned(note.signatures),
     facilityStamp: note.facilityStamp,
 
-    // ── Meta ──
     createdBy: note.createdBy
       ? {
           id: (note.createdBy as any)._id.toString(),
@@ -360,22 +343,20 @@ export const getProgressNoteById = async (
 };
 
 // ═════════════════════════════════════════════════════════════
-// Sign progress note — bcrypt-verified email + password
+// Sign — bcrypt-verified email + password
 // ═════════════════════════════════════════════════════════════
 export const signProgressNote = async (
   patientId: string,
   noteId: string,
-  data: { email: string; password: string; role: 'Physician' | 'Nurse' | 'Reviewer' }
+  data: { email: string; password: string; role: 'Physician' | 'Nurse' | 'Reviewer' },
 ) => {
   const note = await PatientProgressNote.findOne({ _id: noteId, patientId });
   if (!note) throw new ApiError(404, 'Progress note not found');
 
-  // 1. Look up the staff by email
   const email = data.email.toLowerCase().trim();
   const staff = await Staff.findOne({ email });
   if (!staff) throw new ApiError(401, 'Invalid credentials');
 
-  // 2. Account must be active and verified
   if (staff.status !== 'Active') {
     throw new ApiError(403, 'Staff account is not active');
   }
@@ -383,29 +364,24 @@ export const signProgressNote = async (
     throw new ApiError(403, 'Staff email is not verified');
   }
 
-  // 3. Verify password (bcrypt)
   const passwordOk = await bcrypt.compare(data.password, staff.password);
   if (!passwordOk) throw new ApiError(401, 'Invalid credentials');
 
-  // 4. Role must match — except Reviewer, which any staff can claim
   if (data.role !== 'Reviewer' && staff.role !== data.role) {
     throw new ApiError(403, `You are not registered as a ${data.role}`);
   }
 
-  // 5. Responsible clinician is auto-signed — no need to sign again
   if (staff._id.toString() === note.responsibleClinicianId.toString()) {
     throw new ApiError(400, 'You are auto-signed as the responsible clinician');
   }
 
-  // 6. Prevent duplicate signatures
   const alreadySigned = note.signatures.some(
-    (s) => s.staffId.toString() === staff._id.toString()
+    (s) => s.staffId.toString() === staff._id.toString(),
   );
   if (alreadySigned) {
     throw new ApiError(400, 'You have already signed this note');
   }
 
-  // 7. Append the signature
   note.signatures.push({
     staffId: staff._id,
     name: staff.name,
@@ -428,11 +404,11 @@ export const signProgressNote = async (
 };
 
 // ═════════════════════════════════════════════════════════════
-// Get current signature status for a progress note
+// Get signature status
 // ═════════════════════════════════════════════════════════════
 export const getProgressNoteSignatures = async (
   patientId: string,
-  noteId: string
+  noteId: string,
 ) => {
   const note = await PatientProgressNote
     .findOne({ _id: noteId, patientId })
@@ -459,28 +435,28 @@ export const getProgressNoteSignatures = async (
 };
 
 // ═════════════════════════════════════════════════════════════
-// Update progress note (author-only)
+// Update — author only, records who made the change
 // ═════════════════════════════════════════════════════════════
 export const updateProgressNote = async (
   patientId: string,
   noteId: string,
   data: any,
-  staffId: string
+  adminId: string,
 ) => {
   const note = await PatientProgressNote.findOne({ _id: noteId, patientId });
   if (!note) throw new ApiError(404, 'Progress note not found');
 
-  if (note.createdBy.toString() !== staffId) {
+  if (note.createdBy.toString() !== adminId) {
     throw new ApiError(403, 'You can only edit progress notes you created');
   }
 
-  // Don't allow overwriting the signatures or the responsible clinician
   delete data.signatures;
   delete data.responsibleClinicianId;
   delete data.createdBy;
   delete data.patientId;
 
   Object.assign(note, data);
+  note.updatedBy = adminId as any;   // ← audit
   await note.save();
 
   return {
@@ -490,21 +466,58 @@ export const updateProgressNote = async (
 };
 
 // ═════════════════════════════════════════════════════════════
-// Delete progress note (admin-only — enforce at route level)
+// Soft delete (admin only)
 // ═════════════════════════════════════════════════════════════
 export const deleteProgressNote = async (
   patientId: string,
-  noteId: string
+  noteId: string,
+  adminId: string,
+  reason?: string,
 ) => {
   const note = await PatientProgressNote.findOne({ _id: noteId, patientId });
   if (!note) throw new ApiError(404, 'Progress note not found');
 
-  await note.deleteOne();
-  return { id: noteId, success: true };
+  if (note.deletedAt) {
+    throw new ApiError(400, 'Progress note is already deleted');
+  }
+
+  note.deletedAt = new Date();
+  note.deletedBy = adminId as any;
+  note.deletionReason = reason;
+  note.updatedBy = adminId as any;
+  await note.save();
+
+  return { id: noteId, success: true, deletedAt: note.deletedAt };
 };
 
 // ═════════════════════════════════════════════════════════════
-// Helper for admission.service / dashboards
+// Restore a soft-deleted note (admin only)
+// ═════════════════════════════════════════════════════════════
+export const restoreProgressNote = async (
+  patientId: string,
+  noteId: string,
+  adminId: string,
+) => {
+  const note = await PatientProgressNote
+    .findOne({ _id: noteId, patientId })
+    .setOptions({ includeDeleted: true });
+
+  if (!note) throw new ApiError(404, 'Progress note not found');
+  if (!note.deletedAt) {
+    throw new ApiError(400, 'Progress note is not deleted');
+  }
+
+  note.deletedAt = null;
+  note.deletedBy = null as any;
+  note.deletionReason = undefined;
+  note.updatedBy = adminId as any;
+  await note.save();
+
+  return { id: noteId, restored: true };
+};
+
+// ═════════════════════════════════════════════════════════════
+// Helper for admission.service & dashboards
 // ═════════════════════════════════════════════════════════════
 export const countProgressNotesByAdmission = async (admissionId: string) => {
   return PatientProgressNote.countDocuments({ admissionId });
@@ -521,5 +534,6 @@ export default {
   getProgressNoteSignatures,
   updateProgressNote,
   deleteProgressNote,
+  restoreProgressNote,
   countProgressNotesByAdmission,
 };

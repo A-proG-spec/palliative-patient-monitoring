@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '@middlewares/auth.middleware.js';
+import { roleMiddleware } from '@middlewares/role.middleware.js';
 import { validate } from '@middlewares/validate.middleware.js';
 import {
   createMedicationSchema,
@@ -13,23 +14,42 @@ const router = Router({ mergeParams: true });
 // All medication routes require authentication
 router.use(authMiddleware);
 
+// ── Order ──
 router.post(
   '/',
   validate(createMedicationSchema),
   medicationController.orderMedication
 );
 
+// ── List ──
 router.get(
   '/',
   validate(getMedicationsQuerySchema),
   medicationController.getMedications
 );
 
+// ── Read one ──
 router.get('/:medicationId', medicationController.getMedicationById);
+
+// ── Update status ──
 router.put(
   '/:medicationId',
   validate(updateMedicationStatusSchema),
   medicationController.updateMedicationStatus
+);
+
+// ── Soft delete (admin only) ──  ← NEW
+router.delete(
+  '/:medicationId',
+  roleMiddleware(['admin']),
+  medicationController.deleteMedication
+);
+
+// ── Restore (admin only) ──  ← NEW
+router.post(
+  '/:medicationId/restore',
+  roleMiddleware(['admin']),
+  medicationController.restoreMedication
 );
 
 export default router;

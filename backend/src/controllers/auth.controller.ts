@@ -10,9 +10,13 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
-  const { token } = req.query;
-  const result = await authService.verifyEmail(token as string);
-  return SuccessResponse(200, 'Email verified successfully. Please wait for admin approval.', result);
+  const { email, otp } = req.body;
+  const result = await authService.verifyEmail(email, otp);
+  return SuccessResponse(
+    200,
+    'Email verified successfully. Please wait for admin approval.',
+    result,
+  );
 });
 
 export const resendVerification = asyncHandler(async (req: Request, res: Response) => {

@@ -6,7 +6,7 @@ import {
 import { usePatient } from '@/hooks/usePatients';
 import { useAuthStore } from '@/store/auth.store';
 import {
-  useProgressNotesStore,
+  useCreateProgressNote,
   buildBlankProgressNote,
   type ProgressNote,
   type ProgressNoteMedRow,
@@ -14,7 +14,6 @@ import {
   type ProgressNoteAdditionalEntry,
   type ProgressNoteMDTRow,
 } from '@/hooks/useProgressNotes';
-import { useToast } from '@/context/ToastContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -148,9 +147,8 @@ const SYMPTOM_KEYS = [
 const RecordProgressNotePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const user = useAuthStore((s) => s.user);
-  const addNote = useProgressNotesStore((s) => s.addNote);
+  const createNote = useCreateProgressNote(id!);
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
 
@@ -205,11 +203,21 @@ const RecordProgressNotePage: React.FC = () => {
     setShowConfirm(true);
   };
 
-  const handleConfirmSave = () => {
-    addNote({ ...form, createdAt: new Date().toISOString() });
-    setShowConfirm(false);
-    toast.success('Progress note saved successfully.');
-    navigate(`/patients/${id}`, { state: { savedProgressNote: true } });
+  const handleConfirmSave = async () => {
+    // Strip server-managed fields — the API assigns these
+    const { id: _id, patientId: _pid, createdAt: _createdAt, ...payload } = form;
+
+    try {
+      await createNote.mutateAsync(payload);
+      setShowConfirm(false);
+      setIsDirty(false);
+      // useCreateProgressNote already toasts on success/error
+      navigate(`/patients/${id}`, { state: { savedProgressNote: true } });
+    } catch {
+      // onError toast is handled inside the hook; keep the modal open so
+      // the clinician can retry without losing the form data.
+      setShowConfirm(false);
+    }
   };
 
   const handleBack = () => {
@@ -310,7 +318,9 @@ const RecordProgressNotePage: React.FC = () => {
           </div>
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" onClick={handleBack}>Cancel</Button>
-            <Button size="sm" onClick={handleSubmitClick}>Save Progress Note</Button>
+            <Button size="sm" onClick={handleSubmitClick} loading={createNote.isPending}>
+              Save Progress Note
+            </Button>
           </div>
         </div>
       </div>
@@ -349,10 +359,14 @@ const RecordProgressNotePage: React.FC = () => {
               Are you sure you want to save this progress note?
             </p>
             <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setShowConfirm(false)}>
+              <Button variant="outline" className="flex-1"
+                onClick={() => setShowConfirm(false)}
+                disabled={createNote.isPending}>
                 Cancel
               </Button>
-              <Button className="flex-1" onClick={handleConfirmSave}>
+              <Button className="flex-1"
+                onClick={handleConfirmSave}
+                loading={createNote.isPending}>
                 Yes, Save Note
               </Button>
             </div>

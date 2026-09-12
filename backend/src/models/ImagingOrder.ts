@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { applySoftDeleteFilter } from '@middlewares/softDelete.middleware.js';
 
 export type ImagingModality =
   | 'XRay'             // A. X-Ray / Radiography
@@ -116,7 +117,11 @@ export interface IImagingOrder extends Document {
   // ── Meta ────────────────────────────────────────────────────
   orderedBy: mongoose.Types.ObjectId;      // → Staff
   createdAt: Date;
-  updatedAt: Date;
+  updatedAt:Date|null;
+  deletedAt: Date | null;
+  deletedBy: mongoose.Types.ObjectId | null;
+  deletionReason?: string | null;
+  updatedBy: mongoose.Types.ObjectId | null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -283,6 +288,11 @@ const ImagingOrderSchema = new Schema<IImagingOrder>(
       ref: 'Staff',
       required: true,
     },
+    updatedAt: { type: Date, default: null },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: Schema.Types.ObjectId, ref: 'Admin', default: null },
+    deletionReason: { type: String, default: null },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'Admin', default: null },
   },
   { timestamps: true }
 );
@@ -295,7 +305,7 @@ ImagingOrderSchema.index({ status: 1 });
 ImagingOrderSchema.index({ modality: 1 });
 ImagingOrderSchema.index({ priority: 1 });
 ImagingOrderSchema.index({ createdAt: -1 });
-
+applySoftDeleteFilter(ImagingOrderSchema)
 // ─────────────────────────────────────────────────────────────
 // Virtuals
 // ─────────────────────────────────────────────────────────────

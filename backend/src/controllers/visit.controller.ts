@@ -45,7 +45,7 @@ export const getVisitSignatures = asyncHandler(async (req: Request, res: Respons
 });
 
 // ─────────────────────────────────────────────────────────────
-// Admin Edit
+// Admin Edit + Delete + Restore
 // ─────────────────────────────────────────────────────────────
 
 export const updateVisit = asyncHandler(async (req: Request, res: Response) => {
@@ -54,10 +54,17 @@ export const updateVisit = asyncHandler(async (req: Request, res: Response) => {
   return SuccessResponse(200, 'Visit updated successfully', result);
 });
 
-export const getVisitEditHistory = asyncHandler(async (req: Request, res: Response) => {
+export const deleteVisit = asyncHandler(async (req: Request, res: Response) => {
   const visitId = req.params.visitId as string;
-  const result = await visitService.getVisitEditHistory(visitId);
-  return SuccessResponse(200, 'OK', result);
+  const { reason } = req.body;
+  const result = await visitService.deleteVisit(visitId, req.user.id, reason);
+  return SuccessResponse(200, 'Visit deleted', result);
+});
+
+export const restoreVisit = asyncHandler(async (req: Request, res: Response) => {
+  const visitId = req.params.visitId as string;
+  const result = await visitService.restoreVisit(visitId, req.user.id);
+  return SuccessResponse(200, 'Visit restored', result);
 });
 
 export default {
@@ -67,5 +74,6 @@ export default {
   signVisit,
   getVisitSignatures,
   updateVisit,
-  getVisitEditHistory,
+  deleteVisit,
+  restoreVisit,
 };

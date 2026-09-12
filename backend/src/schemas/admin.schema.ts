@@ -42,27 +42,6 @@ export const getReportsQuerySchema = z.object({
   }),
 });
 
-export const updateVisitSchema = z.object({
-  body: z.object({
-    visitDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').optional(),
-    timeStarted: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format').optional(),
-    timeEnded: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format').optional(),
-    overallStatus: z.enum(['Stable', 'Deteriorating', 'Critical', 'BedBound']).optional(),
-    painScore: z.number().min(0).max(10).optional(),
-    ppsScore: z.number().min(0).max(100).optional(),
-    kpsScore: z.number().min(0).max(100).optional(),
-    outcome: z
-      .enum([
-        'Stable',
-        'SymptomsImproved',
-        'SymptomsUnchanged',
-        'SymptomsWorsened',
-        'ReferredToFacility',
-        'Deceased',
-      ])
-      .optional(),
-  }),
-});
 
 export const getVisitEditHistoryParamsSchema = z.object({
   params: z.object({
@@ -78,5 +57,4 @@ export type CloseCaseSchema = z.infer<typeof closeCaseSchema>;
 export type GetNotificationsQuerySchema = z.infer<typeof getNotificationsQuerySchema>;
 export type GetAdminPatientsQuerySchema = z.infer<typeof getAdminPatientsQuerySchema>;
 export type GetReportsQuerySchema = z.infer<typeof getReportsQuerySchema>;
-export type UpdateVisitSchema = z.infer<typeof updateVisitSchema>;
 export type GetVisitEditHistoryParamsSchema = z.infer<typeof getVisitEditHistoryParamsSchema>;

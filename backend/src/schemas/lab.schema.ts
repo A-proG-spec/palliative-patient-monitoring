@@ -39,7 +39,6 @@ export const createLabSchema = z.object({
     collectionTime: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format').optional(),
 
     // ── Encounter links ──
-    visitId: z.string().optional(),
     admissionId: z.string().optional(),
   }),
 });

@@ -18,7 +18,7 @@ const generatePatientDisplayId = async (): Promise<string> => {
   const counter = await Counter.findOneAndUpdate(
     { name: 'patientId' },
     { $inc: { value: 1 } },
-    { new: true, upsert: true }
+    { new: true, upsert: true },
   );
 
   const number = counter.value;
@@ -59,7 +59,7 @@ export const getPatients = async (
   page: number = 1,
   limit: number = 20,
   status?: string,
-  search?: string
+  search?: string,
 ) => {
   const filter: any = {};
 
@@ -102,10 +102,12 @@ export const getPatients = async (
 };
 
 // ─────────────────────────────────────────────────────────────
-// Get one patient (with registeredBy populated)
+// Get one patient
 // ─────────────────────────────────────────────────────────────
 export const getPatientById = async (patientId: string) => {
-  const patient = await Patient.findById(patientId).populate('registeredBy', 'name');
+  const patient = await Patient
+    .findById(patientId)
+    .populate('registeredBy', 'name');
 
   if (!patient) {
     throw new ApiError(404, 'Patient not found');
@@ -114,6 +116,7 @@ export const getPatientById = async (patientId: string) => {
   return {
     id: patient._id.toString(),
     patientDisplayId: patient.patientDisplayId,
+    hospitalPatientId: patient.hospitalPatientId,
     firstName: patient.firstName,
     lastName: patient.lastName,
     age: patient.age,
@@ -137,6 +140,67 @@ export const getPatientById = async (patientId: string) => {
       name: (patient.registeredBy as any)?.name || 'Unknown',
     },
     createdAt: patient.createdAt,
+    updatedAt: patient.updatedAt,
+  };
+};
+
+// ─────────────────────────────────────────────────────────────
+// Update patient — records who made the change
+// ─────────────────────────────────────────────────────────────
+// Only whitelisted demographic/contact fields can be updated.
+// Clinical fields (diagnosis, stage, prognosis) intentionally
+// excluded — those should flow through a proper clinical workflow.
+// ─────────────────────────────────────────────────────────────
+export const updatePatient = async (
+  patientId: string,
+  data: any,
+  adminId: string,
+) => {
+  const patient = await Patient.findById(patientId);
+  if (!patient) throw new ApiError(404, 'Patient not found');
+
+  const allowed = [
+    'firstName',
+    'lastName',
+    'age',
+    'sex',
+    'dateOfBirth',
+    'address',
+    'phone',
+    'emergencyContactName',
+    'emergencyContactPhone',
+    'caregiverName',
+    'caregiverPhone',
+    'hospitalPatientId',
+  ];
+
+  for (const key of allowed) {
+    if (data[key] !== undefined) {
+      patient.set(key, data[key]);
+    }
+  }
+
+  patient.updatedBy = adminId as any;   // ← audit
+  await patient.save();
+
+  return {
+    id: patient._id.toString(),
+    patientDisplayId: patient.patientDisplayId,
+    hospitalPatientId: patient.hospitalPatientId,
+    firstName: patient.firstName,
+    lastName: patient.lastName,
+    age: patient.age,
+    sex: patient.sex,
+    dateOfBirth: patient.dateOfBirth,
+    address: patient.address,
+    phone: patient.phone,
+    emergencyContactName: patient.emergencyContactName,
+    emergencyContactPhone: patient.emergencyContactPhone,
+    caregiverName: patient.caregiverName,
+    caregiverPhone: patient.caregiverPhone,
+    status: patient.status,
+    currentLocation: patient.currentLocation,
+    updatedAt: patient.updatedAt,
   };
 };
 
@@ -168,7 +232,9 @@ export const getPatientSummary = async (patientId: string) => {
     Referral.find({ patientId }).sort({ createdAt: -1 }),
     HospitalAdmission.find({ patientId }).sort({ admissionDate: -1 }),
     ImagingOrder.find({ patientId }).sort({ createdAt: -1 }),
-    PatientProgressNote.find({ patientId }).sort({ createdAt: -1 }).limit(20),
+    PatientProgressNote.find({ patientId })
+      .sort({ createdAt: -1 })
+      .limit(20),
     DischargeSummary.findOne({ patientId }).sort({ createdAt: -1 }),
   ]);
 
@@ -267,7 +333,7 @@ export const getPatientProgress = async (patientId: string) => {
     throw new ApiError(404, 'Patient not found');
   }
 
-  // Primary source: home visits (they carry ppsScore / kpsScore)
+  // Primary source: home visits carry ppsScore / kpsScore
   const visits = await HomeVisit.find({ patientId })
     .sort({ visitDate: 1 })
     .select('visitDate ppsScore kpsScore _id');
@@ -279,10 +345,6 @@ export const getPatientProgress = async (patientId: string) => {
     ppsScore: v.ppsScore,
   }));
 
-  // No home visits → no functional-score data available yet.
-  // (Progress notes don't carry PPS/KPS on this form; return empty trends
-  //  so the frontend graph shows a friendly "no data" state rather than
-  //  crashing on missing trends.)
   if (progressData.length === 0) {
     return {
       patientId: patient._id.toString(),
@@ -333,6 +395,7 @@ export default {
   registerPatient,
   getPatients,
   getPatientById,
+  updatePatient,
   getPatientSummary,
   getPatientProgress,
 };

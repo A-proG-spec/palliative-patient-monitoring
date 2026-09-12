@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { applySoftDeleteFilter } from '@middlewares/softDelete.middleware.js';
 
 // ─────────────────────────────────────────────────────────────
 // Sub-document types
@@ -54,8 +55,8 @@ export interface IProgressNoteSignature {
 export interface IPatientProgressNote extends Document {
   // ── Relationships ──
   patientId: mongoose.Types.ObjectId;         // → Patient
-  admissionId?: mongoose.Types.ObjectId;      // → HospitalAdmission
-  visitId?: mongoose.Types.ObjectId;          // → HomeVisit (if written during a home visit)
+  admissionId?: mongoose.Types.ObjectId;
+  palliativeCareUnit: string
 
   // ── Header ──
   attendingClinician: string;                 // the name printed at the top of the form
@@ -275,7 +276,11 @@ export interface IPatientProgressNote extends Document {
   // ── Meta ──
   createdBy: mongoose.Types.ObjectId;    // → Staff who saved the note
   createdAt: Date;
-  updatedAt: Date;
+  updatedAt: Date | null;
+  deletedAt: Date | null;
+  deletedBy: mongoose.Types.ObjectId | null;
+  deletionReason?: string | null;
+  updatedBy: mongoose.Types.ObjectId | null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -364,14 +369,9 @@ const PatientProgressNoteSchema = new Schema<IPatientProgressNote>(
       type: Schema.Types.ObjectId,
       ref: 'HospitalAdmission',
     },
-    visitId: {
-      type: Schema.Types.ObjectId,
-      ref: 'HomeVisit',
-    },
-
     // ── Header ──
     attendingClinician: { type: String, required: true },
-
+    palliativeCareUnit: { type: String },
     // ── 1. Current Clinical Status ──
     generalCondition: {
       type: String,
@@ -584,6 +584,12 @@ const PatientProgressNoteSchema = new Schema<IPatientProgressNote>(
       ref: 'Staff',
       required: true,
     },
+    updatedAt: { type: Date, default: null },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: Schema.Types.ObjectId, ref: 'Admin', default: null },
+    deletionReason: { type: String, default: null },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'Admin', default: null },
+
   },
   { timestamps: true }
 );
@@ -593,11 +599,10 @@ const PatientProgressNoteSchema = new Schema<IPatientProgressNote>(
 // ─────────────────────────────────────────────────────────────
 PatientProgressNoteSchema.index({ patientId: 1, createdAt: -1 });
 PatientProgressNoteSchema.index({ admissionId: 1, createdAt: -1 });
-PatientProgressNoteSchema.index({ visitId: 1 });
 PatientProgressNoteSchema.index({ createdBy: 1 });
 PatientProgressNoteSchema.index({ responsibleClinicianId: 1 });
 PatientProgressNoteSchema.index({ 'signatures.staffId': 1 });
-
+applySoftDeleteFilter(PatientProgressNoteSchema)
 // ── Virtual: all required roles have signed ──
 // Required signers on a progress note: Physician + Nurse.
 // (Responsible clinician is auto-signed, like the team leader on a visit.)

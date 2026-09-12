@@ -32,14 +32,24 @@ export const getImagingOrderById = asyncHandler(async (req: Request, res: Respon
 export const updateImagingReport = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const imagingId = req.params.imagingId as string;
-  const result = await imagingService.updateImagingReport(patientId, imagingId, req.body, req.user.id);
+  const result = await imagingService.updateImagingReport(
+    patientId,
+    imagingId,
+    req.body,
+    req.user.id,
+  );
   return SuccessResponse(200, 'Imaging report saved successfully', result);
 });
 
 export const recordImagingPerformed = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const imagingId = req.params.imagingId as string;
-  const result = await imagingService.recordImagingPerformed(patientId, imagingId, req.body, req.user.id);
+  const result = await imagingService.recordImagingPerformed(
+    patientId,
+    imagingId,
+    req.body,
+    req.user.id,
+  );
   return SuccessResponse(200, 'Imaging department record saved', result);
 });
 
@@ -47,15 +57,39 @@ export const updateImagingStatus = asyncHandler(async (req: Request, res: Respon
   const patientId = req.params.patientId as string;
   const imagingId = req.params.imagingId as string;
   const { status } = req.body;
-  const result = await imagingService.updateImagingStatus(patientId, imagingId, status);
+  const result = await imagingService.updateImagingStatus(
+    patientId,
+    imagingId,
+    status,
+    req.user.id,
+  );
   return SuccessResponse(200, 'Imaging status updated', result);
 });
 
+// ── Soft delete (admin only) ──
 export const deleteImagingOrder = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const imagingId = req.params.imagingId as string;
-  const result = await imagingService.deleteImagingOrder(patientId, imagingId);
+  const { reason } = req.body;
+  const result = await imagingService.deleteImagingOrder(
+    patientId,
+    imagingId,
+    req.user.id,
+    reason,
+  );
   return SuccessResponse(200, 'Imaging order deleted', result);
+});
+
+// ── Restore (admin only) ──
+export const restoreImagingOrder = asyncHandler(async (req: Request, res: Response) => {
+  const patientId = req.params.patientId as string;
+  const imagingId = req.params.imagingId as string;
+  const result = await imagingService.restoreImagingOrder(
+    patientId,
+    imagingId,
+    req.user.id,
+  );
+  return SuccessResponse(200, 'Imaging order restored', result);
 });
 
 export default {
@@ -66,4 +100,5 @@ export default {
   recordImagingPerformed,
   updateImagingStatus,
   deleteImagingOrder,
+  restoreImagingOrder,
 };

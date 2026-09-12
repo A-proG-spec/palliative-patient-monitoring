@@ -42,15 +42,39 @@ export const getProgressNoteSignatures = asyncHandler(async (req: Request, res: 
 export const updateProgressNote = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const noteId = req.params.noteId as string;
-  const result = await progressNoteService.updateProgressNote(patientId, noteId, req.body, req.user.id);
+  const result = await progressNoteService.updateProgressNote(
+    patientId,
+    noteId,
+    req.body,
+    req.user.id,
+  );
   return SuccessResponse(200, 'Progress note updated successfully', result);
 });
 
+// ── Soft delete (admin only) ──
 export const deleteProgressNote = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const noteId = req.params.noteId as string;
-  const result = await progressNoteService.deleteProgressNote(patientId, noteId);
+  const { reason } = req.body;
+  const result = await progressNoteService.deleteProgressNote(
+    patientId,
+    noteId,
+    req.user.id,
+    reason,
+  );
   return SuccessResponse(200, 'Progress note deleted', result);
+});
+
+// ── Restore (admin only) ──
+export const restoreProgressNote = asyncHandler(async (req: Request, res: Response) => {
+  const patientId = req.params.patientId as string;
+  const noteId = req.params.noteId as string;
+  const result = await progressNoteService.restoreProgressNote(
+    patientId,
+    noteId,
+    req.user.id,
+  );
+  return SuccessResponse(200, 'Progress note restored', result);
 });
 
 export default {
@@ -61,4 +85,5 @@ export default {
   getProgressNoteSignatures,
   updateProgressNote,
   deleteProgressNote,
+  restoreProgressNote,
 };

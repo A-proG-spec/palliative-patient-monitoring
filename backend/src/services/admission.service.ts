@@ -9,11 +9,14 @@ import { ApiError } from '@utils/ApiError.js';
 // ─────────────────────────────────────────────────────────────
 // Record admission
 // ─────────────────────────────────────────────────────────────
-export const recordAdmission = async (patientId: string, data: any, staffId: string) => {
+export const recordAdmission = async (
+  patientId: string,
+  data: any,
+  staffId: string,
+) => {
   const patient = await Patient.findById(patientId);
   if (!patient) throw new ApiError(404, 'Patient not found');
 
-  // Optional referral linkage
   let referral = null;
   if (data.referralId) {
     referral = await Referral.findById(data.referralId);
@@ -26,7 +29,6 @@ export const recordAdmission = async (patientId: string, data: any, staffId: str
   const admission = await HospitalAdmission.create({
     patientId,
     ...data,
-    // Snapshot only the fields the hospital manages
     patientName: `${patient.firstName} ${patient.lastName}`,
     hospitalPatientId: data.hospitalPatientId || patient.patientDisplayId,
     createdBy: staffId,
@@ -53,13 +55,13 @@ export const recordAdmission = async (patientId: string, data: any, staffId: str
 };
 
 // ─────────────────────────────────────────────────────────────
-// Get admissions for a patient
+// List admissions for a patient
 // ─────────────────────────────────────────────────────────────
 export const getAdmissions = async (
   patientId: string,
   status?: string,
   page: number = 1,
-  limit: number = 20
+  limit: number = 20,
 ) => {
   const patient = await Patient.findById(patientId);
   if (!patient) throw new ApiError(404, 'Patient not found');
@@ -97,12 +99,18 @@ export const getAdmissions = async (
 };
 
 // ─────────────────────────────────────────────────────────────
-// Get one admission (populated patient + progress note count + discharge)
+// Get one admission (populated patient + related records)
 // ─────────────────────────────────────────────────────────────
-export const getAdmissionById = async (patientId: string, admissionId: string) => {
+export const getAdmissionById = async (
+  patientId: string,
+  admissionId: string,
+) => {
   const admission = await HospitalAdmission
     .findOne({ _id: admissionId, patientId })
-    .populate('patientId', 'patientDisplayId firstName lastName age sex dateOfBirth address phone emergencyContactName emergencyContactPhone')
+    .populate(
+      'patientId',
+      'patientDisplayId firstName lastName age sex dateOfBirth address phone emergencyContactName emergencyContactPhone',
+    )
     .populate('createdBy', 'name role')
     .populate('referralId', 'referralType referralDate receivingFacility');
 
@@ -110,18 +118,19 @@ export const getAdmissionById = async (patientId: string, admissionId: string) =
 
   const p = admission.patientId as any;
 
-  // Aggregate related records
   const [progressNoteCount, dischargeSummary] = await Promise.all([
     PatientProgressNote.countDocuments({ admissionId: admission._id }),
-    DischargeSummary.findOne({ admissionId: admission._id }).select('_id status dateOfDischarge'),
+    DischargeSummary.findOne({ admissionId: admission._id }).select(
+      '_id status dateOfDischarge',
+    ),
   ]);
 
   return {
     id: admission._id.toString(),
 
-    // ── Patient (populated) ──
     patientId: p?._id?.toString(),
-    patientName: admission.patientName || `${p?.firstName ?? ''} ${p?.lastName ?? ''}`.trim(),
+    patientName:
+      admission.patientName || `${p?.firstName ?? ''} ${p?.lastName ?? ''}`.trim(),
     hospitalPatientId: admission.hospitalPatientId || p?.patientDisplayId,
     age: p?.age,
     sex: p?.sex,
@@ -129,12 +138,10 @@ export const getAdmissionById = async (patientId: string, admissionId: string) =
     address: p?.address,
     phone: p?.phone,
 
-    // ── Emergency contact (admission-time override) ──
     emergencyContactName: admission.emergencyContactName || p?.emergencyContactName,
     emergencyContactRelationship: admission.emergencyContactRelationship,
     emergencyContactPhone: admission.emergencyContactPhone || p?.emergencyContactPhone,
 
-    // ── Referral ──
     referralId: admission.referralId,
     referredFrom: admission.referredFrom,
     referredFromOther: admission.referredFromOther,
@@ -143,7 +150,6 @@ export const getAdmissionById = async (patientId: string, admissionId: string) =
     referralReason: admission.referralReason,
     referralReasonOther: admission.referralReasonOther,
 
-    // ── Admission ──
     admissionDate: admission.admissionDate,
     dischargeDate: admission.dischargeDate,
     bedNumber: admission.bedNumber,
@@ -151,7 +157,6 @@ export const getAdmissionById = async (patientId: string, admissionId: string) =
     admittingPhysician: admission.admittingPhysician,
     careTeam: admission.careTeam,
 
-    // ── Clinical ──
     primaryDiagnosis: admission.primaryDiagnosis,
     secondaryDiagnoses: admission.secondaryDiagnoses,
     diseaseStage: admission.diseaseStage,
@@ -185,7 +190,6 @@ export const getAdmissionById = async (patientId: string, admissionId: string) =
     dischargeReason: admission.dischargeReason,
     status: admission.status,
 
-    // ── Related records summary ──
     progressNoteCount,
     dischargeSummaryId: dischargeSummary?._id?.toString(),
     dischargeSummaryStatus: dischargeSummary?.status,
@@ -204,15 +208,18 @@ export const getAdmissionById = async (patientId: string, admissionId: string) =
 };
 
 // ─────────────────────────────────────────────────────────────
-// Update admission (status change / discharge)
+// Update admission — records who made the change
 // ─────────────────────────────────────────────────────────────
 export const updateAdmission = async (
   patientId: string,
   admissionId: string,
   data: any,
-  staffId: string
+  adminId: string,
 ) => {
-  const admission = await HospitalAdmission.findOne({ _id: admissionId, patientId });
+  const admission = await HospitalAdmission.findOne({
+    _id: admissionId,
+    patientId,
+  });
   if (!admission) throw new ApiError(404, 'Admission not found');
 
   if (!['Active', 'Discharged'].includes(data.status)) {
@@ -228,6 +235,7 @@ export const updateAdmission = async (
   }
 
   admission.status = data.status;
+  admission.updatedBy = adminId as any;   // ← audit
   await admission.save();
 
   return {
@@ -240,7 +248,61 @@ export const updateAdmission = async (
 };
 
 // ─────────────────────────────────────────────────────────────
-// Helper: get current active admission for a patient
+// Soft delete admission (admin only)
+// ─────────────────────────────────────────────────────────────
+export const deleteAdmission = async (
+  patientId: string,
+  admissionId: string,
+  adminId: string,
+  reason?: string,
+) => {
+  const admission = await HospitalAdmission.findOne({
+    _id: admissionId,
+    patientId,
+  });
+  if (!admission) throw new ApiError(404, 'Admission not found');
+
+  if (admission.deletedAt) {
+    throw new ApiError(400, 'Admission is already deleted');
+  }
+
+  admission.deletedAt = new Date();
+  admission.deletedBy = adminId as any;
+  admission.deletionReason = reason;
+  admission.updatedBy = adminId as any;
+  await admission.save();
+
+  return { id: admissionId, success: true, deletedAt: admission.deletedAt };
+};
+
+// ─────────────────────────────────────────────────────────────
+// Restore a soft-deleted admission (admin only)
+// ─────────────────────────────────────────────────────────────
+export const restoreAdmission = async (
+  patientId: string,
+  admissionId: string,
+  adminId: string,
+) => {
+  const admission = await HospitalAdmission
+    .findOne({ _id: admissionId, patientId })
+    .setOptions({ includeDeleted: true });
+
+  if (!admission) throw new ApiError(404, 'Admission not found');
+  if (!admission.deletedAt) {
+    throw new ApiError(400, 'Admission is not deleted');
+  }
+
+  admission.deletedAt = null;
+  admission.deletedBy = null as any;
+  admission.deletionReason = undefined;
+  admission.updatedBy = adminId as any;
+  await admission.save();
+
+  return { id: admissionId, restored: true };
+};
+
+// ─────────────────────────────────────────────────────────────
+// Helper: get the current active admission for a patient
 // ─────────────────────────────────────────────────────────────
 export const getActiveAdmissionForPatient = async (patientId: string) => {
   return HospitalAdmission.findOne({ patientId, status: 'Active' }).sort({
@@ -253,5 +315,7 @@ export default {
   getAdmissions,
   getAdmissionById,
   updateAdmission,
+  deleteAdmission,
+  restoreAdmission,
   getActiveAdmissionForPatient,
 };
