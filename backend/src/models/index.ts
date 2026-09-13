@@ -8,3 +8,6 @@ export { default as LaboratoryTest } from './LaboratoryTest.js';
 export { default as Referral } from './Referral.js';
 export { default as HospitalAdmission } from './HospitalAdmission.js';
 export { default as Notification } from './Notification.js';
+export {default as DischargeSummary} from './DischargeSummary.js'
+export {default as ImagingOrder} from './ImagingOrder.js'
+export {default as PatientProgressNote} from './PatientProgressNote.js'

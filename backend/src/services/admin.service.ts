@@ -4,9 +4,16 @@ import { Referral } from '@models/Referral.js';
 import { Notification } from '@models/Notification.js';
 import { HomeVisit } from '@models/HomeVisit.js';
 import { HospitalAdmission } from '@models/HospitalAdmission.js';
-import { Medication } from '@models/Medication.js';        // ✅ Added - was missing
-import { LaboratoryTest } from '@models/LaboratoryTest.js'; // ✅ Added - was missing
+import { Medication } from '@models/Medication.js';
+import { LaboratoryTest } from '@models/LaboratoryTest.js';
+import { ImagingOrder } from '@models/ImagingOrder.js';
+import { PatientProgressNote } from '@models/PatientProgressNote.js';
+import { DischargeSummary } from '@models/DischargeSummary.js';
 import { ApiError } from '@utils/ApiError.js';
+
+// ═════════════════════════════════════════════════════════════
+// STAFF MANAGEMENT
+// ═════════════════════════════════════════════════════════════
 
 export const getPendingStaff = async () => {
   const pendingStaff = await Staff.find({
@@ -44,13 +51,11 @@ export const approveStaff = async (staffId: string, role: string, adminId: strin
     throw new ApiError(400, 'Staff email is not verified');
   }
 
-  // ✅ Fixed: Type assertion for role
   staff.role = role as 'TeamLeader' | 'Physician' | 'Nurse';
   staff.status = 'Active';
   staff.assignedBy = adminId as any;
   await staff.save();
 
-  // Delete notification
   await Notification.deleteOne({
     type: 'StaffApproval',
     'data.staffId': staffId,
@@ -85,7 +90,6 @@ export const rejectStaff = async (staffId: string) => {
   staff.status = 'Rejected';
   await staff.save();
 
-  // Delete notification
   await Notification.deleteOne({
     type: 'StaffApproval',
     'data.staffId': staffId,
@@ -97,15 +101,24 @@ export const rejectStaff = async (staffId: string) => {
   };
 };
 
+// ═════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═════════════════════════════════════════════════════════════
+
 export const getDashboardStats = async () => {
-  const [totalPatients, activePatients, dischargedPatients, pendingReferrals, pendingStaff] =
-    await Promise.all([
-      Patient.countDocuments(),
-      Patient.countDocuments({ status: 'Active' }),
-      Patient.countDocuments({ status: 'Discharged' }),
-      Referral.countDocuments({ status: 'Pending' }),
-      Staff.countDocuments({ status: 'Pending', isEmailVerified: true }),
-    ]);
+  const [
+    totalPatients,
+    activePatients,
+    dischargedPatients,
+    pendingReferrals,
+    pendingStaff,
+  ] = await Promise.all([
+    Patient.countDocuments(),
+    Patient.countDocuments({ status: 'Active' }),
+    Patient.countDocuments({ status: 'Discharged' }),
+    Referral.countDocuments({ status: 'Pending' }),
+    Staff.countDocuments({ status: 'Pending', isEmailVerified: true }),
+  ]);
 
   const hospitalizedPatients = await Patient.countDocuments({
     currentLocation: 'ReferredHospital',
@@ -127,7 +140,6 @@ export const getDashboardStats = async () => {
     .populate('patientId', 'firstName lastName')
     .populate('teamLeaderId', 'name');
 
-  // Get notification counts
   const staffApprovals = await Notification.countDocuments({
     type: 'StaffApproval',
     read: false,
@@ -166,6 +178,10 @@ export const getDashboardStats = async () => {
     })),
   };
 };
+
+// ═════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ═════════════════════════════════════════════════════════════
 
 export const getNotifications = async (limit: number = 20, read?: string) => {
   const filter: any = {};
@@ -210,7 +226,16 @@ export const markNotificationRead = async (notificationId: string) => {
   };
 };
 
-export const getPatients = async (page: number = 1, limit: number = 20, status?: string, search?: string) => {
+// ═════════════════════════════════════════════════════════════
+// PATIENT MANAGEMENT
+// ═════════════════════════════════════════════════════════════
+
+export const getPatients = async (
+  page: number = 1,
+  limit: number = 20,
+  status?: string,
+  search?: string
+) => {
   const filter: any = {};
 
   if (status) {
@@ -258,6 +283,9 @@ export const getPatients = async (page: number = 1, limit: number = 20, status?:
   };
 };
 
+// ─────────────────────────────────────────────────────────────
+// Admin patient detail (aggregates every sub-record)
+// ─────────────────────────────────────────────────────────────
 export const getPatientDetail = async (patientId: string) => {
   const patient = await Patient.findById(patientId).populate('registeredBy', 'name');
 
@@ -265,20 +293,30 @@ export const getPatientDetail = async (patientId: string) => {
     throw new ApiError(404, 'Patient not found');
   }
 
-  const visits = await HomeVisit.find({ patientId })
-    .sort({ visitDate: -1 })
-    .populate('teamLeaderId', 'name');
-
-  // ✅ Fixed: Now Medication is imported
-  const medications = await Medication.find({ patientId }).sort({ createdAt: -1 });
-  
-  // ✅ Fixed: Now LaboratoryTest is imported
-  const labTests = await LaboratoryTest.find({ patientId }).sort({ dateOrdered: -1 });
-  
-  const referrals = await Referral.find({ patientId }).sort({ createdAt: -1 });
-  const admissions = await HospitalAdmission.find({ patientId }).sort({ admissionDate: -1 });
+  const [
+    visits,
+    medications,
+    labTests,
+    referrals,
+    admissions,
+    imagingOrders,
+    progressNotes,
+    dischargeSummary,
+  ] = await Promise.all([
+    HomeVisit.find({ patientId })
+      .sort({ visitDate: -1 })
+      .populate('teamLeaderId', 'name'),
+    Medication.find({ patientId }).sort({ createdAt: -1 }),
+    LaboratoryTest.find({ patientId }).sort({ dateOrdered: -1 }),
+    Referral.find({ patientId }).sort({ createdAt: -1 }),
+    HospitalAdmission.find({ patientId }).sort({ admissionDate: -1 }),
+    ImagingOrder.find({ patientId }).sort({ createdAt: -1 }),
+    PatientProgressNote.find({ patientId }).sort({ createdAt: -1 }).limit(20),
+    DischargeSummary.findOne({ patientId }).sort({ createdAt: -1 }),
+  ]);
 
   return {
+    // ── Identity ──
     id: patient._id.toString(),
     patientDisplayId: patient.patientDisplayId,
     firstName: patient.firstName,
@@ -292,6 +330,8 @@ export const getPatientDetail = async (patientId: string) => {
     emergencyContactPhone: patient.emergencyContactPhone,
     caregiverName: patient.caregiverName,
     caregiverPhone: patient.caregiverPhone,
+
+    // ── Clinical ──
     primaryDiagnosis: patient.primaryDiagnosis,
     secondaryDiagnoses: patient.secondaryDiagnoses,
     diseaseStage: patient.diseaseStage,
@@ -299,43 +339,117 @@ export const getPatientDetail = async (patientId: string) => {
     estimatedPrognosis: patient.estimatedPrognosis,
     status: patient.status,
     currentLocation: patient.currentLocation,
+
+    // ── Registrant ──
     registeredBy: {
       id: (patient.registeredBy as any)?._id?.toString() || '',
       name: (patient.registeredBy as any)?.name || 'Unknown',
     },
+
+    // ── Sub-records ──
     visits: visits.map((v) => ({
       id: v._id.toString(),
       visitDate: v.visitDate,
+      visitType: v.visitType,
+      overallStatus: v.overallStatus,
       outcome: v.outcome,
+      ppsScore: v.ppsScore,
+      kpsScore: v.kpsScore,
       staff: (v.teamLeaderId as any)?.name || 'Unknown',
     })),
-    medications: medications.map((m: any) => ({  // ✅ Added type
+
+    medications: medications.map((m) => ({
       id: m._id.toString(),
       name: m.name,
       dosage: m.dosage,
+      frequency: m.frequency,
+      route: m.route,
+      administeredAt: m.administeredAt,
       status: m.status,
+      createdAt: m.createdAt,
     })),
-    labTests: labTests.map((l: any) => ({  // ✅ Added type
+
+    labTests: labTests.map((l) => ({
       id: l._id.toString(),
       name: l.testName,
       dateOrdered: l.dateOrdered,
+      datePerformed: l.datePerformed,
       result: l.result,
+      status: l.status,
+      location: l.location,
     })),
+
+    imagingOrders: imagingOrders.map((o) => ({
+      id: o._id.toString(),
+      modality: o.modality,
+      bodyRegion: o.bodyRegion,
+      specificSite: o.specificSite,
+      laterality: o.laterality,
+      priority: o.priority,
+      status: o.status,
+      hasReport: !!(o.report && o.report.findings),
+      dateOrdered: o.createdAt,
+      performedAt: o.performedAt,
+    })),
+
+    progressNotes: progressNotes.map((n) => ({
+      id: n._id.toString(),
+      admissionId: n.admissionId?.toString(),
+      generalCondition: n.generalCondition,
+      levelOfConsciousness: n.levelOfConsciousness,
+      attendingClinician: n.attendingClinician,
+      overallAssessment: n.overallAssessment,
+      soapSubjective: n.soapSubjective,
+      createdAt: n.createdAt,
+    })),
+
     referrals: referrals.map((r) => ({
       id: r._id.toString(),
       date: r.createdAt,
+      referralType: r.referralType,
       status: r.status,
+      receivingFacility: r.receivingFacility,
     })),
+
     admissions: admissions.map((a) => ({
       id: a._id.toString(),
       date: a.admissionDate,
+      dischargeDate: a.dischargeDate,
+      ward: a.ward,
+      bedNumber: a.bedNumber,
+      admittingPhysician: a.admittingPhysician,
       status: a.status,
+      dischargeReason: a.dischargeReason,
     })),
+
+    dischargeSummary: dischargeSummary
+      ? {
+          id: dischargeSummary._id.toString(),
+          admissionId: dischargeSummary.admissionId?.toString(),
+          dateOfDischarge: dischargeSummary.dateOfDischarge,
+          timeOfDischarge: dischargeSummary.timeOfDischarge,
+          dischargeType: dischargeSummary.dischargeType,
+          overallCondition: dischargeSummary.overallCondition,
+          dischargedTo: dischargeSummary.dischargedTo,
+          status: dischargeSummary.status,
+          createdAt: dischargeSummary.createdAt,
+        }
+      : null,
+
+    // ── Meta ──
     createdAt: patient.createdAt,
   };
 };
 
-export const closeCase = async (patientId: string, reason: string, _adminId: string) => {  // ✅ Fixed: Removed unused adminId or use _adminId
+// ─────────────────────────────────────────────────────────────
+// Close case (legacy path — used when admin closes without the
+// full discharge form being filled out)
+// ─────────────────────────────────────────────────────────────
+export const closeCase = async (
+  patientId: string,
+  reason: string,
+  _adminId: string
+) => {
   const patient = await Patient.findById(patientId);
 
   if (!patient) {
@@ -349,7 +463,6 @@ export const closeCase = async (patientId: string, reason: string, _adminId: str
   patient.status = 'Discharged';
   await patient.save();
 
-  // Create notification
   await Notification.create({
     type: 'CloseCase',
     message: `Patient case closed: ${patient.firstName} ${patient.lastName}`,
@@ -369,20 +482,39 @@ export const closeCase = async (patientId: string, reason: string, _adminId: str
   };
 };
 
-export const getPendingReferrals = async () => {
-  const referrals = await Referral.find({ status: 'Pending' })
-    .populate('patientId', 'firstName lastName');
+// ═════════════════════════════════════════════════════════════
+// REFERRAL MANAGEMENT
+// ═════════════════════════════════════════════════════════════
 
-  return referrals.map((r) => ({
-    id: r._id.toString(),
-    patientId: (r.patientId as any)._id.toString(),
-    patientName: `${(r.patientId as any).firstName} ${(r.patientId as any).lastName}`,
-    referralDate: r.referralDate,
-    primaryDiagnosis: r.primaryDiagnosis,
-    status: r.status,
-    reasons: r.reasons,
-    receivingFacility: r.receivingFacility,
-  }));
+export const getPendingReferrals = async () => {
+  const referrals = await Referral.find({ status: 'Pending' }).populate(
+    'patientId',
+    'firstName lastName patientDisplayId'
+  );
+
+  return referrals.map((r) => {
+    const p = r.patientId as any;
+    return {
+      id: r._id.toString(),
+      patientId: p?._id?.toString() || '',
+      patientName: p ? `${p.firstName} ${p.lastName}` : 'Unknown',
+      patientDisplayId: p?.patientDisplayId,
+      referralType: r.referralType,
+      referralDate: r.referralDate,
+      primaryDiagnosis: r.primaryDiagnosis,
+      diseaseStage: r.diseaseStage,
+      ppsScore: r.ppsScore,
+      kpsScore: r.kpsScore,
+      currentSymptoms: r.currentSymptoms,
+      reasons: r.reasons,
+      referringFacility: r.referringFacility,
+      receivingFacility: r.receivingFacility,
+      contactPerson: r.contactPerson,
+      contactNumber: r.contactNumber,
+      status: r.status,
+      createdAt: r.createdAt,
+    };
+  });
 };
 
 export const approveReferral = async (referralId: string, adminId: string) => {
@@ -400,12 +532,10 @@ export const approveReferral = async (referralId: string, adminId: string) => {
   referral.approvedBy = adminId as any;
   await referral.save();
 
-  // Update patient location
   await Patient.findByIdAndUpdate(referral.patientId, {
     currentLocation: 'ReferredHospital',
   });
 
-  // Create notification
   const patient = await Patient.findById(referral.patientId);
   await Notification.create({
     type: 'ReferralApproval',
@@ -449,27 +579,28 @@ export const declineReferral = async (referralId: string) => {
   };
 };
 
+// ═════════════════════════════════════════════════════════════
+// REPORTS
+// ═════════════════════════════════════════════════════════════
+
 export const getReports = async (startDate?: string, endDate?: string) => {
   const dateFilter: any = {};
 
-  if (startDate) {
-    dateFilter.$gte = new Date(startDate);
-  }
-  if (endDate) {
-    dateFilter.$lte = new Date(endDate);
-  }
+  if (startDate) dateFilter.$gte = new Date(startDate);
+  if (endDate) dateFilter.$lte = new Date(endDate);
 
   const filter: any = {};
   if (Object.keys(dateFilter).length > 0) {
     filter.createdAt = dateFilter;
   }
 
-  const [totalPatients, activePatients, dischargedPatients, hospitalizedPatients] = await Promise.all([
-    Patient.countDocuments(filter),
-    Patient.countDocuments({ ...filter, status: 'Active' }),
-    Patient.countDocuments({ ...filter, status: 'Discharged' }),
-    Patient.countDocuments({ ...filter, currentLocation: 'ReferredHospital' }),
-  ]);
+  const [totalPatients, activePatients, dischargedPatients, hospitalizedPatients] =
+    await Promise.all([
+      Patient.countDocuments(filter),
+      Patient.countDocuments({ ...filter, status: 'Active' }),
+      Patient.countDocuments({ ...filter, status: 'Discharged' }),
+      Patient.countDocuments({ ...filter, currentLocation: 'ReferredHospital' }),
+    ]);
 
   const referralsByStatus = await Referral.aggregate([
     { $match: filter },
@@ -507,6 +638,31 @@ export const getReports = async (startDate?: string, endDate?: string) => {
     { $sort: { month: 1 } },
   ]);
 
+  // NEW — imaging and progress-note counts (useful for the Reports page)
+  const imagingByModality = await ImagingOrder.aggregate([
+    { $match: filter },
+    { $group: { _id: '$modality', count: { $sum: 1 } } },
+    { $project: { modality: '$_id', count: 1, _id: 0 } },
+  ]);
+
+  const imagingByStatus = await ImagingOrder.aggregate([
+    { $match: filter },
+    { $group: { _id: '$status', count: { $sum: 1 } } },
+    { $project: { status: '$_id', count: 1, _id: 0 } },
+  ]);
+
+  const progressNotesByCondition = await PatientProgressNote.aggregate([
+    { $match: filter },
+    { $group: { _id: '$generalCondition', count: { $sum: 1 } } },
+    { $project: { condition: '$_id', count: 1, _id: 0 } },
+  ]);
+
+  const dischargesByType = await DischargeSummary.aggregate([
+    { $match: filter },
+    { $group: { _id: '$dischargeType', count: { $sum: 1 } } },
+    { $project: { dischargeType: '$_id', count: 1, _id: 0 } },
+  ]);
+
   return {
     totalPatients,
     activePatients,
@@ -517,21 +673,29 @@ export const getReports = async (startDate?: string, endDate?: string) => {
     patientsByStage,
     closeCasesByReason,
     visitsByMonth,
+    imagingByModality,       // NEW
+    imagingByStatus,         // NEW
+    progressNotesByCondition, // NEW
+    dischargesByType,        // NEW
   };
 };
+
+// ═════════════════════════════════════════════════════════════
+// EXPORTS
+// ═════════════════════════════════════════════════════════════
 
 export default {
   getPendingStaff,
   approveStaff,
-  rejectStaff,
-  getDashboardStats,
+  rejectStaff, 
+  getDashboardStats, 
   getNotifications,
-  markNotificationRead,
+  markNotificationRead, 
   getPatients,
   getPatientDetail,
-  closeCase,
+  closeCase, 
   getPendingReferrals,
   approveReferral,
-  declineReferral,
+  declineReferral, 
   getReports,
 };

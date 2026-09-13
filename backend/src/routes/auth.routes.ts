@@ -4,7 +4,7 @@ import { authRateLimiter } from '@middlewares/rateLimiter.middleware.js';
 import {
   registerSchema,
   loginSchema,
-  verifyEmailQuerySchema,
+  verifyEmailSchema,
   resendVerificationSchema,
 } from '@schemas/auth.schema.js';
 import * as authController from '@controllers/auth.controller.js';
@@ -19,12 +19,12 @@ router.post(
   authController.register
 );
 
-router.get(
+router.post(
   '/verify-email',
-  validate(verifyEmailQuerySchema),
-  authController.verifyEmail
+  authRateLimiter,                    // ← add rate limiting (IMPORTANT for OTP)
+  validate(verifyEmailSchema),
+  authController.verifyEmail,
 );
-
 router.post(
   '/resend-verification',
   authRateLimiter,

@@ -7,7 +7,7 @@ import type {
   UpdateProfileResponse,
   ChangePasswordRequest,
   ChangePasswordResponse,
-  ActivityStats
+  ActivityStats,
 } from '@/types/profile.types';
 
 export const profileApi = {

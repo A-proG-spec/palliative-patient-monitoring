@@ -4,13 +4,13 @@ import { SuccessResponse } from '@utils/ApiResponse.js';
 import * as admissionService from '@services/admission.service.js';
 
 export const recordAdmission = asyncHandler(async (req: Request, res: Response) => {
-  const patientId = req.params.patientId as string; 
+  const patientId = req.params.patientId as string;
   const result = await admissionService.recordAdmission(patientId, req.body, req.user.id);
   return SuccessResponse(201, 'Admission recorded successfully', result);
 });
 
 export const getAdmissions = asyncHandler(async (req: Request, res: Response) => {
-  const patientId = req.params.patientId as string; 
+  const patientId = req.params.patientId as string;
   const status = req.query.status as string | undefined;
   const page = req.query.page ? parseInt(req.query.page as string) : 1;
   const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
@@ -19,17 +19,48 @@ export const getAdmissions = asyncHandler(async (req: Request, res: Response) =>
 });
 
 export const getAdmissionById = asyncHandler(async (req: Request, res: Response) => {
-  const patientId = req.params.patientId as string; 
-  const admissionId = req.params.admissionId as string; 
+  const patientId = req.params.patientId as string;
+  const admissionId = req.params.admissionId as string;
   const result = await admissionService.getAdmissionById(patientId, admissionId);
   return SuccessResponse(200, 'OK', result);
 });
 
 export const updateAdmission = asyncHandler(async (req: Request, res: Response) => {
-  const patientId = req.params.patientId as string; 
-  const admissionId = req.params.admissionId as string; 
-  const result = await admissionService.updateAdmission(patientId, admissionId, req.body, req.user.id);
+  const patientId = req.params.patientId as string;
+  const admissionId = req.params.admissionId as string;
+  const result = await admissionService.updateAdmission(
+    patientId,
+    admissionId,
+    req.body,
+    req.user.id,
+  );
   return SuccessResponse(200, 'Admission updated successfully', result);
+});
+
+// ── Soft delete (admin only) ──
+export const deleteAdmission = asyncHandler(async (req: Request, res: Response) => {
+  const patientId = req.params.patientId as string;
+  const admissionId = req.params.admissionId as string;
+  const { reason } = req.body;
+  const result = await admissionService.deleteAdmission(
+    patientId,
+    admissionId,
+    req.user.id,
+    reason,
+  );
+  return SuccessResponse(200, 'Admission deleted', result);
+});
+
+// ── Restore (admin only) ──
+export const restoreAdmission = asyncHandler(async (req: Request, res: Response) => {
+  const patientId = req.params.patientId as string;
+  const admissionId = req.params.admissionId as string;
+  const result = await admissionService.restoreAdmission(
+    patientId,
+    admissionId,
+    req.user.id,
+  );
+  return SuccessResponse(200, 'Admission restored', result);
 });
 
 export default {
@@ -37,4 +68,6 @@ export default {
   getAdmissions,
   getAdmissionById,
   updateAdmission,
+  deleteAdmission,
+  restoreAdmission,
 };

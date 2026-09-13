@@ -7,3 +7,7 @@ export { default as labController } from './lab.controller.js';
 export { default as referralController } from './referral.controller.js';
 export { default as admissionController } from './admission.controller.js';
 export { default as staffController } from './staff.controller.js';
+export { default as imagingController } from './imaging.controller.js';          
+export { default as progressNoteController } from './progress-note.controller.js'; 
+export { default as dischargeController } from './discharge.controller.js';  
+export { default as profileController } from './profile.routes.js';

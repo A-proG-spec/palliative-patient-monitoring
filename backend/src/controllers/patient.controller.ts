@@ -15,25 +15,32 @@ export const getPatients = asyncHandler(async (req: Request, res: Response) => {
     page ? parseInt(page as string) : 1,
     limit ? parseInt(limit as string) : 20,
     status as string,
-    search as string
+    search as string,
   );
   return SuccessResponse(200, 'OK', result);
 });
 
 export const getPatientById = asyncHandler(async (req: Request, res: Response) => {
- const patientId = req.params.patientId as string;
+  const patientId = req.params.patientId as string;
   const result = await patientService.getPatientById(patientId);
   return SuccessResponse(200, 'OK', result);
 });
 
+// ── Update patient (admin only) ──
+export const updatePatient = asyncHandler(async (req: Request, res: Response) => {
+  const patientId = req.params.patientId as string;
+  const result = await patientService.updatePatient(patientId, req.body, req.user.id);
+  return SuccessResponse(200, 'Patient updated successfully', result);
+});
+
 export const getPatientSummary = asyncHandler(async (req: Request, res: Response) => {
- const patientId = req.params.patientId as string;
+  const patientId = req.params.patientId as string;
   const result = await patientService.getPatientSummary(patientId);
   return SuccessResponse(200, 'OK', result);
 });
 
 export const getPatientProgress = asyncHandler(async (req: Request, res: Response) => {
- const patientId = req.params.patientId as string;
+  const patientId = req.params.patientId as string;
   const result = await patientService.getPatientProgress(patientId);
   return SuccessResponse(200, 'OK', result);
 });
@@ -42,6 +49,7 @@ export default {
   registerPatient,
   getPatients,
   getPatientById,
+  updatePatient,
   getPatientSummary,
   getPatientProgress,
 };

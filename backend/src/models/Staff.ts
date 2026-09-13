@@ -8,9 +8,10 @@ export interface IStaff extends Document {
   role: 'TeamLeader' | 'Physician' | 'Nurse' | null;
   status: 'Pending' | 'Active' | 'Rejected';
   isEmailVerified: boolean;
-  emailVerificationToken: string | null;
-  emailVerificationTokenExpires: Date | null;
+  emailVerificationOtp: string | null;
+  emailVerificationOtpExpires: Date | null;
   assignedBy: mongoose.Types.ObjectId;
+  emailVerificationOtpAttempts:number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,13 +48,17 @@ const StaffSchema = new Schema<IStaff>({
     type: Boolean, 
     default: false 
   },
-  emailVerificationToken: { 
+  emailVerificationOtp: { 
     type: String, 
     default: null 
   },
-  emailVerificationTokenExpires: { 
+emailVerificationOtpExpires: { 
     type: Date, 
     default: null 
+  },
+  emailVerificationOtpAttempts:{
+    type:Number,
+    default:0,
   },
   assignedBy: { 
     type: Schema.Types.ObjectId, 
@@ -67,7 +72,7 @@ const StaffSchema = new Schema<IStaff>({
 
 StaffSchema.index({ status: 1 });
 StaffSchema.index({ isEmailVerified: 1 });
-StaffSchema.index({ emailVerificationToken: 1 });
+StaffSchema.index({ emailVerificationOtpExpires: 1 });
 
 export const Staff = mongoose.model<IStaff>('Staff', StaffSchema);
 export default Staff;

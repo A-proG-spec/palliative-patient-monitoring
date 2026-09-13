@@ -10,6 +10,7 @@ import {
   getAdminPatientsQuerySchema,
   getReportsQuerySchema,
 } from '@schemas/admin.schema.js';
+import {updateVisitSchema} from '@schemas/visit.schema'
 import * as adminController from '@controllers/admin.controller.js';
 
 const router = Router();
@@ -19,7 +20,9 @@ router.use(authMiddleware);
 router.use(roleMiddleware(['admin']));
 router.use(rateLimiter);
 
+// ─────────────────────────────────────────────────────────────
 // Staff Management
+// ─────────────────────────────────────────────────────────────
 router.get('/staff/pending', adminController.getPendingStaff);
 router.put(
   '/staff/:staffId/approve',
@@ -28,7 +31,9 @@ router.put(
 );
 router.put('/staff/:staffId/reject', adminController.rejectStaff);
 
+// ─────────────────────────────────────────────────────────────
 // Dashboard
+// ─────────────────────────────────────────────────────────────
 router.get('/dashboard/stats', adminController.getDashboardStats);
 router.get(
   '/dashboard/notifications',
@@ -40,7 +45,9 @@ router.put(
   adminController.markNotificationRead
 );
 
+// ─────────────────────────────────────────────────────────────
 // Patient Management
+// ─────────────────────────────────────────────────────────────
 router.get(
   '/patients',
   validate(getAdminPatientsQuerySchema),
@@ -53,16 +60,31 @@ router.put(
   adminController.closeCase
 );
 
+// ─────────────────────────────────────────────────────────────
 // Referral Management
+// ─────────────────────────────────────────────────────────────
 router.get('/referrals/pending', adminController.getPendingReferrals);
 router.put('/referrals/:referralId/approve', adminController.approveReferral);
 router.put('/referrals/:referralId/decline', adminController.declineReferral);
 
+// ─────────────────────────────────────────────────────────────
 // Reports
+// ─────────────────────────────────────────────────────────────
 router.get(
   '/reports',
   validate(getReportsQuerySchema),
   adminController.getReports
 );
+
+// ─────────────────────────────────────────────────────────────
+// Visit Edit / Delete / Restore (admin only)
+// ─────────────────────────────────────────────────────────────
+router.put(
+  '/visits/:visitId',
+  validate(updateVisitSchema),
+  adminController.updateVisit
+);
+router.delete('/visits/:visitId', adminController.deleteVisit);
+router.post('/visits/:visitId/restore', adminController.restoreVisit);
 
 export default router;

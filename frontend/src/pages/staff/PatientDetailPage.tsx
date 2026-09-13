@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  ClipboardList, Pill, FlaskConical, GitBranch, Building2, 
-  BarChart2, FileText, Home, Hospital, Phone, MapPin, 
-  Plus, ChevronRight as ChevronRightIcon, Printer, 
-  Camera, Microscope, NotebookPen
+import {
+  ClipboardList, Pill, FlaskConical, GitBranch, Building2,
+  BarChart2, FileText, Home, Hospital, Phone, MapPin,
+  Plus, ChevronRight as ChevronRightIcon, Printer,
+  Camera, NotebookPen,
 } from 'lucide-react';
 import { usePatient } from '@/hooks/usePatients';
 import { usePatientVisits } from '@/hooks/useVisits';
@@ -12,7 +12,7 @@ import { usePatientMedications } from '@/hooks/useMedications';
 import { usePatientLabs } from '@/hooks/useLabs';
 import { usePatientReferrals } from '@/hooks/useReferrals';
 import { usePatientAdmissions } from '@/hooks/useAdmissions';
-import { useProgressNotesStore } from '@/hooks/useProgressNotes';
+import { useProgressNotes } from '@/hooks/useProgressNotes';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
@@ -21,10 +21,9 @@ import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState, EmptyState } from '@/components/common/EmptyState';
 import { formatDate, cn } from '@/lib/utils';
-import { DISEASE_STAGE_LABELS, VISIT_TYPE_LABELS, OUTCOME_LABELS } from '@/constants';
+import { DISEASE_STAGE_LABELS, VISIT_TYPE_LABELS } from '@/constants';
 import { printPatientReport } from '@/lib/printPatientReport';
 import { APP_NAME } from '@/lib/config';
-import { useToast } from '@/context/ToastContext';
 
 // ── Record Type Definitions ──────────────────────────────────────
 interface RecordType {
@@ -178,7 +177,7 @@ const RecordTypeItem: React.FC<{
   onSelect: (route: string) => void;
 }> = ({ recordType, patientId, onSelect }) => {
   const color = recordType.color || 'text-primary';
-  
+
   return (
     <button
       onClick={() => onSelect(recordType.route(patientId))}
@@ -212,18 +211,15 @@ const PatientDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('Visits');
   const [showAddRecord, setShowAddRecord] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
-  // Progress notes — select the raw notes array (stable reference), then filter
-  // with useMemo so the derived array only changes when notes or id changes.
-  const allProgressNotes = useProgressNotesStore((s) => s.notes);
-  const progressNotes = useMemo(
-    () => allProgressNotes.filter((n) => n.patientId === (id ?? '')),
-    [allProgressNotes, id],
-  );
+  // Progress notes — fetched via React Query. The useCreateProgressNote hook
+  // invalidates ['patients', id, 'progress-notes'] after a save, so this list
+  // refreshes automatically without any manual cache fiddling.
+  const { data: progressNotesData } = useProgressNotes(id!);
+  const progressNotes = progressNotesData?.items ?? [];
 
   // If returning from the progress note form with a saved note, show Progress Notes tab
   const locationState = location.state as { savedProgressNote?: boolean } | null;
@@ -243,20 +239,20 @@ const PatientDetailPage: React.FC = () => {
   const { data: admsData } = usePatientAdmissions(id!);
 
   // ── Filter lab tests to show only lab orders (not imaging) ──
-  const labOrders = labsData?.items?.filter(l => 
-    !l.testName?.includes('XRay') && 
-    !l.testName?.includes('Ultrasound') && 
-    !l.testName?.includes('CT') && 
+  const labOrders = labsData?.items?.filter(l =>
+    !l.testName?.includes('XRay') &&
+    !l.testName?.includes('Ultrasound') &&
+    !l.testName?.includes('CT') &&
     !l.testName?.includes('MRI') &&
     !l.testName?.includes('Mammography') &&
     !l.testName?.includes('Fluoroscopy')
   ) || [];
 
   // ── Filter imaging orders ──
-  const imagingOrders = labsData?.items?.filter(l => 
-    l.testName?.includes('XRay') || 
-    l.testName?.includes('Ultrasound') || 
-    l.testName?.includes('CT') || 
+  const imagingOrders = labsData?.items?.filter(l =>
+    l.testName?.includes('XRay') ||
+    l.testName?.includes('Ultrasound') ||
+    l.testName?.includes('CT') ||
     l.testName?.includes('MRI') ||
     l.testName?.includes('Mammography') ||
     l.testName?.includes('Fluoroscopy')
@@ -535,7 +531,7 @@ const PatientDetailPage: React.FC = () => {
                     // Extract modality from test name
                     const modality = img.testName.split(' - ')[0] || img.testName;
                     const bodyRegion = img.testName.split(' - ')[1] || '';
-                    
+
                     return (
                       <tr key={img.id} className="hover:bg-surface-low cursor-pointer" onClick={() => navigate(`/patients/${id}/labs/${img.id}`)}>
                         <td className="py-3 pr-4">

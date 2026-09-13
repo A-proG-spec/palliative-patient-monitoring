@@ -6,8 +6,8 @@ export const createReferralSchema = z.object({
     referralDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
     primaryDiagnosis: z.string().min(1, 'Primary diagnosis is required'),
     diseaseStage: z.enum(['Early', 'Advanced', 'EndStage']),
-    ppsScore: z.number().min(0, 'PPS score must be between 0 and 100').max(100, 'PPS score must be between 0 and 100'),
-    kpsScore: z.number().min(0, 'KPS score must be between 0 and 100').max(100, 'KPS score must be between 0 and 100'),
+    ppsScore: z.number().min(0).max(100),
+    kpsScore: z.number().min(0).max(100),
     currentSymptoms: z.object({
       pain: z.number().min(0).max(10),
       dyspnea: z.number().min(0).max(10),
@@ -15,22 +15,32 @@ export const createReferralSchema = z.object({
       anxiety: z.number().min(0).max(10),
       depression: z.number().min(0).max(10),
     }),
-    reasons: z.array(
-      z.enum([
-        'PainManagement', 'SymptomControl', 'EndOfLifeCare', 'HomeHospiceCare',
-        'InpatientAdmission', 'PsychologicalSupport', 'SpiritualCare',
-        'CaregiverSupport', 'BereavementServices', 'EmergencyCare',
-        'DiagnosticEvaluation', 'Other'
-      ])
-    ).min(1, 'At least one reason is required'),
+    reasons: z
+      .array(
+        z.enum([
+          'PainManagement',
+          'SymptomControl',
+          'EndOfLifeCare',
+          'HomeHospiceCare',
+          'InpatientAdmission',
+          'PsychologicalSupport',
+          'SpiritualCare',
+          'CaregiverSupport',
+          'BereavementServices',
+          'EmergencyCare',
+          'DiagnosticEvaluation',
+          'Other',
+        ])
+      )
+      .min(1, 'At least one reason is required'),
     otherReason: z.string().optional(),
     referringFacility: z.string().min(1, 'Referring facility is required'),
     receivingFacility: z.string().min(1, 'Receiving facility is required'),
     contactPerson: z.string().min(1, 'Contact person is required'),
     contactNumber: z.string().min(1, 'Contact number is required'),
-    preparedBy: z.string().min(1, 'Prepared by is required'),
-    preparedByDesignation: z.string().min(1, 'Designation is required'),
-    signature: z.string().min(1, 'Signature is required'),
+    // NOTE: preparedBy, preparedByDesignation, signature removed.
+    // The staff who submits the referral is captured server-side via
+    // req.user.id and stored as `requestedBy`.
   }),
 });
 

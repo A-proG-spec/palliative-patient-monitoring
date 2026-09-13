@@ -3,14 +3,18 @@ import { asyncHandler } from '@utils/asyncHandler.js';
 import { SuccessResponse } from '@utils/ApiResponse.js';
 import * as visitService from '@services/visit.service.js';
 
+// ─────────────────────────────────────────────────────────────
+// Record / Read
+// ─────────────────────────────────────────────────────────────
+
 export const recordVisit = asyncHandler(async (req: Request, res: Response) => {
-  const patientId = req.params.patientId as string;  // ✅ Fixed
-  const result = await visitService.recordVisit(patientId, req.body);
+  const patientId = req.params.patientId as string;
+  const result = await visitService.recordVisit(patientId, req.body, req.user.id);
   return SuccessResponse(201, 'Home visit recorded successfully', result);
 });
 
 export const getVisits = asyncHandler(async (req: Request, res: Response) => {
-  const patientId = req.params.patientId as string;  // ✅ Fixed
+  const patientId = req.params.patientId as string;
   const page = req.query.page ? parseInt(req.query.page as string) : 1;
   const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
   const result = await visitService.getVisits(patientId, page, limit);
@@ -18,14 +22,58 @@ export const getVisits = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getVisitById = asyncHandler(async (req: Request, res: Response) => {
-  const patientId = req.params.patientId as string;  // ✅ Fixed
-  const visitId = req.params.visitId as string;  // ✅ Fixed
+  const patientId = req.params.patientId as string;
+  const visitId = req.params.visitId as string;
   const result = await visitService.getVisitById(patientId, visitId);
   return SuccessResponse(200, 'OK', result);
+});
+
+// ─────────────────────────────────────────────────────────────
+// Signatures
+// ─────────────────────────────────────────────────────────────
+
+export const signVisit = asyncHandler(async (req: Request, res: Response) => {
+  const visitId = req.params.visitId as string;
+  const result = await visitService.signVisit(visitId, req.body, req.user.id);
+  return SuccessResponse(200, 'Visit signed successfully', result);
+});
+
+export const getVisitSignatures = asyncHandler(async (req: Request, res: Response) => {
+  const visitId = req.params.visitId as string;
+  const result = await visitService.getVisitSignatures(visitId);
+  return SuccessResponse(200, 'OK', result);
+});
+
+// ─────────────────────────────────────────────────────────────
+// Admin Edit + Delete + Restore
+// ─────────────────────────────────────────────────────────────
+
+export const updateVisit = asyncHandler(async (req: Request, res: Response) => {
+  const visitId = req.params.visitId as string;
+  const result = await visitService.updateVisit(visitId, req.body, req.user.id);
+  return SuccessResponse(200, 'Visit updated successfully', result);
+});
+
+export const deleteVisit = asyncHandler(async (req: Request, res: Response) => {
+  const visitId = req.params.visitId as string;
+  const { reason } = req.body;
+  const result = await visitService.deleteVisit(visitId, req.user.id, reason);
+  return SuccessResponse(200, 'Visit deleted', result);
+});
+
+export const restoreVisit = asyncHandler(async (req: Request, res: Response) => {
+  const visitId = req.params.visitId as string;
+  const result = await visitService.restoreVisit(visitId, req.user.id);
+  return SuccessResponse(200, 'Visit restored', result);
 });
 
 export default {
   recordVisit,
   getVisits,
   getVisitById,
+  signVisit,
+  getVisitSignatures,
+  updateVisit,
+  deleteVisit,
+  restoreVisit,
 };
