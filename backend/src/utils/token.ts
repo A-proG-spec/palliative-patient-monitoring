@@ -14,12 +14,12 @@ export const generateOtp = (): string=>{
 export const hashOtp = (otp:string): string=>{
   return crypto.createHash('sha256').update(otp).digest('hex');
 };
-export const compareOtpHash = (incoming:string, stored):boolean =>{
-  const incomingHash = hashOtp(incoming);
-  const a = Buffer.from(incoming,'hex')
-  const b = Buffer.from(stored, 'hex')
-  if(a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a,b)
-}
+export const compareOtpHash = (incoming: string, stored: string): boolean => {
+  const incomingHash = hashOtp(incoming);              // hash the incoming OTP
+  const a = Buffer.from(incomingHash, 'hex');          // decode the hash → 32 bytes
+  const b = Buffer.from(stored, 'hex');                // decode the stored hash → 32 bytes
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+};
 
 export default { generateVerificationToken, generateRandomString, generateOtp,hashOtp,compareOtpHash };

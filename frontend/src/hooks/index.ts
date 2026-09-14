@@ -8,5 +8,32 @@ export { usePatientMedications, useMedicationDetail, useOrderMedication, useUpda
 export { usePatientLabs, useLabDetail, useOrderLab, useUpdateLabResult } from './useLabs';
 export { usePatientReferrals, useReferralDetail, useRequestReferral } from './useReferrals';
 export { usePatientAdmissions, useAdmissionDetail, useRecordAdmission, useUpdateAdmission } from './useAdmissions';
-export { useDashboardStats, useNotifications, useMarkNotificationRead, useAdminPatients, useAdminPatientDetail, useCloseCase, usePendingStaff, useApproveStaff, useRejectStaff, usePendingReferrals, useApproveReferral, useDeclineReferral, useReports, useExportReport } from './useAdmin';
+export {
+  useDashboardStats,
+  useNotifications,
+  useMarkNotificationRead,
+  useAdminPatients,
+  useAdminPatientDetail,
+  useCloseCase,
+  usePendingStaff,
+  useApproveStaff,
+  useRejectStaff,
+  usePendingReferrals,
+  useApproveReferral,
+  useDeclineReferral,
+  useReports,
+} from './useAdmin';
 export { useStaffDashboardStats } from './useStaff';
+export { useDischargeSummary, useDischargePatient, useFinalizeDischargeSummary } from './useDischarge';
+export { useProfile, useUpdateProfile, useChangePassword, useActivityStats } from './useProfile';
+export { usePatientImaging, useImagingDetail, useOrderImaging, useUpdateImagingReport, useUpdateImagingStatus, useDeleteImaging } from './useImaging';
+export {
+  useProgressNotes,
+  useProgressNote,
+  useProgressNoteSignatures,
+  useCreateProgressNote,
+  useUpdateProgressNote,
+  useDeleteProgressNote,
+  useSignProgressNote,
+  buildBlankProgressNote,
+} from './useProgressNotes';

@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useOrderLab } from '@/hooks/useLabs';
 import { usePatient } from '@/hooks/usePatients';
+import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -15,12 +15,21 @@ import { PageLoader } from '@/components/common/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/context/ToastContext';
 import { LabResultEntry } from '@/components/labs/LabResultEntry';
+import {
+  createLabSchema,
+  type CreateLabFormData,
+} from '@/schemas/lab.schema';
 
 // ── Form Section ──────────────────────────────────────────────────
-const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({
+  title,
+  children,
+}) => (
   <Card padding="lg">
     <CardHeader>
-      <CardTitle className="text-sm font-semibold text-primary uppercase tracking-wide">{title}</CardTitle>
+      <CardTitle className="text-sm font-semibold text-primary uppercase tracking-wide">
+        {title}
+      </CardTitle>
     </CardHeader>
     <CardContent className="space-y-4">{children}</CardContent>
   </Card>
@@ -35,35 +44,21 @@ const CheckboxGroup: React.FC<{
 }> = ({ options, name, register, className }) => (
   <div className={cn('grid grid-cols-2 gap-2', className)}>
     {options.map((option) => (
-      <label key={option.value} className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors">
-        <input type="checkbox" value={option.value} {...register(name)} className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary" />
+      <label
+        key={option.value}
+        className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors"
+      >
+        <input
+          type="checkbox"
+          value={option.value}
+          {...register(name)}
+          className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary"
+        />
         {option.label}
       </label>
     ))}
   </div>
 );
-
-// ── Schema ────────────────────────────────────────────────────────
-const orderLabSchema = z.object({
-  // Patient Info (auto-filled)
-  // Order Details
-  testCategory: z.enum(['Hematology', 'Chemistry', 'Hormone', 'Urinalysis', 'Stool', 'Microbiology', 'Histopathology', 'Immunology', 'Cardiac']),
-  testName: z.string().min(1, 'Test name is required'),
-  otherTestName: z.string().optional(),
-  specimenType: z.string().optional(),
-  specimenSite: z.string().optional(),
-  clinicalHistory: z.string().optional(),
-  priority: z.enum(['Routine', 'Urgent', 'Emergency']),
-  collectionDate: z.string().optional(),
-  collectionTime: z.string().optional(),
-  // Lab Use (left empty initially)
-  result: z.string().optional(),
-  resultDate: z.string().optional(),
-  performedBy: z.string().optional(),
-  notes: z.string().optional(),
-});
-
-type OrderLabFormData = z.infer<typeof orderLabSchema>;
 
 const OrderLabPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -71,24 +66,43 @@ const OrderLabPage: React.FC = () => {
   const { data: patient, isLoading: pLoading } = usePatient(id!);
   const orderMutation = useOrderLab(id!);
   const { toast } = useToast();
+  const user = useAuthStore((s) => s.user);
 
   // State to show result entry after saving
   const [savedLabId, setSavedLabId] = useState<string | null>(null);
-  const [showResultEntry, setShowResultEntry] = useState(false);
 
-  const { register, handleSubmit, formState: { errors }, watch } = useForm<OrderLabFormData>({
-    resolver: zodResolver(orderLabSchema),
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    watch,
+  } = useForm<CreateLabFormData>({
+    resolver: zodResolver(createLabSchema),
     defaultValues: {
-      testCategory: 'Hematology',
+      category: 'Hematology',
       priority: 'Routine',
+      dateOrdered: new Date().toISOString().split('T')[0],
       collectionDate: new Date().toISOString().split('T')[0],
-      collectionTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      collectionTime: new Date().toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      location: 'Home',
+      physicianRequester: user?.name || '',
+      wardClinic: '',
+      contactExtension: '',
+      testName: '',
+      otherText: '',
+      specimenType: '',
+      specimenSite: '',
+      clinicalHistory: '',
     },
   });
 
-  const selectedCategory = watch('testCategory');
+  const selectedCategory = watch('category');
+  const selectedTestName = watch('testName');
 
-  // ── Test options by category ──
+  // ── Test options by category — matches backend categories ──
   const getTestOptions = (category: string) => {
     const options: Record<string, { value: string; label: string }[]> = {
       Hematology: [
@@ -147,7 +161,10 @@ const OrderLabPage: React.FC = () => {
         { value: 'Gram Stain', label: 'Gram Stain' },
         { value: 'AFB', label: 'AFB Examination' },
         { value: 'Fungal', label: 'Fungal Examination' },
-        { value: 'Antimicrobial Susceptibility', label: 'Antimicrobial Susceptibility Testing' },
+        {
+          value: 'Antimicrobial Susceptibility',
+          label: 'Antimicrobial Susceptibility Testing',
+        },
       ],
       Histopathology: [
         { value: 'Histopathology', label: 'Histopathological Examination' },
@@ -174,25 +191,41 @@ const OrderLabPage: React.FC = () => {
     return options[category] || [];
   };
 
-  const onSubmit = (data: OrderLabFormData) => {
-    orderMutation.mutate(
-      {
-        testName: data.testName === 'Other' ? data.otherTestName || '' : data.testName,
-        dateOrdered: data.collectionDate || new Date().toISOString().split('T')[0],
-        location: 'Home',
-        // Store additional data for later
-        specimenType: data.specimenType,
-        specimenSite: data.specimenSite,
-        clinicalHistory: data.clinicalHistory,
-        priority: data.priority,
-      } as any,
-      {
-        onSuccess: (response) => {
-          setSavedLabId(response.id);
-          toast.success('Lab test ordered successfully. Enter results when available.');
-        },
-      }
-    );
+  const onSubmit = (data: CreateLabFormData) => {
+    // Strip empty strings so backend treats them as undefined,
+    // then derive the location from the patient's current location.
+    const derivedLocation: 'Home' | 'Hospital' =
+      patient?.currentLocation === 'ReferredHospital' ? 'Hospital' : 'Home';
+
+    const payload = {
+      ...data,
+      location: derivedLocation,
+      wardClinic:
+        data.wardClinic?.trim() ||
+        (derivedLocation === 'Hospital'
+          ? 'Palliative Care Ward'
+          : 'Home Care Unit'),
+      testName:
+        data.testName === 'Other' && data.otherText
+          ? data.otherText.trim()
+          : data.testName,
+    };
+
+    // Remove empty optional fields — keeps the payload clean
+    const cleaned: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(payload)) {
+      if (v === '' || v === undefined || v === null) continue;
+      cleaned[k] = v;
+    }
+
+    orderMutation.mutate(cleaned as any, {
+      onSuccess: (response) => {
+        setSavedLabId(response.id);
+        toast.success(
+          'Lab test ordered successfully. Enter results when available.',
+        );
+      },
+    });
   };
 
   if (pLoading) return <PageLoader />;
@@ -203,8 +236,12 @@ const OrderLabPage: React.FC = () => {
       <div className="flex items-center gap-3">
         <BackButton to={`/patients/${id}`} label="Patient" />
         <div>
-          <h1 className="text-xl font-bold text-on-surface">CLINICAL LABORATORY ORDER FORM</h1>
-          <p className="text-sm text-text-secondary">Yekatit 12 Hospital Medical College (Y12HMC)</p>
+          <h1 className="text-xl font-bold text-on-surface">
+            CLINICAL LABORATORY ORDER FORM
+          </h1>
+          <p className="text-sm text-text-secondary">
+            Yekatit 12 Hospital Medical College (Y12HMC)
+          </p>
           {patient && (
             <p className="text-sm text-text-muted mt-1">
               {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
@@ -217,32 +254,91 @@ const OrderLabPage: React.FC = () => {
         {/* ── 1. Patient Information (Auto-filled) ── */}
         <FormSection title="1. Patient Information">
           <div className="grid sm:grid-cols-2 gap-4">
-            <Input label="Patient Name" value={patient ? `${patient.firstName} ${patient.lastName}` : '—'} disabled />
-            <Input label="Patient ID" value={patient?.patientDisplayId || '—'} disabled />
-            <Input label="Age" value={patient?.age ? `${patient.age} years` : '—'} disabled />
+            <Input
+              label="Patient Name"
+              value={
+                patient ? `${patient.firstName} ${patient.lastName}` : '—'
+              }
+              disabled
+            />
+            <Input
+              label="Patient ID"
+              value={patient?.patientDisplayId || '—'}
+              disabled
+            />
+            <Input
+              label="Age"
+              value={patient?.age ? `${patient.age} years` : '—'}
+              disabled
+            />
             <div>
               <p className="text-sm font-medium text-on-surface mb-2">Sex</p>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="radio" checked={patient?.sex === 'Male'} disabled className="h-4 w-4" />
+                  <input
+                    type="radio"
+                    checked={patient?.sex === 'Male'}
+                    disabled
+                    className="h-4 w-4"
+                  />
                   Male
                 </label>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="radio" checked={patient?.sex === 'Female'} disabled className="h-4 w-4" />
+                  <input
+                    type="radio"
+                    checked={patient?.sex === 'Female'}
+                    disabled
+                    className="h-4 w-4"
+                  />
                   Female
                 </label>
               </div>
             </div>
-            <Input label="Date of Birth" value={patient?.dateOfBirth ? new Date(patient.dateOfBirth).toLocaleDateString() : '—'} disabled />
-            <Input label="Medical Record No." value={patient?.patientDisplayId || '—'} disabled className="sm:col-span-2" />
-            <Input label="Ward/Clinic" value="Palliative Care Unit" disabled className="sm:col-span-2" />
+            <Input
+              label="Date of Birth"
+              value={
+                patient?.dateOfBirth
+                  ? new Date(patient.dateOfBirth).toLocaleDateString()
+                  : '—'
+              }
+              disabled
+            />
+            <Input
+              label="Medical Record No."
+              value={patient?.patientDisplayId || '—'}
+              disabled
+              className="sm:col-span-2"
+            />
           </div>
         </FormSection>
 
         {/* ── 2. Order Details ── */}
         <FormSection title="2. Laboratory Investigations Requested">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Input
+              label="Ward / Clinic"
+              placeholder="e.g. Palliative Care Ward"
+              error={errors.wardClinic?.message}
+              {...register('wardClinic')}
+            />
+            <Input
+              label="Physician / Requester *"
+              placeholder="Full name"
+              error={errors.physicianRequester?.message}
+              {...register('physicianRequester')}
+            />
+            <Input
+              label="Contact / Extension"
+              placeholder="e.g. 1234"
+              error={errors.contactExtension?.message}
+              {...register('contactExtension')}
+            />
+          </div>
+
           <div>
-            <p className="text-sm font-medium text-on-surface mb-2">Test Category</p>
+            <p className="text-sm font-medium text-on-surface mb-2">
+              Test Category
+            </p>
             <Select
               options={[
                 { value: 'Hematology', label: 'A. Hematology' },
@@ -251,61 +347,106 @@ const OrderLabPage: React.FC = () => {
                 { value: 'Urinalysis', label: 'D. Urinalysis' },
                 { value: 'Stool', label: 'E. Stool Examination' },
                 { value: 'Microbiology', label: 'F. Microbiology' },
-                { value: 'Histopathology', label: 'G. Histopathology / Cytology' },
+                {
+                  value: 'Histopathology',
+                  label: 'G. Histopathology / Cytology',
+                },
                 { value: 'Immunology', label: 'H. Immunology / Serology' },
                 { value: 'Cardiac', label: 'I. Cardiac Biomarkers' },
               ]}
-              {...register('testCategory')}
+              error={errors.category?.message}
+              {...register('category')}
             />
           </div>
 
           <div>
-            <p className="text-sm font-medium text-on-surface mb-2">Test Name</p>
+            <p className="text-sm font-medium text-on-surface mb-2">
+              Test Name
+            </p>
             <Select
               options={[
                 ...getTestOptions(selectedCategory),
                 { value: 'Other', label: 'Other (specify below)' },
               ]}
-              {...register('testName')}
               error={errors.testName?.message}
+              {...register('testName')}
             />
           </div>
 
-          {watch('testName') === 'Other' && (
-            <Input label="Specify Other Test" {...register('otherTestName')} />
+          {selectedTestName === 'Other' && (
+            <Input
+              label="Specify Other Test"
+              placeholder="Enter test name"
+              error={errors.otherText?.message}
+              {...register('otherText')}
+            />
           )}
 
           <div className="grid sm:grid-cols-2 gap-4">
-            <Input label="Specimen Type" placeholder="e.g., Blood, Urine, Stool" {...register('specimenType')} />
-            <Input label="Specimen Site" placeholder="e.g., Venous, Finger stick" {...register('specimenSite')} />
-          </div>
-
-          <Textarea label="Clinical History / Reason for Test" rows={3} {...register('clinicalHistory')} />
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Select
-              label="Priority"
-              options={[
-                { value: 'Routine', label: 'Routine' },
-                { value: 'Urgent', label: 'Urgent' },
-                { value: 'Emergency', label: 'Emergency' },
-              ]}
-              {...register('priority')}
+            <Input
+              label="Specimen Type"
+              placeholder="e.g., Blood, Urine, Stool"
+              error={errors.specimenType?.message}
+              {...register('specimenType')}
+            />
+            <Input
+              label="Specimen Site"
+              placeholder="e.g., Venous, Finger stick"
+              error={errors.specimenSite?.message}
+              {...register('specimenSite')}
             />
           </div>
+
+          <Textarea
+            label="Clinical History / Reason for Test"
+            rows={3}
+            error={errors.clinicalHistory?.message}
+            {...register('clinicalHistory')}
+          />
+
+          <Select
+            label="Priority"
+            options={[
+              { value: 'Routine', label: 'Routine' },
+              { value: 'Urgent', label: 'Urgent' },
+              { value: 'Emergency', label: 'Emergency' },
+            ]}
+            error={errors.priority?.message}
+            {...register('priority')}
+          />
         </FormSection>
 
         {/* ── 3. Collection Details ── */}
         <FormSection title="3. Collection & Submission">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Input label="Collection Date" type="date" {...register('collectionDate')} />
-            <Input label="Collection Time" type="time" {...register('collectionTime')} />
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Input
+              label="Date Ordered"
+              type="date"
+              error={errors.dateOrdered?.message}
+              {...register('dateOrdered')}
+            />
+            <Input
+              label="Collection Date"
+              type="date"
+              error={errors.collectionDate?.message}
+              {...register('collectionDate')}
+            />
+            <Input
+              label="Collection Time"
+              type="time"
+              error={errors.collectionTime?.message}
+              {...register('collectionTime')}
+            />
           </div>
         </FormSection>
 
         {/* ── 4. Submit ── */}
         <div className="flex gap-3 justify-end pb-8">
-          <Button type="button" variant="outline" onClick={() => navigate(`/patients/${id}`)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate(`/patients/${id}`)}
+          >
             Cancel
           </Button>
           <Button type="submit" loading={orderMutation.isPending}>
@@ -318,11 +459,14 @@ const OrderLabPage: React.FC = () => {
       {savedLabId && (
         <Card className="border-l-4 border-l-success">
           <CardHeader>
-            <CardTitle className="text-sm font-semibold text-success">Lab Test Ordered</CardTitle>
+            <CardTitle className="text-sm font-semibold text-success">
+              Lab Test Ordered
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-text-secondary mb-4">
-              The lab test has been ordered. Enter the results below when available.
+              The lab test has been ordered. Enter the results below when
+              available.
             </p>
             <LabResultEntry
               labId={savedLabId}

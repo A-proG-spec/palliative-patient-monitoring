@@ -1,39 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminApi } from '@/api/admin';
+import { adminApi, type AdminUpdateVisitRequest } from '@/api/admin';
 import type { ApproveStaffRequest, CloseCaseRequest } from '@/types/admin.types';
 import { useToast } from '@/context/ToastContext';
+
+// ─────────────────────────────────────────────────────────────
+// Dashboard
+// ─────────────────────────────────────────────────────────────
 
 export function useDashboardStats() {
   return useQuery({
     queryKey: ['admin', 'dashboard', 'stats'],
     queryFn: () => adminApi.getDashboardStats(),
     refetchInterval: 30000,
-  });
-}
-
-export function useUpdateVisit() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: ({ visitId, data }: { visitId: string; data: any }) =>
-      adminApi.updateVisit(visitId, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'visits', variables.visitId] });
-      toast.success('Visit updated successfully.');
-    },
-    onError: (error: any) => {
-      toast.error('Update failed', error.response?.data?.message || 'Failed to update visit.');
-    },
-  });
-}
-
-export function useVisitEditHistory(visitId: string) {
-  return useQuery({
-    queryKey: ['admin', 'visits', visitId, 'history'],
-    queryFn: () => adminApi.getVisitEditHistory(visitId),
-    enabled: !!visitId,
   });
 }
 
@@ -56,7 +34,16 @@ export function useMarkNotificationRead() {
   });
 }
 
-export function useAdminPatients(params?: { page?: number; limit?: number; status?: string; search?: string }) {
+// ─────────────────────────────────────────────────────────────
+// Patients
+// ─────────────────────────────────────────────────────────────
+
+export function useAdminPatients(params?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  search?: string;
+}) {
   return useQuery({
     queryKey: ['admin', 'patients', params],
     queryFn: () => adminApi.getPatients(params),
@@ -71,6 +58,10 @@ export function useAdminPatientDetail(patientId: string) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────
+// Close case (legacy)
+// ─────────────────────────────────────────────────────────────
+
 export function useCloseCase() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -80,9 +71,10 @@ export function useCloseCase() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin'] });
       queryClient.invalidateQueries({ queryKey: ['patients'] });
-      const reason = variables.data.reason === 'Deceased'
-        ? 'Case closed — patient marked as deceased.'
-        : 'Case closed — patient discharged (improved).';
+      const reason =
+        variables.data.reason === 'Deceased'
+          ? 'Case closed — patient marked as deceased.'
+          : 'Case closed — patient discharged (improved).';
       toast.info(reason);
     },
     onError: () => {
@@ -91,53 +83,9 @@ export function useCloseCase() {
   });
 }
 
-// ── Discharge API ─────────────────────────────────────────────
-export function useDischargePatient() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  
-  return useMutation({
-    mutationFn: ({ patientId, data }: { patientId: string; data: any }) =>
-      adminApi.dischargePatient(patientId, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'patients', variables.patientId] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
-      queryClient.invalidateQueries({ queryKey: ['patients'] });
-      toast.success('Patient discharged successfully.');
-    },
-    onError: (error: any) => {
-      toast.error('Failed to discharge patient.', error.response?.data?.message || 'Please try again.');
-    },
-  });
-}
-
-export function useDischargeSummary(patientId: string) {
-  return useQuery({
-    queryKey: ['admin', 'patients', patientId, 'discharge-summary'],
-    queryFn: () => adminApi.getDischargeSummary(patientId),
-    enabled: !!patientId,
-  });
-}
-
-// ── Update Patient Status ──────────────────────────────────────
-export function useUpdatePatientStatus() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  
-  return useMutation({
-    mutationFn: ({ patientId, status }: { patientId: string; status: 'Active' | 'Discharged' }) =>
-      adminApi.updatePatientStatus(patientId, status),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'patients', variables.patientId] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
-      queryClient.invalidateQueries({ queryKey: ['patients'] });
-      toast.success(`Patient status updated to ${variables.status}.`);
-    },
-    onError: (error: any) => {
-      toast.error('Failed to update patient status.', error.response?.data?.message || 'Please try again.');
-    },
-  });
-}
+// ─────────────────────────────────────────────────────────────
+// Staff management
+// ─────────────────────────────────────────────────────────────
 
 export function usePendingStaff() {
   return useQuery({
@@ -179,6 +127,10 @@ export function useRejectStaff() {
   });
 }
 
+// ─────────────────────────────────────────────────────────────
+// Referrals
+// ─────────────────────────────────────────────────────────────
+
 export function usePendingReferrals() {
   return useQuery({
     queryKey: ['admin', 'referrals', 'pending'],
@@ -219,6 +171,10 @@ export function useDeclineReferral() {
   });
 }
 
+// ─────────────────────────────────────────────────────────────
+// Reports
+// ─────────────────────────────────────────────────────────────
+
 export function useReports(params?: { startDate?: string; endDate?: string }) {
   return useQuery({
     queryKey: ['admin', 'reports', params],
@@ -226,15 +182,156 @@ export function useReports(params?: { startDate?: string; endDate?: string }) {
   });
 }
 
-export function useExportReport() {
+// ─────────────────────────────────────────────────────────────
+// Admin visit edit / delete / restore
+// ─────────────────────────────────────────────────────────────
+
+export function useUpdateVisit() {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
+
   return useMutation({
-    mutationFn: ({ format }: { format: 'pdf' | 'excel' }) => adminApi.exportReport(format),
+    mutationFn: ({ visitId, data }: { visitId: string; data: AdminUpdateVisitRequest }) =>
+      adminApi.updateVisit(visitId, data),
     onSuccess: (_, variables) => {
-      toast.success(`Report exported as ${variables.format.toUpperCase()} successfully.`);
+      // Invalidate both the admin patient detail (aggregates visits)
+      // and the staff-facing visit list/detail queries.
+      queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
+      queryClient.invalidateQueries({ queryKey: ['patients'] });
+      queryClient.invalidateQueries({ queryKey: ['patients', variables.visitId] });
+      toast.success('Visit updated successfully.');
+    },
+    onError: (error: unknown) => {
+      const msg =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Failed to update visit.';
+      toast.error(msg);
+    },
+  });
+}
+
+export function useDeleteVisit() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({ visitId, reason }: { visitId: string; reason?: string }) =>
+      adminApi.deleteVisit(visitId, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
+      queryClient.invalidateQueries({ queryKey: ['patients'] });
+      toast.info('Visit deleted.');
     },
     onError: () => {
-      toast.error('Failed to export report. Please try again.');
+      toast.error('Failed to delete visit. Please try again.');
+    },
+  });
+}
+
+export function useRestoreVisit() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (visitId: string) => adminApi.restoreVisit(visitId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
+      queryClient.invalidateQueries({ queryKey: ['patients'] });
+      toast.success('Visit restored.');
+    },
+    onError: () => {
+      toast.error('Failed to restore visit. Please try again.');
+    },
+  });
+}
+// ─────────────────────────────────────────────────────────────
+// Staff management — active list + CRUD
+// ─────────────────────────────────────────────────────────────
+
+import type {
+  StaffListResponse,
+  StaffDetail,
+  UpdateStaffRequest,
+  StaffListFilterStatus,
+  StaffRole,
+} from '@/types/admin.types';
+
+export function useStaffList(params?: {
+  page?: number;
+  limit?: number;
+  status?: StaffListFilterStatus;
+  role?: StaffRole;
+  search?: string;
+}) {
+  return useQuery({
+    queryKey: ['admin', 'staff', 'list', params],
+    queryFn: () => adminApi.getStaffList(params),
+  });
+}
+
+export function useStaffDetail(staffId: string) {
+  return useQuery({
+    queryKey: ['admin', 'staff', 'detail', staffId],
+    queryFn: () => adminApi.getStaffById(staffId),
+    enabled: !!staffId,
+  });
+}
+
+export function useUpdateStaff() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({ staffId, data }: { staffId: string; data: UpdateStaffRequest }) =>
+      adminApi.updateStaff(staffId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'staff', 'list'] });
+      queryClient.invalidateQueries({
+        queryKey: ['admin', 'staff', 'detail', variables.staffId],
+      });
+      toast.success('Staff member updated successfully.');
+    },
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.message ?? 'Failed to update staff member.';
+      toast.error(message);
+    },
+  });
+}
+
+export function useDeleteStaff() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({ staffId, reason }: { staffId: string; reason?: string }) =>
+      adminApi.deleteStaff(staffId, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'staff', 'list'] });
+      toast.success('Staff member deleted.');
+    },
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.message ?? 'Failed to delete staff member.';
+      toast.error(message);
+    },
+  });
+}
+
+export function useRestoreStaff() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (staffId: string) => adminApi.restoreStaff(staffId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'staff', 'list'] });
+      toast.success('Staff member restored.');
+    },
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.message ?? 'Failed to restore staff member.';
+      toast.error(message);
     },
   });
 }

@@ -1,18 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   XCircle, Phone, MapPin, User, Calendar, FileText, Printer,
   AlertTriangle, NotebookPen,
 } from 'lucide-react';
-import {
-  useAdminPatientDetail,
-  useUpdateVisit,
-  useVisitEditHistory,
-  useDischargeSummary,
-} from '@/hooks/useAdmin';
+import { useAdminPatientDetail } from '@/hooks/useAdmin';
+import { useDischargeSummary } from '@/hooks/useDischarge';
 import { usePatientVisits } from '@/hooks/useVisits';
 import { usePatientMedications } from '@/hooks/useMedications';
 import { usePatientLabs } from '@/hooks/useLabs';
+import { usePatientImaging } from '@/hooks/useImaging';
 import { usePatientReferrals } from '@/hooks/useReferrals';
 import { usePatientAdmissions } from '@/hooks/useAdmissions';
 import { useProgressNotes } from '@/hooks/useProgressNotes';
@@ -25,7 +22,6 @@ import { PageLoader } from '@/components/common/LoadingSpinner';
 import { EmptyState, ErrorState } from '@/components/common/EmptyState';
 import { formatDate, cn } from '@/lib/utils';
 import { DISEASE_STAGE_LABELS as DSL, VISIT_TYPE_LABELS } from '@/constants';
-import { VisitEditModal } from '@/components/admin/VisitEditModal';
 import type { DischargeSummary } from '@/components/admin/DischargePatientModal';
 import { printDischargeSummary } from '@/lib/printDischargeSummary';
 
@@ -66,7 +62,6 @@ const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-on-surface/30 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="w-full max-w-2xl my-4 bg-surface-lowest rounded-2xl border border-border-base shadow-xl">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border-base">
           <div className="flex items-center gap-2">
             <FileText size={17} className="text-primary" />
@@ -84,7 +79,6 @@ const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
           </button>
         </div>
 
-        {/* Body */}
         <div className="px-6 py-5">
           <div className="divide-y divide-border-base">
             {rows.map(([label, value]) => (
@@ -95,7 +89,6 @@ const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
             ))}
           </div>
 
-          {/* Discharge notes preview */}
           {summary.dischargeNotes && (
             <div className="mt-4">
               <p className="text-xs font-medium text-text-muted mb-1.5">Discharge Notes</p>
@@ -110,7 +103,6 @@ const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
           </p>
         </div>
 
-        {/* Footer */}
         <div className="flex gap-3 px-6 pb-5">
           <Button variant="outline" className="flex-1" onClick={onClose}>
             Close
@@ -130,7 +122,7 @@ const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
 };
 
 // ── Tabs ──────────────────────────────────────────────────────────
-const tabs = ['Visits', 'Progress Notes', 'Medications', 'Labs', 'Referrals', 'Admissions'] as const;
+const tabs = ['Visits', 'Progress Notes', 'Medications', 'Labs', 'Imaging', 'Referrals', 'Admissions'] as const;
 type Tab = typeof tabs[number];
 
 // ── Main page ─────────────────────────────────────────────────────
@@ -140,49 +132,31 @@ const AdminPatientDetailPage: React.FC = () => {
   const location = useLocation();
 
   const [activeTab, setActiveTab] = useState<Tab>('Visits');
+  const [showDischargeSummaryViewer, setShowDischargeSummaryViewer] = useState(false);
 
-  // Discharge summary — try router state first (set by DischargePatientPage
-  // immediately after a successful discharge), then fall back to the API.
-  // This means the summary survives a page refresh.
-  const locationState = (location.state as {
-    dischargeSummary?: DischargeSummary;
-  } | null) ?? null;
-
+  // ── Discharge summary ──
+  // Try router state first (set by DischargePatientPage on success),
+  // then fall back to the API for persisted summaries.
+  const locationState = (location.state as { dischargeSummary?: DischargeSummary } | null) ?? null;
   const { data: fetchedDischargeSummary } = useDischargeSummary(patientId!);
-
   const dischargeSummary: DischargeSummary | null =
     locationState?.dischargeSummary ?? fetchedDischargeSummary ?? null;
 
-  const [showDischargeSummaryViewer, setShowDischargeSummaryViewer] = useState(false);
-
-  // Primary patient data
+  // ── Primary patient data ──
   const { data: patient, isLoading, error, refetch } = useAdminPatientDetail(patientId!);
 
-  // Progress notes — fetched via React Query (same endpoint the staff page uses)
-  const { data: progressNotesData } = useProgressNotes(patientId!);
-  const progressNotes = progressNotesData?.items ?? [];
-
-  // Sub-record data
+  // ── Sub-record data (each has its own endpoint now) ──
   const { data: visitsData } = usePatientVisits(patientId!);
   const { data: medsData } = usePatientMedications(patientId!);
   const { data: labsData } = usePatientLabs(patientId!);
+  const { data: imagingData } = usePatientImaging(patientId!);
   const { data: refsData } = usePatientReferrals(patientId!);
   const { data: admsData } = usePatientAdmissions(patientId!);
+  const { data: progressNotesData } = useProgressNotes(patientId!);
 
-  // ── Lab vs imaging split (memoised so we don't refilter on every render) ──
-  const { labOrders, imagingOrders } = useMemo(() => {
-    const items = labsData?.items ?? [];
-    const labs: typeof items = [];
-    const imaging: typeof items = [];
-    for (const l of items) {
-      const n = l.testName ?? '';
-      const isImaging =
-        n.includes('XRay') || n.includes('Ultrasound') || n.includes('CT') ||
-        n.includes('MRI') || n.includes('Mammography') || n.includes('Fluoroscopy');
-      (isImaging ? imaging : labs).push(l);
-    }
-    return { labOrders: labs, imagingOrders: imaging };
-  }, [labsData]);
+  const progressNotes = progressNotesData?.items ?? [];
+  const labOrders = labsData?.items ?? [];
+  const imagingOrders = imagingData?.items ?? [];
 
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
@@ -192,6 +166,7 @@ const AdminPatientDetailPage: React.FC = () => {
     'Progress Notes': progressNotes.length,
     Medications: medsData?.total ?? 0,
     Labs: labOrders.length,
+    Imaging: imagingOrders.length,
     Referrals: refsData?.total ?? 0,
     Admissions: admsData?.total ?? 0,
   };
@@ -200,14 +175,12 @@ const AdminPatientDetailPage: React.FC = () => {
     if (dischargeSummary) printDischargeSummary(dischargeSummary);
   };
 
-  // Derive discharged-on date for header label
   const dischargedOnLabel = dischargeSummary?.dateOfDischarge
     ? formatDate(dischargeSummary.dateOfDischarge)
     : patient.status === 'Discharged' ? 'previously' : null;
 
   return (
     <div className="space-y-6 max-w-5xl">
-
       {/* ── Header ── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -221,7 +194,6 @@ const AdminPatientDetailPage: React.FC = () => {
           <StatusBadge status={patient.status} type="patient" />
           <StatusBadge status={patient.currentLocation} />
 
-          {/* Discharge Patient — only when Active */}
           {patient.status === 'Active' && (
             <Button
               variant="outline"
@@ -234,7 +206,6 @@ const AdminPatientDetailPage: React.FC = () => {
             </Button>
           )}
 
-          {/* View Discharge Summary — once discharged */}
           {patient.status === 'Discharged' && dischargeSummary && (
             <Button
               variant="secondary"
@@ -246,7 +217,6 @@ const AdminPatientDetailPage: React.FC = () => {
             </Button>
           )}
 
-          {/* Discharged label — if discharged but no local summary */}
           {patient.status === 'Discharged' && !dischargeSummary && dischargedOnLabel && (
             <span className="text-xs text-text-muted px-2 py-1 rounded-lg border border-border-base bg-surface-low">
               Discharged {dischargedOnLabel}
@@ -326,7 +296,6 @@ const AdminPatientDetailPage: React.FC = () => {
         </div>
 
         <div className="p-5 overflow-x-auto">
-
           {/* Visits */}
           {activeTab === 'Visits' && (
             visitsData?.items?.length ? (
@@ -361,42 +330,57 @@ const AdminPatientDetailPage: React.FC = () => {
             )
           )}
 
-          {/* ── Progress Notes Tab ── */}
+          {/* Progress Notes */}
           {activeTab === 'Progress Notes' && (
             progressNotes.length ? (
               <div className="space-y-3">
-                {progressNotes.map((note) => (
-                  <div key={note.id} className="border border-border-base rounded-xl p-4 hover:bg-surface-low/40 transition-colors">
-                    <div className="flex items-start justify-between gap-3 flex-wrap">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                          <Badge variant="primary">
-                            <NotebookPen size={11} className="mr-0.5" />
-                            Progress Note
-                          </Badge>
-                          <span className="text-xs text-text-muted">{formatDate(note.date)} {note.time && `· ${note.time}`}</span>
-                          {note.attendingClinician && (
-                            <span className="text-xs text-text-muted">· {note.attendingClinician}</span>
+                {progressNotes.map((note) => {
+                  // The backend list DTO does not include a `date`/`time`
+                  // string — derive from createdAt.
+                  const created = note.createdAt ? new Date(note.createdAt) : null;
+                  const dateLabel = created ? formatDate(created.toISOString()) : '—';
+                  const timeLabel = created
+                    ? created.toTimeString().slice(0, 5)
+                    : '';
+
+                  return (
+                    <div
+                      key={note.id}
+                      className="border border-border-base rounded-xl p-4 hover:bg-surface-low/40 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                            <Badge variant="primary">
+                              <NotebookPen size={11} className="mr-0.5" />
+                              Progress Note
+                            </Badge>
+                            <span className="text-xs text-text-muted">
+                              {dateLabel}{timeLabel ? ` · ${timeLabel}` : ''}
+                            </span>
+                            {note.attendingClinician && (
+                              <span className="text-xs text-text-muted">· {note.attendingClinician}</span>
+                            )}
+                          </div>
+                          {note.generalCondition && (
+                            <p className="text-sm text-on-surface">
+                              <span className="text-text-muted">Condition:</span>{' '}
+                              <span className="font-medium">{note.generalCondition}</span>
+                              {note.overallAssessment && (
+                                <span className="text-text-secondary"> — {note.overallAssessment}</span>
+                              )}
+                            </p>
+                          )}
+                          {note.soapSubjective && (
+                            <p className="text-xs text-text-muted mt-1 truncate max-w-lg">
+                              S: {note.soapSubjective}
+                            </p>
                           )}
                         </div>
-                        {note.generalCondition && (
-                          <p className="text-sm text-on-surface">
-                            <span className="text-text-muted">Condition:</span>{' '}
-                            <span className="font-medium">{note.generalCondition}</span>
-                            {note.overallAssessment && (
-                              <span className="text-text-secondary"> — {note.overallAssessment}</span>
-                            )}
-                          </p>
-                        )}
-                        {note.soapSubjective && (
-                          <p className="text-xs text-text-muted mt-1 truncate max-w-lg">
-                            S: {note.soapSubjective}
-                          </p>
-                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <EmptyState
@@ -469,6 +453,40 @@ const AdminPatientDetailPage: React.FC = () => {
               </table>
             ) : (
               <EmptyState title="No lab tests ordered" description="No laboratory tests have been ordered for this patient yet." />
+            )
+          )}
+
+          {/* Imaging */}
+          {activeTab === 'Imaging' && (
+            imagingOrders.length ? (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-text-muted">
+                    {['Modality', 'Body Region', 'Ordered', 'Performed', 'Priority', 'Status', 'Report'].map((h) => (
+                      <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-base">
+                  {imagingOrders.map((img) => (
+                    <tr
+                      key={img.id}
+                      className="hover:bg-surface-low cursor-pointer"
+                      onClick={() => navigate(`/admin/patients/${patientId}/imaging/${img.id}`)}
+                    >
+                      <td className="py-3 pr-4"><Badge variant="primary">{img.modality}</Badge></td>
+                      <td className="py-3 pr-4 text-text-secondary">{img.bodyRegion || '—'}</td>
+                      <td className="py-3 pr-4 text-text-secondary">{img.dateOrdered ? formatDate(img.dateOrdered) : '—'}</td>
+                      <td className="py-3 pr-4 text-text-secondary">{img.performedAt ? formatDate(img.performedAt) : '—'}</td>
+                      <td className="py-3 pr-4"><StatusBadge status={img.priority} /></td>
+                      <td className="py-3 pr-4"><StatusBadge status={img.status} type="lab" /></td>
+                      <td className="py-3 text-text-muted text-xs">{img.hasReport ? 'Available' : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <EmptyState title="No imaging orders" description="No imaging orders have been placed for this patient yet." />
             )
           )}
 

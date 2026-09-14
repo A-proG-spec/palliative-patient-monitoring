@@ -79,8 +79,9 @@ export interface IPatientProgressNote extends Document {
     respiratoryRate: IVitalsPair;
     bloodPressure: IVitalsPair;
     spo2: IVitalsPair;
+    oxygenFlow: IVitalsPair;
   };
-
+otherRelevantObservations:string;
   // ═════════════════════════════════════════════════════════════
   // 3. SYMPTOM ASSESSMENT
   // ═════════════════════════════════════════════════════════════
@@ -402,7 +403,9 @@ const PatientProgressNoteSchema = new Schema<IPatientProgressNote>(
       respiratoryRate: { type: VitalsPairSchema, default: () => ({ current: '', previous: '' }) },
       bloodPressure: { type: VitalsPairSchema, default: () => ({ current: '', previous: '' }) },
       spo2: { type: VitalsPairSchema, default: () => ({ current: '', previous: '' }) },
+      oxygenFlow:{type: VitalsPairSchema, default:() =>({current:'', previous:''})}
     },
+    otherRelevantObservations:{type:String, default:''},
 
     // ── 3. Symptom Assessment ──
     symptoms: { type: Schema.Types.Mixed, default: {} },

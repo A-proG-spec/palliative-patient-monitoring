@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ClipboardList, Pill, FlaskConical, GitBranch, Building2,
@@ -10,12 +10,13 @@ import { usePatient } from '@/hooks/usePatients';
 import { usePatientVisits } from '@/hooks/useVisits';
 import { usePatientMedications } from '@/hooks/useMedications';
 import { usePatientLabs } from '@/hooks/useLabs';
+import { usePatientImaging } from '@/hooks/useImaging';
 import { usePatientReferrals } from '@/hooks/useReferrals';
 import { usePatientAdmissions } from '@/hooks/useAdmissions';
 import { useProgressNotes } from '@/hooks/useProgressNotes';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
@@ -25,7 +26,23 @@ import { DISEASE_STAGE_LABELS, VISIT_TYPE_LABELS } from '@/constants';
 import { printPatientReport } from '@/lib/printPatientReport';
 import { APP_NAME } from '@/lib/config';
 
-// ── Record Type Definitions ──────────────────────────────────────
+// ═════════════════════════════════════════════════════════════
+// Module-level constants (do NOT reference `patient` here)
+// ═════════════════════════════════════════════════════════════
+
+const ALL_TABS = [
+  'Visits',
+  'Progress Notes',
+  'Medications',
+  'Labs',
+  'Imaging',
+  'Referrals',
+  'Admissions',
+] as const;
+
+type Tab = typeof ALL_TABS[number];
+
+// ── Record Type Definitions ──────────────────────────────────
 interface RecordType {
   key: string;
   label: string;
@@ -35,8 +52,6 @@ interface RecordType {
   color?: string;
 }
 
-/** The visit-type entry is conditional: Home patients get a Home Visit Record,
- *  hospitalised patients get a Patient Progress Note instead. */
 function getVisitRecordType(currentLocation: 'Home' | 'ReferredHospital'): RecordType {
   if (currentLocation === 'ReferredHospital') {
     return {
@@ -101,7 +116,10 @@ const STATIC_RECORD_TYPES: RecordType[] = [
   },
 ];
 
-// ── Add Record Modal ─────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════
+// Add Record Modal
+// ═════════════════════════════════════════════════════════════
+
 interface AddRecordModalProps {
   patientId: string;
   patientName: string;
@@ -110,11 +128,16 @@ interface AddRecordModalProps {
   onSelect: (route: string) => void;
 }
 
-const AddRecordModal: React.FC<AddRecordModalProps> = ({ patientId, patientName, currentLocation, onClose, onSelect }) => {
-  // Build the full list: conditional visit/progress-note + static remainder
+const AddRecordModal: React.FC<AddRecordModalProps> = ({
+  patientId, patientName, currentLocation, onClose, onSelect,
+}) => {
   const allTypes = [getVisitRecordType(currentLocation), ...STATIC_RECORD_TYPES];
-  const clinicalRecords = allTypes.filter(r => ['visit', 'progress-note', 'medication', 'lab', 'imaging'].includes(r.key));
-  const referralRecords = allTypes.filter(r => ['referral', 'admission'].includes(r.key));
+  const clinicalRecords = allTypes.filter((r) =>
+    ['visit', 'progress-note', 'medication', 'lab', 'imaging'].includes(r.key),
+  );
+  const referralRecords = allTypes.filter((r) =>
+    ['referral', 'admission'].includes(r.key),
+  );
 
   return (
     <div
@@ -124,7 +147,6 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({ patientId, patientName,
       aria-labelledby="add-record-title"
     >
       <div className="w-full max-w-lg bg-surface-lowest rounded-2xl border border-border-base shadow-xl max-h-[90vh] flex flex-col">
-        {/* ── Header ── */}
         <div className="px-6 pt-5 pb-4 border-b border-border-base flex-shrink-0">
           <div className="flex items-center gap-2 mb-0.5">
             <Plus size={17} className="text-primary" />
@@ -133,33 +155,33 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({ patientId, patientName,
             </h2>
           </div>
           <p className="text-xs text-text-muted mt-1">
-            Select the type of record to add for <span className="font-medium text-on-surface">{patientName}</span>
+            Select the type of record to add for{' '}
+            <span className="font-medium text-on-surface">{patientName}</span>
           </p>
         </div>
 
-        {/* ── Record Type List ── */}
         <div className="flex-1 overflow-y-auto py-2">
-          {/* Clinical Records */}
           <div className="px-4 py-1">
-            <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Clinical</p>
+            <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
+              Clinical
+            </p>
             {clinicalRecords.map((rt) => (
               <RecordTypeItem key={rt.key} recordType={rt} patientId={patientId} onSelect={onSelect} />
             ))}
           </div>
 
-          {/* Divider */}
           <div className="border-t border-border-base my-2 mx-6" />
 
-          {/* Referral Records */}
           <div className="px-4 py-1">
-            <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Referral & Admission</p>
+            <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
+              Referral &amp; Admission
+            </p>
             {referralRecords.map((rt) => (
               <RecordTypeItem key={rt.key} recordType={rt} patientId={patientId} onSelect={onSelect} />
             ))}
           </div>
         </div>
 
-        {/* ── Cancel Button ── */}
         <div className="px-6 pb-5 pt-2 border-t border-border-base flex-shrink-0">
           <Button variant="outline" className="w-full" onClick={onClose}>
             Cancel
@@ -170,14 +192,12 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({ patientId, patientName,
   );
 };
 
-// ── Record Type Item ─────────────────────────────────────────────
 const RecordTypeItem: React.FC<{
   recordType: RecordType;
   patientId: string;
   onSelect: (route: string) => void;
 }> = ({ recordType, patientId, onSelect }) => {
   const color = recordType.color || 'text-primary';
-
   return (
     <button
       onClick={() => onSelect(recordType.route(patientId))}
@@ -185,7 +205,7 @@ const RecordTypeItem: React.FC<{
     >
       <div className={cn(
         'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary-light group-hover:bg-primary group-hover:text-white transition-colors',
-        color
+        color,
       )}>
         {recordType.icon}
       </div>
@@ -202,65 +222,72 @@ const RecordTypeItem: React.FC<{
   );
 };
 
-// ── Tabs ──────────────────────────────────────────────────────────
-const tabs = ['Visits', 'Progress Notes', 'Medications', 'Labs', 'Imaging', 'Referrals', 'Admissions'] as const;
-type Tab = typeof tabs[number];
+// ═════════════════════════════════════════════════════════════
+// Main Component
+// ═════════════════════════════════════════════════════════════
 
-// ── Main Component ──────────────────────────────────────────────
 const PatientDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+
   const [activeTab, setActiveTab] = useState<Tab>('Visits');
   const [showAddRecord, setShowAddRecord] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
-  // Progress notes — fetched via React Query. The useCreateProgressNote hook
-  // invalidates ['patients', id, 'progress-notes'] after a save, so this list
-  // refreshes automatically without any manual cache fiddling.
-  const { data: progressNotesData } = useProgressNotes(id!);
-  const progressNotes = progressNotesData?.items ?? [];
+  // ── Primary patient data ──
+  const { data: patient, isLoading, error, refetch } = usePatient(id!);
 
-  // If returning from the progress note form with a saved note, show Progress Notes tab
+  // ── Sub-record data ──
+  const { data: visitsData } = usePatientVisits(id!);
+  const { data: progressNotesData } = useProgressNotes(id!);
+  const { data: medsData } = usePatientMedications(id!);
+  const { data: labsData } = usePatientLabs(id!);
+  const { data: imagingData } = usePatientImaging(id!);
+  const { data: refsData } = usePatientReferrals(id!);
+  const { data: admsData } = usePatientAdmissions(id!);
+
+  const progressNotes = progressNotesData?.items ?? [];
+  const labOrders = labsData?.items ?? [];
+  const imagingOrders = imagingData?.items ?? [];
+
+  // ── Location-driven tab list ──
+  // Home patients: Home Visits + everything else
+  // Hospitalised patients: Progress Notes instead of Visits
+  const tabs = useMemo<Tab[]>(() => {
+    const currentLocation = patient?.currentLocation ?? 'Home';
+    return ALL_TABS.filter((t) => {
+      if (t === 'Visits') return currentLocation === 'Home';
+      if (t === 'Progress Notes') return currentLocation === 'ReferredHospital';
+      return true;
+    });
+  }, [patient?.currentLocation]);
+
+  // If the current active tab is no longer visible (patient moved
+  // home ↔ hospital), reset to the first visible tab.
+  useEffect(() => {
+    if (!tabs.includes(activeTab)) {
+      setActiveTab(tabs[0]);
+    }
+  }, [tabs, activeTab]);
+
+  // If returning from the progress note form with a saved note, show
+  // Progress Notes tab — but only if it's actually visible.
   const locationState = location.state as { savedProgressNote?: boolean } | null;
-  React.useEffect(() => {
-    if (locationState?.savedProgressNote) {
+  useEffect(() => {
+    if (locationState?.savedProgressNote && tabs.includes('Progress Notes')) {
       setActiveTab('Progress Notes');
-      // Clear the flag so re-renders don't re-trigger
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { data: patient, isLoading, error, refetch } = usePatient(id!);
-  const { data: visitsData } = usePatientVisits(id!);
-  const { data: medsData } = usePatientMedications(id!);
-  const { data: labsData } = usePatientLabs(id!);
-  const { data: refsData } = usePatientReferrals(id!);
-  const { data: admsData } = usePatientAdmissions(id!);
+  if (isLoading || !patient) {
+    if (isLoading) return <PageLoader />;
+    return <ErrorState onRetry={refetch} />;
+  }
+  if (error) return <ErrorState onRetry={refetch} />;
 
-  // ── Filter lab tests to show only lab orders (not imaging) ──
-  const labOrders = labsData?.items?.filter(l =>
-    !l.testName?.includes('XRay') &&
-    !l.testName?.includes('Ultrasound') &&
-    !l.testName?.includes('CT') &&
-    !l.testName?.includes('MRI') &&
-    !l.testName?.includes('Mammography') &&
-    !l.testName?.includes('Fluoroscopy')
-  ) || [];
-
-  // ── Filter imaging orders ──
-  const imagingOrders = labsData?.items?.filter(l =>
-    l.testName?.includes('XRay') ||
-    l.testName?.includes('Ultrasound') ||
-    l.testName?.includes('CT') ||
-    l.testName?.includes('MRI') ||
-    l.testName?.includes('Mammography') ||
-    l.testName?.includes('Fluoroscopy')
-  ) || [];
-
-  if (isLoading) return <PageLoader />;
-  if (error || !patient) return <ErrorState onRetry={refetch} />;
-
+  // ── Tab counts ──
   const tabCounts: Record<Tab, number> = {
     Visits: visitsData?.total ?? 0,
     'Progress Notes': progressNotes.length,
@@ -292,7 +319,6 @@ const PatientDetailPage: React.FC = () => {
     navigate(route);
   };
 
-  // Disable Add Record button if patient is Discharged
   const isAddRecordDisabled = patient.status === 'Discharged';
 
   return (
@@ -303,7 +329,9 @@ const PatientDetailPage: React.FC = () => {
           <BackButton to="/patients" label="Patients" />
           <div>
             <p className="text-xs text-text-muted font-mono">{patient.patientDisplayId}</p>
-            <h1 className="text-xl font-bold text-on-surface">{patient.firstName} {patient.lastName}</h1>
+            <h1 className="text-xl font-bold text-on-surface">
+              {patient.firstName} {patient.lastName}
+            </h1>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -343,8 +371,14 @@ const PatientDetailPage: React.FC = () => {
             <h3 className="font-semibold text-on-surface mb-3">Patient Information</h3>
             <InfoRow label="Age / Sex" value={`${patient.age} years · ${patient.sex}`} />
             <InfoRow label="Date of Birth" value={formatDate(patient.dateOfBirth)} />
-            <div className="flex items-center gap-2"><MapPin size={12} className="text-text-muted" /><span className="text-text-secondary">{patient.address}</span></div>
-            <div className="flex items-center gap-2"><Phone size={12} className="text-text-muted" /><span className="text-text-secondary">{patient.phone}</span></div>
+            <div className="flex items-center gap-2">
+              <MapPin size={12} className="text-text-muted" />
+              <span className="text-text-secondary">{patient.address}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Phone size={12} className="text-text-muted" />
+              <span className="text-text-secondary">{patient.phone}</span>
+            </div>
             <InfoRow label="Emergency Contact" value={`${patient.emergencyContactName} · ${patient.emergencyContactPhone}`} />
             <InfoRow label="Caregiver" value={`${patient.caregiverName} · ${patient.caregiverPhone}`} />
           </div>
@@ -353,13 +387,17 @@ const PatientDetailPage: React.FC = () => {
           <div className="space-y-2 text-sm">
             <h3 className="font-semibold text-on-surface mb-3">Medical Information</h3>
             <InfoRow label="Primary Diagnosis" value={patient.primaryDiagnosis} />
-            {patient.secondaryDiagnoses?.length > 0 && <InfoRow label="Secondary" value={patient.secondaryDiagnoses.join(', ')} />}
+            {patient.secondaryDiagnoses?.length > 0 && (
+              <InfoRow label="Secondary" value={patient.secondaryDiagnoses.join(', ')} />
+            )}
             <div className="flex items-center gap-2">
               <span className="text-text-muted">Stage:</span>
               <Badge variant="secondary">{DISEASE_STAGE_LABELS[patient.diseaseStage] ?? patient.diseaseStage}</Badge>
             </div>
             <InfoRow label="Prognosis" value={patient.estimatedPrognosis} />
-            {patient.comorbidities?.length > 0 && <InfoRow label="Comorbidities" value={patient.comorbidities.join(', ')} />}
+            {patient.comorbidities?.length > 0 && (
+              <InfoRow label="Comorbidities" value={patient.comorbidities.join(', ')} />
+            )}
           </div>
         </Card>
       </div>
@@ -375,7 +413,7 @@ const PatientDetailPage: React.FC = () => {
                 'flex items-center gap-2 px-5 py-3.5 text-sm font-medium whitespace-nowrap transition-all border-b-2',
                 activeTab === tab
                   ? 'border-primary text-primary'
-                  : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-low'
+                  : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-low',
               )}
             >
               {tab}
@@ -393,16 +431,24 @@ const PatientDetailPage: React.FC = () => {
           {activeTab === 'Visits' && (
             visitsData?.items?.length ? (
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-xs text-text-muted">
-                  {['Date', 'Type', 'Status', 'Outcome', ''].map((h) => (
-                    <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
-                  ))}
-                </tr></thead>
+                <thead>
+                  <tr className="text-left text-xs text-text-muted">
+                    {['Date', 'Type', 'Status', 'Outcome', ''].map((h) => (
+                      <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody className="divide-y divide-border-base">
                   {visitsData.items.map((v) => (
-                    <tr key={v.id} className="hover:bg-surface-low cursor-pointer" onClick={() => navigate(`/patients/${id}/visits/${v.id}`)}>
+                    <tr
+                      key={v.id}
+                      className="hover:bg-surface-low cursor-pointer"
+                      onClick={() => navigate(`/patients/${id}/visits/${v.id}`)}
+                    >
                       <td className="py-3 pr-4">{formatDate(v.visitDate)}</td>
-                      <td className="py-3 pr-4"><Badge variant="secondary">{VISIT_TYPE_LABELS[v.visitType] || v.visitType}</Badge></td>
+                      <td className="py-3 pr-4">
+                        <Badge variant="secondary">{VISIT_TYPE_LABELS[v.visitType] || v.visitType}</Badge>
+                      </td>
                       <td className="py-3 pr-4"><StatusBadge status={v.overallStatus} /></td>
                       <td className="py-3 pr-4"><StatusBadge status={v.outcome} type="visit" /></td>
                       <td className="py-3 text-text-muted text-xs">PPS {v.ppsScore}% · KPS {v.kpsScore}</td>
@@ -411,7 +457,12 @@ const PatientDetailPage: React.FC = () => {
                 </tbody>
               </table>
             ) : (
-              <EmptyState title="No visits recorded" description="Record the first home visit for this patient." actionLabel="Record Visit" onAction={() => navigate(`/patients/${id}/visits`)} />
+              <EmptyState
+                title="No visits recorded"
+                description="Record the first home visit for this patient."
+                actionLabel="Record Visit"
+                onAction={() => navigate(`/patients/${id}/visits`)}
+              />
             )
           )}
 
@@ -419,38 +470,56 @@ const PatientDetailPage: React.FC = () => {
           {activeTab === 'Progress Notes' && (
             progressNotes.length ? (
               <div className="space-y-3">
-                {progressNotes.map((note) => (
-                  <div key={note.id} className="border border-border-base rounded-xl p-4 hover:bg-surface-low/40 transition-colors">
-                    <div className="flex items-start justify-between gap-3 flex-wrap">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                          <Badge variant="primary">
-                            <NotebookPen size={11} className="mr-0.5" />
-                            Progress Note
-                          </Badge>
-                          <span className="text-xs text-text-muted">{formatDate(note.date)} {note.time && `· ${note.time}`}</span>
-                          {note.attendingClinician && (
-                            <span className="text-xs text-text-muted">· {note.attendingClinician}</span>
+                {progressNotes.map((note) => {
+                  const created = note.createdAt ? new Date(note.createdAt) : null;
+                  const dateLabel = created ? formatDate(created.toISOString()) : '—';
+                  const timeLabel = created
+                    ? created.toTimeString().slice(0, 5)
+                    : '';
+
+                  return (
+                    <div
+                      key={note.id}
+                      className="border border-border-base rounded-xl p-4 hover:bg-surface-low/40 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/patients/${id}/progress-notes/${note.id}`)}
+                    >
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                            <Badge variant="primary">
+                              <NotebookPen size={11} className="mr-0.5" />
+                              Progress Note
+                            </Badge>
+                            <span className="text-xs text-text-muted">
+                              {dateLabel}
+                              {timeLabel ? ` · ${timeLabel}` : ''}
+                            </span>
+                            {note.attendingClinician && (
+                              <span className="text-xs text-text-muted">· {note.attendingClinician}</span>
+                            )}
+                            {note.allSigned && (
+                              <Badge variant="success">All Signed</Badge>
+                            )}
+                          </div>
+                          {note.generalCondition && (
+                            <p className="text-sm text-on-surface">
+                              <span className="text-text-muted">Condition:</span>{' '}
+                              <span className="font-medium">{note.generalCondition}</span>
+                              {note.overallAssessment && (
+                                <span className="text-text-secondary"> — {note.overallAssessment}</span>
+                              )}
+                            </p>
+                          )}
+                          {note.soapSubjective && (
+                            <p className="text-xs text-text-muted mt-1 truncate max-w-lg">
+                              S: {note.soapSubjective}
+                            </p>
                           )}
                         </div>
-                        {note.generalCondition && (
-                          <p className="text-sm text-on-surface">
-                            <span className="text-text-muted">Condition:</span>{' '}
-                            <span className="font-medium">{note.generalCondition}</span>
-                            {note.overallAssessment && (
-                              <span className="text-text-secondary"> — {note.overallAssessment}</span>
-                            )}
-                          </p>
-                        )}
-                        {note.soapSubjective && (
-                          <p className="text-xs text-text-muted mt-1 truncate max-w-lg">
-                            S: {note.soapSubjective}
-                          </p>
-                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <EmptyState
@@ -466,14 +535,20 @@ const PatientDetailPage: React.FC = () => {
           {activeTab === 'Medications' && (
             medsData?.items?.length ? (
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-xs text-text-muted">
-                  {['Medication', 'Dosage', 'Frequency', 'Route', 'Admin At', 'Status', ''].map((h) => (
-                    <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
-                  ))}
-                </tr></thead>
+                <thead>
+                  <tr className="text-left text-xs text-text-muted">
+                    {['Medication', 'Dosage', 'Frequency', 'Route', 'Admin At', 'Status', ''].map((h) => (
+                      <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody className="divide-y divide-border-base">
                   {medsData.items.map((m) => (
-                    <tr key={m.id} className="hover:bg-surface-low cursor-pointer" onClick={() => navigate(`/patients/${id}/medications/${m.id}`)}>
+                    <tr
+                      key={m.id}
+                      className="hover:bg-surface-low cursor-pointer"
+                      onClick={() => navigate(`/patients/${id}/medications/${m.id}`)}
+                    >
                       <td className="py-3 pr-4 font-medium">{m.name}</td>
                       <td className="py-3 pr-4 text-text-secondary">{m.dosage}</td>
                       <td className="py-3 pr-4 text-text-secondary">{m.frequency}</td>
@@ -486,7 +561,11 @@ const PatientDetailPage: React.FC = () => {
                 </tbody>
               </table>
             ) : (
-              <EmptyState title="No medications ordered" actionLabel="Order Medication" onAction={() => navigate(`/patients/${id}/medications`)} />
+              <EmptyState
+                title="No medications ordered"
+                actionLabel="Order Medication"
+                onAction={() => navigate(`/patients/${id}/medications`)}
+              />
             )
           )}
 
@@ -494,26 +573,40 @@ const PatientDetailPage: React.FC = () => {
           {activeTab === 'Labs' && (
             labOrders.length ? (
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-xs text-text-muted">
-                  {['Test', 'Ordered', 'Performed', 'Location', 'Status', 'Result'].map((h) => (
-                    <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
-                  ))}
-                </tr></thead>
+                <thead>
+                  <tr className="text-left text-xs text-text-muted">
+                    {['Test', 'Ordered', 'Performed', 'Location', 'Status', 'Result'].map((h) => (
+                      <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody className="divide-y divide-border-base">
                   {labOrders.map((l) => (
-                    <tr key={l.id} className="hover:bg-surface-low cursor-pointer" onClick={() => navigate(`/patients/${id}/labs/${l.id}`)}>
+                    <tr
+                      key={l.id}
+                      className="hover:bg-surface-low cursor-pointer"
+                      onClick={() => navigate(`/patients/${id}/labs/${l.id}`)}
+                    >
                       <td className="py-3 pr-4 font-medium">{l.testName}</td>
                       <td className="py-3 pr-4 text-text-secondary">{formatDate(l.dateOrdered)}</td>
-                      <td className="py-3 pr-4 text-text-secondary">{l.datePerformed ? formatDate(l.datePerformed) : '—'}</td>
+                      <td className="py-3 pr-4 text-text-secondary">
+                        {l.datePerformed ? formatDate(l.datePerformed) : '—'}
+                      </td>
                       <td className="py-3 pr-4 text-text-secondary">{l.location}</td>
                       <td className="py-3 pr-4"><StatusBadge status={l.status} type="lab" /></td>
-                      <td className="py-3 text-text-muted text-xs max-w-[150px] truncate">{l.result || '—'}</td>
+                      <td className="py-3 text-text-muted text-xs max-w-[150px] truncate">
+                        {l.result || '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
-              <EmptyState title="No lab tests ordered" actionLabel="Order Lab Test" onAction={() => navigate(`/patients/${id}/labs`)} />
+              <EmptyState
+                title="No lab tests ordered"
+                actionLabel="Order Lab Test"
+                onAction={() => navigate(`/patients/${id}/labs`)}
+              />
             )
           )}
 
@@ -521,34 +614,47 @@ const PatientDetailPage: React.FC = () => {
           {activeTab === 'Imaging' && (
             imagingOrders.length ? (
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-xs text-text-muted">
-                  {['Modality', 'Body Region', 'Ordered', 'Performed', 'Status', 'Report'].map((h) => (
-                    <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
-                  ))}
-                </tr></thead>
+                <thead>
+                  <tr className="text-left text-xs text-text-muted">
+                    {['Modality', 'Body Region', 'Ordered', 'Performed', 'Status', 'Report'].map((h) => (
+                      <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody className="divide-y divide-border-base">
                   {imagingOrders.map((img) => {
-                    // Extract modality from test name
-                    const modality = img.testName.split(' - ')[0] || img.testName;
-                    const bodyRegion = img.testName.split(' - ')[1] || '';
-
+                    const hasReport = !!(img.report && img.report.findings);
                     return (
-                      <tr key={img.id} className="hover:bg-surface-low cursor-pointer" onClick={() => navigate(`/patients/${id}/labs/${img.id}`)}>
+                      <tr
+                        key={img.id}
+                        className="hover:bg-surface-low cursor-pointer"
+                        onClick={() => navigate(`/patients/${id}/imaging/${img.id}`)}
+                      >
                         <td className="py-3 pr-4">
-                          <Badge variant="primary">{modality}</Badge>
+                          <Badge variant="primary">{img.modality}</Badge>
                         </td>
-                        <td className="py-3 pr-4 text-text-secondary">{bodyRegion || '—'}</td>
-                        <td className="py-3 pr-4 text-text-secondary">{formatDate(img.dateOrdered)}</td>
-                        <td className="py-3 pr-4 text-text-secondary">{img.datePerformed ? formatDate(img.datePerformed) : '—'}</td>
+                        <td className="py-3 pr-4 text-text-secondary">{img.bodyRegion || '—'}</td>
+                        <td className="py-3 pr-4 text-text-secondary">
+                          {img.dateOrdered ? formatDate(img.dateOrdered) : formatDate(img.createdAt)}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary">
+                          {img.performedAt ? formatDate(img.performedAt) : '—'}
+                        </td>
                         <td className="py-3 pr-4"><StatusBadge status={img.status} type="lab" /></td>
-                        <td className="py-3 text-text-muted text-xs max-w-[150px] truncate">{img.result ? 'View Report' : '—'}</td>
+                        <td className="py-3 text-text-muted text-xs">
+                          {hasReport ? 'Available' : '—'}
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             ) : (
-              <EmptyState title="No imaging orders" actionLabel="Order Imaging" onAction={() => navigate(`/patients/${id}/imaging`)} />
+              <EmptyState
+                title="No imaging orders"
+                actionLabel="Order Imaging"
+                onAction={() => navigate(`/patients/${id}/imaging`)}
+              />
             )
           )}
 
@@ -556,17 +662,25 @@ const PatientDetailPage: React.FC = () => {
           {activeTab === 'Referrals' && (
             refsData?.items?.length ? (
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-xs text-text-muted">
-                  {['Date', 'Type', 'Receiving Facility', 'Status', ''].map((h) => (
-                    <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
-                  ))}
-                </tr></thead>
+                <thead>
+                  <tr className="text-left text-xs text-text-muted">
+                    {['Date', 'Type', 'Receiving Facility', 'Status', ''].map((h) => (
+                      <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody className="divide-y divide-border-base">
                   {refsData.items.map((r) => (
-                    <tr key={r.id} className="hover:bg-surface-low cursor-pointer" onClick={() => navigate(`/patients/${id}/referrals/${r.id}`)}>
+                    <tr
+                      key={r.id}
+                      className="hover:bg-surface-low cursor-pointer"
+                      onClick={() => navigate(`/patients/${id}/referrals/${r.id}`)}
+                    >
                       <td className="py-3 pr-4">{formatDate(r.referralDate)}</td>
                       <td className="py-3 pr-4 text-text-secondary">{r.referralType}</td>
-                      <td className="py-3 pr-4 text-text-secondary truncate max-w-[200px]">{r.receivingFacility}</td>
+                      <td className="py-3 pr-4 text-text-secondary truncate max-w-[200px]">
+                        {r.receivingFacility}
+                      </td>
                       <td className="py-3 pr-4"><StatusBadge status={r.status} type="referral" /></td>
                       <td className="py-3 text-xs text-text-muted">{formatDate(r.createdAt)}</td>
                     </tr>
@@ -574,7 +688,11 @@ const PatientDetailPage: React.FC = () => {
                 </tbody>
               </table>
             ) : (
-              <EmptyState title="No referrals requested" actionLabel="Request Referral" onAction={() => navigate(`/patients/${id}/referrals`)} />
+              <EmptyState
+                title="No referrals requested"
+                actionLabel="Request Referral"
+                onAction={() => navigate(`/patients/${id}/referrals`)}
+              />
             )
           )}
 
@@ -582,26 +700,38 @@ const PatientDetailPage: React.FC = () => {
           {activeTab === 'Admissions' && (
             admsData?.items?.length ? (
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-xs text-text-muted">
-                  {['Admission Date', 'Bed', 'Ward', 'Physician', 'Status', ''].map((h) => (
-                    <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
-                  ))}
-                </tr></thead>
+                <thead>
+                  <tr className="text-left text-xs text-text-muted">
+                    {['Admission Date', 'Bed', 'Ward', 'Physician', 'Status', ''].map((h) => (
+                      <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody className="divide-y divide-border-base">
                   {admsData.items.map((a) => (
-                    <tr key={a.id} className="hover:bg-surface-low cursor-pointer" onClick={() => navigate(`/patients/${id}/admissions/${a.id}`)}>
+                    <tr
+                      key={a.id}
+                      className="hover:bg-surface-low cursor-pointer"
+                      onClick={() => navigate(`/patients/${id}/admissions/${a.id}`)}
+                    >
                       <td className="py-3 pr-4">{formatDate(a.admissionDate)}</td>
                       <td className="py-3 pr-4 text-text-secondary">{a.bedNumber}</td>
                       <td className="py-3 pr-4 text-text-secondary">{a.ward}</td>
                       <td className="py-3 pr-4 text-text-secondary">{a.admittingPhysician}</td>
                       <td className="py-3 pr-4"><StatusBadge status={a.status} type="admission" /></td>
-                      <td className="py-3 text-xs text-text-muted">{a.dischargeDate ? formatDate(a.dischargeDate) : 'Ongoing'}</td>
+                      <td className="py-3 text-xs text-text-muted">
+                        {a.dischargeDate ? formatDate(a.dischargeDate) : 'Ongoing'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
-              <EmptyState title="No admissions recorded" actionLabel="Record Admission" onAction={() => navigate(`/patients/${id}/admissions`)} />
+              <EmptyState
+                title="No admissions recorded"
+                actionLabel="Record Admission"
+                onAction={() => navigate(`/patients/${id}/admissions`)}
+              />
             )
           )}
         </div>
@@ -621,9 +751,14 @@ const PatientDetailPage: React.FC = () => {
   );
 };
 
-// ── Info Row Component ───────────────────────────────────────────
-const InfoRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div><span className="text-text-muted">{label}: </span><span className="text-on-surface">{value || '—'}</span></div>
+// ── Info Row Component ───────────────────────────────────────
+const InfoRow: React.FC<{ label: string; value: string; children?: React.ReactNode }> = ({
+  label, value, children,
+}) => (
+  <div>
+    <span className="text-text-muted">{label}: </span>
+    {children || <span className="text-on-surface">{value || '—'}</span>}
+  </div>
 );
 
 export default PatientDetailPage;

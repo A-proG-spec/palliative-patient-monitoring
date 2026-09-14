@@ -76,13 +76,6 @@ const LoginPage: React.FC = () => {
               </Link>
             </p>
           </div>
-
-          {/* Demo hint */}
-          <div className="mt-2 rounded-lg bg-primary-light border border-primary/10 px-4 py-3">
-            <p className="text-xs text-primary font-medium mb-1">Demo credentials</p>
-            <p className="text-xs text-primary/80">Staff: john@gmail.com / abcdefghi</p>
-            <p className="text-xs text-primary/80">Admin: admin@example.com / admin123</p>
-          </div>
         </form>
       </CardContent>
     </Card>

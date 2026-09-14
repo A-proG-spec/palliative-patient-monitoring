@@ -129,6 +129,54 @@ export const restoreVisit = asyncHandler(async (req: Request, res: Response) => 
   return SuccessResponse(200, 'Visit restored', result);
 });
 
+// ─────────────────────────────────────────────────────────────
+// Staff Management — Active Staff
+// ─────────────────────────────────────────────────────────────
+
+export const getStaffList = asyncHandler(async (req: Request, res: Response) => {
+  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+  const status = req.query.status as
+    | 'Active' | 'Pending' | 'Rejected' | 'Deleted' | 'All' | undefined;
+  const role = req.query.role as
+    | 'TeamLeader' | 'Physician' | 'Nurse' | undefined;
+  const search = req.query.search as string | undefined;
+
+  const result = await adminService.getStaffList(page, limit, {
+    status,
+    role,
+    search,
+  });
+  return SuccessResponse(200, 'OK', result);
+});
+
+export const getStaffById = asyncHandler(async (req: Request, res: Response) => {
+  const staffId = req.params.staffId as string;
+  // Admins viewing a specific staff member always include deleted
+  // so the UI can show a "Restore" button on deleted records.
+  const result = await adminService.getStaffById(staffId, true);
+  return SuccessResponse(200, 'OK', result);
+});
+
+export const updateStaff = asyncHandler(async (req: Request, res: Response) => {
+  const staffId = req.params.staffId as string;
+  const result = await adminService.updateStaff(staffId, req.body, req.user.id);
+  return SuccessResponse(200, 'Staff member updated successfully', result);
+});
+
+export const deleteStaff = asyncHandler(async (req: Request, res: Response) => {
+  const staffId = req.params.staffId as string;
+  const reason = req.body?.reason as string | undefined;
+  const result = await adminService.deleteStaff(staffId, req.user.id, reason);
+  return SuccessResponse(200, 'Staff member deleted', result);
+});
+
+export const restoreStaff = asyncHandler(async (req: Request, res: Response) => {
+  const staffId = req.params.staffId as string;
+  const result = await adminService.restoreStaff(staffId, req.user.id);
+  return SuccessResponse(200, 'Staff member restored', result);
+});
+
 export default {
   getPendingStaff,
   approveStaff,
@@ -146,4 +194,9 @@ export default {
   updateVisit,
   deleteVisit,
   restoreVisit,
+  getStaffList,
+  getStaffById,
+  updateStaff,
+  deleteStaff,
+  restoreStaff
 };

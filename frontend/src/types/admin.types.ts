@@ -1,3 +1,7 @@
+// ─────────────────────────────────────────────────────────────
+// Staff approval
+// ─────────────────────────────────────────────────────────────
+
 export interface PendingStaff {
   id: string;
   name: string;
@@ -23,6 +27,10 @@ export interface ApprovedStaffResponse {
   assignedBy: { id: string; name: string };
   updatedAt: string;
 }
+
+// ─────────────────────────────────────────────────────────────
+// Dashboard
+// ─────────────────────────────────────────────────────────────
 
 export interface DashboardStats {
   totalPatients: number;
@@ -50,6 +58,10 @@ export interface DashboardStats {
   }>;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────
+
 export interface Notification {
   id: string;
   type: 'StaffApproval' | 'ReferralApproval' | 'CloseCase';
@@ -71,6 +83,11 @@ export interface NotificationsResponse {
   totalCount: number;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Close case (legacy path — used only when no full discharge
+// summary is submitted). Prefer dischargeApi.create().
+// ─────────────────────────────────────────────────────────────
+
 export interface CloseCaseRequest {
   reason: 'Improved' | 'Deceased';
 }
@@ -81,6 +98,10 @@ export interface CloseCaseResponse {
   closeReason: 'Improved' | 'Deceased';
   closeDate: string;
 }
+
+// ─────────────────────────────────────────────────────────────
+// Patient list item — used by AdminPatientListPage
+// ─────────────────────────────────────────────────────────────
 
 export interface AdminPatient {
   id: string;
@@ -97,6 +118,11 @@ export interface AdminPatient {
   registeredBy: { id: string; name: string };
 }
 
+// ─────────────────────────────────────────────────────────────
+// Patient detail — aggregates every sub-resource the backend
+// returns from `admin.service.getPatientDetail`
+// ─────────────────────────────────────────────────────────────
+
 export interface AdminPatientDetail extends AdminPatient {
   dateOfBirth: string;
   address: string;
@@ -105,17 +131,106 @@ export interface AdminPatientDetail extends AdminPatient {
   emergencyContactPhone: string;
   caregiverName: string;
   caregiverPhone: string;
+
   secondaryDiagnoses: string[];
   diseaseStage: 'Early' | 'Advanced' | 'EndStage';
   comorbidities: string[];
   estimatedPrognosis: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
-  visits: Array<{ id: string; visitDate: string; outcome: string; staff: string }>;
-  medications: Array<{ id: string; name: string; dosage: string; status: string }>;
-  labTests: Array<{ id: string; name: string; dateOrdered: string; result?: string }>;
-  referrals: Array<{ id: string; date: string; status: string }>;
-  admissions: Array<{ id: string; date: string; status: string }>;
+
+  // ── Sub-record collections ──
+  visits: Array<{
+    id: string;
+    visitDate: string;
+    visitType: string;
+    overallStatus: string;
+    outcome: string;
+    ppsScore: number;
+    kpsScore: number;
+    staff: string;
+  }>;
+
+  medications: Array<{
+    id: string;
+    name: string;
+    dosage: string;
+    frequency: string;
+    route: string;
+    administeredAt: string;
+    status: string;
+    createdAt: string;
+  }>;
+
+  labTests: Array<{
+    id: string;
+    name: string;
+    dateOrdered: string;
+    datePerformed?: string;
+    result?: string;
+    status: string;
+    location: string;
+  }>;
+
+  imagingOrders: Array<{
+    id: string;
+    modality: string;
+    bodyRegion: string;
+    specificSite?: string;
+    laterality: string;
+    priority: string;
+    status: string;
+    hasReport: boolean;
+    dateOrdered: string;
+    performedAt?: string;
+  }>;
+
+  progressNotes: Array<{
+    id: string;
+    admissionId?: string;
+    generalCondition: string;
+    levelOfConsciousness: string;
+    attendingClinician: string;
+    overallAssessment: string;
+    soapSubjective: string;
+    createdAt: string;
+  }>;
+
+  referrals: Array<{
+    id: string;
+    date: string;
+    referralType: string;
+    status: string;
+    receivingFacility: string;
+  }>;
+
+  admissions: Array<{
+    id: string;
+    date: string;
+    dischargeDate?: string;
+    ward: string;
+    bedNumber: string;
+    admittingPhysician: string;
+    status: string;
+    dischargeReason?: string;
+  }>;
+
+  dischargeSummary: {
+    id: string;
+    admissionId?: string;
+    dateOfDischarge: string;
+    timeOfDischarge?: string;
+    dischargeType: string;
+    overallCondition: string;
+    dischargedTo: string;
+    status: string;
+    createdAt: string;
+  } | null;
+
   createdAt: string;
 }
+
+// ─────────────────────────────────────────────────────────────
+// Reports — superset of the original chart data
+// ─────────────────────────────────────────────────────────────
 
 export interface ReportData {
   totalPatients: number;
@@ -127,4 +242,63 @@ export interface ReportData {
   patientsByStage: Array<{ stage: string; count: number }>;
   closeCasesByReason: Array<{ reason: string; count: number }>;
   visitsByMonth: Array<{ month: string; count: number }>;
+
+  // ── Extended aggregates (present on the real backend response) ──
+  imagingByModality?: Array<{ modality: string; count: number }>;
+  imagingByStatus?: Array<{ status: string; count: number }>;
+  progressNotesByCondition?: Array<{ condition: string; count: number }>;
+  dischargesByType?: Array<{ dischargeType: string; count: number }>;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Staff management (active list + CRUD)
+// ─────────────────────────────────────────────────────────────
+
+export type StaffRole = 'TeamLeader' | 'Physician' | 'Nurse';
+export type StaffStatus = 'Pending' | 'Active' | 'Rejected';
+export type StaffListFilterStatus = StaffStatus | 'Deleted' | 'All';
+
+export interface StaffListItem {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: StaffRole | null;
+  status: StaffStatus;
+  isEmailVerified: boolean;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StaffListResponse {
+  items: StaffListItem[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface StaffDetail {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: StaffRole | null;
+  status: StaffStatus;
+  isEmailVerified: boolean;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateStaffRequest {
+  name?: string;
+  phone?: string;
+  role?: StaffRole;
+}
+
+export interface DeletedStaffResponse {
+  id: string;
+  success: boolean;
+  deletedAt: string;
 }

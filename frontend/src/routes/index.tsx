@@ -50,6 +50,7 @@ const ReferralDetailPage = lazy(() => import('@/pages/staff/ReferralDetailPage')
 const RecordAdmissionPage = lazy(() => import('@/pages/staff/RecordAdmissionPage'));
 const AdmissionDetailPage = lazy(() => import('@/pages/staff/AdmissionDetailPage'));
 const OrderImagingPage = lazy(() => import('@/pages/staff/OrderImagingPage'));
+const ImagingDetailPage = lazy(() => import('@/pages/staff/ImagingDetailPage'));
 const RecordProgressNotePage = lazy(() => import('@/pages/staff/RecordProgressNotePage'));
 
 // Print
@@ -91,6 +92,7 @@ const AppRoutes: React.FC = () => (
         <Route path="/admin/patients/:id/visits/:visitId" element={<S><VisitDetailPage /></S>} />
         <Route path="/admin/patients/:id/medications/:medicationId" element={<S><MedicationDetailPage /></S>} />
         <Route path="/admin/patients/:id/labs/:labId" element={<S><LabDetailPage /></S>} />
+        <Route path="/admin/patients/:id/imaging/:imagingId" element={<S><ImagingDetailPage /></S>} />
         <Route path="/admin/patients/:id/referrals/:referralId" element={<S><ReferralDetailPage /></S>} />
         <Route path="/admin/patients/:id/admissions/:admissionId" element={<S><AdmissionDetailPage /></S>} />
         
@@ -125,7 +127,9 @@ const AppRoutes: React.FC = () => (
         <Route path="/patients/:id/labs" element={<S><OrderLabPage /></S>} />
         <Route path="/patients/:id/labs/:labId" element={<S><LabDetailPage /></S>} />
         <Route path="/patients/:id/imaging" element={<S><OrderImagingPage /></S>} />
-        
+        {/* Imaging */}
+<Route path="/patients/:id/imaging" element={<S><OrderImagingPage /></S>} />
+<Route path="/patients/:id/imaging/:imagingId" element={<S><ImagingDetailPage /></S>} />
         {/* Referrals */}
         <Route path="/patients/:id/referrals" element={<S><RequestReferralPage /></S>} />
         <Route path="/patients/:id/referrals/:referralId" element={<S><ReferralDetailPage /></S>} />

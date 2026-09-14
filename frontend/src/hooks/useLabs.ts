@@ -3,7 +3,14 @@ import { labApi } from '@/api/labs';
 import type { CreateLabRequest, UpdateLabRequest } from '@/types/lab.types';
 import { useToast } from '@/context/ToastContext';
 
-export function usePatientLabs(patientId: string, params?: { status?: 'Ordered' | 'Completed'; page?: number; limit?: number }) {
+export function usePatientLabs(
+  patientId: string,
+  params?: {
+    status?: 'Ordered' | 'Completed' | 'Cancelled';
+    page?: number;
+    limit?: number;
+  },
+) {
   return useQuery({
     queryKey: ['patients', patientId, 'labs', params],
     queryFn: () => labApi.getByPatient(patientId, params),
@@ -25,12 +32,19 @@ export function useOrderLab(patientId: string) {
   return useMutation({
     mutationFn: (data: CreateLabRequest) => labApi.create(patientId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'labs'] });
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'summary'] });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'labs'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'summary'],
+      });
       toast.success('Lab test ordered successfully.');
     },
-    onError: () => {
-      toast.error('Failed to order lab test. Please try again.');
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.message ??
+        'Failed to order lab test. Please try again.';
+      toast.error(message);
     },
   });
 }
@@ -42,12 +56,19 @@ export function useUpdateLabResult(patientId: string) {
     mutationFn: ({ labId, data }: { labId: string; data: UpdateLabRequest }) =>
       labApi.updateResult(patientId, labId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'labs'] });
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'summary'] });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'labs'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'summary'],
+      });
       toast.success('Lab result saved successfully.');
     },
-    onError: () => {
-      toast.error('Failed to save lab result. Please try again.');
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.message ??
+        'Failed to save lab result. Please try again.';
+      toast.error(message);
     },
   });
 }

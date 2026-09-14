@@ -1,33 +1,32 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, FileText, Printer } from 'lucide-react';
-import { useAdminPatientDetail, useCloseCase } from '@/hooks/useAdmin';
+import { LogOut } from 'lucide-react';
+import { useAdminPatientDetail } from '@/hooks/useAdmin';
+import { useDischargePatient } from '@/hooks/useDischarge';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
-import { Button } from '@/components/ui/Button';
 import { DischargePatientModal } from '@/components/admin/DischargePatientModal';
 import type { DischargeSummary } from '@/components/admin/DischargePatientModal';
-import { printDischargeSummary } from '@/lib/printDischargeSummary';
 import { useToast } from '@/context/ToastContext';
 import { formatDate } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { XCircle } from 'lucide-react';
 
 /**
  * DischargePatientPage
  * ────────────────────
  * Full-page route: /admin/patients/:patientId/discharge
  *
- * Renders the discharge form inside the normal DashboardLayout (sidebar
- * visible, full page width) rather than inside a centered modal overlay.
- * The DischargePatientModal component handles all form state; this page
- * provides the page chrome: back button, patient header, and handles the
- * onDischarge / onClose callbacks.
+ * Renders the discharge form inside the normal DashboardLayout.
+ * Submits to POST /patients/:patientId/discharge-summary — the real
+ * discharge endpoint that:
+ *   1. Persists the discharge summary
+ *   2. Flips the linked HospitalAdmission → Discharged
+ *   3. Flips the Patient → Discharged
+ *   4. Creates a CloseCase notification
  *
- * On successful discharge it navigates back to the patient detail page.
- * Discharge summary is passed back via location state so the detail page
- * can display it without losing it on refresh (or it's stored in memory).
+ * On success, navigates back to the patient detail page with the
+ * summary in router state so the detail page can render it without
+ * waiting for a refetch.
  */
 const DischargePatientPage: React.FC = () => {
   const { patientId } = useParams<{ patientId: string }>();
@@ -35,11 +34,7 @@ const DischargePatientPage: React.FC = () => {
   const { toast } = useToast();
 
   const { data: patient, isLoading, error, refetch } = useAdminPatientDetail(patientId!);
-  const closeCaseMutation = useCloseCase();
-
-  // Post-discharge summary viewer state (shown on this page after success)
-  const [completedSummary, setCompletedSummary] = useState<DischargeSummary | null>(null);
-  const [showSummaryViewer, setShowSummaryViewer] = useState(false);
+  const dischargeMutation = useDischargePatient();
 
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
@@ -51,50 +46,31 @@ const DischargePatientPage: React.FC = () => {
   }
 
   const handleDischarge = (summary: DischargeSummary) => {
-    setCompletedSummary(summary);
+    // Compose a short human-readable note for the router-state handoff.
+    // This is what the patient detail page will show as "Discharged on..."
+    // until the real discharge summary is refetched from the API.
+    const dischargeType =
+      summary.dischargeType === 'Other' && summary.dischargeTypeOther
+        ? summary.dischargeTypeOther
+        : summary.dischargeType || 'Discharge';
 
-    // Auto-add discharge history entry by passing it through location state
-    const dischargeType = summary.dischargeType === 'Other' && summary.dischargeTypeOther
-      ? summary.dischargeTypeOther
-      : summary.dischargeType || 'Discharge';
-    const dischargedTo = summary.dischargedTo === 'Other' && summary.dischargedToOther
-      ? summary.dischargedToOther
-      : summary.dischargedTo;
+    void dischargeType; // used by the persisted summary, kept for clarity
 
-    const historyNote = [
-      `Patient discharged — ${dischargeType}`,
-      dischargedTo ? `Discharged to: ${dischargedTo}` : null,
-      summary.overallCondition ? `Condition at discharge: ${summary.overallCondition}` : null,
-      summary.dateOfDischarge ? `Discharge date: ${formatDate(summary.dateOfDischarge)}` : null,
-    ].filter(Boolean).join('\n');
-
-    // Use the existing closeCase mutation to flip status → Discharged
-    // TODO: backend integration — replace with a dedicated discharge endpoint
-    closeCaseMutation.mutate(
-      { patientId: patientId!, data: { reason: 'Improved' } },
+    dischargeMutation.mutate(
+      { patientId: patientId!, data: summary },
       {
         onSuccess: () => {
-          toast.success(`${patient.firstName} ${patient.lastName} has been discharged.`);
-          // Navigate back to patient detail, passing discharge summary + history entry in state
+          toast.success(
+            `${patient.firstName} ${patient.lastName} has been discharged.`,
+          );
           navigate(`/admin/patients/${patientId}`, {
             replace: true,
-            state: {
-              dischargeSummary: summary,
-              dischargeHistoryEntry: {
-                id: `hist-discharge-${Date.now()}`,
-                date: summary.submittedAt || new Date().toISOString(),
-                category: 'Clinical Note',
-                note: historyNote,
-                addedBy: summary.submittedBy || 'Admin',
-              },
-            },
+            state: { dischargeSummary: summary },
           });
         },
-        onError: () => {
-          toast.error('Failed to discharge patient. Please try again.');
-          // Keep on this page with entered data intact
-        },
-      }
+        // On error the hook already fires a toast — keep the user
+        // on this page with their entered data intact.
+      },
     );
   };
 
@@ -104,7 +80,6 @@ const DischargePatientPage: React.FC = () => {
 
   return (
     <div className="space-y-5 max-w-5xl">
-
       {/* ── Page header ── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -137,13 +112,25 @@ const DischargePatientPage: React.FC = () => {
         </p>
       </div>
 
-      {/* ── Form (rendered as page content, not modal overlay) ── */}
+      {/* ── Form ── */}
       <DischargePatientModal
         patient={patient}
         onDischarge={handleDischarge}
         onClose={handleClose}
       />
 
+      {/* ── Submitting indicator ── */}
+      {dischargeMutation.isPending && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-on-surface/30 backdrop-blur-sm">
+          <div className="rounded-2xl bg-surface-lowest border border-border-base shadow-xl px-6 py-5 flex items-center gap-3">
+            <span className="h-5 w-5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+            <div>
+              <p className="text-sm font-medium text-on-surface">Saving discharge summary…</p>
+              <p className="text-xs text-text-muted">Please wait — do not close this page.</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,91 +1,208 @@
-import React, { useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
-import { CheckCircle2, XCircle, Clock, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Mail, KeyRound, CheckCircle2, RefreshCw, AlertTriangle } from 'lucide-react';
+import {
+  verifyEmailOtpSchema,
+  type VerifyEmailOtpFormData,
+} from '@/schemas/auth.schema';
 import { useVerifyEmail } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { Input } from '@/components/ui/Input';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from '@/components/ui/Card';
 
+/**
+ * VerifyEmailPage
+ * ───────────────
+ * OTP-only verification flow.
+ *
+ *  - Reads `email` from the query string (set by RegisterPage after a
+ *    successful registration, or by ResendVerificationPage after a
+ *    successful resend).
+ *  - If `email` is missing, the user can type it in.
+ *  - On success → "wait for admin approval" screen.
+ */
 const VerifyEmailPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const token = searchParams.get('token');
+  const navigate = useNavigate();
+  const emailFromQuery = searchParams.get('email') ?? '';
+
   const verifyMutation = useVerifyEmail();
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [currentEmail, setCurrentEmail] = useState(emailFromQuery);
 
-  useEffect(() => {
-    if (token) verifyMutation.mutate(token);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setError,
+    watch,
+  } = useForm<VerifyEmailOtpFormData>({
+    resolver: zodResolver(verifyEmailOtpSchema),
+    defaultValues: {
+      email: emailFromQuery,
+      otp: '',
+    },
+  });
 
-  if (!token) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <Card className="w-full max-w-md text-center">
-          <CardContent className="py-8">
-            <XCircle size={40} className="text-error mx-auto mb-4" />
-            <h2 className="text-lg font-semibold mb-2">No Verification Token</h2>
-            <p className="text-sm text-text-secondary mb-5">No token was found in the link.</p>
-            <Link to="/resend-verification">
-              <Button variant="outline" leftIcon={<RefreshCw size={15} />}>Request New Link</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+  // Keep local state in sync if the user types into the manual email field.
+  const watchedEmail = watch('email');
+
+  const onSubmit = (data: VerifyEmailOtpFormData) => {
+    verifyMutation.mutate(
+      { email: data.email, otp: data.otp },
+      {
+        onSuccess: () => setShowSuccess(true),
+        onError: (err: unknown) => {
+          const message =
+            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+            'Invalid verification code.';
+          setError('otp', { message });
+        },
+      },
     );
-  }
+  };
 
-  if (verifyMutation.isPending) {
+  // ── Success state ────────────────────────────────────────────
+  if (showSuccess) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="min-h-screen flex items-center justify-center bg-background p-6">
         <Card className="w-full max-w-md text-center">
-          <CardContent className="py-12">
-            <LoadingSpinner size="lg" label="Verifying your email…" />
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (verifyMutation.isSuccess) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <Card className="w-full max-w-md text-center">
-          <CardContent className="py-8">
-            <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-success-bg mb-4">
+          <CardContent className="py-10">
+            <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-success-bg mb-5">
               <CheckCircle2 size={32} className="text-success" />
             </div>
-            <h2 className="text-lg font-semibold text-on-surface mb-2">Email Verified!</h2>
-            <p className="text-sm text-text-secondary mb-5">
-              Your email has been verified. Please wait for admin approval before you can log in.
+            <h2 className="text-xl font-semibold text-on-surface mb-2">
+              Email Verified
+            </h2>
+            <p className="text-sm text-text-secondary mb-6 leading-relaxed">
+              Your email is verified. Your account is now{' '}
+              <strong className="text-on-surface">waiting for admin approval</strong>.
+              You will be able to log in as soon as an administrator approves your account.
             </p>
-            <Link to="/login"><Button className="w-full">Go to Login</Button></Link>
+
+            <div className="flex flex-col gap-2">
+              <Link to="/login">
+                <Button className="w-full">Go to Login</Button>
+              </Link>
+              <p className="text-xs text-text-muted mt-2">
+                Tip: you can close this window and come back once you've been approved.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  const errMsg = (verifyMutation.error as { response?: { data?: { message?: string } } })?.response?.data?.message || '';
-  const isExpired = errMsg.toLowerCase().includes('expired');
+  // The email we'll use for the "Resend" link — either from the query
+  // string, or from whatever the user typed into the form.
+  const emailForResend = currentEmail || watchedEmail || '';
 
+  // ── Form state ───────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <Card className="w-full max-w-md text-center">
-        <CardContent className="py-8">
-          <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-error-bg mb-4">
-            {isExpired ? <Clock size={32} className="text-error" /> : <XCircle size={32} className="text-error" />}
+    <div className="min-h-screen flex items-center justify-center bg-background p-6">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <div className="flex justify-center mb-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-light">
+              <KeyRound size={26} className="text-primary" />
+            </div>
           </div>
-          <h2 className="text-lg font-semibold text-on-surface mb-2">
-            {isExpired ? 'Link Expired' : 'Invalid Link'}
-          </h2>
-          <p className="text-sm text-text-secondary mb-5">
-            {errMsg || 'This verification link is invalid.'}
-          </p>
-          <div className="flex flex-col gap-2">
-            <Link to="/resend-verification">
-              <Button className="w-full" leftIcon={<RefreshCw size={15} />}>Request New Verification Email</Button>
-            </Link>
-            <Link to="/login"><Button variant="ghost" className="w-full">Back to Login</Button></Link>
-          </div>
+          <CardTitle className="text-center text-xl">Verify your email</CardTitle>
+          <CardDescription className="text-center">
+            Enter the 6-digit code we sent to your email address.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+            {errors.root && (
+              <div className="rounded-lg bg-error-bg border border-error/20 px-4 py-3 text-sm text-error flex items-start gap-2">
+                <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                <span>{errors.root.message}</span>
+              </div>
+            )}
+
+            {emailFromQuery ? (
+              <div className="rounded-lg bg-surface-low border border-border-base px-4 py-3 text-sm">
+                <span className="text-text-muted">Verifying:</span>{' '}
+                <span className="text-on-surface font-medium">{emailFromQuery}</span>
+              </div>
+            ) : (
+              <Input
+                label="Email address"
+                type="email"
+                placeholder="you@example.com"
+                autoComplete="email"
+                leftIcon={<Mail size={15} />}
+                error={errors.email?.message}
+                {...register('email', {
+                  onChange: (e) => setCurrentEmail(e.target.value),
+                })}
+              />
+            )}
+
+            <Input
+              label="Verification code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              placeholder="123456"
+              leftIcon={<KeyRound size={15} />}
+              error={errors.otp?.message}
+              {...register('otp')}
+            />
+
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              loading={verifyMutation.isPending}
+            >
+              Verify Email
+            </Button>
+
+            <div className="pt-2 text-center text-sm text-text-secondary space-y-2">
+              <p>
+                Didn't get a code?{' '}
+                {/*
+                  Carry the email forward so the resend page pre-fills it.
+                  We can't pre-fill it directly since ResendVerificationPage
+                  uses its own form; passing via query means it lands
+                  in the URL and the user can see it.
+                */}
+                <Link
+                  to={
+                    emailForResend
+                      ? `/resend-verification?email=${encodeURIComponent(emailForResend)}`
+                      : '/resend-verification'
+                  }
+                  className="text-primary font-medium hover:underline inline-flex items-center gap-1"
+                >
+                  <RefreshCw size={12} />
+                  Resend verification
+                </Link>
+              </p>
+              <p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/login')}
+                  className="text-text-muted hover:text-primary transition-colors text-xs"
+                >
+                  ← Back to Login
+                </button>
+              </p>
+            </div>
+          </form>
         </CardContent>
       </Card>
     </div>
