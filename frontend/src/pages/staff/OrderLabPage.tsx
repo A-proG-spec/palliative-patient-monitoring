@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,7 +14,6 @@ import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/context/ToastContext';
-import { LabResultEntry } from '@/components/labs/LabResultEntry';
 import {
   createLabSchema,
   type CreateLabFormData,
@@ -35,31 +34,6 @@ const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({
   </Card>
 );
 
-// ── Checkbox group ───────────────────────────────────────────────
-const CheckboxGroup: React.FC<{
-  options: { value: string; label: string }[];
-  name: string;
-  register: any;
-  className?: string;
-}> = ({ options, name, register, className }) => (
-  <div className={cn('grid grid-cols-2 gap-2', className)}>
-    {options.map((option) => (
-      <label
-        key={option.value}
-        className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors"
-      >
-        <input
-          type="checkbox"
-          value={option.value}
-          {...register(name)}
-          className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary"
-        />
-        {option.label}
-      </label>
-    ))}
-  </div>
-);
-
 const OrderLabPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -67,9 +41,6 @@ const OrderLabPage: React.FC = () => {
   const orderMutation = useOrderLab(id!);
   const { toast } = useToast();
   const user = useAuthStore((s) => s.user);
-
-  // State to show result entry after saving
-  const [savedLabId, setSavedLabId] = useState<string | null>(null);
 
   const {
     register,
@@ -192,8 +163,6 @@ const OrderLabPage: React.FC = () => {
   };
 
   const onSubmit = (data: CreateLabFormData) => {
-    // Strip empty strings so backend treats them as undefined,
-    // then derive the location from the patient's current location.
     const derivedLocation: 'Home' | 'Hospital' =
       patient?.currentLocation === 'ReferredHospital' ? 'Hospital' : 'Home';
 
@@ -211,7 +180,7 @@ const OrderLabPage: React.FC = () => {
           : data.testName,
     };
 
-    // Remove empty optional fields — keeps the payload clean
+    // Remove empty optional fields
     const cleaned: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(payload)) {
       if (v === '' || v === undefined || v === null) continue;
@@ -219,11 +188,11 @@ const OrderLabPage: React.FC = () => {
     }
 
     orderMutation.mutate(cleaned as any, {
-      onSuccess: (response) => {
-        setSavedLabId(response.id);
+      onSuccess: () => {
         toast.success(
-          'Lab test ordered successfully. Enter results when available.',
+          'Lab test ordered successfully. You can record the result from the test detail page.',
         );
+        navigate(`/patients/${id}`);
       },
     });
   };
@@ -244,7 +213,8 @@ const OrderLabPage: React.FC = () => {
           </p>
           {patient && (
             <p className="text-sm text-text-muted mt-1">
-              {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
+              {patient.firstName} {patient.lastName} ·{' '}
+              {patient.patientDisplayId}
             </p>
           )}
         </div>
@@ -440,7 +410,7 @@ const OrderLabPage: React.FC = () => {
           </div>
         </FormSection>
 
-        {/* ── 4. Submit ── */}
+        {/* ── Submit ── */}
         <div className="flex gap-3 justify-end pb-8">
           <Button
             type="button"
@@ -450,35 +420,10 @@ const OrderLabPage: React.FC = () => {
             Cancel
           </Button>
           <Button type="submit" loading={orderMutation.isPending}>
-            {orderMutation.isPending ? 'Ordering...' : 'Order Lab Test'}
+            {orderMutation.isPending ? 'Ordering…' : 'Order Lab Test'}
           </Button>
         </div>
       </form>
-
-      {/* ── 5. Result Entry (Shows after ordering) ── */}
-      {savedLabId && (
-        <Card className="border-l-4 border-l-success">
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold text-success">
-              Lab Test Ordered
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-text-secondary mb-4">
-              The lab test has been ordered. Enter the results below when
-              available.
-            </p>
-            <LabResultEntry
-              labId={savedLabId}
-              patientId={id!}
-              onResultSaved={() => {
-                toast.success('Lab results saved successfully');
-                setTimeout(() => navigate(`/patients/${id}`), 1500);
-              }}
-            />
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 };

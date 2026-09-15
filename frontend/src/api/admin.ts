@@ -15,7 +15,7 @@ import type {
   UpdateStaffRequest,
   DeletedStaffResponse,
 } from '@/types/admin.types';
-import type { Referral } from '@/types/referral.types';
+import type { AdminPendingReferral } from '@/types/referral.types';
 
 // ─────────────────────────────────────────────────────────────
 // Visit edit payload — mirrors the backend `updateVisitSchema`
@@ -47,20 +47,27 @@ export interface AdminUpdateVisitResponse {
 export const adminApi = {
   // ── Dashboard ─────────────────────────────────────────────
   getDashboardStats: (): Promise<DashboardStats> => {
-    return apiClient.get<DashboardStats>('/admin/dashboard/stats').then((r) => r.data);
+    return apiClient
+      .get<DashboardStats>('/admin/dashboard/stats')
+      .then((r) => r.data);
   },
 
-  getNotifications: (
-    params?: { limit?: number; read?: boolean },
-  ): Promise<NotificationsResponse> => {
+  getNotifications: (params?: {
+    limit?: number;
+    read?: boolean;
+  }): Promise<NotificationsResponse> => {
     return apiClient
       .get<NotificationsResponse>('/admin/dashboard/notifications', { params })
       .then((r) => r.data);
   },
 
-  markNotificationRead: (id: string): Promise<{ id: string; read: boolean }> => {
+  markNotificationRead: (
+    id: string,
+  ): Promise<{ id: string; read: boolean }> => {
     return apiClient
-      .put<{ id: string; read: boolean }>(`/admin/dashboard/notifications/${id}/read`)
+      .put<{ id: string; read: boolean }>(
+        `/admin/dashboard/notifications/${id}/read`,
+      )
       .then((r) => r.data);
   },
 
@@ -72,7 +79,9 @@ export const adminApi = {
     search?: string;
   }): Promise<{ items: AdminPatient[]; total: number }> => {
     return apiClient
-      .get<{ items: AdminPatient[]; total: number }>('/admin/patients', { params })
+      .get<{ items: AdminPatient[]; total: number }>('/admin/patients', {
+        params,
+      })
       .then((r) => r.data);
   },
 
@@ -93,7 +102,9 @@ export const adminApi = {
 
   // ── Staff management ─────────────────────────────────────
   getPendingStaff: (): Promise<PendingStaff[]> => {
-    return apiClient.get<PendingStaff[]>('/admin/staff/pending').then((r) => r.data);
+    return apiClient
+      .get<PendingStaff[]>('/admin/staff/pending')
+      .then((r) => r.data);
   },
 
   approveStaff: (
@@ -111,7 +122,6 @@ export const adminApi = {
       .then((r) => r.data);
   },
 
-  // ── NEW: Active staff list + CRUD ────────────────────────
   getStaffList: (params?: {
     page?: number;
     limit?: number;
@@ -150,26 +160,47 @@ export const adminApi = {
       .then((r) => r.data);
   },
 
-  restoreStaff: (staffId: string): Promise<{ id: string; restored: boolean }> => {
+  restoreStaff: (
+    staffId: string,
+  ): Promise<{ id: string; restored: boolean }> => {
     return apiClient
-      .post<{ id: string; restored: boolean }>(`/admin/staff/${staffId}/restore`)
+      .post<{ id: string; restored: boolean }>(
+        `/admin/staff/${staffId}/restore`,
+      )
       .then((r) => r.data);
   },
 
   // ── Referrals ────────────────────────────────────────────
-  getPendingReferrals: (): Promise<Referral[]> => {
-    return apiClient.get<Referral[]>('/admin/referrals/pending').then((r) => r.data);
-  },
+  //
+  // The pending endpoint returns rows where `patientId` is an
+  // ObjectId *string*, but the DTO includes denormalized
+  // `patientName` and `patientDisplayId` fields that the admin
+  // UI must render instead of the raw ObjectId.
+  // ─────────────────────────────────────────────────────────
 
-  approveReferral: (referralId: string): Promise<Referral> => {
+  getPendingReferrals: (): Promise<AdminPendingReferral[]> => {
     return apiClient
-      .put<Referral>(`/admin/referrals/${referralId}/approve`)
+      .get<AdminPendingReferral[]>('/admin/referrals/pending')
       .then((r) => r.data);
   },
 
-  declineReferral: (referralId: string): Promise<Referral> => {
+  approveReferral: (
+    referralId: string,
+  ): Promise<{ id: string; status: string }> => {
     return apiClient
-      .put<Referral>(`/admin/referrals/${referralId}/decline`)
+      .put<{ id: string; status: string }>(
+        `/admin/referrals/${referralId}/approve`,
+      )
+      .then((r) => r.data);
+  },
+
+  declineReferral: (
+    referralId: string,
+  ): Promise<{ id: string; status: string }> => {
+    return apiClient
+      .put<{ id: string; status: string }>(
+        `/admin/referrals/${referralId}/decline`,
+      )
       .then((r) => r.data);
   },
 
@@ -178,7 +209,9 @@ export const adminApi = {
     startDate?: string;
     endDate?: string;
   }): Promise<ReportData> => {
-    return apiClient.get<ReportData>('/admin/reports', { params }).then((r) => r.data);
+    return apiClient
+      .get<ReportData>('/admin/reports', { params })
+      .then((r) => r.data);
   },
 
   // ── Admin visit edit / delete / restore ──────────────────
@@ -203,9 +236,13 @@ export const adminApi = {
       .then((r) => r.data);
   },
 
-  restoreVisit: (visitId: string): Promise<{ id: string; restored: boolean }> => {
+  restoreVisit: (
+    visitId: string,
+  ): Promise<{ id: string; restored: boolean }> => {
     return apiClient
-      .post<{ id: string; restored: boolean }>(`/admin/visits/${visitId}/restore`)
+      .post<{ id: string; restored: boolean }>(
+        `/admin/visits/${visitId}/restore`,
+      )
       .then((r) => r.data);
   },
 };

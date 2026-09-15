@@ -1,13 +1,61 @@
 import { z } from 'zod';
 
+const dateString = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)');
+
+
+const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.enum(values).optional(),
+  );
+
+
+export const ADMISSION_REFERRED_FROM_VALUES = [
+  'InternalWard',
+  'OutpatientDepartment',
+  'ICU',
+  'ExternalHospital',
+  'Community',
+  'Home',
+  'Other',
+] as const;
+
+export const ADMISSION_REFERRAL_REASON_VALUES = [
+  'PainManagement',
+  'EndOfLifeCare',
+  'SymptomControl',
+  'HomeBasedCare',
+  'PsychosocialSupport',
+  'Other',
+] as const;
+
+export const ADMISSION_SYMPTOM_VALUES = [
+  'Dyspnea',
+  'Nausea',
+  'Fatigue',
+  'Anxiety',
+  'Depression',
+  'Insomnia',
+  'Other',
+] as const;
+
+export const ADMISSION_SPIRITUAL_SUPPORT_VALUES = [
+  'ReligiousLeader',
+  'Counselor',
+  'Other',
+] as const;
+
+
 export const createAdmissionSchema = z.object({
   body: z.object({
-    // ── Section 1: Patient identification (snapshot — optional, filled from Patient) ──
+    // ── Section 1: Patient identification (snapshot — auto-filled) ──
     patientName: z.string().optional(),
     hospitalPatientId: z.string().optional(),
-    age: z.number().optional(),
+    age: z.number().min(0).max(150).optional(),
     sex: z.enum(['Male', 'Female']).optional(),
-    dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').optional(),
+    dateOfBirth: dateString.optional(),
     address: z.string().optional(),
     phone: z.string().optional(),
     emergencyContactName: z.string().optional(),
@@ -15,35 +63,16 @@ export const createAdmissionSchema = z.object({
     emergencyContactPhone: z.string().optional(),
 
     // ── Section 2: Referral information ──
-    referralId: z.string().optional(),   // ← now optional
-    referredFrom: z
-      .enum([
-        'InternalWard',
-        'OutpatientDepartment',
-        'ICU',
-        'ExternalHospital',
-        'Community',
-        'Home',
-        'Other',
-      ])
-      .optional(),
+    referralId: z.string().min(1, 'A referral is required before admission'),
+    referredFrom: optionalEnum(ADMISSION_REFERRED_FROM_VALUES),
     referredFromOther: z.string().optional(),
     referringClinician: z.string().optional(),
     diagnosisAtReferral: z.string().optional(),
-    referralReason: z
-      .enum([
-        'PainManagement',
-        'EndOfLifeCare',
-        'SymptomControl',
-        'HomeBasedCare',
-        'PsychosocialSupport',
-        'Other',
-      ])
-      .optional(),
+    referralReason: optionalEnum(ADMISSION_REFERRAL_REASON_VALUES),
     referralReasonOther: z.string().optional(),
 
     // ── Admission Details ──
-    admissionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
+    admissionDate: dateString,
     bedNumber: z.string().min(1, 'Bed number is required'),
     ward: z.string().min(1, 'Ward is required'),
     admittingPhysician: z.string().min(1, 'Admitting physician is required'),
@@ -59,12 +88,19 @@ export const createAdmissionSchema = z.object({
     estimatedPrognosis: z.enum(['Days', 'Weeks', 'Months', 'Uncertain']),
     ppsScore: z.number().min(0).max(100),
     kpsScore: z.number().min(0).max(100).optional(),
-    functionalStatus: z.enum(['FullyIndependent', 'PartiallyDependent', 'FullyDependent']),
+    functionalStatus: z.enum([
+      'FullyIndependent',
+      'PartiallyDependent',
+      'FullyDependent',
+    ]),
 
     // ── Section 5: Pain & Symptom Assessment ──
     painScore: z.number().min(0).max(10),
     painType: z.enum(['Acute', 'Chronic', 'Neuropathic', 'Mixed']),
-    symptomsPresent: z.array(z.string()).optional().default([]),
+    symptomsPresent: z
+      .array(z.enum(ADMISSION_SYMPTOM_VALUES))
+      .optional()
+      .default([]),
     symptomsPresentOther: z.string().optional(),
 
     // ── Section 6: Psychosocial ──
@@ -75,7 +111,7 @@ export const createAdmissionSchema = z.object({
     // ── Section 7: Spiritual Care ──
     spiritualConcerns: z.boolean(),
     spiritualNeedsDescription: z.string().optional(),
-    spiritualSupportPreferred: z.enum(['ReligiousLeader', 'Counselor', 'Other']).optional(),
+    spiritualSupportPreferred: optionalEnum(ADMISSION_SPIRITUAL_SUPPORT_VALUES),
     spiritualSupportPreferredOther: z.string().optional(),
 
     // ── Section 8: Initial Care Plan ──
@@ -91,13 +127,11 @@ export const createAdmissionSchema = z.object({
   }),
 });
 
-// ─────────────────────────────────────────────────────────────
-// Update Admission (discharge / status change)
-// ─────────────────────────────────────────────────────────────
+
 export const updateAdmissionSchema = z.object({
   body: z.object({
-    dischargeDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').optional(),
-    dischargeReason: z.enum(['Improved', 'Deceased']).optional(),
+    dischargeDate: dateString.optional(),
+    dischargeReason: optionalEnum(['Improved', 'Deceased'] as const),
     status: z.enum(['Active', 'Discharged']),
   }),
 });
@@ -105,6 +139,7 @@ export const updateAdmissionSchema = z.object({
 // ─────────────────────────────────────────────────────────────
 // Queries & Params
 // ─────────────────────────────────────────────────────────────
+
 export const getAdmissionsQuerySchema = z.object({
   query: z.object({
     status: z.enum(['Active', 'Discharged']).optional(),
@@ -119,10 +154,18 @@ export const getAdmissionParamsSchema = z.object({
   }),
 });
 
-// ─────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────
 export type CreateAdmissionSchema = z.infer<typeof createAdmissionSchema>;
 export type UpdateAdmissionSchema = z.infer<typeof updateAdmissionSchema>;
 export type GetAdmissionsQuerySchema = z.infer<typeof getAdmissionsQuerySchema>;
 export type GetAdmissionParamsSchema = z.infer<typeof getAdmissionParamsSchema>;
+
+export type AdmissionReferredFrom = z.infer<
+  typeof ADMISSION_REFERRED_FROM_VALUES
+>;
+export type AdmissionReferralReason = z.infer<
+  typeof ADMISSION_REFERRAL_REASON_VALUES
+>;
+export type AdmissionSymptom = z.infer<typeof ADMISSION_SYMPTOM_VALUES>;
+export type AdmissionSpiritualSupport = z.infer<
+  typeof ADMISSION_SPIRITUAL_SUPPORT_VALUES
+>;

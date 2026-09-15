@@ -17,15 +17,41 @@ export const recordAdmission = async (
   const patient = await Patient.findById(patientId);
   if (!patient) throw new ApiError(404, 'Patient not found');
 
-  let referral = null;
-  if (data.referralId) {
-    referral = await Referral.findById(data.referralId);
-    if (!referral) throw new ApiError(404, 'Referral not found');
-    if (referral.status !== 'Accepted') {
-      throw new ApiError(400, 'Referral must be accepted before admission');
-    }
+  // ── 1. referralId is required at the schema level, but double-check
+  //      here so the service is safe to call programmatically too ──
+  if (!data.referralId) {
+    throw new ApiError(400, 'A referral is required before admission');
   }
 
+  // ── 2. Load the referral and confirm it belongs to this patient ──
+  const referral = await Referral.findById(data.referralId);
+  if (!referral) throw new ApiError(404, 'Referral not found');
+
+  if (referral.patientId.toString() !== patientId) {
+    throw new ApiError(
+      400,
+      'Referral does not belong to this patient',
+    );
+  }
+
+  // ── 3. Reject if the referral has already been consumed by a previous
+  //      admission ──
+  if (referral.status === 'Admitted') {
+    throw new ApiError(
+      400,
+      'Referral has already been used for a previous admission',
+    );
+  }
+
+  // ── 4. Require admin acceptance ──
+  if (referral.status !== 'Accepted') {
+    throw new ApiError(
+      400,
+      'Referral must be accepted by an administrator before admission',
+    );
+  }
+
+  // ── 5. Create the admission ──
   const admission = await HospitalAdmission.create({
     patientId,
     ...data,
@@ -35,17 +61,18 @@ export const recordAdmission = async (
     status: 'Active',
   });
 
-  if (referral) {
-    referral.status = 'Admitted';
-    await referral.save();
-  }
+  // ── 6. Flip the referral to 'Admitted' so it can't be reused ──
+  referral.status = 'Admitted';
+  await referral.save();
 
+  // ── 7. Update the patient's current location ──
   patient.currentLocation = 'ReferredHospital';
   await patient.save();
 
   return {
     id: admission._id.toString(),
     patientId: admission.patientId.toString(),
+    referralId: admission.referralId?.toString(),
     admissionDate: admission.admissionDate,
     bedNumber: admission.bedNumber,
     ward: admission.ward,
@@ -53,7 +80,6 @@ export const recordAdmission = async (
     createdAt: admission.createdAt,
   };
 };
-
 // ─────────────────────────────────────────────────────────────
 // List admissions for a patient
 // ─────────────────────────────────────────────────────────────

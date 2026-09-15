@@ -257,7 +257,6 @@ const PatientDetailPage: React.FC = () => {
   const tabs = useMemo<Tab[]>(() => {
     const currentLocation = patient?.currentLocation ?? 'Home';
     return ALL_TABS.filter((t) => {
-      if (t === 'Visits') return currentLocation === 'Home';
       if (t === 'Progress Notes') return currentLocation === 'ReferredHospital';
       return true;
     });

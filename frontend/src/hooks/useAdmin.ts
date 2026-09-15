@@ -149,8 +149,11 @@ export function useApproveReferral() {
       queryClient.invalidateQueries({ queryKey: ['patients'] });
       toast.success('Referral approved. Patient location updated.');
     },
-    onError: () => {
-      toast.error('Failed to approve referral. Please try again.');
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.message ??
+        'Failed to approve referral. Please try again.';
+      toast.error(message);
     },
   });
 }
@@ -165,12 +168,14 @@ export function useDeclineReferral() {
       queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] });
       toast.warning('Referral declined.');
     },
-    onError: () => {
-      toast.error('Failed to decline referral. Please try again.');
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.message ??
+        'Failed to decline referral. Please try again.';
+      toast.error(message);
     },
   });
 }
-
 // ─────────────────────────────────────────────────────────────
 // Reports
 // ─────────────────────────────────────────────────────────────
