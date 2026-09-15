@@ -28,6 +28,7 @@ export const getPendingStaff = async () => {
     phone: staff.phone,
     role: staff.role,
     status: staff.status,
+    isEmailVerified: staff.isEmailVerified,
     createdAt: staff.createdAt,
   }));
 };
@@ -681,6 +682,226 @@ export const getReports = async (startDate?: string, endDate?: string) => {
 };
 
 // ═════════════════════════════════════════════════════════════
+// STAFF MANAGEMENT — ACTIVE STAFF
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * List staff with filters + pagination.
+ *
+ * By default (no status filter) this excludes soft-deleted records.
+ * Passing status='Deleted' returns only soft-deleted records.
+ * Passing status='All' returns everything, live and deleted.
+ */
+export const getStaffList = async (
+  page: number = 1,
+  limit: number = 20,
+  filters: {
+    status?: 'Active' | 'Pending' | 'Rejected' | 'Deleted' | 'All';
+    role?: 'TeamLeader' | 'Physician' | 'Nurse';
+    search?: string;
+  } = {},
+) => {
+  const query: any = {};
+
+  // ── Status filter ──
+  if (!filters.status || filters.status === 'All') {
+    // 'All' → no filter on deletedAt, no filter on status
+  } else if (filters.status === 'Deleted') {
+    // Soft-deleted records, any status
+    query.deletedAt = { $ne: null };
+  } else {
+    // A specific status — only live records
+    query.status = filters.status;
+    query.deletedAt = null;
+  }
+
+  if (filters.role) {
+    query.role = filters.role;
+  }
+
+  if (filters.search) {
+    const q = filters.search.trim();
+    query.$or = [
+      { name: { $regex: q, $options: 'i' } },
+      { email: { $regex: q, $options: 'i' } },
+      { phone: { $regex: q, $options: 'i' } },
+    ];
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [items, total] = await Promise.all([
+    Staff.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select('-password -emailVerificationOtp -emailVerificationOtpExpires'),
+    Staff.countDocuments(query),
+  ]);
+
+  return {
+    items: items.map((s) => ({
+      id: s._id.toString(),
+      name: s.name,
+      email: s.email,
+      phone: s.phone,
+      role: s.role,
+      status: s.status,
+      isEmailVerified: s.isEmailVerified,
+      deletedAt: s.deletedAt,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    })),
+    page,
+    limit,
+    total,
+  };
+};
+
+/**
+ * Get one staff member. Supports viewing soft-deleted records
+ * by passing includeDeleted — the controller decides based on
+ * the caller's intent (restore flow needs it, normal view doesn't).
+ */
+export const getStaffById = async (
+  staffId: string,
+  includeDeleted: boolean = false,
+) => {
+  let q = Staff.findById(staffId).select(
+    '-password -emailVerificationOtp -emailVerificationOtpExpires',
+  );
+  if (includeDeleted) {
+    q = q.setOptions({ includeDeleted: true });
+  }
+  const staff = await q;
+
+  if (!staff) {
+    throw new ApiError(404, 'Staff member not found');
+  }
+
+  return {
+    id: staff._id.toString(),
+    name: staff.name,
+    email: staff.email,
+    phone: staff.phone,
+    role: staff.role,
+    status: staff.status,
+    isEmailVerified: staff.isEmailVerified,
+    deletedAt: staff.deletedAt,
+    createdAt: staff.createdAt,
+    updatedAt: staff.updatedAt,
+  };
+};
+
+/**
+ * Update name / phone / role of an existing staff member.
+ * Email is not editable here — it would require re-verification.
+ */
+export const updateStaff = async (
+  staffId: string,
+  data: { name?: string; phone?: string; role?: 'TeamLeader' | 'Physician' | 'Nurse' },
+  adminId: string,
+) => {
+  const staff = await Staff.findById(staffId);
+
+  if (!staff) {
+    throw new ApiError(404, 'Staff member not found');
+  }
+
+  if (staff.deletedAt) {
+    throw new ApiError(400, 'Cannot edit a deleted staff member — restore first');
+  }
+
+  if (staff.status !== 'Active' && data.role !== undefined) {
+    throw new ApiError(
+      400,
+      'Role can only be changed for active staff. Use approve for pending users.',
+    );
+  }
+
+  if (data.name !== undefined) staff.name = data.name;
+  if (data.phone !== undefined) staff.phone = data.phone;
+  if (data.role !== undefined) staff.role = data.role;
+
+  staff.updatedBy = adminId as any;
+  await staff.save();
+
+  return {
+    id: staff._id.toString(),
+    name: staff.name,
+    email: staff.email,
+    phone: staff.phone,
+    role: staff.role,
+    status: staff.status,
+    isEmailVerified: staff.isEmailVerified,
+    updatedAt: staff.updatedAt,
+  };
+};
+
+/**
+ * Soft delete a staff member.
+ * - Prevents an admin from deleting themselves.
+ * - Prevents deleting an already-deleted record.
+ * - Sets `deletedAt`, `deletedBy`, `deletionReason`.
+ */
+export const deleteStaff = async (
+  staffId: string,
+  adminId: string,
+  reason?: string,
+) => {
+  if (staffId === adminId) {
+    throw new ApiError(400, 'You cannot delete your own account');
+  }
+
+  const staff = await Staff.findById(staffId);
+
+  if (!staff) {
+    throw new ApiError(404, 'Staff member not found');
+  }
+
+  if (staff.deletedAt) {
+    throw new ApiError(400, 'Staff member is already deleted');
+  }
+
+  staff.deletedAt = new Date();
+  staff.deletedBy = adminId as any;
+  staff.deletionReason = reason ?? null;
+  staff.updatedBy = adminId as any;
+  await staff.save();
+
+  return {
+    id: staff._id.toString(),
+    success: true,
+    deletedAt: staff.deletedAt,
+  };
+};
+
+/**
+ * Restore a soft-deleted staff member.
+ */
+export const restoreStaff = async (staffId: string, adminId: string) => {
+  const staff = await Staff.findById(staffId).setOptions({ includeDeleted: true });
+
+  if (!staff) {
+    throw new ApiError(404, 'Staff member not found');
+  }
+
+  if (!staff.deletedAt) {
+    throw new ApiError(400, 'Staff member is not deleted');
+  }
+
+  staff.deletedAt = null;
+  staff.deletedBy = null as any;
+  staff.deletionReason = null;
+  staff.updatedBy = adminId as any;
+  await staff.save();
+
+  return {
+    id: staff._id.toString(),
+    restored: true,
+  };
+};
+// ═════════════════════════════════════════════════════════════
 // EXPORTS
 // ═════════════════════════════════════════════════════════════
 
@@ -698,4 +919,9 @@ export default {
   approveReferral,
   declineReferral, 
   getReports,
+    getStaffList,
+  getStaffById,
+  updateStaff,
+  deleteStaff,
+  restoreStaff
 };

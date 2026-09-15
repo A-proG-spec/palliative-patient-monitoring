@@ -1,73 +1,87 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useVisitSignatures, useSignVisit } from '@/hooks/useSignatures';
-import { signVisitSchema, type SignVisitFormData } from '@/schemas/signature.schema';
+import { z } from 'zod';
+import {
+  CheckCircle2,
+  Clock,
+  Lock,
+  Mail,
+  PenLine,
+  ShieldCheck,
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { cn, formatDate } from '@/lib/utils';
 import {
-  CheckCircle2,
-  Clock,
-  PenLine,
-  ShieldCheck,
-  AlertCircle,
-  Mail,
-  Lock,
-} from 'lucide-react';
-import type { Signature } from '@/types/signature.types';
+  useProgressNoteSignatures,
+  useSignProgressNote,
+  type ProgressNoteSignature,
+} from '@/hooks/useProgressNotes';
 
-interface SignatureSectionProps {
+// ─────────────────────────────────────────────────────────────
+// Signing form schema
+// ─────────────────────────────────────────────────────────────
+const signSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(1, 'Password is required'),
+  role: z.enum(['Physician', 'Nurse', 'Reviewer']),
+});
+
+type SignFormData = z.infer<typeof signSchema>;
+
+interface ProgressNoteSignatureSectionProps {
   patientId: string;
-  visitId: string;
-  /** Optional — used to display the team leader's name when not populated. */
-  teamMembers?: Array<{ role: string; name: string }>;
-  /** Fires when all required roles have signed. */
-  onAllSigned?: () => void;
+  noteId: string;
+  /** Optional callback fired after a successful signature. */
+  onSigned?: () => void;
 }
 
 /**
- * SignatureSection
- * ────────────────
- * Visit signing card. The Team Leader is auto-signed on visit creation,
- * so this section only offers to sign as Physician or Nurse.
+ * ProgressNoteSignatureSection
+ * ────────────────────────────
+ * Shows the signature state of a progress note and allows
+ * Physician / Nurse / Reviewer to sign in via email + password
+ * (bcrypt-verified server-side).
+ *
+ * The responsible clinician is auto-signed at note creation — they
+ * never need to sign here. If the logged-in user IS the responsible
+ * clinician, the backend will reject their signature attempt.
  */
-export const SignatureSection: React.FC<SignatureSectionProps> = ({
-  patientId,
-  visitId,
-  teamMembers = [],
-  onAllSigned,
-}) => {
-  const { data, isLoading, refetch } = useVisitSignatures(patientId, visitId);
-  const signMutation = useSignVisit(patientId, visitId);
+const ProgressNoteSignatureSection: React.FC<
+  ProgressNoteSignatureSectionProps
+> = ({ patientId, noteId, onSigned }) => {
+  const { data, isLoading, refetch } = useProgressNoteSignatures(
+    patientId,
+    noteId,
+  );
+  const signMutation = useSignProgressNote(patientId, noteId);
 
-  const [signingRole, setSigningRole] = useState<'Physician' | 'Nurse' | null>(null);
-
+  const [showSignForm, setShowSignForm] = useState(false);
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
     setError,
-  } = useForm<SignVisitFormData>({
-    resolver: zodResolver(signVisitSchema),
-    defaultValues: { role: 'Physician', email: '', password: '' },
+  } = useForm<SignFormData>({
+    resolver: zodResolver(signSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+      role: 'Physician',
+    },
   });
 
-  const onSubmit = (form: SignVisitFormData) => {
+  const onSubmit = (form: SignFormData) => {
     signMutation.mutate(form, {
       onSuccess: () => {
-        setSigningRole(null);
-        reset({ role: 'Physician', email: '', password: '' });
+        setShowSignForm(false);
+        reset({ email: '', password: '', role: 'Physician' });
         refetch();
-        // Fire the callback if signatures are now complete.
-        // We can't read the fresh state synchronously here, so we
-        // check the response shape from the mutation.
-        setTimeout(() => {
-          // The query will have refetched by now.
-        }, 0);
+        onSigned?.();
       },
       onError: (err: unknown) => {
         const msg =
@@ -87,23 +101,16 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
   }
 
   const signatures = data?.signatures ?? [];
-  const teamLeader = data?.teamLeader ?? null;
+  const responsible = data?.responsibleClinician ?? null;
   const allSigned = data?.allSigned ?? false;
 
-  const findSig = (role: Signature['role']) =>
+  // ── Helper to find a signature for a given role ──
+  const findSig = (role: ProgressNoteSignature['role']) =>
     signatures.find((s) => s.role === role) ?? null;
 
   const physicianSig = findSig('Physician');
   const nurseSig = findSig('Nurse');
-
-  // Team leader fallback: use the response field first, else the
-  // passed teamMembers list.
-  const teamLeaderFallback = teamMembers.find((m) => m.role === 'TeamLeader');
-  const teamLeaderDisplay = teamLeader
-    ? { staffId: teamLeader.staffId, name: teamLeader.name }
-    : teamLeaderFallback
-      ? { staffId: '', name: teamLeaderFallback.name }
-      : null;
+  const reviewerSig = findSig('Reviewer');
 
   return (
     <div className="rounded-xl border border-border-base bg-surface-lowest overflow-hidden">
@@ -112,7 +119,7 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
         <div className="flex items-center gap-2">
           <ShieldCheck size={16} className="text-primary" />
           <h3 className="text-sm font-semibold text-on-surface">
-            Team Signatures
+            Section 20 — Signatures
           </h3>
         </div>
         {allSigned ? (
@@ -128,83 +135,85 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
         )}
       </div>
 
-      {/* Rows */}
+      {/* Signature rows */}
       <div className="divide-y divide-border-base">
-        {/* Team Leader — auto-signed */}
+        {/* Responsible clinician — auto-signed */}
         <SignatureRow
-          label="Team Leader"
+          label="Responsible Clinician"
           subtitle="Auto-signed at creation"
           signature={
-            teamLeaderDisplay
+            responsible
               ? {
-                  name: teamLeaderDisplay.name,
+                  name: responsible.name,
+                  role: responsible.role,
                   signedAt: '',
-                  autoSigned: true,
                 }
               : null
           }
+          autoSigned
         />
 
         {/* Physician */}
         <SignatureRow
           label="Physician"
           subtitle="Sign with email + password"
-          signature={
-            physicianSig
-              ? {
-                  name: physicianSig.name,
-                  signedAt: physicianSig.signedAt,
-                  autoSigned: false,
-                }
-              : null
+          signature={physicianSig}
+          onSignClick={
+            !physicianSig ? () => setShowSignForm(true) : undefined
           }
-          onSignClick={!physicianSig ? () => setSigningRole('Physician') : undefined}
         />
 
         {/* Nurse */}
         <SignatureRow
           label="Nurse"
           subtitle="Sign with email + password"
-          signature={
-            nurseSig
-              ? {
-                  name: nurseSig.name,
-                  signedAt: nurseSig.signedAt,
-                  autoSigned: false,
-                }
-              : null
-          }
-          onSignClick={!nurseSig ? () => setSigningRole('Nurse') : undefined}
+          signature={nurseSig}
+          onSignClick={!nurseSig ? () => setShowSignForm(true) : undefined}
+        />
+
+        {/* Reviewer — optional */}
+        <SignatureRow
+          label="Reviewer"
+          subtitle="Optional review signature"
+          signature={reviewerSig}
+          onSignClick={!reviewerSig ? () => setShowSignForm(true) : undefined}
         />
       </div>
 
-      {/* Sign form */}
-      {signingRole && (
+      {/* Sign-in form */}
+      {showSignForm && (
         <div className="border-t border-border-base bg-surface-low/30 px-5 py-4">
           <div className="flex items-center gap-2 mb-3">
             <PenLine size={14} className="text-primary" />
             <p className="text-sm font-medium text-on-surface">
-              Sign as {signingRole}
+              Add your signature
             </p>
           </div>
           <p className="text-xs text-text-muted mb-4 leading-relaxed">
             Signatures are verified against your registered email and password.
-            Only staff registered as <strong>{signingRole}</strong> can sign
-            as that role.
+            Only staff registered with the role you select can sign as that role.
           </p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-3" noValidate>
             {errors.root && (
-              <div className="rounded-lg bg-error-bg border border-error/20 px-3 py-2 text-xs text-error flex items-start gap-2">
-                <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
-                <span>{errors.root.message}</span>
+              <div className="rounded-lg bg-error-bg border border-error/20 px-3 py-2 text-xs text-error">
+                {errors.root.message}
               </div>
             )}
+            <div className="grid sm:grid-cols-3 gap-3"></div>
 
-            {/* Inject role — hidden */}
-            <input type="hidden" value={signingRole} {...register('role')} />
-
-            <div className="grid sm:grid-cols-2 gap-3">
+            {/* Role — handled by the Select below, not by the grid above */}
+            <div className="grid sm:grid-cols-3 gap-3">
+              <Select
+                label="Signing as"
+                options={[
+                  { value: 'Physician', label: 'Physician' },
+                  { value: 'Nurse', label: 'Nurse' },
+                  { value: 'Reviewer', label: 'Reviewer' },
+                ]}
+                error={errors.role?.message}
+                {...register('role')}
+              />
               <Input
                 label="Email"
                 type="email"
@@ -236,8 +245,8 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
                 size="sm"
                 variant="ghost"
                 onClick={() => {
-                  setSigningRole(null);
-                  reset({ role: 'Physician', email: '', password: '' });
+                  setShowSignForm(false);
+                  reset({ email: '', password: '', role: 'Physician' });
                 }}
                 disabled={signMutation.isPending}
               >
@@ -253,17 +262,13 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
         {allSigned ? (
           <p className="text-xs text-success flex items-center gap-1.5">
             <CheckCircle2 size={12} />
-            All team members have signed. This visit is ready to be finalized.
+            Note fully signed by Physician and Nurse.
           </p>
         ) : (
-          <div className="flex items-start gap-1.5 text-xs text-warning">
-            <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
-            <span>
-              All team members must sign before the visit can be finalized.
-              {!physicianSig && ' Physician needs to sign.'}
-              {!nurseSig && ' Nurse needs to sign.'}
-            </span>
-          </div>
+          <p className="text-xs text-text-muted">
+            Both a Physician and a Nurse signature are required to finalise this
+            note.
+          </p>
         )}
       </div>
     </div>
@@ -271,17 +276,14 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
 };
 
 // ─────────────────────────────────────────────────────────────
-// Signature row
+// Single signature row
 // ─────────────────────────────────────────────────────────────
 
 interface SignatureRowProps {
   label: string;
   subtitle?: string;
-  signature: {
-    name: string;
-    signedAt: string;
-    autoSigned: boolean;
-  } | null;
+  signature: ProgressNoteSignature | { name: string; role: string; signedAt: string } | null;
+  autoSigned?: boolean;
   onSignClick?: () => void;
 }
 
@@ -289,9 +291,11 @@ const SignatureRow: React.FC<SignatureRowProps> = ({
   label,
   subtitle,
   signature,
+  autoSigned,
   onSignClick,
 }) => {
   const signed = !!signature;
+
   return (
     <div
       className={cn(
@@ -307,7 +311,7 @@ const SignatureRow: React.FC<SignatureRowProps> = ({
               {signature.name}
             </p>
             <p className="text-[11px] text-text-muted">
-              {signature.autoSigned
+              {autoSigned
                 ? subtitle
                 : signature.signedAt
                   ? `Signed ${formatDate(signature.signedAt)}`
@@ -323,7 +327,7 @@ const SignatureRow: React.FC<SignatureRowProps> = ({
         {signed ? (
           <Badge variant="success" className="flex items-center gap-1">
             <CheckCircle2 size={11} />
-            {signature.autoSigned ? 'Auto-signed' : 'Signed'}
+            {autoSigned ? 'Auto-signed' : 'Signed'}
           </Badge>
         ) : onSignClick ? (
           <Button
@@ -345,4 +349,4 @@ const SignatureRow: React.FC<SignatureRowProps> = ({
   );
 };
 
-export default SignatureSection;
+export default ProgressNoteSignatureSection;

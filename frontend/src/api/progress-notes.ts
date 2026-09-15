@@ -1,7 +1,13 @@
 import apiClient from './client';
-import { USE_MOCK } from '@/lib/config';
-import { mockProgressNotesApi } from './mocks/progress-notes.mock';
-import type { ProgressNote } from '@/hooks/useProgressNotes';
+import type {
+  ProgressNote,
+  ProgressNoteListItem,
+  ProgressNoteSignature,
+} from '@/hooks/useProgressNotes';
+
+// ─────────────────────────────────────────────────────────────
+// Request / response types
+// ─────────────────────────────────────────────────────────────
 
 export interface CreateProgressNoteRequest {
   patientId: string;
@@ -22,26 +28,38 @@ export interface SignProgressNoteRequest {
 
 export interface SignProgressNoteResponse {
   id: string;
-  signedBy: { staffId: string; name: string; role: string; signedAt: string };
-  signatures: Array<{ staffId: string; name: string; role: string; signedAt: string }>;
+  signedBy: {
+    staffId: string;
+    name: string;
+    role: string;
+    signedAt: string;
+  };
+  signatures: ProgressNoteSignature[];
   allSigned: boolean;
 }
 
 export interface ProgressNoteSignaturesResponse {
   noteId: string;
   createdAt: string;
-  responsibleClinician: { staffId: string; name: string; role: string } | null;
-  signatures: Array<{ staffId: string; name: string; role: string; signedAt: string }>;
+  responsibleClinician: {
+    staffId: string;
+    name: string;
+    role: string;
+  } | null;
+  signatures: ProgressNoteSignature[];
   allSigned: boolean;
   totalSignatures: number;
 }
+
+// ─────────────────────────────────────────────────────────────
+// API
+// ─────────────────────────────────────────────────────────────
 
 export const progressNotesApi = {
   create: (
     patientId: string,
     data: Omit<ProgressNote, 'id' | 'patientId' | 'createdAt'>,
   ): Promise<ProgressNote> => {
-    if (USE_MOCK) return mockProgressNotesApi.create(patientId, data);
     return apiClient
       .post<ProgressNote>(`/patients/${patientId}/progress-notes`, data)
       .then((r) => r.data);
@@ -50,10 +68,9 @@ export const progressNotesApi = {
   getByPatient: (
     patientId: string,
     params?: { admissionId?: string; page?: number; limit?: number },
-  ): Promise<{ items: ProgressNote[]; total: number }> => {
-    if (USE_MOCK) return mockProgressNotesApi.getByPatient(patientId, params);
+  ): Promise<{ items: ProgressNoteListItem[]; total: number }> => {
     return apiClient
-      .get<{ items: ProgressNote[]; total: number }>(
+      .get<{ items: ProgressNoteListItem[]; total: number }>(
         `/patients/${patientId}/progress-notes`,
         { params },
       )
@@ -61,7 +78,6 @@ export const progressNotesApi = {
   },
 
   getById: (patientId: string, noteId: string): Promise<ProgressNote> => {
-    if (USE_MOCK) return mockProgressNotesApi.getById(patientId, noteId);
     return apiClient
       .get<ProgressNote>(`/patients/${patientId}/progress-notes/${noteId}`)
       .then((r) => r.data);
@@ -72,27 +88,20 @@ export const progressNotesApi = {
     noteId: string,
     data: Partial<Omit<ProgressNote, 'id' | 'patientId' | 'createdAt'>>,
   ): Promise<ProgressNote> => {
-    if (USE_MOCK) return mockProgressNotesApi.update(patientId, noteId, data);
     return apiClient
       .put<ProgressNote>(`/patients/${patientId}/progress-notes/${noteId}`, data)
       .then((r) => r.data);
   },
 
-  delete: (patientId: string, noteId: string, reason?: string): Promise<{ id: string; success: boolean }> => {
-    if (USE_MOCK) return mockProgressNotesApi.delete(patientId, noteId);
+  delete: (
+    patientId: string,
+    noteId: string,
+    reason?: string,
+  ): Promise<{ id: string; success: boolean }> => {
     return apiClient
       .delete<{ id: string; success: boolean }>(
         `/patients/${patientId}/progress-notes/${noteId}`,
         { data: { reason } },
-      )
-      .then((r) => r.data);
-  },
-
-  restore: (patientId: string, noteId: string): Promise<{ id: string; restored: boolean }> => {
-    if (USE_MOCK) return Promise.resolve({ id: noteId, restored: true });
-    return apiClient
-      .post<{ id: string; restored: boolean }>(
-        `/patients/${patientId}/progress-notes/${noteId}/restore`,
       )
       .then((r) => r.data);
   },
@@ -102,19 +111,6 @@ export const progressNotesApi = {
     noteId: string,
     data: SignProgressNoteRequest,
   ): Promise<SignProgressNoteResponse> => {
-    if (USE_MOCK) {
-      return Promise.resolve({
-        id: noteId,
-        signedBy: {
-          staffId: 'mock-staff',
-          name: 'Mock Staff',
-          role: data.role,
-          signedAt: new Date().toISOString(),
-        },
-        signatures: [],
-        allSigned: false,
-      });
-    }
     return apiClient
       .post<SignProgressNoteResponse>(
         `/patients/${patientId}/progress-notes/${noteId}/sign`,
@@ -127,16 +123,6 @@ export const progressNotesApi = {
     patientId: string,
     noteId: string,
   ): Promise<ProgressNoteSignaturesResponse> => {
-    if (USE_MOCK) {
-      return Promise.resolve({
-        noteId,
-        createdAt: new Date().toISOString(),
-        responsibleClinician: null,
-        signatures: [],
-        allSigned: false,
-        totalSignatures: 0,
-      });
-    }
     return apiClient
       .get<ProgressNoteSignaturesResponse>(
         `/patients/${patientId}/progress-notes/${noteId}/signatures`,

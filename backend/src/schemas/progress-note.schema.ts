@@ -54,8 +54,9 @@ export const createProgressNoteSchema = z.object({
       respiratoryRate: vitalsPairSchema.default({ current: '', previous: '' }),
       bloodPressure: vitalsPairSchema.default({ current: '', previous: '' }),
       spo2: vitalsPairSchema.default({ current: '', previous: '' }),
+       oxygenFlow: vitalsPairSchema.default({ current: '', previous: '' }),
     }).optional(),
-
+otherRelevantObservations: z.string().default(''),
     // 3. Symptom Assessment
     symptoms: z.record(z.string(), symptomRowSchema).optional(),
     painScore: z.string().default(''),

@@ -1,7 +1,22 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserCheck, UserX, Trash2, UserPlus, Search, Filter, MoreVertical } from 'lucide-react';
-import { usePendingStaff, useApproveStaff, useRejectStaff } from '@/hooks/useAdmin';
+import {
+  UserCheck,
+  UserX,
+  Trash2,
+  RotateCcw,
+  UserPlus,
+  Search,
+  Pencil,
+} from 'lucide-react';
+import {
+  usePendingStaff,
+  useApproveStaff,
+  useRejectStaff,
+  useStaffList,
+  useDeleteStaff,
+  useRestoreStaff,
+} from '@/hooks/useAdmin';
 import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -10,31 +25,41 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { BackButton } from '@/components/common/BackButton';
-import { PageLoader } from '@/components/common/LoadingSpinner';
+import { PageLoader, SkeletonTable } from '@/components/common/LoadingSpinner';
 import { EmptyState, ErrorState } from '@/components/common/EmptyState';
-import { formatDate, formatRelativeTime } from '@/lib/utils';
+import { Pagination } from '@/components/common/Pagination';
+import { formatRelativeTime } from '@/lib/utils';
 import { ROLE_LABELS } from '@/constants';
-import { useToast } from '@/context/ToastContext';
+import StaffEditModal from '@/components/admin/StaffEditModal';
+import type {
+  StaffListItem,
+  StaffListFilterStatus,
+  StaffRole,
+} from '@/types/admin.types';
 
-// ── Mock data for active staff ──────────────────────────────────
-// In a real app, this would come from an API endpoint
-const MOCK_ACTIVE_STAFF = [
-  { id: 'staff-001', name: 'John Doe', email: 'john@gmail.com', phone: '+251911234567', role: 'Physician' as const, status: 'Active' as const, isEmailVerified: true, createdAt: '2026-01-15T08:00:00Z' },
-  { id: 'staff-002', name: 'Dr. Tigist Alemu', email: 'tigist@hospital.et', phone: '+251922345678', role: 'TeamLeader' as const, status: 'Active' as const, isEmailVerified: true, createdAt: '2026-01-20T08:00:00Z' },
-  { id: 'staff-003', name: 'Nurse Selam Bekele', email: 'selam@hospital.et', phone: '+251933456789', role: 'Nurse' as const, status: 'Active' as const, isEmailVerified: true, createdAt: '2026-02-01T08:00:00Z' },
-  { id: 'staff-004', name: 'Dr. Abebe Kebede', email: 'abebe@hospital.et', phone: '+251944567890', role: 'Physician' as const, status: 'Active' as const, isEmailVerified: true, createdAt: '2026-03-15T08:00:00Z' },
-  { id: 'staff-005', name: 'Nurse Sara Tadesse', email: 'sara@hospital.et', phone: '+251955678901', role: 'Nurse' as const, status: 'Active' as const, isEmailVerified: true, createdAt: '2026-04-01T08:00:00Z' },
-];
+// ─────────────────────────────────────────────────────────────
+// Tabs
+// ─────────────────────────────────────────────────────────────
+type Tab = 'active' | 'pending';
 
-// ── Delete Confirmation Modal ────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Delete confirmation modal
+// ─────────────────────────────────────────────────────────────
 interface DeleteModalProps {
-  staff: typeof MOCK_ACTIVE_STAFF[0] | null;
-  onConfirm: () => void;
+  staff: StaffListItem | null;
+  onConfirm: (reason?: string) => void;
   onCancel: () => void;
   isPending: boolean;
 }
 
-const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({ staff, onConfirm, onCancel, isPending }) => {
+const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({
+  staff,
+  onConfirm,
+  onCancel,
+  isPending,
+}) => {
+  const [reason, setReason] = useState('');
+
   if (!staff) return null;
 
   return (
@@ -43,15 +68,41 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({ staff, onConfirm,
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-error-bg text-error mb-4">
           <UserX size={24} />
         </div>
-        <h2 className="text-lg font-semibold text-on-surface mb-2">Delete Staff Member</h2>
-        <p className="text-sm text-text-secondary mb-6">
-          Are you sure you want to delete <strong>{staff.name}</strong>? 
-          This action cannot be undone and will remove all their access to the system.
+        <h2 className="text-lg font-semibold text-on-surface mb-2">
+          Delete Staff Member
+        </h2>
+        <p className="text-sm text-text-secondary mb-4">
+          Are you sure you want to delete{' '}
+          <strong>{staff.name}</strong>? The account will be
+          hidden from the list but their clinical records remain intact.
+          You can restore them later from the Deleted filter.
         </p>
-        <div className="bg-surface-low p-3 rounded-lg text-sm space-y-1 mb-6">
-          <div><span className="text-text-muted">Email:</span> <span className="text-on-surface">{staff.email}</span></div>
-          <div><span className="text-text-muted">Role:</span> <span className="text-on-surface">{ROLE_LABELS[staff.role]}</span></div>
+
+        <div className="bg-surface-low p-3 rounded-lg text-sm space-y-1 mb-4">
+          <div>
+            <span className="text-text-muted">Email:</span>{' '}
+            <span className="text-on-surface">{staff.email}</span>
+          </div>
+          <div>
+            <span className="text-text-muted">Role:</span>{' '}
+            <span className="text-on-surface">
+              {staff.role ? ROLE_LABELS[staff.role] ?? staff.role : '—'}
+            </span>
+          </div>
         </div>
+
+        <label className="block text-sm font-medium text-on-surface mb-1">
+          Reason (optional)
+        </label>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="e.g. Left the organization, reason recorded for audit trail…"
+          rows={3}
+          maxLength={500}
+          className="block w-full rounded-lg border border-border-base bg-surface-lowest px-3 py-2 text-sm text-on-surface placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary mb-5 resize-y"
+        />
+
         <div className="flex gap-3">
           <button
             type="button"
@@ -63,7 +114,7 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({ staff, onConfirm,
           </button>
           <button
             type="button"
-            onClick={onConfirm}
+            onClick={() => onConfirm(reason.trim() || undefined)}
             disabled={isPending}
             className="flex-1 rounded-xl bg-error px-4 py-2.5 text-sm font-medium text-white hover:bg-error/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
@@ -80,63 +131,131 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({ staff, onConfirm,
   );
 };
 
+// ─────────────────────────────────────────────────────────────
+// Main page
+// ─────────────────────────────────────────────────────────────
 const StaffManagementPage: React.FC = () => {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { user } = useAuthStore();
-  const isAdmin = user?.type === 'admin';
 
-  // ── Pending staff (existing functionality) ──
-  const { data: pendingStaff, isLoading: pendingLoading, error: pendingError, refetch: refetchPending } = usePendingStaff();
+  const [tab, setTab] = useState<Tab>('active');
+
+  // ── Pending staff ──
+  const {
+    data: pendingStaff,
+    isLoading: pendingLoading,
+    error: pendingError,
+    refetch: refetchPending,
+  } = usePendingStaff();
   const approveStaffMutation = useApproveStaff();
   const rejectStaffMutation = useRejectStaff();
-
-  // ── Active staff state ──
-  const [activeStaff, setActiveStaff] = useState(MOCK_ACTIVE_STAFF);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('');
-
-  // ── Delete modal state ──
-  const [deleteTarget, setDeleteTarget] = useState<typeof MOCK_ACTIVE_STAFF[0] | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
   const [roleSelections, setRoleSelections] = useState<Record<string, string>>({});
 
-  // ── Filter active staff ──
-  const filteredActiveStaff = activeStaff.filter((staff) => {
-    const matchesSearch = 
-      staff.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      staff.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter ? staff.role === roleFilter : true;
-    return matchesSearch && matchesRole;
+  // ── Active staff ──
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState<StaffRole | ''>('');
+  const [statusFilter, setStatusFilter] = useState<StaffListFilterStatus>('Active');
+  const [page, setPage] = useState(1);
+  const limit = 15;
+
+  const {
+    data: staffListData,
+    isLoading: listLoading,
+    error: listError,
+    refetch: refetchList,
+  } = useStaffList({
+    page,
+    limit,
+    status: statusFilter,
+    role: roleFilter || undefined,
+    search: searchTerm.trim() || undefined,
   });
 
-  // ── Handle delete ──
-  const handleDelete = () => {
+  // ── Modals ──
+  const [editTarget, setEditTarget] = useState<StaffListItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StaffListItem | null>(null);
+
+  const deleteMutation = useDeleteStaff();
+  const restoreMutation = useRestoreStaff();
+
+  const handleDeleteConfirm = (reason?: string) => {
     if (!deleteTarget) return;
-    setIsDeleting(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      setActiveStaff((prev) => prev.filter((s) => s.id !== deleteTarget.id));
-      toast.success(`Staff member ${deleteTarget.name} deleted successfully.`);
-      setDeleteTarget(null);
-      setIsDeleting(false);
-    }, 600);
+    deleteMutation.mutate(
+      { staffId: deleteTarget.id, reason },
+      { onSettled: () => setDeleteTarget(null) },
+    );
   };
 
-  // ── Handle role badge color ──
-  const getRoleBadgeVariant = (role: string) => {
+  const handleRestore = (staffId: string) => {
+    restoreMutation.mutate(staffId);
+  };
+
+  // ── Derived: counts for tab labels ──
+  const pendingCount = pendingStaff?.length ?? 0;
+  const activeCount = staffListData?.total ?? 0;
+
+  // ── Role badge variant ──
+  const getRoleBadgeVariant = (role: string | null) => {
     switch (role) {
-      case 'TeamLeader': return 'primary';
-      case 'Physician': return 'success';
-      case 'Nurse': return 'warning';
-      default: return 'default';
+      case 'TeamLeader':
+        return 'primary';
+      case 'Physician':
+        return 'success';
+      case 'Nurse':
+        return 'warning';
+      default:
+        return 'default';
     }
   };
 
-  if (pendingLoading) return <PageLoader />;
-  if (pendingError) return <ErrorState onRetry={refetchPending} />;
+  // ── Reset page when filters change ──
+  const handleFilterChange = (
+    setter: (v: any) => void,
+    value: any,
+  ) => {
+    setter(value);
+    setPage(1);
+  };
+
+  // ── Tab label component ──
+  const TabButton: React.FC<{
+    id: Tab;
+    label: string;
+    count: number;
+  }> = ({ id, label, count }) => (
+    <button
+      type="button"
+      onClick={() => setTab(id)}
+      className={
+        'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ' +
+        (tab === id
+          ? 'text-primary border-primary'
+          : 'text-text-secondary border-transparent hover:text-on-surface')
+      }
+    >
+      {label}
+      {count > 0 && (
+        <span
+          className={
+            'inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold ' +
+            (id === 'pending'
+              ? 'bg-warning text-white'
+              : 'bg-surface-container text-text-secondary')
+          }
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+
+  // ─────────────────────────────────────────────────────────
+  // Loading / error at the page level — only block on the
+  // tab that's actually shown.
+  // ─────────────────────────────────────────────────────────
+  if (tab === 'pending' && pendingLoading) return <PageLoader />;
+  if (tab === 'pending' && pendingError)
+    return <ErrorState onRetry={refetchPending} />;
 
   return (
     <div className="space-y-6">
@@ -145,227 +264,373 @@ const StaffManagementPage: React.FC = () => {
         <div>
           <BackButton to="/admin" label="Dashboard" />
           <h1 className="text-2xl font-bold text-on-surface">Staff Management</h1>
-          <p className="text-sm text-text-secondary">Manage active staff and pending registrations</p>
+          <p className="text-sm text-text-secondary">
+            Manage active staff and pending registrations
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            leftIcon={<UserPlus size={14} />}
-            onClick={() => navigate('/register')}
-          >
-            Register New Staff
-          </Button>
-          {(pendingStaff?.length ?? 0) > 0 && (
-            <Badge variant="warning">{pendingStaff?.length} pending</Badge>
+          {pendingCount > 0 && (
+            <Badge variant="warning">{pendingCount} pending</Badge>
           )}
         </div>
       </div>
 
       {/* ── Tabs ── */}
       <div className="flex border-b border-border-base">
-        <div className="px-4 py-2.5 text-sm font-medium text-primary border-b-2 border-primary">
-          Active Staff ({filteredActiveStaff.length})
-        </div>
-        <div className="px-4 py-2.5 text-sm font-medium text-text-secondary">
-          Pending Approvals ({pendingStaff?.length || 0})
-        </div>
+        <TabButton id="active" label="Active Staff" count={activeCount} />
+        <TabButton id="pending" label="Pending Approvals" count={pendingCount} />
       </div>
 
-      {/* ── Active Staff Section ── */}
-      <Card padding="none">
-        {/* Filters */}
-        <div className="flex flex-wrap gap-3 p-4 border-b border-border-base">
-          <Input
-            placeholder="Search by name or email..."
-            leftIcon={<Search size={15} />}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-64"
-          />
-          <Select
-            options={[
-              { value: '', label: 'All Roles' },
-              { value: 'TeamLeader', label: 'Team Leader' },
-              { value: 'Physician', label: 'Physician' },
-              { value: 'Nurse', label: 'Nurse' },
-            ]}
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="w-40"
-          />
-        </div>
-
-        {/* Staff Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-low border-b border-border-base">
-              <tr>
-                {['Name', 'Email', 'Phone', 'Role', 'Status', 'Joined', 'Actions'].map((h) => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-on-surface-variant whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-base">
-              {filteredActiveStaff.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-text-muted">
-                    No staff members found
-                  </td>
-                </tr>
-              ) : (
-                filteredActiveStaff.map((staff) => (
-                  <tr key={staff.id} className="hover:bg-surface-low/50 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <div>
-                        <p className="font-medium text-on-surface">{staff.name}</p>
-                        <p className="text-xs text-text-muted">{staff.id}</p>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-text-secondary">{staff.email}</td>
-                    <td className="px-5 py-3.5 text-text-secondary">{staff.phone}</td>
-                    <td className="px-5 py-3.5">
-                      <Badge variant={getRoleBadgeVariant(staff.role)}>
-                        {ROLE_LABELS[staff.role] || staff.role}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge status={staff.status} type="staff" />
-                    </td>
-                    <td className="px-5 py-3.5 text-text-muted text-xs">
-                      {formatRelativeTime(staff.createdAt)}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs"
-                          onClick={() => navigate(`/admin/staff/${staff.id}/edit`)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          className="text-xs"
-                          leftIcon={<Trash2 size={12} />}
-                          onClick={() => setDeleteTarget(staff)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* ── Pending Staff Section ── */}
-      <Card padding="none">
-        <div className="px-5 py-4 border-b border-border-base">
-          <h3 className="text-sm font-semibold text-on-surface">
-            Pending Approvals 
-            {pendingStaff && pendingStaff.length > 0 && (
-              <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-warning text-[10px] font-bold text-white px-1.5">
-                {pendingStaff.length}
-              </span>
-            )}
-          </h3>
-        </div>
-
-        {!pendingStaff?.length ? (
-          <div className="p-5 text-sm text-text-muted text-center">
-            No pending staff registrations
+      {/* ══════════════════════════════════════════════════════ */}
+      {/* Active Staff tab                                      */}
+      {/* ══════════════════════════════════════════════════════ */}
+      {tab === 'active' && (
+        <Card padding="none">
+          {/* Filters */}
+          <div className="flex flex-wrap gap-3 p-4 border-b border-border-base">
+            <Input
+              placeholder="Search by name, email, or phone…"
+              leftIcon={<Search size={15} />}
+              value={searchTerm}
+              onChange={(e) => handleFilterChange(setSearchTerm, e.target.value)}
+              className="w-72"
+            />
+            <Select
+              options={[
+                { value: '', label: 'All Roles' },
+                { value: 'TeamLeader', label: 'Team Leader' },
+                { value: 'Physician', label: 'Physician' },
+                { value: 'Nurse', label: 'Nurse' },
+              ]}
+              value={roleFilter}
+              onChange={(e) =>
+                handleFilterChange(setRoleFilter, e.target.value as StaffRole | '')
+              }
+              className="w-40"
+            />
+            <Select
+              options={[
+                
+                { value: 'Active', label: 'Active' },
+                { value: 'All', label: 'All statuses' },
+                { value: 'Pending', label: 'Pending' },
+                { value: 'Rejected', label: 'Rejected' },
+                { value: 'Deleted', label: 'Deleted' },
+              ]}
+              value={statusFilter}
+              onChange={(e) =>
+                handleFilterChange(
+                  setStatusFilter,
+                  e.target.value as StaffListFilterStatus,
+                )
+              }
+              className="w-40"
+            />
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-low border-b border-border-base">
-                <tr>
-                  {['Name', 'Email', 'Phone', 'Registered', 'Assign Role', 'Actions'].map((h) => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-on-surface-variant">
-                      {h}
-                    </th>
+
+          {/* Table */}
+          {listLoading ? (
+            <div className="p-5">
+              <SkeletonTable rows={6} />
+            </div>
+          ) : listError ? (
+            <ErrorState onRetry={refetchList} />
+          ) : !staffListData?.items.length ? (
+            <EmptyState
+              title={
+                statusFilter === 'Deleted'
+                  ? 'No deleted staff'
+                  : 'No staff members found'
+              }
+              description={
+                statusFilter === 'Deleted'
+                  ? 'Deleted staff members will appear here so you can restore them.'
+                  : 'Try adjusting your filters, or approve pending registrations.'
+              }
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-low border-b border-border-base">
+                  <tr>
+                    {[
+                      'Name',
+                      'Email',
+                      'Phone',
+                      'Role',
+                      'Status',
+                      'Joined',
+                      'Actions',
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="px-5 py-3 text-left text-xs font-semibold text-on-surface-variant whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-base">
+                  {staffListData.items.map((staff) => {
+                    const isDeleted = !!staff.deletedAt;
+                    return (
+                      <tr
+                        key={staff.id}
+                        className={
+                          'transition-colors ' +
+                          (isDeleted
+                            ? 'bg-error-bg/20 hover:bg-error-bg/30'
+                            : 'hover:bg-surface-low/50')
+                        }
+                      >
+                        <td className="px-5 py-3.5">
+                          <div>
+                            <p className="font-medium text-on-surface">
+                              {staff.name}
+                            </p>
+                            <p className="text-xs text-text-muted font-mono">
+                              {staff.id.slice(-8)}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5 text-text-secondary">
+                          {staff.email}
+                        </td>
+                        <td className="px-5 py-3.5 text-text-secondary">
+                          {staff.phone}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          {staff.role ? (
+                            <Badge variant={getRoleBadgeVariant(staff.role)}>
+                              {ROLE_LABELS[staff.role] ?? staff.role}
+                            </Badge>
+                          ) : (
+                            <span className="text-text-muted text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          {isDeleted ? (
+                            <Badge variant="error">Deleted</Badge>
+                          ) : (
+                            <StatusBadge status={staff.status} type="staff" />
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 text-text-muted text-xs">
+                          {formatRelativeTime(staff.createdAt)}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-2">
+                            {isDeleted ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                leftIcon={<RotateCcw size={12} />}
+                                loading={
+                                  restoreMutation.isPending &&
+                                  restoreMutation.variables === staff.id
+                                }
+                                onClick={() => handleRestore(staff.id)}
+                                className="text-xs"
+                              >
+                                Restore
+                              </Button>
+                            ) : (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  leftIcon={<Pencil size={12} />}
+                                  className="text-xs"
+                                  onClick={() => setEditTarget(staff)}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  className="text-xs"
+                                  leftIcon={<Trash2 size={12} />}
+                                  onClick={() => setDeleteTarget(staff)}
+                                >
+                                  Delete
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {staffListData && staffListData.total > limit && (
+            <div className="px-5 py-4 border-t border-border-base">
+              <Pagination
+                page={page}
+                total={staffListData.total}
+                limit={limit}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* ══════════════════════════════════════════════════════ */}
+      {/* Pending Approvals tab                                 */}
+      {/* ══════════════════════════════════════════════════════ */}
+      {tab === 'pending' && (
+        <Card padding="none">
+          <div className="px-5 py-4 border-b border-border-base">
+            <h3 className="text-sm font-semibold text-on-surface">
+              Pending Approvals
+            </h3>
+          </div>
+
+          {!pendingStaff?.length ? (
+            <div className="p-5 text-sm text-text-muted text-center">
+              No pending staff registrations
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-low border-b border-border-base">
+                  <tr>
+                    {[
+                      'Name',
+                      'Email',
+                      'Phone',
+                      'Registered',
+                      'Assign Role',
+                      'Actions',
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="px-5 py-3 text-left text-xs font-semibold text-on-surface-variant"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-base">
+                  {pendingStaff.map((staff) => (
+                    <tr
+                      key={staff.id}
+                      className="hover:bg-surface-low/40 transition-colors"
+                    >
+                      <td className="px-5 py-4">
+                        <div>
+                          <p className="font-medium text-on-surface">
+                            {staff.name}
+                          </p>
+                          <p className="text-xs text-text-muted">
+                            {staff.isEmailVerified
+                              ? 'Email verified'
+                              : 'Email not verified'}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-text-secondary">
+                        {staff.email}
+                      </td>
+                      <td className="px-5 py-4 text-text-secondary">
+                        {staff.phone}
+                      </td>
+                      <td className="px-5 py-4 text-text-muted text-xs">
+                        {formatRelativeTime(staff.createdAt)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <Select
+                          options={[
+                            { value: 'TeamLeader', label: 'Team Leader' },
+                            { value: 'Physician', label: 'Physician' },
+                            { value: 'Nurse', label: 'Nurse' },
+                          ]}
+                          placeholder="Select role…"
+                          value={roleSelections[staff.id] || ''}
+                          onChange={(e) =>
+                            setRoleSelections((prev) => ({
+                              ...prev,
+                              [staff.id]: e.target.value,
+                            }))
+                          }
+                          className="w-36 text-xs"
+                        />
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            leftIcon={<UserCheck size={13} />}
+                            disabled={!roleSelections[staff.id]}
+                            loading={approveStaffMutation.isPending}
+                            onClick={() => {
+                              if (roleSelections[staff.id]) {
+                                approveStaffMutation.mutate({
+                                  staffId: staff.id,
+                                  data: {
+                                    role: roleSelections[
+                                      staff.id
+                                    ] as 'TeamLeader' | 'Physician' | 'Nurse',
+                                  },
+                                });
+                              }
+                            }}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            leftIcon={<UserX size={13} />}
+                            loading={rejectStaffMutation.isPending}
+                            onClick={() => rejectStaffMutation.mutate(staff.id)}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-base">
-                {pendingStaff.map((staff) => (
-                  <tr key={staff.id} className="hover:bg-surface-low/40 transition-colors">
-                    <td className="px-5 py-4">
-                      <div>
-                        <p className="font-medium text-on-surface">{staff.name}</p>
-                        <p className="text-xs text-text-muted">
-                          {staff.isEmailVerified ? '✓ Email verified' : '⚠ Email not verified'}
-                        </p>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-text-secondary">{staff.email}</td>
-                    <td className="px-5 py-4 text-text-secondary">{staff.phone}</td>
-                    <td className="px-5 py-4 text-text-muted text-xs">{formatRelativeTime(staff.createdAt)}</td>
-                    <td className="px-5 py-4">
-                      <Select
-                        options={[
-                          { value: 'TeamLeader', label: 'Team Leader' },
-                          { value: 'Physician', label: 'Physician' },
-                          { value: 'Nurse', label: 'Nurse' },
-                        ]}
-                        placeholder="Select role…"
-                        value={roleSelections[staff.id] || ''}
-                        onChange={(e) => setRoleSelections((prev) => ({ ...prev, [staff.id]: e.target.value }))}
-                        className="w-36 text-xs"
-                      />
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          leftIcon={<UserCheck size={13} />}
-                          disabled={!roleSelections[staff.id]}
-                          loading={approveStaffMutation.isPending}
-                          onClick={() => {
-                            if (roleSelections[staff.id]) {
-                              approveStaffMutation.mutate({
-                                staffId: staff.id,
-                                data: { role: roleSelections[staff.id] as 'TeamLeader' | 'Physician' | 'Nurse' }
-                              });
-                            }
-                          }}
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          leftIcon={<UserX size={13} />}
-                          loading={rejectStaffMutation.isPending}
-                          onClick={() => rejectStaffMutation.mutate(staff.id)}
-                        >
-                          Reject
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
 
-      {/* ── Delete Confirmation Modal ── */}
+      {/* ── Edit Modal ── */}
+      {editTarget && (
+        <StaffEditModal
+          staff={{
+            id: editTarget.id,
+            name: editTarget.name,
+            email: editTarget.email,
+            phone: editTarget.phone,
+            role: editTarget.role,
+            status: editTarget.status,
+            isEmailVerified: editTarget.isEmailVerified,
+            deletedAt: editTarget.deletedAt,
+            createdAt: editTarget.createdAt,
+            updatedAt: editTarget.updatedAt,
+          }}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
+
+      {/* ── Delete Modal ── */}
       {deleteTarget && (
         <DeleteConfirmationModal
           staff={deleteTarget}
-          onConfirm={handleDelete}
+          onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteTarget(null)}
-          isPending={isDeleting}
+          isPending={deleteMutation.isPending}
         />
       )}
     </div>

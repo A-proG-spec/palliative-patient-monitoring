@@ -1,6 +1,4 @@
 import apiClient from './client';
-import { USE_MOCK } from '@/lib/config';
-import { mockAdminApi } from './mocks/admin.mock';
 import type { DischargeSummary } from '@/components/admin/DischargePatientModal';
 
 export interface CreateDischargeSummaryResponse {
@@ -23,7 +21,6 @@ export const dischargeApi = {
     patientId: string,
     data: DischargeSummary,
   ): Promise<CreateDischargeSummaryResponse> => {
-    if (USE_MOCK) return mockAdminApi.dischargePatient(patientId, data) as any;
     return apiClient
       .post<CreateDischargeSummaryResponse>(
         `/patients/${patientId}/discharge-summary`,
@@ -37,7 +34,6 @@ export const dischargeApi = {
    * Backend returns 404 if none exists yet.
    */
   getByPatient: (patientId: string): Promise<DischargeSummary> => {
-    if (USE_MOCK) return mockAdminApi.getDischargeSummary(patientId);
     return apiClient
       .get<DischargeSummary>(`/patients/${patientId}/discharge-summary`)
       .then((r) => r.data);
@@ -50,7 +46,6 @@ export const dischargeApi = {
     patientId: string,
     summaryId: string,
   ): Promise<{ id: string; status: 'Final' }> => {
-    if (USE_MOCK) return Promise.resolve({ id: summaryId, status: 'Final' as const });
     return apiClient
       .put<{ id: string; status: 'Final' }>(
         `/patients/${patientId}/discharge-summary/${summaryId}/finalize`,

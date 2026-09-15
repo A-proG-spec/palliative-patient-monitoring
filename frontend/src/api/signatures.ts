@@ -1,6 +1,4 @@
 import apiClient from './client';
-import { USE_MOCK } from '@/lib/config';
-import { mockSignaturesApi } from './mocks/signatures.mock';
 import type {
   SignVisitRequest,
   SignVisitResponse,
@@ -12,13 +10,14 @@ export const signatureApi = {
    * Sign a visit as Physician or Nurse.
    * Backend path: POST /patients/:patientId/visits/:visitId/sign
    * Body: { email, password, role }
+   * The backend verifies email + password (bcrypt) and checks that the
+   * staff member's registered role matches the requested role.
    */
   signVisit: (
     patientId: string,
     visitId: string,
     data: SignVisitRequest,
   ): Promise<SignVisitResponse> => {
-    if (USE_MOCK) return mockSignaturesApi.signVisit(visitId, data);
     return apiClient
       .post<SignVisitResponse>(
         `/patients/${patientId}/visits/${visitId}/sign`,
@@ -35,7 +34,6 @@ export const signatureApi = {
     patientId: string,
     visitId: string,
   ): Promise<VisitSignaturesResponse> => {
-    if (USE_MOCK) return mockSignaturesApi.getVisitSignatures(visitId);
     return apiClient
       .get<VisitSignaturesResponse>(
         `/patients/${patientId}/visits/${visitId}/signatures`,

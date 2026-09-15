@@ -1,7 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GitBranch, CheckCircle2, XCircle, ExternalLink } from 'lucide-react';
-import { usePendingReferrals, useApproveReferral, useDeclineReferral } from '@/hooks/useAdmin';
+import {
+  usePendingReferrals,
+  useApproveReferral,
+  useDeclineReferral,
+} from '@/hooks/useAdmin';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -25,8 +29,12 @@ const ReferralManagementPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <BackButton to="/admin" label="Dashboard" />
-          <h1 className="text-2xl font-bold text-on-surface">Referral Management</h1>
-          <p className="text-sm text-text-secondary">Review and act on pending referral requests</p>
+          <h1 className="text-2xl font-bold text-on-surface">
+            Referral Management
+          </h1>
+          <p className="text-sm text-text-secondary">
+            Review and act on pending referral requests
+          </p>
         </div>
         {(referrals?.length ?? 0) > 0 && (
           <Badge variant="warning">{referrals?.length} pending</Badge>
@@ -48,51 +56,83 @@ const ReferralManagementPage: React.FC = () => {
               <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                 <div className="space-y-3 flex-1">
                   <div className="flex items-center gap-3 flex-wrap">
-                    {/* Clickable patient ID — navigates to patient detail */}
+                    {/* Denormalized patient name — never render patientId */}
                     <button
-                      onClick={() => navigate(`/admin/patients/${ref.patientId}`)}
+                      onClick={() =>
+                        navigate(`/admin/patients/${ref.patientId}`)
+                      }
                       className="font-semibold text-on-surface hover:text-primary transition-colors flex items-center gap-1.5 group"
                       title="View patient details"
                     >
-                      Patient ID: {ref.patientId}
-                      <ExternalLink size={12} className="text-text-muted group-hover:text-primary transition-colors" />
+                      {ref.patientName}
+                      {ref.patientDisplayId && (
+                        <span className="text-xs text-text-muted font-mono">
+                          ({ref.patientDisplayId})
+                        </span>
+                      )}
+                      <ExternalLink
+                        size={12}
+                        className="text-text-muted group-hover:text-primary transition-colors"
+                      />
                     </button>
                     <Badge variant="warning">Pending</Badge>
-                    <span className="text-xs text-text-muted">{ref.referralType} referral</span>
+                    <span className="text-xs text-text-muted">
+                      {ref.referralType} referral
+                    </span>
                   </div>
 
                   <div className="grid sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm">
-                    <DetailRow label="Diagnosis" value={ref.primaryDiagnosis} />
-                    <DetailRow label="Disease Stage" value={ref.diseaseStage} />
-                    <DetailRow label="PPS / KPS" value={`${ref.ppsScore}% / ${ref.kpsScore}`} />
-                    <DetailRow label="Date" value={formatDate(ref.referralDate)} />
-                    <DetailRow label="From" value={ref.referringFacility} />
-                    <DetailRow label="To" value={ref.receivingFacility} />
-                    <DetailRow label="Contact" value={`${ref.contactPerson} · ${ref.contactNumber}`} />
+                    <DetailRow
+                      label="Diagnosis"
+                      value={ref.primaryDiagnosis}
+                    />
+                    <DetailRow
+                      label="Disease Stage"
+                      value={ref.diseaseStage}
+                    />
+                    <DetailRow
+                      label="PPS / KPS"
+                      value={`${ref.ppsScore}% / ${ref.kpsScore}`}
+                    />
+                    <DetailRow
+                      label="Date"
+                      value={formatDate(ref.referralDate)}
+                    />
+                    <DetailRow
+                      label="From"
+                      value={ref.referringFacility}
+                    />
+                    <DetailRow
+                      label="To"
+                      value={ref.receivingFacility}
+                    />
+                    <DetailRow
+                      label="Contact"
+                      value={`${ref.contactPerson} · ${ref.contactNumber}`}
+                    />
                   </div>
 
                   <div>
                     <p className="text-xs text-text-muted mb-1.5">Reasons:</p>
                     <div className="flex flex-wrap gap-1.5">
                       {ref.reasons.map((r) => (
-                        <Badge key={r} variant="secondary">{REFERRAL_REASON_LABELS[r] || r}</Badge>
+                        <Badge key={r} variant="secondary">
+                          {REFERRAL_REASON_LABELS[r] || r}
+                        </Badge>
                       ))}
                     </div>
                   </div>
-
-                  <div className="text-xs text-text-muted border-t border-border-base pt-3">
-                    Prepared by: {ref.preparedBy} · {ref.preparedByDesignation}
-                  </div>
                 </div>
 
-                <div className="flex md:flex-col gap-2 md:w-32 flex-shrink-0">
-                  {/* View patient before deciding */}
+                <div className="flex md:flex-col gap-2 md:w-36 flex-shrink-0">
                   <Button
                     className="flex-1 md:flex-none"
                     variant="outline"
                     size="sm"
                     leftIcon={<ExternalLink size={13} />}
-                    onClick={() => navigate(`/admin/patients/${ref.patientId}`)}
+                    onClick={() =>
+                      navigate(`/admin/patients/${ref.patientId}`)
+                    }
                   >
                     View Patient
                   </Button>
@@ -124,7 +164,10 @@ const ReferralManagementPage: React.FC = () => {
   );
 };
 
-const DetailRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+const DetailRow: React.FC<{ label: string; value: string }> = ({
+  label,
+  value,
+}) => (
   <div>
     <span className="text-text-muted text-xs">{label}: </span>
     <span className="text-on-surface">{value}</span>

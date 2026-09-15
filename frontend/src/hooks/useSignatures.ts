@@ -1,29 +1,48 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { signatureApi } from '@/api/signatures';
-import { SignVisitRequest } from '@/types/signature.types';
+import type { SignVisitRequest } from '@/types/signature.types';
 import { useToast } from '@/context/ToastContext';
 
-export function useVisitSignatures(visitId: string) {
+/**
+ * Read signature status for a visit.
+ * Query key is scoped to the patient so invalidation is easy.
+ */
+export function useVisitSignatures(patientId: string, visitId: string) {
   return useQuery({
-    queryKey: ['visits', visitId, 'signatures'],
-    queryFn: () => signatureApi.getVisitSignatures(visitId),
-    enabled: !!visitId,
+    queryKey: ['patients', patientId, 'visits', visitId, 'signatures'],
+    queryFn: () => signatureApi.getVisitSignatures(patientId, visitId),
+    enabled: !!patientId && !!visitId,
   });
 }
 
-export function useSignVisit(visitId: string) {
+/**
+ * Sign a visit. On success, invalidates:
+ *   - the signature status for this visit
+ *   - the visit detail (so the visit's `signatures` field refreshes)
+ */
+export function useSignVisit(patientId: string, visitId: string) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: (data: SignVisitRequest) => signatureApi.signVisit(visitId, data),
+    mutationFn: (data: SignVisitRequest) =>
+      signatureApi.signVisit(patientId, visitId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['visits', visitId, 'signatures'] });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'visits', visitId, 'signatures'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'visits', visitId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'visits'],
+      });
       toast.success('Signature added successfully.');
     },
     onError: (error: any) => {
-      const message = error.response?.data?.message || 'Failed to sign visit.';
-      toast.error('Signature failed', message);
+      const message =
+        error?.response?.data?.message ?? 'Failed to sign visit.';
+      toast.error(message);
     },
   });
 }

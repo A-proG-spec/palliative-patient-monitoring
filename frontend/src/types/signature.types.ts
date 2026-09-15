@@ -1,14 +1,17 @@
+// ─────────────────────────────────────────────────────────────
+// Signature — one entry in the note/visit `signatures[]` array
+// ─────────────────────────────────────────────────────────────
+
 export interface Signature {
-  id: string;
-  visitId: string;
   staffId: string;
-  staffName: string;
-  role: 'TeamLeader' | 'Physician' | 'Nurse';
+  name: string;
+  role: 'TeamLeader' | 'Physician' | 'Nurse' | 'Reviewer';
   signedAt: string;
-  autoSigned: boolean;
-  ipAddress?: string;
-  userAgent?: string;
 }
+
+// ─────────────────────────────────────────────────────────────
+// Signing request (visits)
+// ─────────────────────────────────────────────────────────────
 
 export interface SignVisitRequest {
   email: string;
@@ -16,22 +19,34 @@ export interface SignVisitRequest {
   role: 'TeamLeader' | 'Physician' | 'Nurse';
 }
 
+// ─────────────────────────────────────────────────────────────
+// Signing response — both visits and progress notes use the
+// same shape. The backend returns the newly-added signature,
+// the full signatures array, and the updated allSigned flag.
+// ─────────────────────────────────────────────────────────────
+
 export interface SignVisitResponse {
   id: string;
-  visitId: string;
-  staffId: string;
-  staffName: string;
-  role: string;
-  signedAt: string;
-  ipAddress?: string;
+  signedBy: {
+    staffId: string;
+    name: string;
+    role: string;
+    signedAt: string;
+  };
+  signatures: Signature[];
+  allSigned: boolean;
 }
+
 
 export interface VisitSignaturesResponse {
   visitId: string;
   visitDate: string;
-  teamLeader: Signature | null;
-  physician: Signature | null;
-  nurse: Signature | null;
+  teamLeader: {
+    staffId: string;
+    name: string;
+    role: string;
+  } | null;
+  signatures: Signature[];
   allSigned: boolean;
   totalSignatures: number;
 }

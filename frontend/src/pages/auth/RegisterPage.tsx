@@ -7,58 +7,97 @@ import { registerSchema, type RegisterFormData } from '@/schemas/auth.schema';
 import { useRegister } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from '@/components/ui/Card';
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
-  const { register, handleSubmit, formState: { errors }, setError } = useForm<RegisterFormData>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setError,
+  } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
   });
   const registerMutation = useRegister();
 
+  // The email address used in registration is needed on the verify
+  // page so the OTP submission carries the correct identifier.
+  const [registeredEmail, setRegisteredEmail] = React.useState('');
+
   const onSubmit = (data: RegisterFormData) => {
     registerMutation.mutate(
-      { name: data.name, email: data.email, phone: data.phone, password: data.password },
       {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        password: data.password,
+      },
+      {
+        onSuccess: () => {
+          setRegisteredEmail(data.email);
+        },
         onError: (err: unknown) => {
-          const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-            || 'Registration failed. Please try again.';
+          const message =
+            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+            'Registration failed. Please try again.';
           if (message.toLowerCase().includes('email')) {
             setError('email', { message: 'Email already registered' });
           } else {
             setError('root', { message });
           }
         },
-      }
+      },
     );
   };
 
+  // Auto-redirect to the OTP entry page 3 seconds after success.
   useEffect(() => {
-    if (registerMutation.isSuccess) {
-      const timer = setTimeout(() => navigate('/login'), 3000);
+    if (registerMutation.isSuccess && registeredEmail) {
+      const timer = setTimeout(() => {
+        navigate(`/verify-email?email=${encodeURIComponent(registeredEmail)}`);
+      }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [registerMutation.isSuccess, navigate]);
+  }, [registerMutation.isSuccess, registeredEmail, navigate]);
 
-  if (registerMutation.isSuccess) {
+  // ── Success state ────────────────────────────────────────────
+  if (registerMutation.isSuccess && registeredEmail) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center text-center py-8">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-success-bg text-success mb-4">
             <CheckCircle2 size={32} />
           </div>
-          <h2 className="text-lg font-semibold text-on-surface mb-2">Registration Successful!</h2>
-          <p className="text-sm text-text-secondary max-w-xs">
-            Please check your email to verify your account. You'll be redirected to login shortly.
+          <h2 className="text-lg font-semibold text-on-surface mb-2">
+            Registration Successful!
+          </h2>
+          <p className="text-sm text-text-secondary max-w-sm leading-relaxed">
+            We've sent a <strong>6-digit verification code</strong> to{' '}
+            <span className="text-on-surface font-medium">{registeredEmail}</span>.
+            Enter the code to verify your email, then wait for admin approval.
           </p>
-          <Link to="/login" className="mt-5 text-sm text-primary font-medium hover:underline">
-            Go to Login →
+          <Link
+            to={`/verify-email?email=${encodeURIComponent(registeredEmail)}`}
+            className="mt-5"
+          >
+            <Button>Enter Verification Code →</Button>
           </Link>
+          <p className="text-xs text-text-muted mt-3">
+            Redirecting automatically in a few seconds…
+          </p>
         </CardContent>
       </Card>
     );
   }
 
+  // ── Form state ───────────────────────────────────────────────
   return (
     <Card>
       <CardHeader>
@@ -123,7 +162,12 @@ const RegisterPage: React.FC = () => {
             {...register('confirmPassword')}
           />
 
-          <Button type="submit" className="w-full" size="lg" loading={registerMutation.isPending}>
+          <Button
+            type="submit"
+            className="w-full"
+            size="lg"
+            loading={registerMutation.isPending}
+          >
             Create Account
           </Button>
 
