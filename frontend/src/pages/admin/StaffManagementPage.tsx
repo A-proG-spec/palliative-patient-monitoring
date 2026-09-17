@@ -8,6 +8,7 @@ import {
   UserPlus,
   Search,
   Pencil,
+  TrendingUp,
 } from 'lucide-react';
 import {
   usePendingStaff,
@@ -31,6 +32,7 @@ import { Pagination } from '@/components/common/Pagination';
 import { formatRelativeTime } from '@/lib/utils';
 import { ROLE_LABELS } from '@/constants';
 import StaffEditModal from '@/components/admin/StaffEditModal';
+import { StaffPerformanceTab } from './StaffPerformanceTab';
 import type {
   StaffListItem,
   StaffListFilterStatus,
@@ -40,7 +42,7 @@ import type {
 // ─────────────────────────────────────────────────────────────
 // Tabs
 // ─────────────────────────────────────────────────────────────
-type Tab = 'active' | 'pending';
+type Tab = 'active' | 'pending' | 'performance';
 
 // ─────────────────────────────────────────────────────────────
 // Delete confirmation modal
@@ -279,6 +281,19 @@ const StaffManagementPage: React.FC = () => {
       <div className="flex border-b border-border-base">
         <TabButton id="active" label="Active Staff" count={activeCount} />
         <TabButton id="pending" label="Pending Approvals" count={pendingCount} />
+        <button
+          type="button"
+          onClick={() => setTab('performance')}
+          className={
+            'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ' +
+            (tab === 'performance'
+              ? 'text-primary border-primary'
+              : 'text-text-secondary border-transparent hover:text-on-surface')
+          }
+        >
+          <TrendingUp size={14} />
+          Performance
+        </button>
       </div>
 
       {/* ══════════════════════════════════════════════════════ */}
@@ -480,6 +495,11 @@ const StaffManagementPage: React.FC = () => {
           )}
         </Card>
       )}
+
+      {/* ══════════════════════════════════════════════════════ */}
+      {/* Performance tab                                       */}
+      {/* ══════════════════════════════════════════════════════ */}
+      {tab === 'performance' && <StaffPerformanceTab />}
 
       {/* ══════════════════════════════════════════════════════ */}
       {/* Pending Approvals tab                                 */}
