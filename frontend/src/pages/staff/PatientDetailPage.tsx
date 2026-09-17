@@ -25,6 +25,9 @@ import { formatDate, cn } from '@/lib/utils';
 import { DISEASE_STAGE_LABELS, VISIT_TYPE_LABELS } from '@/constants';
 import { printPatientReport } from '@/lib/printPatientReport';
 import { APP_NAME } from '@/lib/config';
+import { ProgressNoteModal } from '@/components/patient/ProgressNoteModal';
+import { useAuthStore } from '@/store/auth.store';
+import { hasPermission, canAddAnyRecord, type StaffRole } from '@/config/permissions';
 
 // ═════════════════════════════════════════════════════════════
 // Module-level constants (do NOT reference `patient` here)
@@ -124,20 +127,45 @@ interface AddRecordModalProps {
   patientId: string;
   patientName: string;
   currentLocation: 'Home' | 'ReferredHospital';
+  userRole: StaffRole;
   onClose: () => void;
   onSelect: (route: string) => void;
 }
 
 const AddRecordModal: React.FC<AddRecordModalProps> = ({
-  patientId, patientName, currentLocation, onClose, onSelect,
+  patientId, patientName, currentLocation, userRole, onClose, onSelect,
 }) => {
   const allTypes = [getVisitRecordType(currentLocation), ...STATIC_RECORD_TYPES];
-  const clinicalRecords = allTypes.filter((r) =>
+  
+  // Filter record types based on user permissions
+  const allowedTypes = allTypes.filter((r) => {
+    switch (r.key) {
+      case 'visit':
+      case 'progress-note':
+        return hasPermission(userRole, 'canRecordVisit');
+      case 'medication':
+        return hasPermission(userRole, 'canOrderMedication');
+      case 'lab':
+        return hasPermission(userRole, 'canOrderLab');
+      case 'imaging':
+        return hasPermission(userRole, 'canOrderImaging');
+      case 'referral':
+        return hasPermission(userRole, 'canCreateReferral');
+      case 'admission':
+        return hasPermission(userRole, 'canRecordAdmission');
+      default:
+        return false;
+    }
+  });
+  
+  const clinicalRecords = allowedTypes.filter((r) =>
     ['visit', 'progress-note', 'medication', 'lab', 'imaging'].includes(r.key),
   );
-  const referralRecords = allTypes.filter((r) =>
+  const referralRecords = allowedTypes.filter((r) =>
     ['referral', 'admission'].includes(r.key),
   );
+
+  const hasAnyActions = allowedTypes.length > 0;
 
   return (
     <div
@@ -161,25 +189,45 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto py-2">
-          <div className="px-4 py-1">
-            <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
-              Clinical
-            </p>
-            {clinicalRecords.map((rt) => (
-              <RecordTypeItem key={rt.key} recordType={rt} patientId={patientId} onSelect={onSelect} />
-            ))}
-          </div>
+          {!hasAnyActions ? (
+            <div className="px-6 py-8 text-center">
+              <p className="text-sm text-text-muted">
+                You don't have permission to add any records for this patient.
+              </p>
+            </div>
+          ) : (
+            <>
+              {clinicalRecords.length > 0 && (
+                <div className="px-4 py-1">
+                  <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
+                    Clinical
+                  </p>
+                  {clinicalRecords.map((rt) => (
+                    <RecordTypeItem key={rt.key} recordType={rt} patientId={patientId} onSelect={onSelect} />
+                  ))}
+                </div>
+              )}
 
-          <div className="border-t border-border-base my-2 mx-6" />
+              {clinicalRecords.length > 0 && referralRecords.length > 0 && (
+                <div className="border-t border-border-base my-2 mx-6" />
+              )}
 
-          <div className="px-4 py-1">
-            <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
-              Referral &amp; Admission
-            </p>
-            {referralRecords.map((rt) => (
-              <RecordTypeItem key={rt.key} recordType={rt} patientId={patientId} onSelect={onSelect} />
-            ))}
-          </div>
+              {clinicalRecords.length > 0 && referralRecords.length > 0 && (
+                <div className="border-t border-border-base my-2 mx-6" />
+              )}
+
+              {referralRecords.length > 0 && (
+                <div className="px-4 py-1">
+                  <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
+                    Referral &amp; Admission
+                  </p>
+                  {referralRecords.map((rt) => (
+                    <RecordTypeItem key={rt.key} recordType={rt} patientId={patientId} onSelect={onSelect} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         <div className="px-6 pb-5 pt-2 border-t border-border-base flex-shrink-0">
@@ -230,10 +278,14 @@ const PatientDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState<Tab>('Visits');
   const [showAddRecord, setShowAddRecord] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+
+  const userRole = (user?.role ?? '') as StaffRole;
 
   // ── Primary patient data ──
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
@@ -319,6 +371,7 @@ const PatientDetailPage: React.FC = () => {
   };
 
   const isAddRecordDisabled = patient.status === 'Discharged';
+  const showAddRecordButton = canAddAnyRecord(userRole) && !isAddRecordDisabled;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -336,15 +389,15 @@ const PatientDetailPage: React.FC = () => {
         <div className="flex items-center gap-2 flex-wrap">
           <StatusBadge status={patient.status} type="patient" />
           <StatusBadge status={patient.currentLocation} />
-          <Button
-            size="sm"
-            leftIcon={<Plus size={14} />}
-            onClick={() => setShowAddRecord(true)}
-            disabled={isAddRecordDisabled}
-            title={isAddRecordDisabled ? 'Cannot add records for discharged patients' : ''}
-          >
-            Add Record
-          </Button>
+          {showAddRecordButton && (
+            <Button
+              size="sm"
+              leftIcon={<Plus size={14} />}
+              onClick={() => setShowAddRecord(true)}
+            >
+              Add Record
+            </Button>
+          )}
           <Button variant="outline" size="sm" leftIcon={<FileText size={14} />} onClick={() => navigate(`/patients/${id}/summary`)}>
             Summary
           </Button>
@@ -459,8 +512,10 @@ const PatientDetailPage: React.FC = () => {
               <EmptyState
                 title="No visits recorded"
                 description="Record the first home visit for this patient."
-                actionLabel="Record Visit"
-                onAction={() => navigate(`/patients/${id}/visits`)}
+                {...(hasPermission(userRole, 'canRecordVisit') && {
+                  actionLabel: "Record Visit",
+                  onAction: () => navigate(`/patients/${id}/visits`)
+                })}
               />
             )
           )}
@@ -468,64 +523,54 @@ const PatientDetailPage: React.FC = () => {
           {/* ── Progress Notes Tab ── */}
           {activeTab === 'Progress Notes' && (
             progressNotes.length ? (
-              <div className="space-y-3">
-                {progressNotes.map((note) => {
-                  const created = note.createdAt ? new Date(note.createdAt) : null;
-                  const dateLabel = created ? formatDate(created.toISOString()) : '—';
-                  const timeLabel = created
-                    ? created.toTimeString().slice(0, 5)
-                    : '';
-
-                  return (
-                    <div
-                      key={note.id}
-                      className="border border-border-base rounded-xl p-4 hover:bg-surface-low/40 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/patients/${id}/progress-notes/${note.id}`)}
-                    >
-                      <div className="flex items-start justify-between gap-3 flex-wrap">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                            <Badge variant="primary">
-                              <NotebookPen size={11} className="mr-0.5" />
-                              Progress Note
+              <div className="space-y-0 divide-y divide-border-base">
+                {progressNotes.map((note) => (
+                  <button
+                    key={note.id}
+                    className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-surface-low transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset"
+                    onClick={() => setSelectedNoteId(note.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedNoteId(note.id);
+                      }
+                    }}
+                    tabIndex={0}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium text-on-surface">
+                          {formatDate(note.createdAt)}
+                        </span>
+                        <span className="text-xs text-text-muted">·</span>
+                        <span className="text-xs text-text-secondary">
+                          {note.attendingClinician || '—'}
+                        </span>
+                        {note.allSigned && (
+                          <>
+                            <span className="text-xs text-text-muted">·</span>
+                            <Badge variant="success" className="text-[10px] px-1.5 py-0.5">
+                              All Signed
                             </Badge>
-                            <span className="text-xs text-text-muted">
-                              {dateLabel}
-                              {timeLabel ? ` · ${timeLabel}` : ''}
-                            </span>
-                            {note.attendingClinician && (
-                              <span className="text-xs text-text-muted">· {note.attendingClinician}</span>
-                            )}
-                            {note.allSigned && (
-                              <Badge variant="success">All Signed</Badge>
-                            )}
-                          </div>
-                          {note.generalCondition && (
-                            <p className="text-sm text-on-surface">
-                              <span className="text-text-muted">Condition:</span>{' '}
-                              <span className="font-medium">{note.generalCondition}</span>
-                              {note.overallAssessment && (
-                                <span className="text-text-secondary"> — {note.overallAssessment}</span>
-                              )}
-                            </p>
-                          )}
-                          {note.soapSubjective && (
-                            <p className="text-xs text-text-muted mt-1 truncate max-w-lg">
-                              S: {note.soapSubjective}
-                            </p>
-                          )}
-                        </div>
+                          </>
+                        )}
                       </div>
+                      <p className="text-sm text-text-secondary truncate">
+                        {note.generalCondition || 'No condition summary recorded'}
+                      </p>
                     </div>
-                  );
-                })}
+                    <ChevronRightIcon size={16} className="text-outline-variant flex-shrink-0" />
+                  </button>
+                ))}
               </div>
             ) : (
               <EmptyState
                 title="No progress notes recorded"
                 description="Progress notes are recorded for hospitalised patients. Record the first one."
-                actionLabel="Record Progress Note"
-                onAction={() => navigate(`/patients/${id}/progress-note/new`)}
+                {...(hasPermission(userRole, 'canCreateProgressNote') && {
+                  actionLabel: "Record Progress Note",
+                  onAction: () => navigate(`/patients/${id}/progress-note/new`)
+                })}
               />
             )
           )}
@@ -562,8 +607,10 @@ const PatientDetailPage: React.FC = () => {
             ) : (
               <EmptyState
                 title="No medications ordered"
-                actionLabel="Order Medication"
-                onAction={() => navigate(`/patients/${id}/medications`)}
+                {...(hasPermission(userRole, 'canOrderMedication') && {
+                  actionLabel: "Order Medication",
+                  onAction: () => navigate(`/patients/${id}/medications`)
+                })}
               />
             )
           )}
@@ -603,8 +650,10 @@ const PatientDetailPage: React.FC = () => {
             ) : (
               <EmptyState
                 title="No lab tests ordered"
-                actionLabel="Order Lab Test"
-                onAction={() => navigate(`/patients/${id}/labs`)}
+                {...(hasPermission(userRole, 'canOrderLab') && {
+                  actionLabel: "Order Lab Test",
+                  onAction: () => navigate(`/patients/${id}/labs`)
+                })}
               />
             )
           )}
@@ -651,8 +700,10 @@ const PatientDetailPage: React.FC = () => {
             ) : (
               <EmptyState
                 title="No imaging orders"
-                actionLabel="Order Imaging"
-                onAction={() => navigate(`/patients/${id}/imaging`)}
+                {...(hasPermission(userRole, 'canOrderImaging') && {
+                  actionLabel: "Order Imaging",
+                  onAction: () => navigate(`/patients/${id}/imaging`)
+                })}
               />
             )
           )}
@@ -689,8 +740,10 @@ const PatientDetailPage: React.FC = () => {
             ) : (
               <EmptyState
                 title="No referrals requested"
-                actionLabel="Request Referral"
-                onAction={() => navigate(`/patients/${id}/referrals`)}
+                {...(hasPermission(userRole, 'canCreateReferral') && {
+                  actionLabel: "Request Referral",
+                  onAction: () => navigate(`/patients/${id}/referrals`)
+                })}
               />
             )
           )}
@@ -728,8 +781,10 @@ const PatientDetailPage: React.FC = () => {
             ) : (
               <EmptyState
                 title="No admissions recorded"
-                actionLabel="Record Admission"
-                onAction={() => navigate(`/patients/${id}/admissions`)}
+                {...(hasPermission(userRole, 'canRecordAdmission') && {
+                  actionLabel: "Record Admission",
+                  onAction: () => navigate(`/patients/${id}/admissions`)
+                })}
               />
             )
           )}
@@ -742,8 +797,22 @@ const PatientDetailPage: React.FC = () => {
           patientId={id!}
           patientName={`${patient.firstName} ${patient.lastName}`}
           currentLocation={patient.currentLocation}
+          userRole={userRole}
           onClose={() => setShowAddRecord(false)}
           onSelect={handleAddRecord}
+        />
+      )}
+
+      {/* ── Progress Note Modal ── */}
+      {selectedNoteId && (
+        <ProgressNoteModal
+          patientId={id!}
+          noteId={selectedNoteId}
+          onClose={() => setSelectedNoteId(null)}
+          onEdit={(noteId) => {
+            setSelectedNoteId(null);
+            navigate(`/patients/${id}/progress-note/${noteId}/edit`);
+          }}
         />
       )}
     </div>
@@ -761,3 +830,6 @@ const InfoRow: React.FC<{ label: string; value: string; children?: React.ReactNo
 );
 
 export default PatientDetailPage;
+
+// Named export for unit testing only — not part of the public API
+export { AddRecordModal };
