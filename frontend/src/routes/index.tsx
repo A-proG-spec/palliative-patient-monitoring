@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import PublicRoute from './PublicRoute';
 import ProtectedRoute from './ProtectedRoute';
+import RoleGuard from './RoleGuard';
 import { PublicLayout, AuthLayout, DashboardLayout, PrintLayout } from '@/components/layouts';
 
 // ── Lazy-load every page ─────────────────────────────────────────
@@ -27,6 +28,7 @@ const AdminPatientListPage = lazy(() => import('@/pages/admin/AdminPatientListPa
 const AdminPatientDetailPage = lazy(() => import('@/pages/admin/AdminPatientDetailPage'));
 const DischargePatientPage = lazy(() => import('@/pages/admin/DischargePatientPage'));
 const StaffManagementPage = lazy(() => import('@/pages/admin/StaffManagementPage'));
+const StaffPerformanceDetailPage = lazy(() => import('@/pages/admin/StaffPerformanceDetailPage'));
 const ReferralManagementPage = lazy(() => import('@/pages/admin/ReferralManagementPage'));
 const ReportsPage = lazy(() => import('@/pages/admin/ReportsPage'));
 const SettingsPage = lazy(() => import('@/pages/admin/SettingsPage'));
@@ -52,6 +54,14 @@ const AdmissionDetailPage = lazy(() => import('@/pages/staff/AdmissionDetailPage
 const OrderImagingPage = lazy(() => import('@/pages/staff/OrderImagingPage'));
 const ImagingDetailPage = lazy(() => import('@/pages/staff/ImagingDetailPage'));
 const RecordProgressNotePage = lazy(() => import('@/pages/staff/RecordProgressNotePage'));
+
+// Role-specific queues
+const MedicationOrdersPage = lazy(() => import('@/pages/staff/MedicationOrdersPage'));
+const MedicationOrderDetailPage = lazy(() => import('@/pages/staff/MedicationOrderDetailPage'));
+const LabRequestsPage = lazy(() => import('@/pages/staff/LabRequestsPage'));
+const LabRequestDetailPage = lazy(() => import('@/pages/staff/LabRequestDetailPage'));
+const ImagingOrdersPage = lazy(() => import('@/pages/staff/ImagingOrdersPage'));
+const ImagingOrderDetailPage = lazy(() => import('@/pages/staff/ImagingOrderDetailPage'));
 
 // Print
 const PatientPrintPage = lazy(() => import('@/pages/PatientPrintPage'));
@@ -97,6 +107,7 @@ const AppRoutes: React.FC = () => (
         <Route path="/admin/patients/:id/admissions/:admissionId" element={<S><AdmissionDetailPage /></S>} />
         
         <Route path="/admin/staff" element={<S><StaffManagementPage /></S>} />
+        <Route path="/admin/staff/performance/:staffId" element={<S><StaffPerformanceDetailPage /></S>} />
         <Route path="/admin/referrals" element={<S><ReferralManagementPage /></S>} />
         <Route path="/admin/reports" element={<S><ReportsPage /></S>} />
         <Route path="/admin/settings" element={<S><SettingsPage /></S>} />
@@ -105,41 +116,52 @@ const AppRoutes: React.FC = () => (
 
     {/* ── Staff Routes ── */}
     <Route element={<ProtectedRoute role="staff" />}>
-      <Route element={<DashboardLayout />}>
-        <Route path="/dashboard" element={<S><DashboardPage /></S>} />
-        
-        {/* Patient management */}
-        <Route path="/patients" element={<S><PatientListPage /></S>} />
-        <Route path="/patients/new" element={<S><PatientRegistrationPage /></S>} />
-        <Route path="/patients/:id" element={<S><PatientDetailPage /></S>} />
-        <Route path="/patients/:id/summary" element={<S><PatientSummaryPage /></S>} />
-        <Route path="/patients/:id/progress" element={<S><PatientProgressPage /></S>} />
-        
-        {/* Visits - /visits route removed, only patient-specific visit routes remain */}
-        <Route path="/patients/:id/visits" element={<S><RecordVisitPage /></S>} />
-        <Route path="/patients/:id/visits/:visitId" element={<S><VisitDetailPage /></S>} />
-        
-        {/* Medications */}
-        <Route path="/patients/:id/medications" element={<S><OrderMedicationPage /></S>} />
-        <Route path="/patients/:id/medications/:medicationId" element={<S><MedicationDetailPage /></S>} />
-        
-        {/* Labs */}
-        <Route path="/patients/:id/labs" element={<S><OrderLabPage /></S>} />
-        <Route path="/patients/:id/labs/:labId" element={<S><LabDetailPage /></S>} />
-        <Route path="/patients/:id/imaging" element={<S><OrderImagingPage /></S>} />
-        {/* Imaging */}
-<Route path="/patients/:id/imaging" element={<S><OrderImagingPage /></S>} />
-<Route path="/patients/:id/imaging/:imagingId" element={<S><ImagingDetailPage /></S>} />
-        {/* Referrals */}
-        <Route path="/patients/:id/referrals" element={<S><RequestReferralPage /></S>} />
-        <Route path="/patients/:id/referrals/:referralId" element={<S><ReferralDetailPage /></S>} />
-        
-        {/* Admissions */}
-        <Route path="/patients/:id/admissions" element={<S><RecordAdmissionPage /></S>} />
-        <Route path="/patients/:id/admissions/:admissionId" element={<S><AdmissionDetailPage /></S>} />
+      <Route element={<RoleGuard />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/dashboard" element={<S><DashboardPage /></S>} />
+          
+          {/* Patient management */}
+          <Route path="/patients" element={<S><PatientListPage /></S>} />
+          <Route path="/patients/new" element={<S><PatientRegistrationPage /></S>} />
+          <Route path="/patients/:id" element={<S><PatientDetailPage /></S>} />
+          <Route path="/patients/:id/summary" element={<S><PatientSummaryPage /></S>} />
+          <Route path="/patients/:id/progress" element={<S><PatientProgressPage /></S>} />
+          
+          {/* Visits - /visits route removed, only patient-specific visit routes remain */}
+          <Route path="/patients/:id/visits" element={<S><RecordVisitPage /></S>} />
+          <Route path="/patients/:id/visits/:visitId" element={<S><VisitDetailPage /></S>} />
+          
+          {/* Medications */}
+          <Route path="/patients/:id/medications" element={<S><OrderMedicationPage /></S>} />
+          <Route path="/patients/:id/medications/:medicationId" element={<S><MedicationDetailPage /></S>} />
+          
+          {/* Labs */}
+          <Route path="/patients/:id/labs" element={<S><OrderLabPage /></S>} />
+          <Route path="/patients/:id/labs/:labId" element={<S><LabDetailPage /></S>} />
+          
+          {/* Imaging */}
+          <Route path="/patients/:id/imaging" element={<S><OrderImagingPage /></S>} />
+          <Route path="/patients/:id/imaging/:imagingId" element={<S><ImagingDetailPage /></S>} />
+          
+          {/* Referrals */}
+          <Route path="/patients/:id/referrals" element={<S><RequestReferralPage /></S>} />
+          <Route path="/patients/:id/referrals/:referralId" element={<S><ReferralDetailPage /></S>} />
+          
+          {/* Admissions */}
+          <Route path="/patients/:id/admissions" element={<S><RecordAdmissionPage /></S>} />
+          <Route path="/patients/:id/admissions/:admissionId" element={<S><AdmissionDetailPage /></S>} />
 
-        {/* Progress Notes */}
-        <Route path="/patients/:id/progress-note/new" element={<S><RecordProgressNotePage /></S>} />
+          {/* Progress Notes */}
+          <Route path="/patients/:id/progress-note/new" element={<S><RecordProgressNotePage /></S>} />
+
+          {/* Role-specific queues */}
+          <Route path="/medication-orders" element={<S><MedicationOrdersPage /></S>} />
+          <Route path="/medication-orders/:id" element={<S><MedicationOrderDetailPage /></S>} />
+          <Route path="/lab-requests" element={<S><LabRequestsPage /></S>} />
+          <Route path="/lab-requests/:id" element={<S><LabRequestDetailPage /></S>} />
+          <Route path="/imaging-orders" element={<S><ImagingOrdersPage /></S>} />
+          <Route path="/imaging-orders/:id" element={<S><ImagingOrderDetailPage /></S>} />
+        </Route>
       </Route>
     </Route>
 
