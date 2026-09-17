@@ -37,6 +37,14 @@ export const ROUTES = {
 
   PATIENT_ADMISSIONS: (id: string) => `/patients/${id}/admissions`,
   PATIENT_ADMISSION_DETAIL: (patientId: string, admId: string) => `/patients/${patientId}/admissions/${admId}`,
+
+  // Role-specific queues
+  MEDICATION_ORDERS: '/medication-orders',
+  MEDICATION_ORDER_DETAIL: (id: string) => `/medication-orders/${id}`,
+  LAB_REQUESTS: '/lab-requests',
+  LAB_REQUEST_DETAIL: (id: string) => `/lab-requests/${id}`,
+  IMAGING_ORDERS: '/imaging-orders',
+  IMAGING_ORDER_DETAIL: (id: string) => `/imaging-orders/${id}`,
 } as const;
 
 // TanStack Query keys
@@ -64,6 +72,9 @@ export const QUERY_KEYS = {
   PATIENT_REFERRAL: (patientId: string, refId: string) => ['patients', patientId, 'referrals', refId],
   PATIENT_ADMISSIONS: (id: string) => ['patients', id, 'admissions'],
   PATIENT_ADMISSION: (patientId: string, admId: string) => ['patients', patientId, 'admissions', admId],
+  MEDICATION_ORDERS: ['medication-orders'],
+  LAB_REQUESTS: ['lab-requests'],
+  IMAGING_ORDERS: ['imaging-orders'],
 } as const;
 
 // Enum display labels
@@ -103,6 +114,9 @@ export const ROLE_LABELS: Record<string, string> = {
   TeamLeader: 'Team Leader',
   Physician: 'Physician',
   Nurse: 'Nurse',
+  Pharmacist: 'Pharmacist',
+  LabTechnician: 'Laboratory Technician',
+  Radiologist: 'Radiologist',
   admin: 'Administrator',
 };
 
