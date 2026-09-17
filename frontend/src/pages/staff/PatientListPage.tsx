@@ -16,6 +16,8 @@ import { EmptyState, ErrorState } from '@/components/common/EmptyState';
 import { formatDate } from '@/lib/utils';
 import { DISEASE_STAGE_LABELS } from '@/constants';
 import type { Patient } from '@/types/patient.types';
+import { useAuthStore } from '@/store/auth.store';
+import { hasPermission, type StaffRole } from '@/config/permissions';
 
 // ── Patient card ──────────────────────────────────────────────────
 const PatientCard: React.FC<{ patient: Patient; onClick: () => void }> = ({ patient, onClick }) => (
@@ -64,12 +66,16 @@ const PatientCard: React.FC<{ patient: Patient; onClick: () => void }> = ({ pati
 
 const PatientListPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'Active' | 'Discharged' | undefined>(undefined);
   const [page, setPage] = useState(1);
   const limit = 12;
 
   const { data, isLoading, error, refetch } = usePatients({ page, limit, search: search || undefined, status });
+
+  const userRole = (user?.role ?? '') as StaffRole;
+  const canRegisterPatient = hasPermission(userRole, 'canRegisterPatient');
 
   return (
     <div className="space-y-6">
@@ -81,9 +87,11 @@ const PatientListPage: React.FC = () => {
             {data ? `${data.total} patients registered` : 'Manage your patient list'}
           </p>
         </div>
-        <Button leftIcon={<Plus size={15} />} onClick={() => navigate('/patients/new')}>
-          Register Patient
-        </Button>
+        {canRegisterPatient && (
+          <Button leftIcon={<Plus size={15} />} onClick={() => navigate('/patients/new')}>
+            Register Patient
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -114,8 +122,8 @@ const PatientListPage: React.FC = () => {
           icon={<User size={28} />}
           title="No patients found"
           description={search ? 'Try a different search term.' : 'Register your first patient to get started.'}
-          actionLabel="Register Patient"
-          onAction={() => navigate('/patients/new')}
+          actionLabel={canRegisterPatient ? 'Register Patient' : undefined}
+          onAction={canRegisterPatient ? () => navigate('/patients/new') : undefined}
         />
       ) : (
         <>

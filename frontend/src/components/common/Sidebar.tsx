@@ -3,21 +3,14 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, UserCheck, GitBranch,
   BarChart3, Settings, Heart, LogOut, Menu, X,
-  ChevronRight, Bell, ClipboardList, UserCircle,
+  ChevronRight, Bell,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { useLogout } from '@/hooks/useAuth';
 import { ROLE_LABELS } from '@/constants';
 import { APP_NAME } from '@/lib/config';
-
-interface NavItem {
-  label: string;
-  href: string;
-  icon: React.ReactNode;
-  badge?: number;
-  end?: boolean;
-}
+import { getSidebarItems, type NavItem } from '@/config/permissions';
 
 // ── Stethoscope SVG icon (custom medical motif) ─────────────────
 const StethoscopeIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -57,28 +50,13 @@ const HeartbeatAccent: React.FC<{ className?: string }> = ({ className }) => (
 
 // ── Admin nav items ──────────────────────────────────────────────
 const adminNavItems = (pendingStaff = 0, pendingReferrals = 0): NavItem[] => [
-  { label: 'Dashboard', href: '/admin', icon: <LayoutDashboard size={18} />, end: true },
-  { label: 'Patients', href: '/admin/patients', icon: <Users size={18} /> },
-  { label: 'Staff Management', href: '/admin/staff', icon: <UserCheck size={18} />, badge: pendingStaff || undefined },
-  { label: 'Referrals', href: '/admin/referrals', icon: <GitBranch size={18} />, badge: pendingReferrals || undefined },
-  { label: 'Reports', href: '/admin/reports', icon: <BarChart3 size={18} /> },
-  { label: 'Settings', href: '/admin/settings', icon: <Settings size={18} /> },
+  { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, end: true },
+  { label: 'Patients', href: '/admin/patients', icon: Users },
+  { label: 'Staff Management', href: '/admin/staff', icon: UserCheck, badge: pendingStaff || undefined },
+  { label: 'Referrals', href: '/admin/referrals', icon: GitBranch, badge: pendingReferrals || undefined },
+  { label: 'Reports', href: '/admin/reports', icon: BarChart3 },
+  { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
-
-// ── Staff nav items (Visits removed) ──────────────────────────────
-const staffNavItems = (): NavItem[] => [
-  { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={18} />, end: true },
-  { label: 'Patients', href: '/patients', icon: <Users size={18} />, end: false },
-  // Visits item removed from sidebar
-];
-
-// ── Profile nav item (shared) ────────────────────────────────────
-const profileNavItem = (): NavItem => ({
-  label: 'Profile',
-  href: '/profile',
-  icon: <UserCircle size={18} />,
-  end: true,
-});
 
 interface SidebarProps {
   pendingStaff?: number;
@@ -146,10 +124,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingStaff = 0, pendingRefer
 
   const isAdmin = user?.type === 'admin';
   
-  // Build nav items with profile at the bottom
+  // Build nav items from permissions module
   const navItems = isAdmin
-    ? [...adminNavItems(pendingStaff, pendingReferrals)]
-    : [...staffNavItems()];
+    ? adminNavItems(pendingStaff, pendingReferrals)
+    : getSidebarItems(user?.role);
 
   const handleLogoutConfirm = () => {
     logoutMutation.mutate(undefined, {
@@ -175,66 +153,45 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingStaff = 0, pendingRefer
 
       {/* ── Nav items ── */}
       <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto min-h-0">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.href + item.label}
-            to={item.href}
-            end={item.end}
-            onClick={() => setMobileOpen(false)}
-            className={({ isActive }) =>
-              cn(
-                'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
-                isActive
-                  ? 'bg-primary-light text-primary'
-                  : 'text-on-surface-variant hover:bg-surface-low hover:text-on-surface'
-              )
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <span className={cn('flex-shrink-0 transition-colors', isActive ? 'text-primary' : 'text-text-muted group-hover:text-on-surface')}>
-                  {item.icon}
-                </span>
-                <span className="flex-1">{item.label}</span>
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white px-1.5">
-                    {item.badge}
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.href + item.label}
+              to={item.href}
+              end={item.end}
+              onClick={() => setMobileOpen(false)}
+              className={({ isActive }) =>
+                cn(
+                  'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                  isActive
+                    ? 'bg-primary-light text-primary'
+                    : 'text-on-surface-variant hover:bg-surface-low hover:text-on-surface'
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <span className={cn('flex-shrink-0 transition-colors', isActive ? 'text-primary' : 'text-text-muted group-hover:text-on-surface')}>
+                    <Icon size={18} />
                   </span>
-                )}
-                {isActive && (
-                  <ChevronRight size={14} className="text-primary opacity-60" />
-                )}
-              </>
-            )}
-          </NavLink>
-        ))}
+                  <span className="flex-1">{item.label}</span>
+                  {item.badge !== undefined && item.badge > 0 && (
+                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white px-1.5">
+                      {item.badge}
+                    </span>
+                  )}
+                  {isActive && (
+                    <ChevronRight size={14} className="text-primary opacity-60" />
+                  )}
+                </>
+              )}
+            </NavLink>
+          );
+        })}
       </nav>
 
-      {/* ── Profile link (separate from main nav) ── */}
-      <div className="flex-shrink-0 px-3 pb-1">
-        <NavLink
-          to="/profile"
-          end
-          onClick={() => setMobileOpen(false)}
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
-              isActive
-                ? 'bg-primary-light text-primary'
-                : 'text-on-surface-variant hover:bg-surface-low hover:text-on-surface'
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <span className={cn('flex-shrink-0 transition-colors', isActive ? 'text-primary' : 'text-text-muted group-hover:text-on-surface')}>
-                <UserCircle size={18} />
-              </span>
-              <span className="flex-1">Profile</span>
-            </>
-          )}
-        </NavLink>
-      </div>
+      {/* ── Profile link removed - now included in sidebar items ── */}
 
       {/* ── User info + logout ── sticky footer ── */}
       <div className="flex-shrink-0 border-t border-border-base p-3 bg-surface-lowest">
