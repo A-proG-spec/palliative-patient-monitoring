@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { APP_NAME } from '@/lib/config';
 
 export const Navbar: React.FC = () => {
@@ -19,7 +20,8 @@ export const Navbar: React.FC = () => {
         </Link>
 
         {/* Nav actions */}
-        <nav className="flex items-center gap-3">
+        <nav className="flex items-center gap-2">
+          <ThemeToggle variant="dropdown" />
           <Button variant="ghost" size="sm" onClick={() => navigate('/login')}>
             Sign In
           </Button>

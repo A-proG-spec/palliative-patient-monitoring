@@ -1,24 +1,42 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, UserCheck, Hospital, UserX, GitBranch, Bell, CheckCircle2, Clock, RefreshCw, ChevronRight } from 'lucide-react';
-import { useDashboardStats, useNotifications, useMarkNotificationRead, usePendingStaff, useApproveStaff, useRejectStaff, usePendingReferrals, useApproveReferral, useDeclineReferral } from '@/hooks/useAdmin';
+import {
+  Users, UserCheck, Hospital, UserX, GitBranch, Bell, CheckCircle2,
+  RefreshCw, ChevronRight, ShieldCheck, Activity,
+} from 'lucide-react';
+import {
+  useDashboardStats, useNotifications, useMarkNotificationRead,
+  usePendingStaff, useApproveStaff, useRejectStaff,
+  usePendingReferrals, useApproveReferral, useDeclineReferral,
+} from '@/hooks/useAdmin';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { PageLoader } from '@/components/common/LoadingSpinner';
-import { ErrorState } from '@/components/common/EmptyState';
-import { EmptyState } from '@/components/common/EmptyState';
+import { ErrorState, EmptyState } from '@/components/common/EmptyState';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { formatRelativeTime, formatDate } from '@/lib/utils';
 
-// ── Stat card ────────────────────────────────────────────────────
-const StatCard: React.FC<{
-  icon: React.ReactNode; label: string; value: number; color?: string; onClick?: () => void;
-}> = ({ icon, label, value, color = 'text-primary', onClick }) => (
-  <Card hover={!!onClick} padding="md" onClick={onClick} className={onClick ? 'cursor-pointer' : ''}>
-    <div className="flex items-center gap-4">
-      <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-primary-light ${color}`}>
+// ── Admin stat card — uses distinct admin palette ────────────────
+const AdminStatCard: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  accent?: string;
+  onClick?: () => void;
+}> = ({ icon, label, value, accent = 'text-primary', onClick }) => (
+  <div
+    onClick={onClick}
+    className={`
+      relative overflow-hidden rounded-2xl border border-border-base bg-surface-lowest p-5 shadow-card transition-all
+      ${onClick ? 'cursor-pointer hover:shadow-card-hover hover:-translate-y-0.5' : ''}
+    `}
+  >
+    {/* Decorative accent stripe */}
+    <div className={`absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-primary to-primary/40 opacity-70`} />
+    <div className="flex items-center gap-4 pt-1">
+      <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-primary-light ${accent}`}>
         {icon}
       </div>
       <div>
@@ -26,8 +44,43 @@ const StatCard: React.FC<{
         <p className="text-xs text-text-muted">{label}</p>
       </div>
     </div>
-  </Card>
+  </div>
 );
+
+// ── Section wrapper with admin-style header ──────────────────────
+const AdminSection: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  badge?: number;
+  badgeVariant?: 'primary' | 'warning' | 'error';
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  noPadding?: boolean;
+}> = ({ icon, title, badge, badgeVariant = 'primary', action, children, noPadding }) => (
+  <div className="rounded-2xl border border-border-base bg-surface-lowest shadow-card overflow-hidden">
+    {/* Section header — uses a subtle admin-identity gradient */}
+    <div className="flex items-center justify-between px-5 py-4 border-b border-border-base bg-gradient-to-r from-surface-low to-surface-lowest">
+      <div className="flex items-center gap-2.5">
+        <span className="text-primary">{icon}</span>
+        <h2 className="text-sm font-semibold text-on-surface">{title}</h2>
+        {badge !== undefined && badge > 0 && (
+          <Badge variant={badgeVariant}>{badge}</Badge>
+        )}
+      </div>
+      {action}
+    </div>
+    <div className={noPadding ? '' : 'p-5'}>
+      {children}
+    </div>
+  </div>
+);
+
+// ── Notification type icon ───────────────────────────────────────
+const notifTypeIcon = (type: string) => {
+  if (type === 'StaffApproval')   return <UserCheck size={15} className="text-primary" />;
+  if (type === 'ReferralApproval') return <GitBranch size={15} className="text-warning" />;
+  return <CheckCircle2 size={15} className="text-success" />;
+};
 
 const AdminDashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -47,55 +100,59 @@ const AdminDashboardPage: React.FC = () => {
   if (isLoading) return <PageLoader />;
   if (error) return <ErrorState onRetry={refetch} />;
 
-  const notifTypeIcon = (type: string) => {
-    if (type === 'StaffApproval') return <UserCheck size={15} className="text-primary" />;
-    if (type === 'ReferralApproval') return <GitBranch size={15} className="text-warning" />;
-    return <CheckCircle2 size={15} className="text-success" />;
-  };
-
   return (
     <div className="space-y-7">
-      {/* Header */}
+
+      {/* ── Admin identity header ── */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-on-surface">Admin Dashboard</h1>
-          <p className="text-sm text-text-secondary">Palliative Care System Overview</p>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white shadow-md">
+            <ShieldCheck size={20} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-on-surface">Admin Dashboard</h1>
+            <p className="text-sm text-text-secondary">
+              Palliative Care System · Administrative Control
+            </p>
+          </div>
         </div>
         <Button variant="outline" size="sm" leftIcon={<RefreshCw size={14} />} onClick={() => refetch()}>
           Refresh
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* ── Stats strip ── */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard icon={<Users size={20} />} label="Total Patients" value={stats?.totalPatients ?? 0} onClick={() => navigate('/admin/patients')} />
-        <StatCard icon={<CheckCircle2 size={20} />} label="Active Patients" value={stats?.activePatients ?? 0} color="text-success" onClick={() => navigate('/admin/patients')} />
-        <StatCard icon={<Hospital size={20} />} label="Hospitalized" value={stats?.hospitalizedPatients ?? 0} color="text-warning" />
-        <StatCard icon={<UserX size={20} />} label="Discharged" value={stats?.dischargedPatients ?? 0} color="text-text-muted" />
-        <StatCard icon={<GitBranch size={20} />} label="Pending Referrals" value={stats?.pendingReferrals ?? 0} color="text-warning" onClick={() => navigate('/admin/referrals')} />
-        <StatCard icon={<UserCheck size={20} />} label="Pending Staff" value={stats?.pendingStaff ?? 0} color="text-primary" onClick={() => navigate('/admin/staff')} />
+        <AdminStatCard icon={<Users size={20} />}       label="Total Patients"    value={stats?.totalPatients ?? 0}      onClick={() => navigate('/admin/patients')} />
+        <AdminStatCard icon={<CheckCircle2 size={20} />} label="Active Patients"  value={stats?.activePatients ?? 0}     accent="text-success" onClick={() => navigate('/admin/patients')} />
+        <AdminStatCard icon={<Hospital size={20} />}    label="Hospitalized"      value={stats?.hospitalizedPatients ?? 0} accent="text-warning" />
+        <AdminStatCard icon={<UserX size={20} />}       label="Discharged"        value={stats?.dischargedPatients ?? 0}  accent="text-text-muted" />
+        <AdminStatCard icon={<GitBranch size={20} />}   label="Pending Referrals" value={stats?.pendingReferrals ?? 0}   accent="text-warning" onClick={() => navigate('/admin/referrals')} />
+        <AdminStatCard icon={<UserCheck size={20} />}   label="Pending Staff"     value={stats?.pendingStaff ?? 0}       accent="text-primary" onClick={() => navigate('/admin/staff')} />
       </div>
 
+      {/* ── 2-col: Notifications + Recent Referrals ── */}
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Notifications */}
-        <Card padding="none">
-          <CardHeader className="px-5 pt-5 pb-4 border-b border-border-base flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Bell size={16} className="text-primary" />
-              <CardTitle>Notifications</CardTitle>
-              {(notifData?.unreadCount ?? 0) > 0 && (
-                <Badge variant="primary">{notifData?.unreadCount} unread</Badge>
-              )}
-            </div>
-          </CardHeader>
-          <div className="divide-y divide-border-base max-h-80 overflow-y-auto">
+        {/* Notifications — Admin only */}
+        <AdminSection
+          icon={<Bell size={16} />}
+          title="Notifications"
+          badge={notifData?.unreadCount ?? 0}
+          badgeVariant="primary"
+        >
+          <div className="divide-y divide-border-base max-h-72 overflow-y-auto -mx-5 -mb-5">
             {notifLoading ? (
               <div className="p-5 text-sm text-text-muted">Loading…</div>
             ) : !notifData?.notifications?.length ? (
               <div className="p-5 text-sm text-text-muted text-center">All clear — no notifications</div>
             ) : (
               notifData.notifications.map((n) => (
-                <div key={n.id} className={`flex items-start gap-3 px-5 py-3.5 transition-colors ${!n.read ? 'bg-primary-light/30' : 'hover:bg-surface-low'}`}>
+                <div
+                  key={n.id}
+                  className={`flex items-start gap-3 px-5 py-3.5 transition-colors ${
+                    !n.read ? 'bg-primary-light/25 dark:bg-primary-light/10' : 'hover:bg-surface-low'
+                  }`}
+                >
                   <div className="mt-0.5">{notifTypeIcon(n.type)}</div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-on-surface truncate">{n.message}</p>
@@ -113,23 +170,28 @@ const AdminDashboardPage: React.FC = () => {
               ))
             )}
           </div>
-        </Card>
+        </AdminSection>
 
         {/* Recent referrals */}
-        <Card padding="none">
-          <CardHeader className="px-5 pt-5 pb-4 border-b border-border-base flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <GitBranch size={16} className="text-primary" />
-              <CardTitle>Recent Referrals</CardTitle>
-            </div>
-            <button className="text-xs text-primary hover:underline" onClick={() => navigate('/admin/referrals')}>View all</button>
-          </CardHeader>
-          <div className="divide-y divide-border-base max-h-80 overflow-y-auto">
+        <AdminSection
+          icon={<GitBranch size={16} />}
+          title="Recent Referrals"
+          action={
+            <button className="text-xs text-primary hover:underline" onClick={() => navigate('/admin/referrals')}>
+              View all
+            </button>
+          }
+        >
+          <div className="divide-y divide-border-base max-h-72 overflow-y-auto -mx-5 -mb-5">
             {!stats?.recentReferrals?.length ? (
               <div className="p-5 text-sm text-text-muted text-center">No recent referrals</div>
             ) : (
               stats.recentReferrals.map((r) => (
-                <div key={r.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-surface-low cursor-pointer" onClick={() => navigate('/admin/referrals')}>
+                <div
+                  key={r.id}
+                  className="flex items-center gap-3 px-5 py-3.5 hover:bg-surface-low cursor-pointer"
+                  onClick={() => navigate('/admin/referrals')}
+                >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-on-surface truncate">{r.patientName}</p>
                     <p className="text-xs text-text-muted">{formatDate(r.date)}</p>
@@ -140,21 +202,22 @@ const AdminDashboardPage: React.FC = () => {
               ))
             )}
           </div>
-        </Card>
+        </AdminSection>
       </div>
 
-      {/* Pending Staff Approvals */}
-      <Card padding="none">
-        <CardHeader className="px-5 pt-5 pb-4 border-b border-border-base flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <UserCheck size={16} className="text-primary" />
-            <CardTitle>Pending Staff Approvals</CardTitle>
-            {(pendingStaff?.length ?? 0) > 0 && (
-              <Badge variant="warning">{pendingStaff?.length}</Badge>
-            )}
-          </div>
-          <button className="text-xs text-primary hover:underline" onClick={() => navigate('/admin/staff')}>View all</button>
-        </CardHeader>
+      {/* ── Pending Staff Approvals ── */}
+      <AdminSection
+        icon={<UserCheck size={16} />}
+        title="Pending Staff Approvals"
+        badge={pendingStaff?.length ?? 0}
+        badgeVariant="warning"
+        action={
+          <button className="text-xs text-primary hover:underline" onClick={() => navigate('/admin/staff')}>
+            View all
+          </button>
+        }
+        noPadding
+      >
         {staffLoading ? (
           <div className="p-5 text-sm text-text-muted">Loading…</div>
         ) : !pendingStaff?.length ? (
@@ -179,9 +242,12 @@ const AdminDashboardPage: React.FC = () => {
                     <td className="px-5 py-3.5">
                       <Select
                         options={[
-                          { value: 'TeamLeader', label: 'Team Leader' },
-                          { value: 'Physician', label: 'Physician' },
-                          { value: 'Nurse', label: 'Nurse' },
+                          { value: 'TeamLeader',   label: 'Team Leader' },
+                          { value: 'Physician',    label: 'Physician' },
+                          { value: 'Nurse',        label: 'Nurse' },
+                          { value: 'Pharmacist',   label: 'Pharmacist' },
+                          { value: 'LabTechnician', label: 'Lab Technician' },
+                          { value: 'Radiologist',  label: 'Radiologist' },
                         ]}
                         placeholder="Select role…"
                         value={roleSelections[staff.id] || ''}
@@ -195,7 +261,13 @@ const AdminDashboardPage: React.FC = () => {
                           size="sm"
                           disabled={!roleSelections[staff.id]}
                           loading={approveStaffMutation.isPending}
-                          onClick={() => roleSelections[staff.id] && approveStaffMutation.mutate({ staffId: staff.id, data: { role: roleSelections[staff.id] as 'TeamLeader' | 'Physician' | 'Nurse' } })}
+                          onClick={() =>
+                            roleSelections[staff.id] &&
+                            approveStaffMutation.mutate({
+                              staffId: staff.id,
+                              data: { role: roleSelections[staff.id] as 'TeamLeader' | 'Physician' | 'Nurse' },
+                            })
+                          }
                         >
                           Approve
                         </Button>
@@ -215,19 +287,16 @@ const AdminDashboardPage: React.FC = () => {
             </table>
           </div>
         )}
-      </Card>
+      </AdminSection>
 
-      {/* Pending Referrals */}
-      <Card padding="none">
-        <CardHeader className="px-5 pt-5 pb-4 border-b border-border-base flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <GitBranch size={16} className="text-primary" />
-            <CardTitle>Pending Referral Approvals</CardTitle>
-            {(pendingReferrals?.length ?? 0) > 0 && (
-              <Badge variant="warning">{pendingReferrals?.length}</Badge>
-            )}
-          </div>
-        </CardHeader>
+      {/* ── Pending Referrals ── */}
+      <AdminSection
+        icon={<GitBranch size={16} />}
+        title="Pending Referral Approvals"
+        badge={pendingReferrals?.length ?? 0}
+        badgeVariant="warning"
+        noPadding
+      >
         {refLoading ? (
           <div className="p-5 text-sm text-text-muted">Loading…</div>
         ) : !pendingReferrals?.length ? (
@@ -265,7 +334,7 @@ const AdminDashboardPage: React.FC = () => {
             </table>
           </div>
         )}
-      </Card>
+      </AdminSection>
     </div>
   );
 };

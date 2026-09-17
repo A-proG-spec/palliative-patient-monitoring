@@ -2,18 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── CSS Custom Properties ─────────────────────────────── */
+/* ─── LIGHT MODE CSS Custom Properties ──────────────────────── */
 :root {
   --color-primary: #002395;
   --color-primary-hover: #001B73;
   --color-primary-light: #E8ECF7;
+
   --color-background: #F7F9FE;
-  --color-surface: #FFFFFF;
+  --color-surface: #F7F9FE;
+  --color-surface-lowest: #FFFFFF;
+  --color-surface-low: #F1F4F9;
+  --color-surface-container: #ECEEF3;
+  --color-surface-high: #E6E8ED;
+  --color-surface-highest: #E0E2E7;
+  --color-surface-dim: #D8DADF;
+
   --color-on-surface: #181C20;
   --color-on-surface-variant: #424754;
   --color-text-secondary: #52627A;
   --color-text-muted: #8290A7;
+
   --color-border: #E6EBF4;
+  --color-outline: #727785;
+  --color-outline-variant: #C2C6D6;
+
   --color-success: #43B982;
   --color-success-bg: #EAF8F2;
   --color-warning: #F5A34A;
@@ -24,7 +36,144 @@
   --shadow-card: 0 12px 35px rgba(50, 88, 150, 0.08);
   --shadow-nav: 0 2px 10px rgba(50, 88, 150, 0.05);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+
+  /* Chart tokens */
+  --chart-grid: #E6EBF4;
+  --chart-axis-text: #8290A7;
+  --chart-tooltip-bg: #FFFFFF;
+  --chart-tooltip-border: #E6EBF4;
+  --chart-tooltip-text: #181C20;
+  --chart-ref-line: #C2C6D6;
+
+  /* Scrollbar */
+  --scrollbar-thumb: #C2C6D6;
+  --scrollbar-thumb-hover: #8290A7;
+  --scrollbar-track: #F1F4F9;
 }
+
+/* ─── DARK MODE CSS Custom Properties ───────────────────────── */
+.dark {
+  --color-primary: #4D73D9;
+  --color-primary-hover: #3A5FC2;
+  --color-primary-light: #1A2540;
+
+  --color-background: #0F1117;
+  --color-surface: #0F1117;
+  --color-surface-lowest: #1A1D26;
+  --color-surface-low: #1E2230;
+  --color-surface-container: #252838;
+  --color-surface-high: #2C3042;
+  --color-surface-highest: #333748;
+  --color-surface-dim: #3A3E50;
+
+  --color-on-surface: #E4E7F0;
+  --color-on-surface-variant: #AAB0C4;
+  --color-text-secondary: #8A93AD;
+  --color-text-muted: #636A82;
+
+  --color-border: #2A2F42;
+  --color-outline: #555C74;
+  --color-outline-variant: #3A3F54;
+
+  --color-success: #3FAD77;
+  --color-success-bg: #0F2A1C;
+  --color-warning: #D9914A;
+  --color-warning-bg: #2A1E0F;
+  --color-error: #D94F40;
+  --color-error-bg: #2A1010;
+
+  --shadow-card: 0 12px 35px rgba(0, 0, 0, 0.4);
+  --shadow-nav: 0 2px 10px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+
+  /* Chart tokens - dark mode */
+  --chart-grid: #2A2F42;
+  --chart-axis-text: #636A82;
+  --chart-tooltip-bg: #1A1D26;
+  --chart-tooltip-border: #2A2F42;
+  --chart-tooltip-text: #E4E7F0;
+  --chart-ref-line: #3A3F54;
+
+  /* Scrollbar */
+  --scrollbar-thumb: #3A3F54;
+  --scrollbar-thumb-hover: #555C74;
+  --scrollbar-track: #1E2230;
+}
+
+/* ─── SYSTEM THEME — infographic-inspired calm clinical palette ─ */
+/*
+ * Drawn from the Palliative Care Service Model infographic:
+ *   - Soft blue (Medical Care bubble)       #D6E8F5 / #4A90C4
+ *   - Soft green (Emotional Support bubble) #D6EFE4 / #4AAD7A
+ *   - Soft purple (Social Support bubble)   #E8DCF5 / #7B5EA7
+ *   - Warm yellow (Spiritual Care bubble)   #FFF3CC / #D4A017
+ *   - Background: a warm off-white with a hint of blue-green
+ * Restrained — only a few accent touches. Remains calm + professional.
+ */
+.system {
+  --color-primary: #2B6CB0;
+  --color-primary-hover: #1E5490;
+  --color-primary-light: #D6E8F5;
+
+  --color-background: #F5F8FA;
+  --color-surface: #F5F8FA;
+  --color-surface-lowest: #FFFFFF;
+  --color-surface-low: #EDF4F9;
+  --color-surface-container: #E3EEF6;
+  --color-surface-high: #D8E8F2;
+  --color-surface-highest: #CCE0EE;
+  --color-surface-dim: #C0D6E8;
+
+  --color-on-surface: #1A2332;
+  --color-on-surface-variant: #3D5166;
+  --color-text-secondary: #4A6580;
+  --color-text-muted: #7A96AD;
+
+  --color-border: #C8DDE9;
+  --color-outline: #7A99AD;
+  --color-outline-variant: #A8C4D6;
+
+  /* Green accent — from Emotional Support / success bubbles */
+  --color-success: #4AAD7A;
+  --color-success-bg: #D6EFE4;
+
+  /* Warm yellow — from Spiritual Care bubble */
+  --color-warning: #C49A17;
+  --color-warning-bg: #FFF3CC;
+
+  --color-error: #C0392B;
+  --color-error-bg: #FCEAE8;
+
+  --shadow-card: 0 12px 35px rgba(43, 108, 176, 0.10);
+  --shadow-nav: 0 2px 10px rgba(43, 108, 176, 0.07);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+
+  --chart-grid: #C8DDE9;
+  --chart-axis-text: #7A96AD;
+  --chart-tooltip-bg: #FFFFFF;
+  --chart-tooltip-border: #C8DDE9;
+  --chart-tooltip-text: #1A2332;
+  --chart-ref-line: #A8C4D6;
+
+  --scrollbar-thumb: #A8C4D6;
+  --scrollbar-thumb-hover: #7A96AD;
+  --scrollbar-track: #EDF4F9;
+}
+
+/* ─── Tailwind dark overrides via CSS vars ─────────────────── */
+/* Map Tailwind color tokens to CSS variables so dark mode works */
+.dark .bg-background { background-color: var(--color-background) !important; }
+.dark .bg-surface-lowest { background-color: var(--color-surface-lowest) !important; }
+.dark .bg-surface-low { background-color: var(--color-surface-low) !important; }
+.dark .bg-surface-container { background-color: var(--color-surface-container) !important; }
+.dark .bg-primary-light { background-color: var(--color-primary-light) !important; }
+.dark .text-on-surface { color: var(--color-on-surface) !important; }
+.dark .text-on-surface-variant { color: var(--color-on-surface-variant) !important; }
+.dark .text-text-secondary { color: var(--color-text-secondary) !important; }
+.dark .text-text-muted { color: var(--color-text-muted) !important; }
+.dark .text-primary { color: var(--color-primary) !important; }
+.dark .border-border-base { border-color: var(--color-border) !important; }
+.dark .divide-border-base > * + * { border-color: var(--color-border) !important; }
 
 /* ─── Base Resets ─────────────────────────────────────────── */
 *, *::before, *::after {
@@ -35,6 +184,9 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   scroll-behavior: smooth;
+  /* Ensure html element scrolls, not just body */
+  height: 100%;
+  overflow-y: scroll;
 }
 
 body {
@@ -44,6 +196,13 @@ body {
   line-height: 1.6;
   margin: 0;
   padding: 0;
+  min-height: 100%;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ─── Focus Styles (Accessibility) ───────────────────────── */
@@ -53,20 +212,44 @@ body {
   border-radius: 4px;
 }
 
-/* ─── Scrollbar Styling ──────────────────────────────────── */
+/* ─── Scrollbar Styling — clearly visible ─────────────────── */
+/* Main window scrollbar */
+html::-webkit-scrollbar {
+  width: 8px;
+}
+html::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+html::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 4px;
+  border: 2px solid var(--scrollbar-track);
+}
+html::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+/* In-component scrollbars (overflow-y-auto elements) */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--scrollbar-track);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb {
-  background-color: var(--color-border);
-  border-radius: 3px;
+  background-color: var(--scrollbar-thumb);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--color-outline-variant, #C2C6D6);
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 /* ─── Pulse Line Animation (heartbeat motif) ─────────────── */
@@ -117,17 +300,45 @@ body {
 .skeleton {
   background: linear-gradient(
     90deg,
-    #f0f2f7 25%,
-    #e8ebf2 50%,
-    #f0f2f7 75%
+    var(--color-surface-low) 25%,
+    var(--color-surface-container) 50%,
+    var(--color-surface-low) 75%
   );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
   border-radius: 4px;
 }
 
-/* ─── Print Styles ────────────────────────────────────────── */
+/* ─── Dark mode generic overrides for common patterns ─────── */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: var(--color-surface-low);
+  border-color: var(--color-border);
+  color: var(--color-on-surface);
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* ─── Print Styles — always light ────────────────────────── */
 @media print {
   .no-print { display: none !important; }
-  body { background: white; }
+  html, body {
+    background: white !important;
+    color: #181C20 !important;
+    overflow-y: visible !important;
+  }
+  /* Force light mode for print regardless of OS/user preference */
+  html.dark {
+    --color-background: #FFFFFF;
+    --color-surface-lowest: #FFFFFF;
+    --color-surface-low: #F1F4F9;
+    --color-on-surface: #181C20;
+    --color-text-secondary: #52627A;
+    --color-border: #E6EBF4;
+    --color-primary: #002395;
+  }
 }

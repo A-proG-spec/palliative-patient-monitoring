@@ -123,11 +123,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingStaff = 0, pendingRefer
   const logoutMutation = useLogout();
 
   const isAdmin = user?.type === 'admin';
-  
+
   // Build nav items from permissions module
   const navItems = isAdmin
     ? adminNavItems(pendingStaff, pendingReferrals)
     : getSidebarItems(user?.role);
+
+  // Human-readable role label — always use ROLE_LABELS for staff
+  const roleDisplay = isAdmin
+    ? 'Administrator'
+    : ROLE_LABELS[user?.role ?? ''] ?? user?.role ?? user?.email ?? '';
 
   const handleLogoutConfirm = () => {
     logoutMutation.mutate(undefined, {
@@ -191,8 +196,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingStaff = 0, pendingRefer
         })}
       </nav>
 
-      {/* ── Profile link removed - now included in sidebar items ── */}
-
       {/* ── User info + logout ── sticky footer ── */}
       <div className="flex-shrink-0 border-t border-border-base p-3 bg-surface-lowest">
         <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-surface-low transition-colors">
@@ -201,9 +204,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingStaff = 0, pendingRefer
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-on-surface truncate">{user?.name}</p>
-            <p className="text-xs text-text-muted truncate">
-              {user?.type === 'admin' ? 'Administrator' : ROLE_LABELS[user?.role || ''] || user?.email}
-            </p>
+            {/* Always display human-readable role name, never raw role code */}
+            <p className="text-xs text-text-muted truncate">{roleDisplay}</p>
           </div>
           <button
             onClick={() => setShowLogoutDialog(true)}
@@ -271,7 +273,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingStaff = 0, pendingRefer
   );
 };
 
-// Notification bell for top bar
+// Notification bell for top bar — role-filtered count
 export const NotificationBell: React.FC<{ count?: number }> = ({ count = 0 }) => {
   const navigate = useNavigate();
   return (

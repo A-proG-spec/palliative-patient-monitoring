@@ -3,6 +3,7 @@ import { Outlet, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { Sidebar } from '@/components/common/Sidebar';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { useDashboardStats } from '@/hooks/useAdmin';
 import { useAuthStore } from '@/store/auth.store';
 
@@ -49,7 +50,12 @@ const DashboardLayout: React.FC = () => {
 
       {/* Main content — scrolls independently, sidebar stays fixed height */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <main className="flex-1 p-6 lg:p-8 overflow-x-hidden">
+        {/* Top bar with theme toggle */}
+        <div className="flex-shrink-0 flex items-center justify-end px-6 lg:px-8 pt-4 pb-0">
+          <ThemeToggle variant="dropdown" />
+        </div>
+
+        <main className="flex-1 p-6 lg:p-8 pt-3 overflow-x-hidden">
           <Breadcrumb />
           <AnimatePresence mode="wait">
             <motion.div

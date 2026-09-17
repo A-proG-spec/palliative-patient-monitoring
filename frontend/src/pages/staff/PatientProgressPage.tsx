@@ -4,6 +4,7 @@ import { TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { usePatient } from '@/hooks/usePatients';
 import { usePatientProgress } from '@/hooks/usePatientProgress';
+import { useChartTheme } from '@/hooks/useChartTheme';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { BackButton } from '@/components/common/BackButton';
@@ -21,6 +22,7 @@ const PatientProgressPage: React.FC = () => {
   const navigate = useNavigate();
   const { data: patient } = usePatient(id!);
   const { data: progress, isLoading, error, refetch } = usePatientProgress(id!);
+  const ct = useChartTheme();
 
   if (isLoading) return <PageLoader />;
   if (error) return <ErrorState onRetry={refetch} />;
@@ -76,29 +78,35 @@ const PatientProgressPage: React.FC = () => {
       {/* Chart */}
       <Card padding="lg">
         <CardHeader>
-          <CardTitle>KPS & PPS Over Time</CardTitle>
+          <CardTitle>KPS &amp; PPS Over Time</CardTitle>
           <CardDescription>Scores range 0–100. Higher = better functional status.</CardDescription>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={progress.visits}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E6EBF4" />
-              <XAxis dataKey="visitDate" tick={{ fontSize: 11 }} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={ct.gridStroke} />
+              <XAxis dataKey="visitDate" tick={{ fontSize: 11, fill: ct.axisTick }} stroke={ct.axisStroke} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: ct.axisTick }} stroke={ct.axisStroke} />
               <Tooltip
                 content={({ active, payload, label }) => active && payload?.length ? (
-                  <div className="bg-surface-lowest rounded-xl border border-border-base shadow-lg p-3 text-xs">
+                  <div className="rounded-xl border shadow-lg p-3 text-xs" style={{ background: ct.tooltipBg, borderColor: ct.tooltipBorder, color: ct.tooltipText }}>
                     <p className="font-semibold mb-1">{label}</p>
                     <p className="text-primary">KPS: {payload[0]?.value}</p>
                     <p className="text-success">PPS: {payload[1]?.value}</p>
                   </div>
                 ) : null}
               />
-              <Legend formatter={(v) => v === 'kpsScore' ? 'KPS Score' : 'PPS Score'} />
-              <ReferenceLine y={80} stroke="#C2C6D6" strokeDasharray="4 2" label={{ value: 'High', fontSize: 10 }} />
-              <ReferenceLine y={50} stroke="#C2C6D6" strokeDasharray="4 2" label={{ value: 'Medium', fontSize: 10 }} />
-              <ReferenceLine y={20} stroke="#C2C6D6" strokeDasharray="4 2" label={{ value: 'Low', fontSize: 10 }} />
-              <Line type="monotone" dataKey="kpsScore" stroke="#002395" strokeWidth={2} dot={{ fill: '#002395', r: 4 }} activeDot={{ r: 6 }} name="kpsScore" />
+              <Legend
+                formatter={(v) => (
+                  <span style={{ color: ct.legendText, fontSize: 12 }}>
+                    {v === 'kpsScore' ? 'KPS Score' : 'PPS Score'}
+                  </span>
+                )}
+              />
+              <ReferenceLine y={80} stroke={ct.refLineStroke} strokeDasharray="4 2" label={{ value: 'High', fontSize: 10, fill: ct.axisTick }} />
+              <ReferenceLine y={50} stroke={ct.refLineStroke} strokeDasharray="4 2" label={{ value: 'Medium', fontSize: 10, fill: ct.axisTick }} />
+              <ReferenceLine y={20} stroke={ct.refLineStroke} strokeDasharray="4 2" label={{ value: 'Low', fontSize: 10, fill: ct.axisTick }} />
+              <Line type="monotone" dataKey="kpsScore" stroke="#4D73D9" strokeWidth={2} dot={{ fill: '#4D73D9', r: 4 }} activeDot={{ r: 6 }} name="kpsScore" />
               <Line type="monotone" dataKey="ppsScore" stroke="#43B982" strokeWidth={2} dot={{ fill: '#43B982', r: 4 }} activeDot={{ r: 6 }} name="ppsScore" />
             </LineChart>
           </ResponsiveContainer>

@@ -8,7 +8,7 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { EmptyState, ErrorState } from '@/components/common/EmptyState';
 import { formatDate } from '@/lib/utils';
 import { QUERY_KEYS, ROUTES } from '@/constants';
-import { api } from '@/api/client';
+import api from '@/api/client';
 
 interface LabRequest {
   id: string;
