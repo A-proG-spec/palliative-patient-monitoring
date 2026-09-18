@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Users, Activity, Bell, AlertTriangle, Clock, ArrowRight, Home, Hospital } from 'lucide-react';
+import { Calendar, Users, Activity, Bell, AlertTriangle, Clock, ArrowRight, Home, Hospital, Pill, FlaskConical, Scan } from 'lucide-react';
 import { useStaffDashboardStats, useStaffProfile } from '@/hooks/useStaff';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -10,6 +10,8 @@ import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
 import { formatDate, formatRelativeTime } from '@/lib/utils';
 import { ROLE_LABELS as RL, VISIT_TYPE_LABELS, OUTCOME_LABELS } from '@/constants';
+import { useAuthStore } from '@/store/auth.store';
+import { hasPermission, type StaffRole } from '@/config/permissions';
 
 const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: number; color?: string }> = ({ icon, label, value, color = 'text-primary' }) => (
   <Card padding="md">
@@ -34,10 +36,68 @@ const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { data: stats, isLoading, error, refetch } = useStaffDashboardStats();
   const { data: profile } = useStaffProfile();
+  const { user } = useAuthStore();
+
+  const userRole = (user?.role ?? '') as StaffRole;
+
+  // Determine which dashboard view to show based on role
+  const canRegisterPatient = hasPermission(userRole, 'canRegisterPatient');
+  const canViewMedicationQueue = hasPermission(userRole, 'canMarkMedicationGiven');
+  const canViewLabQueue = hasPermission(userRole, 'canEnterLabResult');
+  const canViewImagingQueue = hasPermission(userRole, 'canEnterImagingReport');
 
   if (isLoading) return <PageLoader />;
   if (error) return <ErrorState onRetry={refetch} />;
 
+  // Role-specific queue dashboard for Pharmacist, Lab Technician, Radiologist
+  if (canViewMedicationQueue || canViewLabQueue || canViewImagingQueue) {
+    const queueInfo = canViewMedicationQueue
+      ? { title: 'Pending Medication Orders', icon: <Pill size={48} />, route: '/medication-orders', color: 'text-primary' }
+      : canViewLabQueue
+      ? { title: 'Pending Lab Requests', icon: <FlaskConical size={48} />, route: '/lab-requests', color: 'text-success' }
+      : { title: 'Pending Imaging Orders', icon: <Scan size={48} />, route: '/imaging-orders', color: 'text-warning' };
+
+    return (
+      <div className="space-y-7">
+        {/* Welcome */}
+        <div>
+          <h1 className="text-2xl font-bold text-on-surface">
+            Welcome back, {profile?.name?.split(' ')[0] ?? 'User'} 👋
+          </h1>
+          <p className="text-sm text-text-secondary">
+            {RL[profile?.role ?? ''] || 'Staff'} · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
+
+        {/* Queue Summary Card */}
+        <Card>
+          <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+            <div className={`flex h-20 w-20 items-center justify-center rounded-2xl bg-primary-light ${queueInfo.color} mb-6`}>
+              {queueInfo.icon}
+            </div>
+            <p className="text-xl font-semibold text-on-surface mb-6">
+              {queueInfo.title}
+            </p>
+            <Button onClick={() => navigate(queueInfo.route)} rightIcon={<ArrowRight size={14} />}>
+              View Queue
+            </Button>
+          </div>
+        </Card>
+
+        {/* Info message */}
+        <div className="rounded-xl bg-surface-low border border-border-base px-5 py-4">
+          <p className="text-sm text-text-secondary">
+            <strong className="text-on-surface">Note:</strong> Your dashboard shows your pending work queue. 
+            {canViewMedicationQueue && ' Review and process medication orders assigned to you.'}
+            {canViewLabQueue && ' Review and enter results for lab requests.'}
+            {canViewImagingQueue && ' Review and submit reports for imaging orders.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Original patient-caring role dashboard (TeamLeader, Physician, Nurse)
   return (
     <div className="space-y-7">
       {/* Welcome */}
@@ -50,9 +110,11 @@ const DashboardPage: React.FC = () => {
             {RL[profile?.role ?? ''] || 'Staff'} · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
         </div>
-        <Button onClick={() => navigate('/patients/new')} rightIcon={<ArrowRight size={14} />}>
-          Register Patient
-        </Button>
+        {canRegisterPatient && (
+          <Button onClick={() => navigate('/patients/new')} rightIcon={<ArrowRight size={14} />}>
+            Register Patient
+          </Button>
+        )}
       </div>
 
       {/* Stat cards */}

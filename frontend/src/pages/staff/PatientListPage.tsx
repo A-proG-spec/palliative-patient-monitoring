@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, User, MapPin, Calendar, Home, Hospital } from 'lucide-react';
+import { Search, Plus, User, MapPin, Calendar, Home, Hospital, ArrowUpDown, ArrowUp, ArrowDown, Filter } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { usePatients } from '@/hooks/usePatients';
 import { Button } from '@/components/ui/Button';
@@ -16,6 +16,18 @@ import { EmptyState, ErrorState } from '@/components/common/EmptyState';
 import { formatDate } from '@/lib/utils';
 import { DISEASE_STAGE_LABELS } from '@/constants';
 import type { Patient } from '@/types/patient.types';
+import { useAuthStore } from '@/store/auth.store';
+import { hasPermission, type StaffRole } from '@/config/permissions';
+
+// ── Sort types ────────────────────────────────────────────────────
+type SortField = 'name' | 'age' | 'registeredAt';
+type SortDir = 'asc' | 'desc';
+
+// ── Sort icon component ───────────────────────────────────────────
+const SortIcon: React.FC<{ field: SortField; current: SortField; dir: SortDir }> = ({ field, current, dir }) => {
+  if (field !== current) return <ArrowUpDown size={13} className="opacity-40" />;
+  return dir === 'asc' ? <ArrowUp size={13} className="text-primary" /> : <ArrowDown size={13} className="text-primary" />;
+};
 
 // ── Patient card ──────────────────────────────────────────────────
 const PatientCard: React.FC<{ patient: Patient; onClick: () => void }> = ({ patient, onClick }) => (
@@ -64,12 +76,59 @@ const PatientCard: React.FC<{ patient: Patient; onClick: () => void }> = ({ pati
 
 const PatientListPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'Active' | 'Discharged' | undefined>(undefined);
+  const [diagnosisFilter, setDiagnosisFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [sortField, setSortField] = useState<SortField>('registeredAt');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const limit = 12;
 
   const { data, isLoading, error, refetch } = usePatients({ page, limit, search: search || undefined, status });
+
+  const userRole = (user?.role ?? '') as StaffRole;
+  const canRegisterPatient = hasPermission(userRole, 'canRegisterPatient');
+
+  // Collect unique diagnoses from current page for filter dropdown (no API change)
+  const diagnoses = useMemo(() => {
+    if (!data?.items) return [];
+    const set = new Set(data.items.map((p) => p.primaryDiagnosis).filter(Boolean));
+    return Array.from(set).sort();
+  }, [data?.items]);
+
+  // Client-side sort + diagnosis filter applied on top of server-paginated results
+  const displayItems = useMemo(() => {
+    let items = data?.items ?? [];
+
+    // Diagnosis filter
+    if (diagnosisFilter) {
+      items = items.filter((p) => p.primaryDiagnosis === diagnosisFilter);
+    }
+
+    // Sort
+    return [...items].sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'name') {
+        cmp = `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+      } else if (sortField === 'age') {
+        cmp = (a.age ?? 0) - (b.age ?? 0);
+      } else {
+        // registeredAt
+        cmp = new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime();
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [data?.items, sortField, sortDir, diagnosisFilter]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -81,12 +140,15 @@ const PatientListPage: React.FC = () => {
             {data ? `${data.total} patients registered` : 'Manage your patient list'}
           </p>
         </div>
-        <Button leftIcon={<Plus size={15} />} onClick={() => navigate('/patients/new')}>
-          Register Patient
-        </Button>
+        {canRegisterPatient && (
+          <Button leftIcon={<Plus size={15} />} onClick={() => navigate('/patients/new')}>
+            Register Patient
+          </Button>
+        )}
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      {/* Search + Status + Diagnosis filters */}
+      <div className="flex flex-wrap gap-3 items-center">
         <Input
           placeholder="Search by name, ID, or diagnosis…"
           leftIcon={<Search size={15} />}
@@ -101,6 +163,57 @@ const PatientListPage: React.FC = () => {
           onChange={(e) => { setStatus(e.target.value as 'Active' | 'Discharged' | undefined || undefined); setPage(1); }}
           className="w-40"
         />
+        {diagnoses.length > 0 && (
+          <div className="relative flex items-center gap-1.5">
+            <Filter size={14} className="text-text-muted absolute left-2.5 pointer-events-none" />
+            <select
+              value={diagnosisFilter}
+              onChange={(e) => { setDiagnosisFilter(e.target.value); setPage(1); }}
+              className="h-9 pl-8 pr-3 rounded-xl border border-border-base bg-surface-lowest text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+              aria-label="Filter by diagnosis"
+            >
+              <option value="">All diagnoses</option>
+              {diagnoses.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Sort controls */}
+      <div className="flex items-center gap-1 text-xs text-text-muted">
+        <span className="mr-1 font-medium">Sort by:</span>
+        {(['name', 'age', 'registeredAt'] as SortField[]).map((field) => {
+          const labels: Record<SortField, string> = { name: 'Name', age: 'Age', registeredAt: 'Date Registered' };
+          return (
+            <button
+              key={field}
+              onClick={() => handleSort(field)}
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 transition-colors ${
+                sortField === field
+                  ? 'bg-primary-light text-primary font-semibold'
+                  : 'hover:bg-surface-low text-text-secondary'
+              }`}
+            >
+              {labels[field]}
+              <SortIcon field={field} current={sortField} dir={sortDir} />
+            </button>
+          );
+        })}
+        {diagnosisFilter && (
+          <span className="ml-3 flex items-center gap-1 rounded-full bg-primary-light text-primary px-2.5 py-0.5 text-xs font-medium">
+            <Filter size={10} />
+            {diagnosisFilter}
+            <button
+              onClick={() => setDiagnosisFilter('')}
+              className="ml-1 hover:text-primary/60"
+              aria-label="Clear diagnosis filter"
+            >
+              ×
+            </button>
+          </span>
+        )}
       </div>
 
       {isLoading ? (
@@ -109,18 +222,18 @@ const PatientListPage: React.FC = () => {
         </div>
       ) : error ? (
         <ErrorState onRetry={refetch} />
-      ) : !data?.items?.length ? (
+      ) : !displayItems.length ? (
         <EmptyState
           icon={<User size={28} />}
           title="No patients found"
-          description={search ? 'Try a different search term.' : 'Register your first patient to get started.'}
-          actionLabel="Register Patient"
-          onAction={() => navigate('/patients/new')}
+          description={search || diagnosisFilter ? 'Try a different search or filter.' : 'Register your first patient to get started.'}
+          actionLabel={canRegisterPatient ? 'Register Patient' : undefined}
+          onAction={canRegisterPatient ? () => navigate('/patients/new') : undefined}
         />
       ) : (
         <>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.items.map((patient) => (
+            {displayItems.map((patient) => (
               <PatientCard
                 key={patient.id}
                 patient={patient}
@@ -128,7 +241,7 @@ const PatientListPage: React.FC = () => {
               />
             ))}
           </div>
-          <Pagination page={page} total={data.total} limit={limit} onPageChange={setPage} />
+          <Pagination page={page} total={data!.total} limit={limit} onPageChange={setPage} />
         </>
       )}
     </div>

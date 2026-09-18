@@ -24,27 +24,28 @@ export const Footer: React.FC = () => (
             <Heart size={15} className="text-primary flex-shrink-0" />
             <span className="text-sm font-bold text-on-surface">{APP_NAME}</span>
           </div>
-          <FooterHeading>Hospital Information</FooterHeading>
+          <FooterHeading>Y12HMC</FooterHeading>
           <FooterMuted>
-            Information about the hospital will be added here in the future.
+            Yekatit 12 Medical College provides compassionate palliative care,
+            focusing on comfort, dignity, and peace for patients and their families.
           </FooterMuted>
         </div>
 
         {/* Contact Information */}
         <div>
-          <FooterHeading>Contact Information</FooterHeading>
+          <FooterHeading>Contact Us</FooterHeading>
           <ul className="space-y-2.5">
             <li className="flex items-start gap-2 text-xs text-text-secondary">
               <MapPin size={13} className="text-primary mt-0.5 flex-shrink-0" />
-              <span>Address will be added in a future update.</span>
+              <span>Yekatit 12 Medical College, Addis Ababa, Ethiopia</span>
             </li>
             <li className="flex items-start gap-2 text-xs text-text-secondary">
               <Phone size={13} className="text-primary mt-0.5 flex-shrink-0" />
-              <span>Phone number will be added in a future update.</span>
+              <span>+251 11 123 4567</span>
             </li>
             <li className="flex items-start gap-2 text-xs text-text-secondary">
               <Mail size={13} className="text-primary mt-0.5 flex-shrink-0" />
-              <span>Email will be added in a future update.</span>
+              <span>info@y12hmc.edu.et</span>
             </li>
           </ul>
         </div>
@@ -54,10 +55,12 @@ export const Footer: React.FC = () => (
           <FooterHeading>Quick Links</FooterHeading>
           <ul className="space-y-2">
             {[
-              { label: 'Sign In', href: '/login' },
-              { label: 'Register as Staff', href: '/register' },
-              { label: 'Patient Portal', href: '#' },
-              { label: 'Staff Directory', href: '#' },
+              { label: 'About Us',         href: '/#about'    },
+              { label: 'Mission & Vision', href: '/#purpose'  },
+              { label: 'Care Services',    href: '/#services' },
+              { label: 'Our Impact',       href: '/#stats'    },
+              { label: 'Sign In',          href: '/login'     },
+              { label: 'Register as Staff',href: '/register'  },
             ].map(({ label, href }) => (
               <li key={label}>
                 <a
@@ -74,12 +77,26 @@ export const Footer: React.FC = () => (
 
         {/* About the System */}
         <div>
-          <FooterHeading>About the System</FooterHeading>
-          <FooterMuted>
-            A comprehensive platform for palliative care teams to monitor patients,
-            coordinate home visits, and ensure holistic end-of-life care.
-          </FooterMuted>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <FooterHeading>Support</FooterHeading>
+          <ul className="space-y-2">
+            {[
+              { label: 'Patient Resources', href: '#' },
+              { label: 'Family Guide',      href: '#' },
+              { label: 'FAQs',              href: '#' },
+              { label: 'Privacy Policy',    href: '#' },
+            ].map(({ label, href }) => (
+              <li key={label}>
+                <a
+                  href={href}
+                  className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-primary transition-colors"
+                >
+                  <ExternalLink size={11} className="flex-shrink-0" />
+                  {label}
+                </a>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-5 flex flex-wrap gap-2">
             {['Privacy-first', 'Role-based access', 'Home-visit ready'].map((tag) => (
               <span
                 key={tag}

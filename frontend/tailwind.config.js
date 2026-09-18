@@ -1,6 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  // Enable class-based dark mode (controlled by ThemeContext adding .dark to <html>)
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -39,6 +41,13 @@ export default {
           bg: '#FCE8E8',
         },
         tertiary: '#4C5C7D',
+        // Admin-specific accent (deep teal/slate)
+        admin: {
+          DEFAULT: '#1E3A5F',
+          hover: '#162D4A',
+          light: '#E8EEF6',
+          accent: '#2E6DA4',
+        },
       },
       fontFamily: {
         sans: ['Outfit', 'system-ui', '-apple-system', 'sans-serif'],
@@ -71,6 +80,10 @@ export default {
         card: '0 12px 35px rgba(50, 88, 150, 0.08)',
         nav: '0 2px 10px rgba(50, 88, 150, 0.05)',
         'card-hover': '0 16px 40px rgba(50, 88, 150, 0.13)',
+        // Dark mode shadows
+        'dark-card': '0 12px 35px rgba(0, 0, 0, 0.35)',
+        'dark-nav': '0 2px 10px rgba(0, 0, 0, 0.3)',
+        'dark-card-hover': '0 16px 40px rgba(0, 0, 0, 0.5)',
       },
       spacing: {
         micro: '4px',

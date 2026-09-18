@@ -44,7 +44,7 @@ export interface StaffMember {
   name: string;
   email: string;
   phone: string;
-  role: 'TeamLeader' | 'Physician' | 'Nurse';
+  role: 'TeamLeader' | 'Physician' | 'Nurse' | 'Pharmacist' | 'LabTechnician' | 'Radiologist';
   status: 'Pending' | 'Active' | 'Rejected';
   isEmailVerified: boolean;
   assignedPatientsCount: number;

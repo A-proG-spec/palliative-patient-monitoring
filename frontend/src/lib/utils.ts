@@ -1,11 +1,19 @@
-import { type ClassValue, clsx } from 'clsx';
+// ClassValue type for cn() helper — clsx is not installed, using inline implementation
+export type ClassValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | ClassValue[]
+  | { [key: string]: unknown };
 
-// clsx is not installed — use a simple implementation
 export function cn(...inputs: ClassValue[]): string {
   return inputs
     .flatMap((input) => {
       if (!input) return [];
       if (typeof input === 'string') return [input];
+      if (typeof input === 'number') return [String(input)];
       if (Array.isArray(input)) return [cn(...input)];
       if (typeof input === 'object') {
         return Object.entries(input)
@@ -17,9 +25,6 @@ export function cn(...inputs: ClassValue[]): string {
     .filter(Boolean)
     .join(' ');
 }
-
-// Re-export type
-export type { ClassValue };
 
 export function formatDate(dateStr: string | Date | undefined | null): string {
   if (!dateStr) return '—';
@@ -140,4 +145,30 @@ export function generateId(): string {
 
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Role checking helper
+export function hasRole(
+  user: { role?: string | null } | null | undefined,
+  ...roles: string[]
+): boolean {
+  if (!user?.role) return false;
+  return roles.includes(user.role);
+}
+
+// Format response time in human-readable format
+export function formatResponseTime(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined || isNaN(minutes)) return '—';
+  if (minutes === 0) return '0m';
+  
+  const days = Math.floor(minutes / (24 * 60));
+  const hours = Math.floor((minutes % (24 * 60)) / 60);
+  const mins = Math.floor(minutes % 60);
+  
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (mins > 0 || parts.length === 0) parts.push(`${mins}m`);
+  
+  return parts.join(' ');
 }

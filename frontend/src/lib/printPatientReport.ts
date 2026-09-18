@@ -342,7 +342,7 @@ export function printPatientReport(data: PrintReportData): void {
       l.datePerformed ? fmt(l.datePerformed) : '—',
       safe(l.location),
       statusBadge(l.status),
-      safe(l.result) || '—',
+      `<span style="white-space:pre-wrap">${safe(l.result) || '—'}</span>`,
     ]),
   ));
 

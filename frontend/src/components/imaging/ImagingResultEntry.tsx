@@ -14,6 +14,7 @@ const imagingReportSchema = z.object({
   impression: z.string().min(1, 'Impression / Conclusion is required'),
   recommendations: z.string().optional(),
   reportingPhysician: z.string().min(1, 'Reporting physician is required'),
+  sonographer: z.string().optional(),
   signature: z.string().optional(),
   reportDate: z.string().optional(),
   hospitalDepartmentStamp: z.string().optional(),
@@ -125,6 +126,17 @@ const ImagingResultEntry: React.FC<ImagingResultEntryProps> = ({
                 placeholder="Typed signature"
                 {...register('signature')}
               />
+            </div>
+
+            <div>
+              <Input
+                label="Sonographer"
+                placeholder="Name of the person who performed the exam"
+                {...register('sonographer')}
+              />
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                Not saved yet — pending backend support
+              </p>
             </div>
 
             <Input

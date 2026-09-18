@@ -7,7 +7,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
 import { BackButton } from '@/components/common/BackButton';
-import { Mail, Phone, BadgeCheck, Calendar } from 'lucide-react';
+import { ThemeSelector } from '@/components/common/ThemeToggle';
+import { Mail, Phone, BadgeCheck, Calendar, Palette } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { Profile, StaffProfile } from '@/types/profile.types';
 
@@ -147,6 +148,23 @@ const ProfilePage: React.FC = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Appearance / Theme */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Palette size={18} className="text-primary" />
+            <CardTitle>Appearance</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-text-secondary mb-4">
+            Choose your preferred colour theme. <strong className="text-on-surface">System</strong> follows your
+            operating system's light/dark preference and updates automatically.
+          </p>
+          <ThemeSelector />
+        </CardContent>
+      </Card>
     </div>
   );
 };

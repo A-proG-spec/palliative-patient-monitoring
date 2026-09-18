@@ -7,7 +7,7 @@ export interface User {
   name: string;
   email: string;
   phone?: string;
-  role?: 'TeamLeader' | 'Physician' | 'Nurse' | null;
+  role?: 'TeamLeader' | 'Physician' | 'Nurse' | 'Pharmacist' | 'LabTechnician' | 'Radiologist' | null;
   type: 'staff' | 'admin';
   status?: 'Pending' | 'Active' | 'Rejected';
   isEmailVerified?: boolean;
@@ -57,7 +57,7 @@ export interface RegisterResponse {
   phone?: string;
   status: 'Pending' | 'Active' | 'Rejected';
   isEmailVerified: boolean;
-  role?: 'TeamLeader' | 'Physician' | 'Nurse' | null;
+  role?: 'TeamLeader' | 'Physician' | 'Nurse' | 'Pharmacist' | 'LabTechnician' | 'Radiologist' | null;
   createdAt?: string;
   updatedAt?: string;
   assignedBy?: string | null;
@@ -106,7 +106,7 @@ export interface StaffProfile {
   name: string;
   email: string;
   phone: string;
-  role: 'TeamLeader' | 'Physician' | 'Nurse' | null;
+  role: 'TeamLeader' | 'Physician' | 'Nurse' | 'Pharmacist' | 'LabTechnician' | 'Radiologist' | null;
   status: 'Pending' | 'Active' | 'Rejected';
   isEmailVerified: boolean;
   assignedPatientsCount: number;
@@ -124,7 +124,7 @@ export interface UpdateStaffProfileResponse {
   name: string;
   email: string;
   phone?: string;
-  role?: 'TeamLeader' | 'Physician' | 'Nurse' | null;
+  role?: 'TeamLeader' | 'Physician' | 'Nurse' | 'Pharmacist' | 'LabTechnician' | 'Radiologist' | null;
   status?: 'Pending' | 'Active' | 'Rejected';
   isEmailVerified?: boolean;
   updatedAt: string;

@@ -480,7 +480,7 @@ const AdminPatientDetailPage: React.FC = () => {
                       <td className="py-3 pr-4 text-text-secondary">{img.performedAt ? formatDate(img.performedAt) : '—'}</td>
                       <td className="py-3 pr-4"><StatusBadge status={img.priority} /></td>
                       <td className="py-3 pr-4"><StatusBadge status={img.status} type="lab" /></td>
-                      <td className="py-3 text-text-muted text-xs">{img.hasReport ? 'Available' : '—'}</td>
+                      <td className="py-3 text-text-muted text-xs">{img.report ? 'Available' : '—'}</td>
                     </tr>
                   ))}
                 </tbody>

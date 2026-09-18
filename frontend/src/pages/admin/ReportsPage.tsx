@@ -1,21 +1,20 @@
 import React from 'react';
-import { Download } from 'lucide-react';
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { useReports, useExportReport } from '@/hooks/useAdmin';
+import { useReports } from '@/hooks/useAdmin';
+import { useChartTheme } from '@/hooks/useChartTheme';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
 
-const COLORS = ['#002395', '#43B982', '#F5A34A', '#E74F3D', '#4C5C7D'];
+const COLORS = ['#4D73D9', '#43B982', '#F5A34A', '#E74F3D', '#4C5C7D'];
 
 const ReportsPage: React.FC = () => {
   const { data, isLoading, error, refetch } = useReports();
-  const exportMutation = useExportReport();
+  const ct = useChartTheme();
 
   if (isLoading) return <PageLoader />;
   if (error || !data) return <ErrorState onRetry={refetch} />;
@@ -52,11 +51,13 @@ const ReportsPage: React.FC = () => {
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={data.visitsByMonth}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E6EBF4" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#002395" radius={[4, 4, 0, 0]} name="Visits" />
+                <CartesianGrid strokeDasharray="3 3" stroke={ct.gridStroke} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: ct.axisTick }} stroke={ct.axisStroke} />
+                <YAxis tick={{ fontSize: 11, fill: ct.axisTick }} stroke={ct.axisStroke} />
+                <Tooltip
+                  contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 8, color: ct.tooltipText }}
+                />
+                <Bar dataKey="count" fill="#4D73D9" radius={[4, 4, 0, 0]} name="Visits" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -73,7 +74,7 @@ const ReportsPage: React.FC = () => {
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 8, color: ct.tooltipText }} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
@@ -85,10 +86,10 @@ const ReportsPage: React.FC = () => {
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={data.patientsByStage} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#E6EBF4" />
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis dataKey="stage" type="category" tick={{ fontSize: 11 }} width={70} />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke={ct.gridStroke} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: ct.axisTick }} stroke={ct.axisStroke} />
+                <YAxis dataKey="stage" type="category" tick={{ fontSize: 11, fill: ct.axisTick }} stroke={ct.axisStroke} width={70} />
+                <Tooltip contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 8, color: ct.tooltipText }} />
                 <Bar dataKey="count" fill="#43B982" radius={[0, 4, 4, 0]} name="Patients" />
               </BarChart>
             </ResponsiveContainer>
@@ -106,8 +107,8 @@ const ReportsPage: React.FC = () => {
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
-                <Legend />
+                <Tooltip contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 8, color: ct.tooltipText }} />
+                <Legend formatter={(v) => <span style={{ color: ct.legendText }}>{v}</span>} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>

@@ -6,6 +6,7 @@ import { usePatientMedications } from '@/hooks/useMedications';
 import { usePatientLabs } from '@/hooks/useLabs';
 import { usePatientReferrals } from '@/hooks/useReferrals';
 import { usePatientAdmissions } from '@/hooks/useAdmissions';
+import type { HospitalAdmission } from '@/types/admission.types';
 import { printPatientReport } from '@/lib/printPatientReport';
 import { APP_NAME } from '@/lib/config';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
@@ -33,7 +34,7 @@ const PatientPrintPage: React.FC = () => {
         medications: medsData?.items || [],
         labs: labsData?.items || [],
         referrals: refsData?.items || [],
-        admissions: admsData?.items || [],
+        admissions: (admsData?.items || []) as unknown as HospitalAdmission[],
         appName: APP_NAME,
       });
       // Navigate back after print dialog

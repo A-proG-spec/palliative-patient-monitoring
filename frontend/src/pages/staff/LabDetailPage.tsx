@@ -399,6 +399,7 @@ const LabDetailPage: React.FC = () => {
           <LabResultEntry
             labId={labId!}
             patientId={id!}
+            category={lab.category}
             onResultSaved={handleResultSaved}
           />
         </div>
