@@ -252,6 +252,52 @@ html::-webkit-scrollbar-thumb:hover {
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
+/* ─── Landing Page Hero ──────────────────────────────────── */
+.landing-hero-bg {
+  background-image: url('/images/hero-light.jpg');
+  background-position: center center;
+  background-size: cover;
+}
+
+/* Dark mode swaps to the alternate hero image */
+.dark .landing-hero-bg {
+  background-image: url('/images/hero-dark.jpg');
+}
+
+/* Left-side vignette overlay: solid on left, fades right */
+.landing-hero-overlay {
+  background: linear-gradient(90deg, rgba(15,23,42,0.88) 0%, rgba(15,23,42,0.45) 65%, transparent 100%);
+}
+
+/* On tablet/mobile the overlay covers full width */
+@media (max-width: 1023px) {
+  .landing-hero-overlay {
+    width: 100%;
+    background: linear-gradient(180deg, rgba(15,23,42,0.70) 0%, rgba(15,23,42,0.88) 100%);
+  }
+}
+
+/* ─── Playfair Display font utility ─────────────────────── */
+.font-display {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+/* ─── Marquee / Infinite Scroll Animation ────────────────── */
+@keyframes marquee-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 40s linear infinite;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
 /* ─── Pulse Line Animation (heartbeat motif) ─────────────── */
 @keyframes pulse-line {
   0%, 100% { stroke-dashoffset: 0; }

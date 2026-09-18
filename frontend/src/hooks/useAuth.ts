@@ -110,6 +110,13 @@ export function useCurrentUser() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Edge-case: no token at all → nothing to verify, mark init complete immediately.
+  useEffect(() => {
+    if (!token) {
+      setInitialized();
+    }
+  }, [token, setInitialized]);
+
   useEffect(() => {
     if (query.isSuccess) {
       setInitialized();
