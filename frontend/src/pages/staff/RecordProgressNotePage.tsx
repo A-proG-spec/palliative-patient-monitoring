@@ -14,6 +14,8 @@ import { usePatient } from '@/hooks/usePatients';
 import { useAuthStore } from '@/store/auth.store';
 import {
   useCreateProgressNote,
+  useUpdateProgressNote,
+  useProgressNote,
   buildBlankProgressNote,
   type ProgressNote,
   type ProgressNoteMedRow,
@@ -174,12 +176,16 @@ const TAB_ERROR_MAP: Partial<Record<keyof ProgressNote, TabId>> = {
 // Main page
 // ─────────────────────────────────────────────────────────────
 const RecordProgressNotePage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, noteId } = useParams<{ id: string; noteId?: string }>();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
 
-  const { data: patient, isLoading, error, refetch } = usePatient(id!);
+  const isEditMode = Boolean(noteId);
+
+  const { data: patient, isLoading: patientLoading, error: patientError, refetch: refetchPatient } = usePatient(id!);
+  const { data: existingNote, isLoading: noteLoading } = useProgressNote(id!, noteId ?? '', );
   const createNote = useCreateProgressNote(id!);
+  const updateNote = useUpdateProgressNote(id!);
 
   const [form, setForm] = useState<ProgressNote | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('header');
@@ -189,14 +195,20 @@ const RecordProgressNotePage: React.FC = () => {
   const [isDirty, setIsDirty] = useState(false);
   const [savedNoteId, setSavedNoteId] = useState<string | null>(null);
 
-  // Initialise form once we have the logged-in user's name for the header
+  // Initialise form once we have the logged-in user's name for the header.
+  // In edit mode, wait for the existing note then seed the form from it.
   React.useEffect(() => {
-    if (!form) {
-      setForm(
-        buildBlankProgressNote(user?.name ?? '') as ProgressNote,
-      );
+    if (isEditMode) {
+      // Wait until the existing note has loaded before seeding
+      if (existingNote && !form) {
+        setForm(existingNote as unknown as ProgressNote);
+      }
+    } else {
+      if (!form) {
+        setForm(buildBlankProgressNote(user?.name ?? '') as ProgressNote);
+      }
     }
-  }, [form, user?.name]);
+  }, [isEditMode, existingNote, form, user?.name]);
 
   const set = useCallback(<K extends keyof ProgressNote>(key: K, value: ProgressNote[K]) => {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -255,8 +267,8 @@ const RecordProgressNotePage: React.FC = () => {
     return keys.some((k) => !!errors[k]);
   };
 
-  if (isLoading || !form) return <PageLoader />;
-  if (error || !patient) return <ErrorState onRetry={refetch} />;
+  if (patientLoading || !form || (isEditMode && noteLoading)) return <PageLoader />;
+  if (patientError || !patient) return <ErrorState onRetry={refetchPatient} />;
 
   const handleSubmitClick = () => {
     const errs = validate(form);
@@ -285,11 +297,20 @@ const RecordProgressNotePage: React.FC = () => {
     } = form;
 
     try {
-      const response = await createNote.mutateAsync(payload as any);
-      const newId = (response as any)?.id as string | undefined;
-      if (newId) setSavedNoteId(newId);
-      setShowConfirm(false);
-      setIsDirty(false);
+      if (isEditMode && noteId) {
+        // Edit mode — PATCH existing note, then return to patient detail
+        await updateNote.mutateAsync({ noteId, data: payload as any });
+        setShowConfirm(false);
+        setIsDirty(false);
+        navigate(`/patients/${id}`, { state: { savedProgressNote: true } });
+      } else {
+        // Create mode — POST new note, then show signature section
+        const response = await createNote.mutateAsync(payload as any);
+        const newId = (response as any)?.id as string | undefined;
+        if (newId) setSavedNoteId(newId);
+        setShowConfirm(false);
+        setIsDirty(false);
+      }
     } catch {
       setShowConfirm(false);
     }
@@ -366,7 +387,7 @@ const RecordProgressNotePage: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-bold text-on-surface leading-tight">
-              Patient Progress Note
+              {isEditMode ? 'Edit Progress Note' : 'Patient Progress Note'}
             </h1>
             <p className="text-xs text-text-muted">
               {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
@@ -448,9 +469,9 @@ const RecordProgressNotePage: React.FC = () => {
             <Button
               size="sm"
               onClick={handleSubmitClick}
-              loading={createNote.isPending}
+              loading={createNote.isPending || updateNote.isPending}
             >
-              Save Progress Note
+              {isEditMode ? 'Save Changes' : 'Save Progress Note'}
             </Button>
           </div>
         </div>
@@ -466,7 +487,7 @@ const RecordProgressNotePage: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-base font-semibold text-on-surface">
-                  Save Progress Note?
+                  {isEditMode ? 'Save Changes?' : 'Save Progress Note?'}
                 </h3>
                 <p className="text-xs text-text-muted mt-0.5">
                   {patient.firstName} {patient.lastName}
@@ -495,16 +516,16 @@ const RecordProgressNotePage: React.FC = () => {
                 variant="outline"
                 className="flex-1"
                 onClick={() => setShowConfirm(false)}
-                disabled={createNote.isPending}
+                disabled={createNote.isPending || updateNote.isPending}
               >
                 Cancel
               </Button>
               <Button
                 className="flex-1"
                 onClick={handleConfirmSave}
-                loading={createNote.isPending}
+                loading={createNote.isPending || updateNote.isPending}
               >
-                Yes, Save Note
+                {isEditMode ? 'Yes, Save Changes' : 'Yes, Save Note'}
               </Button>
             </div>
           </div>

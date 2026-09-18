@@ -153,6 +153,7 @@ const AppRoutes: React.FC = () => (
 
           {/* Progress Notes */}
           <Route path="/patients/:id/progress-note/new" element={<S><RecordProgressNotePage /></S>} />
+          <Route path="/patients/:id/progress-note/:noteId/edit" element={<S><RecordProgressNotePage /></S>} />
 
           {/* Role-specific queues */}
           <Route path="/medication-orders" element={<S><MedicationOrdersPage /></S>} />
