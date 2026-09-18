@@ -1,15 +1,5 @@
 import { z } from 'zod';
 
-const vitalsPairSchema = z.object({
-  current: z.string().default(''),
-  previous: z.string().default(''),
-});
-
-const symptomRowSchema = z.object({
-  severity: z.enum(['None', 'Mild', 'Moderate', 'Severe']).default('None'),
-  notes: z.string().default(''),
-});
-
 const medicationRowSchema = z.object({
   medicationTreatment: z.string().default(''),
   dose: z.string().default(''),
@@ -35,10 +25,10 @@ export const createProgressNoteSchema = z.object({
   body: z.object({
     // Relationships
     admissionId: z.string().optional(),
-    visitId: z.string().optional(),
 
     // Header
     attendingClinician: z.string().min(1, 'Attending clinician is required'),
+    palliativeCareUnit: z.string().optional(),
 
     // 1. Current Clinical Status
     generalCondition: z.enum(['Stable', 'Improving', 'Deteriorating', 'Critical', 'ActivelyDying', '']).default(''),
@@ -47,18 +37,41 @@ export const createProgressNoteSchema = z.object({
     functionalStatus: z.enum(['Independent', 'RequiresAssistance', 'Bedbound', 'FullyDependent', '']).default(''),
     changesSincePreviousReview: z.string().default(''),
 
-    // 2. Vital Signs
-    vitals: z.object({
-      temperature: vitalsPairSchema.default({ current: '', previous: '' }),
-      pulse: vitalsPairSchema.default({ current: '', previous: '' }),
-      respiratoryRate: vitalsPairSchema.default({ current: '', previous: '' }),
-      bloodPressure: vitalsPairSchema.default({ current: '', previous: '' }),
-      spo2: vitalsPairSchema.default({ current: '', previous: '' }),
-       oxygenFlow: vitalsPairSchema.default({ current: '', previous: '' }),
-    }).optional(),
-otherRelevantObservations: z.string().default(''),
+    // 2. Vital Signs (flat columns — matching Prisma model)
+    temperature: z.string().default(''),
+    pulse: z.string().default(''),
+    respiratoryRate: z.string().default(''),
+    bloodPressure: z.string().default(''),
+    oxygenFlow: z.string().default(''),
+    spO2: z.string().default(''),
+    otherRelevantObservations: z.string().default(''),
+
     // 3. Symptom Assessment
-    symptoms: z.record(z.string(), symptomRowSchema).optional(),
+    pain: z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default(''),
+    painNote: z.string().default(''),
+    shortnessOfBreath: z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default(''),
+    shortnessOfBreathNote: z.string().default(''),
+    nausea: z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default(''),
+    nauseaNote: z.string().default(''),
+    vomiting: z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default(''),
+    vomitingNote: z.string().default(''),
+    constipation: z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default(''),
+    constipationNote: z.string().default(''),
+    diarrhea: z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default(''),
+    diarrheaNote: z.string().default(''),
+    fatigue: z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default(''),
+    fatigueNote: z.string().default(''),
+    anxiety: z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default(''),
+    anxietyNote: z.string().default(''),
+    delirium: z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default(''),
+    deliriumNote: z.string().default(''),
+    insomania: z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default(''),
+    insomaniaNote: z.string().default(''),
+    appetiteLoss: z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default(''),
+    appetiteLossNote: z.string().default(''),
+    other: z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default(''),
+    otherNote: z.string().default(''),
+
     painScore: z.string().default(''),
     painLocation: z.string().default(''),
     painCharacter: z.string().default(''),

@@ -1,157 +1,140 @@
-import { Staff } from '@models/Staff.js';
-import { Patient } from '@models/Patient.js';
-import { Referral } from '@models/Referral.js';
-import { Notification } from '@models/Notification.js';
-import { HomeVisit } from '@models/HomeVisit.js';
-import { HospitalAdmission } from '@models/HospitalAdmission.js';
-import { Medication } from '@models/Medication.js';
-import { LaboratoryTest } from '@models/LaboratoryTest.js';
-import { ImagingOrder } from '@models/ImagingOrder.js';
-import { PatientProgressNote } from '@models/PatientProgressNote.js';
-import { DischargeSummary } from '@models/DischargeSummary.js';
+import { prisma, prismaBase } from '@db/prisma.js';
 import { ApiError } from '@utils/ApiError.js';
+import { toId } from '@utils/prisma.js';
 
 // ═════════════════════════════════════════════════════════════
-// STAFF MANAGEMENT
+// STAFF APPROVALS
 // ═════════════════════════════════════════════════════════════
-
 export const getPendingStaff = async () => {
-  const pendingStaff = await Staff.find({
-    status: 'Pending',
-    isEmailVerified: true,
-  }).select('-password');
-
-  return pendingStaff.map((staff) => ({
-    id: staff._id.toString(),
-    name: staff.name,
-    email: staff.email,
-    phone: staff.phone,
-    role: staff.role,
-    status: staff.status,
-    isEmailVerified: staff.isEmailVerified,
-    createdAt: staff.createdAt,
-  }));
+  const pending = await prisma.staff.findMany({
+    where: { status: 'Pending', isEmailVerified: true },
+    select: {
+      id: true, name: true, email: true, phone: true, role: true,
+      status: true, isEmailVerified: true, createdAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  return pending;
 };
 
-export const approveStaff = async (staffId: string, role: string, adminId: string) => {
-  const staff = await Staff.findById(staffId);
+export const approveStaff = async (
+  staffId: string,
+  role: string,
+  adminId: string|number,
+) => {
+  const id = toId(staffId, 'staff id');
+  const adm = toId(adminId, 'admin id');
 
-  if (!staff) {
-    throw new ApiError(404, 'Staff member not found');
-  }
-
-  if (!['TeamLeader', 'Physician', 'Nurse'].includes(role)) {
+  const validRoles = ['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'];
+  if (!validRoles.includes(role)) {
     throw new ApiError(400, 'Invalid role specified');
   }
 
-  if (staff.status === 'Active') {
-    throw new ApiError(400, 'Staff member is already approved');
-  }
+  const staff = await prisma.staff.findUnique({ where: { id } });
+  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (staff.status === 'Active') throw new ApiError(400, 'Staff member is already approved');
+  if (!staff.isEmailVerified) throw new ApiError(400, 'Staff email is not verified');
 
-  if (!staff.isEmailVerified) {
-    throw new ApiError(400, 'Staff email is not verified');
-  }
+  const updated = await prisma.$transaction(async (tx) => {
+    const s = await tx.staff.update({
+      where: { id },
+      data: { role: role as any, status: 'Active', assignedBy: adm },
+    });
 
-  staff.role = role as 'TeamLeader' | 'Physician' | 'Nurse';
-  staff.status = 'Active';
-  staff.assignedBy = adminId as any;
-  await staff.save();
+    await tx.notification.deleteMany({
+      where: {
+        type: 'StaffApproval',
+        data: { path: ['staffId'], equals: id },
+      },
+    });
 
-  await Notification.deleteOne({
-    type: 'StaffApproval',
-    'data.staffId': staffId,
+    return s;
   });
 
   return {
-    id: staff._id.toString(),
-    name: staff.name,
-    email: staff.email,
-    phone: staff.phone,
-    role: staff.role,
-    status: staff.status,
-    assignedBy: {
-      id: adminId,
-      name: 'Admin',
-    },
-    updatedAt: staff.updatedAt,
+    id: updated.id,
+    name: updated.name,
+    email: updated.email,
+    phone: updated.phone,
+    role: updated.role,
+    status: updated.status,
+    assignedBy: { id: adm, name: 'Admin' },
+    updatedAt: updated.updatedAt,
   };
 };
 
 export const rejectStaff = async (staffId: string) => {
-  const staff = await Staff.findById(staffId);
+  const id = toId(staffId, 'staff id');
 
-  if (!staff) {
-    throw new ApiError(404, 'Staff member not found');
-  }
+  const staff = await prisma.staff.findUnique({ where: { id } });
+  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (staff.status === 'Active') throw new ApiError(400, 'Staff member is already approved');
 
-  if (staff.status === 'Active') {
-    throw new ApiError(400, 'Staff member is already approved');
-  }
-
-  staff.status = 'Rejected';
-  await staff.save();
-
-  await Notification.deleteOne({
-    type: 'StaffApproval',
-    'data.staffId': staffId,
+  const updated = await prisma.$transaction(async (tx) => {
+    const s = await tx.staff.update({
+      where: { id },
+      data: { status: 'Rejected' },
+    });
+    await tx.notification.deleteMany({
+      where: {
+        type: 'StaffApproval',
+        data: { path: ['staffId'], equals: id },
+      },
+    });
+    return s;
   });
 
-  return {
-    id: staff._id.toString(),
-    status: staff.status,
-  };
+  return { id: updated.id, status: updated.status };
 };
 
 // ═════════════════════════════════════════════════════════════
 // DASHBOARD
 // ═════════════════════════════════════════════════════════════
-
 export const getDashboardStats = async () => {
   const [
     totalPatients,
     activePatients,
     dischargedPatients,
+    hospitalizedPatients,
     pendingReferrals,
     pendingStaff,
+    staffApprovals,
+    recentCloseCases,
+    patientsByStatusRaw,
+    recentReferrals,
+    recentVisits,
   ] = await Promise.all([
-    Patient.countDocuments(),
-    Patient.countDocuments({ status: 'Active' }),
-    Patient.countDocuments({ status: 'Discharged' }),
-    Referral.countDocuments({ status: 'Pending' }),
-    Staff.countDocuments({ status: 'Pending', isEmailVerified: true }),
+    prisma.patient.count(),
+    prisma.patient.count({ where: { status: 'Active' } }),
+    prisma.patient.count({ where: { status: 'Discharged' } }),
+    prisma.patient.count({ where: { currentLocation: 'ReferredHospital' } }),
+    prisma.referral.count({ where: { status: 'Pending' } }),
+    prisma.staff.count({ where: { status: 'Pending', isEmailVerified: true } }),
+    prisma.notification.count({ where: { type: 'StaffApproval', read: false } }),
+    prisma.notification.count({
+      where: {
+        type: 'CloseCase',
+        createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+      },
+    }),
+    prisma.patient.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    }),
+    prisma.referral.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: { patient: { select: { firstName: true, lastName: true } } },
+    }),
+    prisma.homeVisit.findMany({
+      orderBy: { visitDate: 'desc' },
+      take: 5,
+      include: {
+        patient: { select: { firstName: true, lastName: true } },
+        createdByStaff: { select: { name: true } },
+      },
+    }),
   ]);
-
-  const hospitalizedPatients = await Patient.countDocuments({
-    currentLocation: 'ReferredHospital',
-  });
-
-  const patientsByStatus = await Patient.aggregate([
-    { $group: { _id: '$status', count: { $sum: 1 } } },
-    { $project: { status: '$_id', count: 1, _id: 0 } },
-  ]);
-
-  const recentReferrals = await Referral.find()
-    .sort({ createdAt: -1 })
-    .limit(5)
-    .populate('patientId', 'firstName lastName');
-
-  const recentVisits = await HomeVisit.find()
-    .sort({ visitDate: -1 })
-    .limit(5)
-    .populate('patientId', 'firstName lastName')
-    .populate('teamLeaderId', 'name');
-
-  const staffApprovals = await Notification.countDocuments({
-    type: 'StaffApproval',
-    read: false,
-  });
-
-  const pendingReferralsCount = await Referral.countDocuments({ status: 'Pending' });
-
-  const recentCloseCases = await Notification.countDocuments({
-    type: 'CloseCase',
-    createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
-  });
 
   return {
     totalPatients,
@@ -162,20 +145,23 @@ export const getDashboardStats = async () => {
     pendingStaff,
     notifications: {
       staffApprovals,
-      pendingReferrals: pendingReferralsCount,
+      pendingReferrals,
       recentCloseCases,
     },
-    patientsByStatus,
+    patientsByStatus: patientsByStatusRaw.map((r) => ({
+      status: r.status,
+      count: r._count._all,
+    })),
     recentReferrals: recentReferrals.map((r) => ({
-      id: r._id.toString(),
-      patientName: `${(r.patientId as any).firstName} ${(r.patientId as any).lastName}`,
+      id: r.id,
+      patientName: `${r.patient.firstName} ${r.patient.lastName}`,
       date: r.createdAt,
       status: r.status,
     })),
     recentVisits: recentVisits.map((v) => ({
-      patientName: `${(v.patientId as any).firstName} ${(v.patientId as any).lastName}`,
+      patientName: `${v.patient.firstName} ${v.patient.lastName}`,
       date: v.visitDate,
-      staff: (v.teamLeaderId as any)?.name || 'Unknown',
+      staff: v.createdByStaff.name,
     })),
   };
 };
@@ -183,99 +169,86 @@ export const getDashboardStats = async () => {
 // ═════════════════════════════════════════════════════════════
 // NOTIFICATIONS
 // ═════════════════════════════════════════════════════════════
-
 export const getNotifications = async (limit: number = 20, read?: string) => {
-  const filter: any = {};
-  if (read !== undefined) {
-    filter.read = read === 'true';
-  }
+  const where: any = {};
+  if (read !== undefined) where.read = read === 'true';
 
-  const notifications = await Notification.find(filter)
-    .sort({ createdAt: -1 })
-    .limit(limit);
-
-  const unreadCount = await Notification.countDocuments({ read: false });
-  const totalCount = await Notification.countDocuments();
+  const [notifications, unreadCount, totalCount] = await Promise.all([
+    prisma.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    }),
+    prisma.notification.count({ where: { read: false } }),
+    prisma.notification.count(),
+  ]);
 
   return {
-    notifications: notifications.map((n) => ({
-      id: n._id.toString(),
-      type: n.type,
-      message: n.message,
-      data: n.data,
-      read: n.read,
-      createdAt: n.createdAt,
-    })),
+    notifications,
     unreadCount,
     totalCount,
   };
 };
 
 export const markNotificationRead = async (notificationId: string) => {
-  const notification = await Notification.findById(notificationId);
+  const id = toId(notificationId, 'notification id');
 
-  if (!notification) {
-    throw new ApiError(404, 'Notification not found');
-  }
+  const existing = await prisma.notification.findUnique({ where: { id } });
+  if (!existing) throw new ApiError(404, 'Notification not found');
 
-  notification.read = true;
-  await notification.save();
+  const updated = await prisma.notification.update({
+    where: { id },
+    data: { read: true },
+  });
 
-  return {
-    id: notification._id.toString(),
-    read: notification.read,
-  };
+  return { id: updated.id, read: updated.read };
 };
 
 // ═════════════════════════════════════════════════════════════
-// PATIENT MANAGEMENT
+// PATIENTS (admin view)
 // ═════════════════════════════════════════════════════════════
-
 export const getPatients = async (
   page: number = 1,
   limit: number = 20,
   status?: string,
-  search?: string
+  search?: string,
 ) => {
-  const filter: any = {};
-
-  if (status) {
-    filter.status = status;
-  }
-
+  const where: any = {};
+  if (status) where.status = status;
   if (search) {
-    filter.$or = [
-      { firstName: { $regex: search, $options: 'i' } },
-      { lastName: { $regex: search, $options: 'i' } },
-      { patientDisplayId: { $regex: search, $options: 'i' } },
+    where.OR = [
+      { firstName: { contains: search, mode: 'insensitive' } },
+      { lastName: { contains: search, mode: 'insensitive' } },
     ];
   }
 
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
-    Patient.find(filter)
-      .skip(skip)
-      .limit(limit)
-      .populate('registeredBy', 'name'),
-    Patient.countDocuments(filter),
+    prisma.patient.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: { registeredByStaff: { select: { id: true, name: true } } },
+    }),
+    prisma.patient.count({ where }),
   ]);
 
   return {
-    items: items.map((patient) => ({
-      id: patient._id.toString(),
-      patientDisplayId: patient.patientDisplayId,
-      firstName: patient.firstName,
-      lastName: patient.lastName,
-      age: patient.age,
-      sex: patient.sex,
-      status: patient.status,
-      currentLocation: patient.currentLocation,
-      primaryDiagnosis: patient.primaryDiagnosis,
-      registeredAt: patient.createdAt,
+    items: items.map((p) => ({
+      id: p.id,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      age: p.age,
+      sex: p.sex,
+      status: p.status,
+      currentLocation: p.currentLocation,
+      primaryDiagnosis: p.primaryDiagnosis,
+      registeredAt: p.createdAt,
       registeredBy: {
-        id: (patient.registeredBy as any)?._id?.toString() || '',
-        name: (patient.registeredBy as any)?.name || 'Unknown',
+        id: p.registeredByStaff.id,
+        name: p.registeredByStaff.name,
       },
     })),
     page,
@@ -284,42 +257,36 @@ export const getPatients = async (
   };
 };
 
-// ─────────────────────────────────────────────────────────────
-// Admin patient detail (aggregates every sub-record)
-// ─────────────────────────────────────────────────────────────
 export const getPatientDetail = async (patientId: string) => {
-  const patient = await Patient.findById(patientId).populate('registeredBy', 'name');
+  const id = toId(patientId, 'patient id');
 
-  if (!patient) {
-    throw new ApiError(404, 'Patient not found');
-  }
+  const patient = await prisma.patient.findUnique({
+    where: { id },
+    include: {
+      registeredByStaff: { select: { id: true, name: true } },
+      visits: {
+        orderBy: { visitDate: 'desc' },
+        include: {
+          createdByStaff: { select: { id: true, name: true } },
+          signatures: true,
+        },
+      },
+      medications: { orderBy: { createdAt: 'desc' } },
+      labTests: { orderBy: { dateOrdered: 'desc' } },
+      referrals: { orderBy: { createdAt: 'desc' } },
+      admissions: { orderBy: { admissionDate: 'desc' } },
+      imagingOrders: { orderBy: { createdAt: 'desc' } },
+      progressNotes: { orderBy: { createdAt: 'desc' }, take: 20 },
+      dischargeSummaries: { orderBy: { createdAt: 'desc' }, take: 1 },
+    },
+  });
 
-  const [
-    visits,
-    medications,
-    labTests,
-    referrals,
-    admissions,
-    imagingOrders,
-    progressNotes,
-    dischargeSummary,
-  ] = await Promise.all([
-    HomeVisit.find({ patientId })
-      .sort({ visitDate: -1 })
-      .populate('teamLeaderId', 'name'),
-    Medication.find({ patientId }).sort({ createdAt: -1 }),
-    LaboratoryTest.find({ patientId }).sort({ dateOrdered: -1 }),
-    Referral.find({ patientId }).sort({ createdAt: -1 }),
-    HospitalAdmission.find({ patientId }).sort({ admissionDate: -1 }),
-    ImagingOrder.find({ patientId }).sort({ createdAt: -1 }),
-    PatientProgressNote.find({ patientId }).sort({ createdAt: -1 }).limit(20),
-    DischargeSummary.findOne({ patientId }).sort({ createdAt: -1 }),
-  ]);
+  if (!patient) throw new ApiError(404, 'Patient not found');
+
+  const latestDischarge = patient.dischargeSummaries[0] ?? null;
 
   return {
-    // ── Identity ──
-    id: patient._id.toString(),
-    patientDisplayId: patient.patientDisplayId,
+    id: patient.id,
     firstName: patient.firstName,
     lastName: patient.lastName,
     age: patient.age,
@@ -332,7 +299,6 @@ export const getPatientDetail = async (patientId: string) => {
     caregiverName: patient.caregiverName,
     caregiverPhone: patient.caregiverPhone,
 
-    // ── Clinical ──
     primaryDiagnosis: patient.primaryDiagnosis,
     secondaryDiagnoses: patient.secondaryDiagnoses,
     diseaseStage: patient.diseaseStage,
@@ -341,26 +307,27 @@ export const getPatientDetail = async (patientId: string) => {
     status: patient.status,
     currentLocation: patient.currentLocation,
 
-    // ── Registrant ──
     registeredBy: {
-      id: (patient.registeredBy as any)?._id?.toString() || '',
-      name: (patient.registeredBy as any)?.name || 'Unknown',
+      id: patient.registeredByStaff.id,
+      name: patient.registeredByStaff.name,
     },
 
-    // ── Sub-records ──
-    visits: visits.map((v) => ({
-      id: v._id.toString(),
-      visitDate: v.visitDate,
-      visitType: v.visitType,
-      overallStatus: v.overallStatus,
-      outcome: v.outcome,
-      ppsScore: v.ppsScore,
-      kpsScore: v.kpsScore,
-      staff: (v.teamLeaderId as any)?.name || 'Unknown',
-    })),
+    visits: patient.visits.map((v) => {
+      const leader = v.signatures.find((s) => s.isTeamLeader);
+      return {
+        id: v.id,
+        visitDate: v.visitDate,
+        visitType: v.visitType,
+        overallStatus: v.overallStatus,
+        outcome: v.outcome,
+        ppsScore: v.ppsScore,
+        kpsScore: v.kpsScore,
+        staff: leader?.name ?? v.createdByStaff.name,
+      };
+    }),
 
-    medications: medications.map((m) => ({
-      id: m._id.toString(),
+    medications: patient.medications.map((m) => ({
+      id: m.id,
       name: m.name,
       dosage: m.dosage,
       frequency: m.frequency,
@@ -370,8 +337,8 @@ export const getPatientDetail = async (patientId: string) => {
       createdAt: m.createdAt,
     })),
 
-    labTests: labTests.map((l) => ({
-      id: l._id.toString(),
+    labTests: patient.labTests.map((l) => ({
+      id: l.id,
       name: l.testName,
       dateOrdered: l.dateOrdered,
       datePerformed: l.datePerformed,
@@ -380,22 +347,22 @@ export const getPatientDetail = async (patientId: string) => {
       location: l.location,
     })),
 
-    imagingOrders: imagingOrders.map((o) => ({
-      id: o._id.toString(),
+    imagingOrders: patient.imagingOrders.map((o) => ({
+      id: o.id,
       modality: o.modality,
       bodyRegion: o.bodyRegion,
       specificSite: o.specificSite,
       laterality: o.laterality,
       priority: o.priority,
       status: o.status,
-      hasReport: !!(o.report && o.report.findings),
+      hasReport: !!(o.findings || o.impression),
       dateOrdered: o.createdAt,
       performedAt: o.performedAt,
     })),
 
-    progressNotes: progressNotes.map((n) => ({
-      id: n._id.toString(),
-      admissionId: n.admissionId?.toString(),
+    progressNotes: patient.progressNotes.map((n) => ({
+      id: n.id,
+      admissionId: n.admissionId,
       generalCondition: n.generalCondition,
       levelOfConsciousness: n.levelOfConsciousness,
       attendingClinician: n.attendingClinician,
@@ -404,16 +371,16 @@ export const getPatientDetail = async (patientId: string) => {
       createdAt: n.createdAt,
     })),
 
-    referrals: referrals.map((r) => ({
-      id: r._id.toString(),
+    referrals: patient.referrals.map((r) => ({
+      id: r.id,
       date: r.createdAt,
       referralType: r.referralType,
       status: r.status,
       receivingFacility: r.receivingFacility,
     })),
 
-    admissions: admissions.map((a) => ({
-      id: a._id.toString(),
+    admissions: patient.admissions.map((a) => ({
+      id: a.id,
       date: a.admissionDate,
       dischargeDate: a.dischargeDate,
       ward: a.ward,
@@ -423,391 +390,375 @@ export const getPatientDetail = async (patientId: string) => {
       dischargeReason: a.dischargeReason,
     })),
 
-    dischargeSummary: dischargeSummary
+    dischargeSummary: latestDischarge
       ? {
-          id: dischargeSummary._id.toString(),
-          admissionId: dischargeSummary.admissionId?.toString(),
-          dateOfDischarge: dischargeSummary.dateOfDischarge,
-          timeOfDischarge: dischargeSummary.timeOfDischarge,
-          dischargeType: dischargeSummary.dischargeType,
-          overallCondition: dischargeSummary.overallCondition,
-          dischargedTo: dischargeSummary.dischargedTo,
-          status: dischargeSummary.status,
-          createdAt: dischargeSummary.createdAt,
+          id: latestDischarge.id,
+          admissionId: latestDischarge.admissionId,
+          dateOfDischarge: latestDischarge.dateOfDischarge,
+          timeOfDischarge: latestDischarge.timeOfDischarge,
+          dischargeType: latestDischarge.dischargeType,
+          overallCondition: latestDischarge.overallCondition,
+          dischargedTo: latestDischarge.dischargedTo,
+          status: latestDischarge.status,
+          createdAt: latestDischarge.createdAt,
         }
       : null,
 
-    // ── Meta ──
     createdAt: patient.createdAt,
   };
 };
 
-// ─────────────────────────────────────────────────────────────
-// Close case (legacy path — used when admin closes without the
-// full discharge form being filled out)
-// ─────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════
+// CLOSE CASE (legacy fast path)
+// ═════════════════════════════════════════════════════════════
 export const closeCase = async (
   patientId: string,
   reason: string,
-  _adminId: string
+  _adminId: string|number,
 ) => {
-  const patient = await Patient.findById(patientId);
+  const id = toId(patientId, 'patient id');
 
-  if (!patient) {
-    throw new ApiError(404, 'Patient not found');
-  }
-
+  const patient = await prisma.patient.findUnique({ where: { id } });
+  if (!patient) throw new ApiError(404, 'Patient not found');
   if (patient.status === 'Discharged') {
     throw new ApiError(400, 'Patient case is already closed');
   }
 
-  patient.status = 'Discharged';
-  await patient.save();
+  await prisma.$transaction(async (tx) => {
+    await tx.patient.update({
+      where: { id },
+      data: { status: 'Discharged' },
+    });
 
-  await Notification.create({
-    type: 'CloseCase',
-    message: `Patient case closed: ${patient.firstName} ${patient.lastName}`,
-    data: {
-      patientId: patient._id,
-      patientName: `${patient.firstName} ${patient.lastName}`,
-      reason,
-    },
-    read: false,
+    await tx.notification.create({
+      data: {
+        type: 'CloseCase',
+        message: `Patient case closed: ${patient.firstName} ${patient.lastName}`,
+        data: {
+          patientId: id,
+          patientName: `${patient.firstName} ${patient.lastName}`,
+        },
+        read: false,
+      },
+    });
   });
 
   return {
-    id: patient._id.toString(),
-    status: patient.status,
+    id,
+    status: 'Discharged',
     closeReason: reason,
     closeDate: new Date(),
   };
 };
 
 // ═════════════════════════════════════════════════════════════
-// REFERRAL MANAGEMENT
+// REFERRALS (admin view)
 // ═════════════════════════════════════════════════════════════
-
 export const getPendingReferrals = async () => {
-  const referrals = await Referral.find({ status: 'Pending' }).populate(
-    'patientId',
-    'firstName lastName patientDisplayId'
-  );
-
-  return referrals.map((r) => {
-    const p = r.patientId as any;
-    return {
-      id: r._id.toString(),
-      patientId: p?._id?.toString() || '',
-      patientName: p ? `${p.firstName} ${p.lastName}` : 'Unknown',
-      patientDisplayId: p?.patientDisplayId,
-      referralType: r.referralType,
-      referralDate: r.referralDate,
-      primaryDiagnosis: r.primaryDiagnosis,
-      diseaseStage: r.diseaseStage,
-      ppsScore: r.ppsScore,
-      kpsScore: r.kpsScore,
-      currentSymptoms: r.currentSymptoms,
-      reasons: r.reasons,
-      referringFacility: r.referringFacility,
-      receivingFacility: r.receivingFacility,
-      contactPerson: r.contactPerson,
-      contactNumber: r.contactNumber,
-      status: r.status,
-      createdAt: r.createdAt,
-    };
+  const referrals = await prisma.referral.findMany({
+    where: { status: 'Pending' },
+    include: {
+      patient: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: { createdAt: 'desc' },
   });
+
+  return referrals.map((r) => ({
+    id: r.id,
+    patientId: r.patient.id,
+    patientName: `${r.patient.firstName} ${r.patient.lastName}`,
+    referralType: r.referralType,
+    referralDate: r.referralDate,
+    primaryDiagnosis: r.primaryDiagnosis,
+    diseaseStage: r.diseaseStage,
+    ppsScore: r.ppsScore,
+    kpsScore: r.kpsScore,
+    currentSymptoms: r.currentSymptoms,
+    reasons: r.reasons,
+    referringFacility: r.referringFacility,
+    receivingFacility: r.receivingFacility,
+    contactPerson: r.contactPerson,
+    contactNumber: r.contactNumber,
+    status: r.status,
+    createdAt: r.createdAt,
+  }));
 };
 
-export const approveReferral = async (referralId: string, adminId: string) => {
-  const referral = await Referral.findById(referralId);
+export const approveReferral = async (referralId: string, adminId: string|number) => {
+  const rid = toId(referralId, 'referral id');
+  const adm = toId(adminId, 'admin id');
 
-  if (!referral) {
-    throw new ApiError(404, 'Referral not found');
-  }
-
+  const referral = await prisma.referral.findUnique({
+    where: { id: rid },
+    include: { patient: { select: { id: true, firstName: true, lastName: true } } },
+  });
+  if (!referral) throw new ApiError(404, 'Referral not found');
   if (referral.status !== 'Pending') {
     throw new ApiError(400, 'Referral has already been processed');
   }
 
-  referral.status = 'Accepted';
-  referral.approvedBy = adminId as any;
-  await referral.save();
+  const updated = await prisma.$transaction(async (tx) => {
+    const r = await tx.referral.update({
+      where: { id: rid },
+      data: { status: 'Accepted', approvedBy: adm },
+    });
 
-  await Patient.findByIdAndUpdate(referral.patientId, {
-    currentLocation: 'ReferredHospital',
-  });
+    await tx.patient.update({
+      where: { id: referral.patientId },
+      data: { currentLocation: 'ReferredHospital' },
+    });
 
-  const patient = await Patient.findById(referral.patientId);
-  await Notification.create({
-    type: 'ReferralApproval',
-    message: `Referral approved for ${patient?.firstName} ${patient?.lastName}`,
-    data: {
-      referralId: referral._id,
-      patientId: referral.patientId,
-      patientName: `${patient?.firstName} ${patient?.lastName}`,
-    },
-    read: false,
+    await tx.notification.create({
+      data: {
+        type: 'ReferralApproval',
+        message: `Referral approved for ${referral.patient.firstName} ${referral.patient.lastName}`,
+        data: {
+          referralId: rid,
+          patientId: referral.patientId,
+          patientName: `${referral.patient.firstName} ${referral.patient.lastName}`,
+        },
+        read: false,
+      },
+    });
+
+    return r;
   });
 
   return {
-    id: referral._id.toString(),
-    status: referral.status,
-    approvedBy: {
-      id: adminId,
-      name: 'Admin',
-    },
-    updatedAt: referral.updatedAt,
+    id: updated.id,
+    status: updated.status,
+    approvedBy: { id: adm, name: 'Admin' },
+    updatedAt: updated.updatedAt,
   };
 };
 
 export const declineReferral = async (referralId: string) => {
-  const referral = await Referral.findById(referralId);
+  const rid = toId(referralId, 'referral id');
 
-  if (!referral) {
-    throw new ApiError(404, 'Referral not found');
-  }
-
+  const referral = await prisma.referral.findUnique({ where: { id: rid } });
+  if (!referral) throw new ApiError(404, 'Referral not found');
   if (referral.status !== 'Pending') {
     throw new ApiError(400, 'Referral has already been processed');
   }
 
-  referral.status = 'Declined';
-  await referral.save();
+  const updated = await prisma.referral.update({
+    where: { id: rid },
+    data: { status: 'Declined' },
+  });
 
-  return {
-    id: referral._id.toString(),
-    status: referral.status,
-  };
+  return { id: updated.id, status: updated.status };
 };
 
 // ═════════════════════════════════════════════════════════════
 // REPORTS
 // ═════════════════════════════════════════════════════════════
-
 export const getReports = async (startDate?: string, endDate?: string) => {
   const dateFilter: any = {};
+  if (startDate) dateFilter.gte = new Date(startDate);
+  if (endDate) dateFilter.lte = new Date(endDate);
+  const createdAtFilter = Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
+  const visitDateFilter = Object.keys(dateFilter).length > 0 ? { visitDate: dateFilter } : {};
 
-  if (startDate) dateFilter.$gte = new Date(startDate);
-  if (endDate) dateFilter.$lte = new Date(endDate);
+  const [
+    totalPatients,
+    activePatients,
+    dischargedPatients,
+    hospitalizedPatients,
+    referralsByStatusRaw,
+    patientsByLocationRaw,
+    patientsByStageRaw,
+    closeCasesByReasonRaw,
+    visitsByMonthRaw,
+    imagingByModalityRaw,
+    imagingByStatusRaw,
+    progressNotesByConditionRaw,
+    dischargesByTypeRaw,
+  ] = await Promise.all([
+    prisma.patient.count({ where: createdAtFilter }),
+    prisma.patient.count({ where: { ...createdAtFilter, status: 'Active' } }),
+    prisma.patient.count({ where: { ...createdAtFilter, status: 'Discharged' } }),
+    prisma.patient.count({ where: { ...createdAtFilter, currentLocation: 'ReferredHospital' } }),
+    prisma.referral.groupBy({
+      by: ['status'],
+      where: createdAtFilter,
+      _count: { _all: true },
+    }),
+    prisma.patient.groupBy({
+      by: ['currentLocation'],
+      where: createdAtFilter,
+      _count: { _all: true },
+    }),
+    prisma.patient.groupBy({
+      by: ['diseaseStage'],
+      where: createdAtFilter,
+      _count: { _all: true },
+    }),
+    prisma.notification.findMany({
+      where: { ...createdAtFilter, type: 'CloseCase' },
+      select: { data: true },
+    }),
+    prisma.$queryRaw<Array<{ month: string; count: bigint }>>`
+      SELECT to_char("visitDate", 'YYYY-MM') AS month, COUNT(*)::bigint AS count
+      FROM "HomeVisit"
+      WHERE ${startDate ? prisma.$queryRaw`"visitDate" >= ${new Date(startDate)}` : prisma.$queryRaw`TRUE`}
+      GROUP BY month
+      ORDER BY month ASC
+    `,
+    prisma.imagingOrder.groupBy({
+      by: ['modality'],
+      where: createdAtFilter,
+      _count: { _all: true },
+    }),
+    prisma.imagingOrder.groupBy({
+      by: ['status'],
+      where: createdAtFilter,
+      _count: { _all: true },
+    }),
+    prisma.patientProgressNote.groupBy({
+      by: ['generalCondition'],
+      where: createdAtFilter,
+      _count: { _all: true },
+    }),
+    prisma.dischargeSummary.groupBy({
+      by: ['dischargeType'],
+      where: createdAtFilter,
+      _count: { _all: true },
+    }),
+  ]);
 
-  const filter: any = {};
-  if (Object.keys(dateFilter).length > 0) {
-    filter.createdAt = dateFilter;
+  const closeCasesByReasonMap: Record<string, number> = {};
+  for (const n of closeCasesByReasonRaw) {
+    const reason = (n.data as any)?.reason ?? 'Unknown';
+    closeCasesByReasonMap[reason] = (closeCasesByReasonMap[reason] ?? 0) + 1;
   }
-
-  const [totalPatients, activePatients, dischargedPatients, hospitalizedPatients] =
-    await Promise.all([
-      Patient.countDocuments(filter),
-      Patient.countDocuments({ ...filter, status: 'Active' }),
-      Patient.countDocuments({ ...filter, status: 'Discharged' }),
-      Patient.countDocuments({ ...filter, currentLocation: 'ReferredHospital' }),
-    ]);
-
-  const referralsByStatus = await Referral.aggregate([
-    { $match: filter },
-    { $group: { _id: '$status', count: { $sum: 1 } } },
-    { $project: { status: '$_id', count: 1, _id: 0 } },
-  ]);
-
-  const patientsByLocation = await Patient.aggregate([
-    { $match: filter },
-    { $group: { _id: '$currentLocation', count: { $sum: 1 } } },
-    { $project: { location: '$_id', count: 1, _id: 0 } },
-  ]);
-
-  const patientsByStage = await Patient.aggregate([
-    { $match: filter },
-    { $group: { _id: '$diseaseStage', count: { $sum: 1 } } },
-    { $project: { stage: '$_id', count: 1, _id: 0 } },
-  ]);
-
-  const closeCasesByReason = await Notification.aggregate([
-    { $match: { ...filter, type: 'CloseCase' } },
-    { $group: { _id: '$data.reason', count: { $sum: 1 } } },
-    { $project: { reason: '$_id', count: 1, _id: 0 } },
-  ]);
-
-  const visitsByMonth = await HomeVisit.aggregate([
-    { $match: filter },
-    {
-      $group: {
-        _id: { $dateToString: { format: '%Y-%m', date: '$visitDate' } },
-        count: { $sum: 1 },
-      },
-    },
-    { $project: { month: '$_id', count: 1, _id: 0 } },
-    { $sort: { month: 1 } },
-  ]);
-
-  // NEW — imaging and progress-note counts (useful for the Reports page)
-  const imagingByModality = await ImagingOrder.aggregate([
-    { $match: filter },
-    { $group: { _id: '$modality', count: { $sum: 1 } } },
-    { $project: { modality: '$_id', count: 1, _id: 0 } },
-  ]);
-
-  const imagingByStatus = await ImagingOrder.aggregate([
-    { $match: filter },
-    { $group: { _id: '$status', count: { $sum: 1 } } },
-    { $project: { status: '$_id', count: 1, _id: 0 } },
-  ]);
-
-  const progressNotesByCondition = await PatientProgressNote.aggregate([
-    { $match: filter },
-    { $group: { _id: '$generalCondition', count: { $sum: 1 } } },
-    { $project: { condition: '$_id', count: 1, _id: 0 } },
-  ]);
-
-  const dischargesByType = await DischargeSummary.aggregate([
-    { $match: filter },
-    { $group: { _id: '$dischargeType', count: { $sum: 1 } } },
-    { $project: { dischargeType: '$_id', count: 1, _id: 0 } },
-  ]);
 
   return {
     totalPatients,
     activePatients,
     dischargedPatients,
     hospitalizedPatients,
-    referralsByStatus,
-    patientsByLocation,
-    patientsByStage,
-    closeCasesByReason,
-    visitsByMonth,
-    imagingByModality,       // NEW
-    imagingByStatus,         // NEW
-    progressNotesByCondition, // NEW
-    dischargesByType,        // NEW
+    referralsByStatus: referralsByStatusRaw.map((r) => ({
+      status: r.status,
+      count: r._count._all,
+    })),
+    patientsByLocation: patientsByLocationRaw.map((r) => ({
+      location: r.currentLocation,
+      count: r._count._all,
+    })),
+    patientsByStage: patientsByStageRaw.map((r) => ({
+      stage: r.diseaseStage,
+      count: r._count._all,
+    })),
+    closeCasesByReason: Object.entries(closeCasesByReasonMap).map(
+      ([reason, count]) => ({ reason, count }),
+    ),
+    visitsByMonth: visitsByMonthRaw.map((r) => ({
+      month: r.month,
+      count: Number(r.count),
+    })),
+    imagingByModality: imagingByModalityRaw.map((r) => ({
+      modality: r.modality,
+      count: r._count._all,
+    })),
+    imagingByStatus: imagingByStatusRaw.map((r) => ({
+      status: r.status,
+      count: r._count._all,
+    })),
+    progressNotesByCondition: progressNotesByConditionRaw.map((r) => ({
+      condition: r.generalCondition,
+      count: r._count._all,
+    })),
+    dischargesByType: dischargesByTypeRaw.map((r) => ({
+      dischargeType: r.dischargeType,
+      count: r._count._all,
+    })),
   };
 };
 
 // ═════════════════════════════════════════════════════════════
-// STAFF MANAGEMENT — ACTIVE STAFF
+// STAFF MANAGEMENT (active staff)
 // ═════════════════════════════════════════════════════════════
-
-/**
- * List staff with filters + pagination.
- *
- * By default (no status filter) this excludes soft-deleted records.
- * Passing status='Deleted' returns only soft-deleted records.
- * Passing status='All' returns everything, live and deleted.
- */
 export const getStaffList = async (
   page: number = 1,
   limit: number = 20,
   filters: {
     status?: 'Active' | 'Pending' | 'Rejected' | 'Deleted' | 'All';
-    role?: 'TeamLeader' | 'Physician' | 'Nurse';
+    role?: 'Physician' | 'Nurse' | 'Pharmacist' | 'Radiologist' | 'LaboratoryTechnician';
     search?: string;
   } = {},
 ) => {
   const query: any = {};
 
-  // ── Status filter ──
   if (!filters.status || filters.status === 'All') {
-    // 'All' → no filter on deletedAt, no filter on status
+    // no filter
   } else if (filters.status === 'Deleted') {
-    // Soft-deleted records, any status
-    query.deletedAt = { $ne: null };
+    query.deletedAt = { not: null };
   } else {
-    // A specific status — only live records
     query.status = filters.status;
     query.deletedAt = null;
   }
 
-  if (filters.role) {
-    query.role = filters.role;
-  }
+  if (filters.role) query.role = filters.role;
 
   if (filters.search) {
     const q = filters.search.trim();
-    query.$or = [
-      { name: { $regex: q, $options: 'i' } },
-      { email: { $regex: q, $options: 'i' } },
-      { phone: { $regex: q, $options: 'i' } },
+    query.OR = [
+      { name: { contains: q, mode: 'insensitive' } },
+      { email: { contains: q, mode: 'insensitive' } },
+      { phone: { contains: q, mode: 'insensitive' } },
     ];
   }
 
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
-    Staff.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .select('-password -emailVerificationOtp -emailVerificationOtpExpires'),
-    Staff.countDocuments(query),
+    prismaBase.staff.findMany({
+      where: query,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true, name: true, email: true, phone: true, role: true,
+        status: true, isEmailVerified: true, deletedAt: true,
+        createdAt: true, updatedAt: true,
+      },
+    }),
+    prismaBase.staff.count({ where: query }),
   ]);
 
-  return {
-    items: items.map((s) => ({
-      id: s._id.toString(),
-      name: s.name,
-      email: s.email,
-      phone: s.phone,
-      role: s.role,
-      status: s.status,
-      isEmailVerified: s.isEmailVerified,
-      deletedAt: s.deletedAt,
-      createdAt: s.createdAt,
-      updatedAt: s.updatedAt,
-    })),
-    page,
-    limit,
-    total,
-  };
+  return { items, page, limit, total };
 };
 
-/**
- * Get one staff member. Supports viewing soft-deleted records
- * by passing includeDeleted — the controller decides based on
- * the caller's intent (restore flow needs it, normal view doesn't).
- */
 export const getStaffById = async (
   staffId: string,
   includeDeleted: boolean = false,
 ) => {
-  let q = Staff.findById(staffId).select(
-    '-password -emailVerificationOtp -emailVerificationOtpExpires',
-  );
-  if (includeDeleted) {
-    q = q.setOptions({ includeDeleted: true });
-  }
-  const staff = await q;
+  const id = toId(staffId, 'staff id');
 
-  if (!staff) {
-    throw new ApiError(404, 'Staff member not found');
-  }
+  const client = includeDeleted ? prismaBase : prisma;
+  const staff = await client.staff.findUnique({
+    where: { id },
+    select: {
+      id: true, name: true, email: true, phone: true, role: true,
+      status: true, isEmailVerified: true, deletedAt: true,
+      createdAt: true, updatedAt: true,
+    },
+  });
 
-  return {
-    id: staff._id.toString(),
-    name: staff.name,
-    email: staff.email,
-    phone: staff.phone,
-    role: staff.role,
-    status: staff.status,
-    isEmailVerified: staff.isEmailVerified,
-    deletedAt: staff.deletedAt,
-    createdAt: staff.createdAt,
-    updatedAt: staff.updatedAt,
-  };
+  if (!staff) throw new ApiError(404, 'Staff member not found');
+  return staff;
 };
 
-/**
- * Update name / phone / role of an existing staff member.
- * Email is not editable here — it would require re-verification.
- */
 export const updateStaff = async (
   staffId: string,
-  data: { name?: string; phone?: string; role?: 'TeamLeader' | 'Physician' | 'Nurse' },
-  adminId: string,
+  data: { name?: string; phone?: string; role?: any },
+  adminId: string|number,
 ) => {
-  const staff = await Staff.findById(staffId);
+  const id = toId(staffId, 'staff id');
+  const adm = toId(adminId, 'admin id');
 
-  if (!staff) {
-    throw new ApiError(404, 'Staff member not found');
-  }
-
+  const staff = await prisma.staff.findUnique({ where: { id } });
+  if (!staff) throw new ApiError(404, 'Staff member not found');
   if (staff.deletedAt) {
     throw new ApiError(400, 'Cannot edit a deleted staff member — restore first');
   }
@@ -819,109 +770,88 @@ export const updateStaff = async (
     );
   }
 
-  if (data.name !== undefined) staff.name = data.name;
-  if (data.phone !== undefined) staff.phone = data.phone;
-  if (data.role !== undefined) staff.role = data.role;
+  const updated = await prisma.staff.update({
+    where: { id },
+    data: { ...data, updatedBy: adm },
+    select: {
+      id: true, name: true, email: true, phone: true, role: true,
+      status: true, isEmailVerified: true, updatedAt: true,
+    },
+  });
 
-  staff.updatedBy = adminId as any;
-  await staff.save();
-
-  return {
-    id: staff._id.toString(),
-    name: staff.name,
-    email: staff.email,
-    phone: staff.phone,
-    role: staff.role,
-    status: staff.status,
-    isEmailVerified: staff.isEmailVerified,
-    updatedAt: staff.updatedAt,
-  };
+  return updated;
 };
 
-/**
- * Soft delete a staff member.
- * - Prevents an admin from deleting themselves.
- * - Prevents deleting an already-deleted record.
- * - Sets `deletedAt`, `deletedBy`, `deletionReason`.
- */
 export const deleteStaff = async (
   staffId: string,
-  adminId: string,
+  adminId: string|number,
   reason?: string,
 ) => {
   if (staffId === adminId) {
     throw new ApiError(400, 'You cannot delete your own account');
   }
 
-  const staff = await Staff.findById(staffId);
+  const id = toId(staffId, 'staff id');
+  const adm = toId(adminId, 'admin id');
 
-  if (!staff) {
-    throw new ApiError(404, 'Staff member not found');
-  }
+  const staff = await prisma.staff.findUnique({ where: { id } });
+  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (staff.deletedAt) throw new ApiError(400, 'Staff member is already deleted');
 
-  if (staff.deletedAt) {
-    throw new ApiError(400, 'Staff member is already deleted');
-  }
+  const updated = await prisma.staff.update({
+    where: { id },
+    data: {
+      deletedAt: new Date(),
+      deletedBy: adm,
+      deletionReason: reason ?? null,
+      updatedBy: adm,
+    },
+  });
 
-  staff.deletedAt = new Date();
-  staff.deletedBy = adminId as any;
-  staff.deletionReason = reason ?? null;
-  staff.updatedBy = adminId as any;
-  await staff.save();
-
-  return {
-    id: staff._id.toString(),
-    success: true,
-    deletedAt: staff.deletedAt,
-  };
+  return { id: updated.id, success: true, deletedAt: updated.deletedAt };
 };
 
-/**
- * Restore a soft-deleted staff member.
- */
-export const restoreStaff = async (staffId: string, adminId: string) => {
-  const staff = await Staff.findById(staffId).setOptions({ includeDeleted: true });
+export const restoreStaff = async (staffId: string, adminId: string|number) => {
+  const id = toId(staffId, 'staff id');
+  const adm = toId(adminId, 'admin id');
 
-  if (!staff) {
-    throw new ApiError(404, 'Staff member not found');
-  }
+  const staff = await prismaBase.staff.findUnique({ where: { id } });
+  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (!staff.deletedAt) throw new ApiError(400, 'Staff member is not deleted');
 
-  if (!staff.deletedAt) {
-    throw new ApiError(400, 'Staff member is not deleted');
-  }
+  await prisma.staff.update({
+    where: { id },
+    data: {
+      deletedAt: null,
+      deletedBy: null,
+      deletionReason: null,
+      updatedBy: adm,
+    },
+  });
 
-  staff.deletedAt = null;
-  staff.deletedBy = null as any;
-  staff.deletionReason = null;
-  staff.updatedBy = adminId as any;
-  await staff.save();
-
-  return {
-    id: staff._id.toString(),
-    restored: true,
-  };
+  return { id, restored: true };
 };
+
 // ═════════════════════════════════════════════════════════════
 // EXPORTS
 // ═════════════════════════════════════════════════════════════
-
 export default {
   getPendingStaff,
   approveStaff,
-  rejectStaff, 
-  getDashboardStats, 
+  rejectStaff,
+  getDashboardStats,
   getNotifications,
-  markNotificationRead, 
+  markNotificationRead,
   getPatients,
   getPatientDetail,
-  closeCase, 
+  closeCase,
   getPendingReferrals,
   approveReferral,
-  declineReferral, 
+  declineReferral,
   getReports,
-    getStaffList,
+  getStaffList,
   getStaffById,
   updateStaff,
   deleteStaff,
-  restoreStaff
+  restoreStaff,
 };

@@ -1,7 +1,6 @@
-import { ImagingOrder } from '@models/ImagingOrder.js';
-import { Patient } from '@models/Patient.js';
-import { Staff } from '@models/Staff.js';
+import { prisma } from '@db/prisma.js';
 import { ApiError } from '@utils/ApiError.js';
+import { toId } from '@utils/prisma.js';
 
 // ─────────────────────────────────────────────────────────────
 // Order imaging
@@ -9,37 +8,45 @@ import { ApiError } from '@utils/ApiError.js';
 export const orderImaging = async (
   patientId: string,
   data: any,
-  staffId: string,
+  staffId: string | number,
 ) => {
+  const pid = toId(patientId, 'patient id');
+  const sid = toId(staffId, 'staff id');
+
   const [patient, staff] = await Promise.all([
-    Patient.findById(patientId),
-    Staff.findById(staffId),
+    prisma.patient.findUnique({
+      where: { id: pid },
+      select: { id: true, firstName: true, lastName: true, hospitalPatientId: true },
+    }),
+    prisma.staff.findUnique({
+      where: { id: sid },
+      select: { id: true, name: true },
+    }),
   ]);
 
   if (!patient) throw new ApiError(404, 'Patient not found');
   if (!staff) throw new ApiError(404, 'Staff member not found');
 
-  const order = await ImagingOrder.create({
-    patientId,
-    patientName: `${patient.firstName} ${patient.lastName}`,
-    medicalRecordNo: patient.patientDisplayId,
-    ...data,
-    orderedBy: staffId,
-    status: 'Ordered',
+  const order = await prisma.imagingOrder.create({
+    data: {
+      patientId: pid,
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      medicalRecordNo: patient.hospitalPatientId,
+      ...data,
+      orderedBy: sid,
+      status: 'Ordered',
+    },
   });
 
   return {
-    id: order._id.toString(),
-    patientId: order.patientId.toString(),
+    id: order.id,
+    patientId: order.patientId,
     patientName: order.patientName,
     modality: order.modality,
     bodyRegion: order.bodyRegion,
     priority: order.priority,
     status: order.status,
-    orderedBy: {
-      id: staff._id.toString(),
-      name: staff.name,
-    },
+    orderedBy: { id: staff.id, name: staff.name },
     createdAt: order.createdAt,
   };
 };
@@ -53,29 +60,38 @@ export const getImagingOrders = async (
   page: number = 1,
   limit: number = 20,
 ) => {
-  const patient = await Patient.findById(patientId);
+  const pid = toId(patientId, 'patient id');
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: pid },
+    select: { id: true },
+  });
   if (!patient) throw new ApiError(404, 'Patient not found');
 
-  const query: any = { patientId };
-  if (filters.status) query.status = filters.status;
-  if (filters.modality) query.modality = filters.modality;
-  if (filters.priority) query.priority = filters.priority;
+  const where: any = { patientId: pid };
+  if (filters.status) where.status = filters.status;
+  if (filters.modality) where.modality = filters.modality;
+  if (filters.priority) where.priority = filters.priority;
 
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
-    ImagingOrder.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate('orderedBy', 'name role'),
-    ImagingOrder.countDocuments(query),
+    prisma.imagingOrder.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        orderedByStaff: { select: { id: true, name: true, role: true } },
+      },
+    }),
+    prisma.imagingOrder.count({ where }),
   ]);
 
   return {
     items: items.map((o) => ({
-      id: o._id.toString(),
-      patientId: o.patientId.toString(),
+      id: o.id,
+      patientId: o.patientId,
       modality: o.modality,
       bodyRegion: o.bodyRegion,
       specificSite: o.specificSite,
@@ -83,12 +99,12 @@ export const getImagingOrders = async (
       priority: o.priority,
       contrastRequested: o.contrastRequested,
       status: o.status,
-      hasReport: !!(o.report && o.report.findings),
+      hasReport: !!(o.findings || o.impression),
       dateOrdered: o.createdAt,
       performedAt: o.performedAt,
       orderedBy: {
-        id: (o.orderedBy as any)?._id?.toString() || '',
-        name: (o.orderedBy as any)?.name || 'Unknown',
+        id: o.orderedByStaff.id,
+        name: o.orderedByStaff.name,
       },
     })),
     page,
@@ -104,24 +120,38 @@ export const getImagingOrderById = async (
   patientId: string,
   imagingId: string,
 ) => {
-  const order = await ImagingOrder
-    .findOne({ _id: imagingId, patientId })
-    .populate('patientId', 'firstName lastName patientDisplayId age sex dateOfBirth')
-    .populate('orderedBy', 'name role email');
+  const pid = toId(patientId, 'patient id');
+  const oid = toId(imagingId, 'imaging id');
+
+  const order = await prisma.imagingOrder.findFirst({
+    where: { id: oid, patientId: pid },
+    include: {
+      patient: {
+        select: {
+          id: true, firstName: true, lastName: true, age: true, sex: true,
+          dateOfBirth: true, hospitalPatientId: true,
+        },
+      },
+      orderedByStaff: { select: { id: true, name: true, role: true, email: true } },
+      updatedByAdmin: { select: { id: true, name: true } },
+    },
+  });
 
   if (!order) throw new ApiError(404, 'Imaging order not found');
 
-  const p = order.patientId as any;
-
   return {
-    id: order._id.toString(),
-    patientId: p?._id?.toString(),
+    id: order.id,
+    patientId: order.patientId,
     patientName:
-      order.patientName || `${p?.firstName ?? ''} ${p?.lastName ?? ''}`.trim(),
-    medicalRecordNo: order.medicalRecordNo || p?.patientDisplayId,
-    age: p?.age,
-    sex: p?.sex,
-    dateOfBirth: p?.dateOfBirth,
+      order.patientName ??
+      `${order.patient.firstName} ${order.patient.lastName}`,
+    medicalRecordNo: order.medicalRecordNo ?? order.patient.hospitalPatientId,
+    age: order.patient.age,
+    sex: order.patient.sex,
+    dateOfBirth: order.patient.dateOfBirth,
+
+    hospital: order.hospital,
+    department: order.department,
 
     provisionalDiagnosis: order.provisionalDiagnosis,
     presentingSymptoms: order.presentingSymptoms,
@@ -163,8 +193,6 @@ export const getImagingOrderById = async (
     clinicianDepartment: order.clinicianDepartment,
     clinicianLicenseNo: order.clinicianLicenseNo,
     clinicianContact: order.clinicianContact,
-    clinicianSignature: order.clinicianSignature,
-    clinicianSignedAt: order.clinicianSignedAt,
 
     examinationPerformed: order.examinationPerformed,
     performedModality: order.performedModality,
@@ -175,17 +203,19 @@ export const getImagingOrderById = async (
     performedAt: order.performedAt,
     imageQuality: order.imageQuality,
 
-    report: order.report,
+    findings: order.findings,
+    impression: order.impression,
+    recommendation: order.recommendation,
+    reportDate: order.reportDate,
+
     status: order.status,
 
-    orderedBy: order.orderedBy
-      ? {
-          id: (order.orderedBy as any)._id.toString(),
-          name: (order.orderedBy as any).name,
-          role: (order.orderedBy as any).role,
-          email: (order.orderedBy as any).email,
-        }
-      : null,
+    orderedBy: {
+      id: order.orderedByStaff.id,
+      name: order.orderedByStaff.name,
+      role: order.orderedByStaff.role,
+      email: order.orderedByStaff.email,
+    },
 
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
@@ -193,36 +223,46 @@ export const getImagingOrderById = async (
 };
 
 // ─────────────────────────────────────────────────────────────
-// Update imaging report — records who made the change
+// Update imaging report — flat fields now, not a nested JSON
 // ─────────────────────────────────────────────────────────────
 export const updateImagingReport = async (
   patientId: string,
   imagingId: string,
   reportData: any,
-  adminId: string,
+  adminId: string | number,
 ) => {
-  const order = await ImagingOrder.findOne({ _id: imagingId, patientId });
-  if (!order) throw new ApiError(404, 'Imaging order not found');
+  const pid = toId(patientId, 'patient id');
+  const oid = toId(imagingId, 'imaging id');
+  const aid = toId(adminId, 'admin id');
 
-  order.report = {
-    reportNo: reportData.reportNo,
-    findings: reportData.findings,
-    impression: reportData.impression,
-    recommendations: reportData.recommendations,
-    reportingPhysician: reportData.reportingPhysician,
-    signature: reportData.signature,
-    reportDate: reportData.reportDate ? new Date(reportData.reportDate) : new Date(),
-    hospitalDepartmentStamp: reportData.hospitalDepartmentStamp,
-  };
-  order.status = 'Completed';
-  order.updatedBy = adminId as any;   // ← audit
-  await order.save();
+  const existing = await prisma.imagingOrder.findFirst({
+    where: { id: oid, patientId: pid },
+    select: { id: true },
+  });
+  if (!existing) throw new ApiError(404, 'Imaging order not found');
+
+  const updated = await prisma.imagingOrder.update({
+    where: { id: oid },
+    data: {
+      findings: reportData.findings,
+      impression: reportData.impression,
+      recommendation: reportData.recommendation ?? null,
+      reportDate: reportData.reportDate
+        ? new Date(reportData.reportDate)
+        : new Date(),
+      status: 'Completed',
+      updatedBy: aid,
+    },
+  });
 
   return {
-    id: order._id.toString(),
-    status: order.status,
-    report: order.report,
-    updatedAt: order.updatedAt,
+    id: updated.id,
+    status: updated.status,
+    findings: updated.findings,
+    impression: updated.impression,
+    recommendation: updated.recommendation,
+    reportDate: updated.reportDate,
+    updatedAt: updated.updatedAt,
   };
 };
 
@@ -233,29 +273,40 @@ export const recordImagingPerformed = async (
   patientId: string,
   imagingId: string,
   departmentData: any,
-  adminId: string,
+  adminId: string | number,
 ) => {
-  const order = await ImagingOrder.findOne({ _id: imagingId, patientId });
-  if (!order) throw new ApiError(404, 'Imaging order not found');
+  const pid = toId(patientId, 'patient id');
+  const oid = toId(imagingId, 'imaging id');
+  const aid = toId(adminId, 'admin id');
 
-  order.examinationPerformed = true;
-  order.performedModality = departmentData.performedModality;
-  order.performedProtocol = departmentData.performedProtocol;
-  order.performedContrast = departmentData.performedContrast;
-  order.technologistName = departmentData.technologistName;
-  order.radiologistName = departmentData.radiologistName;
-  order.performedAt = departmentData.performedAt
-    ? new Date(departmentData.performedAt)
-    : new Date();
-  order.imageQuality = departmentData.imageQuality;
-  order.updatedBy = adminId as any;   // ← audit
-  await order.save();
+  const existing = await prisma.imagingOrder.findFirst({
+    where: { id: oid, patientId: pid },
+    select: { id: true },
+  });
+  if (!existing) throw new ApiError(404, 'Imaging order not found');
+
+  const updated = await prisma.imagingOrder.update({
+    where: { id: oid },
+    data: {
+      examinationPerformed: true,
+      performedModality: departmentData.performedModality,
+      performedProtocol: departmentData.performedProtocol,
+      performedContrast: departmentData.performedContrast ?? 'None',
+      technologistName: departmentData.technologistName,
+      radiologistName: departmentData.radiologistName,
+      performedAt: departmentData.performedAt
+        ? new Date(departmentData.performedAt)
+        : new Date(),
+      imageQuality: departmentData.imageQuality,
+      updatedBy: aid,
+    },
+  });
 
   return {
-    id: order._id.toString(),
-    examinationPerformed: order.examinationPerformed,
-    performedAt: order.performedAt,
-    imageQuality: order.imageQuality,
+    id: updated.id,
+    examinationPerformed: updated.examinationPerformed,
+    performedAt: updated.performedAt,
+    imageQuality: updated.imageQuality,
   };
 };
 
@@ -266,19 +317,27 @@ export const updateImagingStatus = async (
   patientId: string,
   imagingId: string,
   status: 'Ordered' | 'Completed' | 'Cancelled',
-  adminId: string,
+  adminId: string | number,
 ) => {
-  const order = await ImagingOrder.findOne({ _id: imagingId, patientId });
-  if (!order) throw new ApiError(404, 'Imaging order not found');
+  const pid = toId(patientId, 'patient id');
+  const oid = toId(imagingId, 'imaging id');
+  const aid = toId(adminId, 'admin id');
 
-  order.status = status;
-  order.updatedBy = adminId as any;   // ← audit
-  await order.save();
+  const existing = await prisma.imagingOrder.findFirst({
+    where: { id: oid, patientId: pid },
+    select: { id: true },
+  });
+  if (!existing) throw new ApiError(404, 'Imaging order not found');
+
+  const updated = await prisma.imagingOrder.update({
+    where: { id: oid },
+    data: { status, updatedBy: aid },
+  });
 
   return {
-    id: order._id.toString(),
-    status: order.status,
-    updatedAt: order.updatedAt,
+    id: updated.id,
+    status: updated.status,
+    updatedAt: updated.updatedAt,
   };
 };
 
@@ -288,47 +347,62 @@ export const updateImagingStatus = async (
 export const deleteImagingOrder = async (
   patientId: string,
   imagingId: string,
-  adminId: string,
-  reason?: string,
+  adminId: string|number,
+  reason?: string ,
 ) => {
-  const order = await ImagingOrder.findOne({ _id: imagingId, patientId });
+  const pid = toId(patientId, 'patient id');
+  const oid = toId(imagingId, 'imaging id');
+  const aid = toId(adminId, 'admin id');
+
+  const order = await prisma.imagingOrder.findFirst({
+    where: { id: oid, patientId: pid },
+  });
   if (!order) throw new ApiError(404, 'Imaging order not found');
 
   if (order.deletedAt) {
     throw new ApiError(400, 'Imaging order is already deleted');
   }
 
-  order.deletedAt = new Date();
-  order.deletedBy = adminId as any;
-  order.deletionReason = reason;
-  order.updatedBy = adminId as any;
-  await order.save();
+  const updated = await prisma.imagingOrder.update({
+    where: { id: oid },
+    data: {
+      deletedAt: new Date(),
+      deletedBy: aid,
+      deletionReason: reason ?? null,
+      updatedBy: aid,
+    },
+  });
 
-  return { id: imagingId, success: true, deletedAt: order.deletedAt };
+  return { id: imagingId, success: true, deletedAt: updated.deletedAt };
 };
 
 // ─────────────────────────────────────────────────────────────
-// Restore a soft-deleted imaging order (admin only)
+// Restore
 // ─────────────────────────────────────────────────────────────
 export const restoreImagingOrder = async (
   patientId: string,
   imagingId: string,
-  adminId: string,
+  adminId: string | number,
 ) => {
-  const order = await ImagingOrder
-    .findOne({ _id: imagingId, patientId })
-    .setOptions({ includeDeleted: true });
+  const pid = toId(patientId, 'patient id');
+  const oid = toId(imagingId, 'imaging id');
+  const aid = toId(adminId, 'admin id');
 
+  const order = await prisma.imagingOrder.findFirst({
+    where: { id: oid, patientId: pid },
+  });
   if (!order) throw new ApiError(404, 'Imaging order not found');
-  if (!order.deletedAt) {
-    throw new ApiError(400, 'Imaging order is not deleted');
-  }
+  if (!order.deletedAt) throw new ApiError(400, 'Imaging order is not deleted');
 
-  order.deletedAt = null;
-  order.deletedBy = null as any;
-  order.deletionReason = undefined;
-  order.updatedBy = adminId as any;
-  await order.save();
+  await prisma.imagingOrder.update({
+    where: { id: oid },
+    data: {
+      deletedAt: null,
+      deletedBy: null,
+      deletionReason: null,
+      updatedBy: aid,
+    },
+  });
 
   return { id: imagingId, restored: true };
 };

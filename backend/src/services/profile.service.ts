@@ -1,61 +1,55 @@
 import bcrypt from 'bcrypt';
-import { Staff } from '@models/Staff.js';
-import { Admin } from '@models/Admin.js';
-import { HomeVisit } from '@models/HomeVisit.js';
-import { Patient } from '@models/Patient.js';
-import { Referral } from '@models/Referral.js';
-import { HospitalAdmission } from '@models/HospitalAdmission.js';
+import { prisma } from '@db/prisma.js';
 import { ApiError } from '@utils/ApiError.js';
 import { hashPassword } from '@utils/password.js';
+import { toId } from '@utils/prisma.js';
 
 // ═════════════════════════════════════════════════════════════
-// Helpers
+// Lookup
 // ═════════════════════════════════════════════════════════════
-
-/**
- * Look up the current user as either a Staff member or an Admin.
- * Returns a discriminated union so callers can branch cleanly.
- * Never returns the password field.
- */
 type UserLookup =
   | { type: 'staff'; doc: any }
   | { type: 'admin'; doc: any };
 
-const findCurrentUser = async (userId: string): Promise<UserLookup> => {
-  const staff = await Staff.findById(userId).select('-password');
-  if (staff) return { type: 'staff', doc: staff };
-
-  const admin = await Admin.findById(userId).select('-password');
-  if (admin) return { type: 'admin', doc: admin };
-
-  throw new ApiError(404, 'User not found');
-};
-
-/**
- * Same lookup but keeps the password field — needed for changePassword.
- */
-const findCurrentUserWithPassword = async (
-  userId: string,
+const findUser = async (
+  userId: string | number,
+  withPassword = false,
 ): Promise<UserLookup> => {
-  const staff = await Staff.findById(userId);
-  if (staff) return { type: 'staff', doc: staff };
+  const id = toId(userId, 'user id');
 
-  const admin = await Admin.findById(userId);
-  if (admin) return { type: 'admin', doc: admin };
+  const staff = await prisma.staff.findUnique({ where: { id } });
+  if (staff) {
+    if (!withPassword) {
+      const { password, ...rest } = staff;
+      return { type: 'staff', doc: rest };
+    }
+    return { type: 'staff', doc: staff };
+  }
+
+  const admin = await prisma.admin.findUnique({ where: { id } });
+  if (admin) {
+    if (!withPassword) {
+      const { password, ...rest } = admin;
+      return { type: 'admin', doc: rest };
+    }
+    return { type: 'admin', doc: admin };
+  }
 
   throw new ApiError(404, 'User not found');
 };
 
 // ═════════════════════════════════════════════════════════════
-// 1. Get profile
+// Get profile
 // ═════════════════════════════════════════════════════════════
-
-export const getProfile = async (userId: string, _userType: string) => {
-  const { type, doc } = await findCurrentUser(userId);
+export const getProfile = async (
+  userId: string | number,
+  _userType: string,
+) => {
+  const { type, doc } = await findUser(userId);
 
   if (type === 'staff') {
     return {
-      id: doc._id.toString(),
+      id: doc.id,
       name: doc.name,
       email: doc.email,
       phone: doc.phone,
@@ -68,9 +62,8 @@ export const getProfile = async (userId: string, _userType: string) => {
     };
   }
 
-  // admin
   return {
-    id: doc._id.toString(),
+    id: doc.id,
     name: doc.name,
     email: doc.email,
     type: 'admin' as const,
@@ -80,20 +73,15 @@ export const getProfile = async (userId: string, _userType: string) => {
 };
 
 // ═════════════════════════════════════════════════════════════
-// 2. Update profile
+// Update profile
 // ═════════════════════════════════════════════════════════════
-// Only `name` (both) and `phone` (staff only) are editable.
-// Email, role, status, isEmailVerified are never client-editable.
-// ═════════════════════════════════════════════════════════════
-
 export const updateProfile = async (
-  userId: string,
+  userId: string | number,
   _userType: string,
   data: { name?: string; phone?: string },
 ) => {
-  const { type, doc } = await findCurrentUserWithPassword(userId);
+  const { type, doc } = await findUser(userId, true);
 
-  // ── Validate at least one editable field was sent ──
   const hasName = typeof data.name === 'string' && data.name.trim().length > 0;
   const hasPhone = typeof data.phone === 'string' && data.phone.trim().length > 0;
 
@@ -101,31 +89,27 @@ export const updateProfile = async (
     throw new ApiError(400, 'No updatable fields provided');
   }
 
-  // ── Apply edits ──
-  if (hasName) doc.name = data.name!.trim();
-
+  const updateData: any = {};
+  if (hasName) updateData.name = data.name!.trim();
   if (hasPhone) {
-    if (type !== 'staff') {
-      throw new ApiError(400, 'Admins cannot set a phone number');
-    }
-    doc.phone = data.phone!.trim();
+    if (type !== 'staff') throw new ApiError(400, 'Admins cannot set a phone number');
+    updateData.phone = data.phone!.trim();
   }
 
-  await doc.save();
+  if (type === 'staff') {
+    await prisma.staff.update({ where: { id: doc.id }, data: updateData });
+  } else {
+    await prisma.admin.update({ where: { id: doc.id }, data: updateData });
+  }
 
-  // Return the same shape as getProfile
   return getProfile(userId, _userType);
 };
 
 // ═════════════════════════════════════════════════════════════
-// 3. Change password
+// Change password
 // ═════════════════════════════════════════════════════════════
-// Verify currentPassword with bcrypt, hash newPassword, persist.
-// JWTs are stateless and remain valid until expiry (no forced logout).
-// ═════════════════════════════════════════════════════════════
-
 export const changePassword = async (
-  userId: string,
+  userId: string | number,
   _userType: string,
   currentPassword: string,
   newPassword: string,
@@ -134,75 +118,69 @@ export const changePassword = async (
     throw new ApiError(400, 'Current and new password are required');
   }
 
-  const { doc } = await findCurrentUserWithPassword(userId);
+  const { type, doc } = await findUser(userId, true);
 
-  const passwordOk = await bcrypt.compare(currentPassword, doc.password);
-  if (!passwordOk) {
-    throw new ApiError(401, 'Current password is incorrect');
-  }
+  const ok = await bcrypt.compare(currentPassword, doc.password);
+  if (!ok) throw new ApiError(401, 'Current password is incorrect');
 
   if (currentPassword === newPassword) {
-    throw new ApiError(
-      400,
-      'New password must be different from the current password',
-    );
+    throw new ApiError(400, 'New password must be different from the current password');
   }
 
-  doc.password = await hashPassword(newPassword);
-  await doc.save();
+  const hashed = await hashPassword(newPassword);
 
-  return {
-    id: doc._id.toString(),
-    updatedAt: doc.updatedAt,
-  };
+  if (type === 'staff') {
+    await prisma.staff.update({ where: { id: doc.id }, data: { password: hashed } });
+  } else {
+    await prisma.admin.update({ where: { id: doc.id }, data: { password: hashed } });
+  }
+
+  return { id: doc.id, updatedAt: new Date() };
 };
 
 // ═════════════════════════════════════════════════════════════
-// 4. Activity stats
+// Activity stats
 // ═════════════════════════════════════════════════════════════
-// Staff → their own activity (scoped by teamLeaderId on HomeVisit,
-//         and by "patients they have visited" for patient counts).
-// Admin → system-wide counts (same shape the admin dashboard uses).
-// ═════════════════════════════════════════════════════════════
-
 export const getActivityStats = async (
-  userId: string,
+  userId: string | number,
   _userType: string,
 ) => {
-  const { type, doc } = await findCurrentUser(userId);
+  const { type, doc } = await findUser(userId);
 
   if (type === 'staff') {
-    const staffId = doc._id.toString();
+    const staffId = doc.id;
 
-    // All patients this staff member has visited at least once
-    const visitedPatientIds = await HomeVisit.distinct('patientId', {
-      teamLeaderId: staffId,
+    const visitFilter = {
+      OR: [
+        { createdBy: staffId },
+        { signatures: { some: { staffId } } },
+      ],
+    };
+
+    const visitsByStaff = await prisma.homeVisit.findMany({
+      where: visitFilter,
+      select: { patientId: true },
     });
+    const visitedPatientIds = [...new Set(visitsByStaff.map((v) => v.patientId))];
 
-    const [
-      totalVisits,
-      totalPatients,
-      activePatients,
-      todayVisits,
-    ] = await Promise.all([
-      HomeVisit.countDocuments({ teamLeaderId: staffId }),
-      visitedPatientIds.length,
-      Patient.countDocuments({
-        _id: { $in: visitedPatientIds },
-        status: 'Active',
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const [totalVisits, activePatients, todayVisits] = await Promise.all([
+      prisma.homeVisit.count({ where: visitFilter }),
+      prisma.patient.count({
+        where: { id: { in: visitedPatientIds }, status: 'Active' },
       }),
-      HomeVisit.countDocuments({
-        teamLeaderId: staffId,
-        visitDate: {
-          $gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          $lt: new Date(new Date().setHours(24, 0, 0, 0)),
-        },
+      prisma.homeVisit.count({
+        where: { ...visitFilter, visitDate: { gte: today, lt: tomorrow } },
       }),
     ]);
 
     return {
       totalVisits,
-      totalPatients,
+      totalPatients: visitedPatientIds.length,
       activePatients,
       todayVisits,
       lastLogin: new Date().toISOString(),
@@ -210,7 +188,7 @@ export const getActivityStats = async (
     };
   }
 
-  // admin
+  // Admin
   const [
     totalPatients,
     activePatients,
@@ -218,16 +196,12 @@ export const getActivityStats = async (
     pendingReferrals,
     pendingStaff,
   ] = await Promise.all([
-    Patient.countDocuments(),
-    Patient.countDocuments({ status: 'Active' }),
-    Patient.countDocuments({ status: 'Discharged' }),
-    Referral.countDocuments({ status: 'Pending' }),
-    Staff.countDocuments({ status: 'Pending', isEmailVerified: true }),
+    prisma.patient.count(),
+    prisma.patient.count({ where: { status: 'Active' } }),
+    prisma.patient.count({ where: { status: 'Discharged' } }),
+    prisma.referral.count({ where: { status: 'Pending' } }),
+    prisma.staff.count({ where: { status: 'Pending', isEmailVerified: true } }),
   ]);
-
-  // Referenced but not returned — kept here for symmetry if you ever
-  // want to add "recent admissions" to the admin activity panel.
-  void HospitalAdmission;
 
   return {
     totalPatients,

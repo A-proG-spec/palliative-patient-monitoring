@@ -1,99 +1,90 @@
-import { Patient } from '@models/Patient.js';
-import { Staff } from '@models/Staff.js';
-import { Counter } from '@models/Counter.js';
-import { HomeVisit } from '@models/HomeVisit.js';
-import { Medication } from '@models/Medication.js';
-import { LaboratoryTest } from '@models/LaboratoryTest.js';
-import { Referral } from '@models/Referral.js';
-import { HospitalAdmission } from '@models/HospitalAdmission.js';
-import { ImagingOrder } from '@models/ImagingOrder.js';
-import { PatientProgressNote } from '@models/PatientProgressNote.js';
-import { DischargeSummary } from '@models/DischargeSummary.js';
+import { prisma } from '@db/prisma.js';
 import { ApiError } from '@utils/ApiError.js';
-
-// ─────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────
-const generatePatientDisplayId = async (): Promise<string> => {
-  const counter = await Counter.findOneAndUpdate(
-    { name: 'patientId' },
-    { $inc: { value: 1 } },
-    { new: true, upsert: true },
-  );
-
-  const number = counter.value;
-  return `PAT-${String(number).padStart(3, '0')}`;
-};
+import { toId } from '@utils/prisma.js';
 
 // ─────────────────────────────────────────────────────────────
 // Register patient
 // ─────────────────────────────────────────────────────────────
-export const registerPatient = async (data: any, staffId: string) => {
-  const staff = await Staff.findById(staffId);
-  if (!staff) {
-    throw new ApiError(404, 'Staff member not found');
-  }
+export const registerPatient = async (data: any, staffId: string|number) => {
+  const registeredById = toId(staffId, 'staff id');
 
-  const patientDisplayId = await generatePatientDisplayId();
+  const staff = await prisma.staff.findUnique({
+    where: { id: registeredById },
+    select: { id: true },
+  });
+  if (!staff) throw new ApiError(404, 'Staff member not found');
 
-  const patient = await Patient.create({
-    ...data,
-    patientDisplayId,
-    registeredBy: staffId,
-    status: 'Active',
-    currentLocation: 'Home',
+  const patient = await prisma.patient.create({
+    data: {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      age: data.age,
+      sex: data.sex,
+      dateOfBirth: new Date(data.dateOfBirth),
+      address: data.address,
+      phone: data.phone,
+      emergencyContactName: data.emergencyContactName,
+      emergencyContactPhone: data.emergencyContactPhone,
+      caregiverName: data.caregiverName,
+      caregiverPhone: data.caregiverPhone,
+      caregiverRelation: data.caregiverRelation ?? null,
+      primaryDiagnosis: data.primaryDiagnosis,
+      secondaryDiagnoses: data.secondaryDiagnoses ?? [],
+      diseaseStage: data.diseaseStage,
+      comorbidities: data.comorbidities ?? [],
+      estimatedPrognosis: data.estimatedPrognosis,
+      status: 'Active',
+      currentLocation: 'Home',
+      registeredBy: registeredById,
+    },
   });
 
-  const { __v, ...patientObject } = patient.toObject();
-  return {
-    ...patientObject,
-    id: patientObject._id.toString(),
-  };
+  return patient;
 };
 
 // ─────────────────────────────────────────────────────────────
 // List patients
 // ─────────────────────────────────────────────────────────────
 export const getPatients = async (
-  _staffId: string,
+  _staffId: string|number,
   page: number = 1,
   limit: number = 20,
   status?: string,
   search?: string,
 ) => {
-  const filter: any = {};
-
-  if (status) {
-    filter.status = status;
-  }
+  const where: any = {};
+  if (status) where.status = status;
 
   if (search) {
-    filter.$or = [
-      { firstName: { $regex: search, $options: 'i' } },
-      { lastName: { $regex: search, $options: 'i' } },
-      { patientDisplayId: { $regex: search, $options: 'i' } },
+    where.OR = [
+      { firstName: { contains: search, mode: 'insensitive' } },
+      { lastName: { contains: search, mode: 'insensitive' } },
     ];
   }
 
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
-    Patient.find(filter).skip(skip).limit(limit),
-    Patient.countDocuments(filter),
+    prisma.patient.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.patient.count({ where }),
   ]);
 
   return {
-    items: items.map((patient) => ({
-      id: patient._id.toString(),
-      patientDisplayId: patient.patientDisplayId,
-      firstName: patient.firstName,
-      lastName: patient.lastName,
-      age: patient.age,
-      sex: patient.sex,
-      status: patient.status,
-      currentLocation: patient.currentLocation,
-      primaryDiagnosis: patient.primaryDiagnosis,
-      registeredAt: patient.createdAt,
+    items: items.map((p) => ({
+      id: p.id,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      age: p.age,
+      sex: p.sex,
+      status: p.status,
+      currentLocation: p.currentLocation,
+      primaryDiagnosis: p.primaryDiagnosis,
+      registeredAt: p.createdAt,
     })),
     page,
     limit,
@@ -105,17 +96,19 @@ export const getPatients = async (
 // Get one patient
 // ─────────────────────────────────────────────────────────────
 export const getPatientById = async (patientId: string) => {
-  const patient = await Patient
-    .findById(patientId)
-    .populate('registeredBy', 'name');
+  const id = toId(patientId, 'patient id');
 
-  if (!patient) {
-    throw new ApiError(404, 'Patient not found');
-  }
+  const patient = await prisma.patient.findUnique({
+    where: { id },
+    include: {
+      registeredByStaff: { select: { id: true, name: true } },
+    },
+  });
+
+  if (!patient) throw new ApiError(404, 'Patient not found');
 
   return {
-    id: patient._id.toString(),
-    patientDisplayId: patient.patientDisplayId,
+    id: patient.id,
     hospitalPatientId: patient.hospitalPatientId,
     firstName: patient.firstName,
     lastName: patient.lastName,
@@ -128,6 +121,7 @@ export const getPatientById = async (patientId: string) => {
     emergencyContactPhone: patient.emergencyContactPhone,
     caregiverName: patient.caregiverName,
     caregiverPhone: patient.caregiverPhone,
+    caregiverRelation: patient.caregiverRelation,
     primaryDiagnosis: patient.primaryDiagnosis,
     secondaryDiagnoses: patient.secondaryDiagnoses,
     diseaseStage: patient.diseaseStage,
@@ -136,8 +130,8 @@ export const getPatientById = async (patientId: string) => {
     status: patient.status,
     currentLocation: patient.currentLocation,
     registeredBy: {
-      id: (patient.registeredBy as any)?._id?.toString() || '',
-      name: (patient.registeredBy as any)?.name || 'Unknown',
+      id: patient.registeredByStaff.id,
+      name: patient.registeredByStaff.name,
     },
     createdAt: patient.createdAt,
     updatedAt: patient.updatedAt,
@@ -145,163 +139,159 @@ export const getPatientById = async (patientId: string) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Update patient — records who made the change
-// ─────────────────────────────────────────────────────────────
-// Only whitelisted demographic/contact fields can be updated.
-// Clinical fields (diagnosis, stage, prognosis) intentionally
-// excluded — those should flow through a proper clinical workflow.
+// Update patient — whitelisted fields only, records auditor
 // ─────────────────────────────────────────────────────────────
 export const updatePatient = async (
   patientId: string,
   data: any,
-  adminId: string,
+  adminId: string|number,
 ) => {
-  const patient = await Patient.findById(patientId);
-  if (!patient) throw new ApiError(404, 'Patient not found');
+  const id = toId(patientId, 'patient id');
+  const admin = toId(adminId, 'admin id');
+
+  const existing = await prisma.patient.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!existing) throw new ApiError(404, 'Patient not found');
 
   const allowed = [
-    'firstName',
-    'lastName',
-    'age',
-    'sex',
-    'dateOfBirth',
-    'address',
-    'phone',
-    'emergencyContactName',
-    'emergencyContactPhone',
-    'caregiverName',
-    'caregiverPhone',
+    'firstName', 'lastName', 'age', 'sex', 'dateOfBirth',
+    'address', 'phone',
+    'emergencyContactName', 'emergencyContactPhone',
+    'caregiverName', 'caregiverPhone', 'caregiverRelation',
     'hospitalPatientId',
-  ];
+  ] as const;
 
+  const updateData: any = {};
   for (const key of allowed) {
     if (data[key] !== undefined) {
-      patient.set(key, data[key]);
+      updateData[key] = key === 'dateOfBirth' ? new Date(data[key]) : data[key];
     }
   }
+  updateData.updatedBy = admin;
 
-  patient.updatedBy = adminId as any;   // ← audit
-  await patient.save();
-
-  return {
-    id: patient._id.toString(),
-    patientDisplayId: patient.patientDisplayId,
-    hospitalPatientId: patient.hospitalPatientId,
-    firstName: patient.firstName,
-    lastName: patient.lastName,
-    age: patient.age,
-    sex: patient.sex,
-    dateOfBirth: patient.dateOfBirth,
-    address: patient.address,
-    phone: patient.phone,
-    emergencyContactName: patient.emergencyContactName,
-    emergencyContactPhone: patient.emergencyContactPhone,
-    caregiverName: patient.caregiverName,
-    caregiverPhone: patient.caregiverPhone,
-    status: patient.status,
-    currentLocation: patient.currentLocation,
-    updatedAt: patient.updatedAt,
-  };
+  return prisma.patient.update({
+    where: { id },
+    data: updateData,
+  });
 };
 
 // ─────────────────────────────────────────────────────────────
-// Patient summary (aggregates every sub-record)
+// Patient summary — aggregate every sub-record
+//
+// NOTE: the "team leader" is the staff member who submitted the
+// visit form (captured in `HomeVisit.createdBy`). In this schema
+// that is exposed as the `createdByStaff` relation. The signature
+// table also carries an `isTeamLeader` flag for the auto-signed
+// leader row.
 // ─────────────────────────────────────────────────────────────
 export const getPatientSummary = async (patientId: string) => {
-  const patient = await Patient.findById(patientId);
+  const id = toId(patientId, 'patient id');
 
-  if (!patient) {
-    throw new ApiError(404, 'Patient not found');
-  }
+  const patient = await prisma.patient.findUnique({
+    where: { id },
+    include: {
+      visits: {
+        orderBy: { visitDate: 'desc' },
+        include: {
+          createdByStaff: { select: { id: true, name: true } },
+          signatures: {
+            select: {
+              staffId: true,
+              name: true,
+              role: true,
+              isTeamLeader: true,
+              signedAt: true,
+            },
+          },
+        },
+      },
+      medications: { orderBy: { createdAt: 'desc' } },
+      labTests: { orderBy: { dateOrdered: 'desc' } },
+      referrals: { orderBy: { createdAt: 'desc' } },
+      admissions: { orderBy: { admissionDate: 'desc' } },
+      imagingOrders: { orderBy: { createdAt: 'desc' } },
+      progressNotes: { orderBy: { createdAt: 'desc' }, take: 20 },
+      dischargeSummaries: { orderBy: { createdAt: 'desc' }, take: 1 },
+    },
+  });
 
-  const [
-    visits,
-    medications,
-    labTests,
-    referrals,
-    admissions,
-    imagingOrders,
-    progressNotes,
-    dischargeSummary,
-  ] = await Promise.all([
-    HomeVisit.find({ patientId })
-      .sort({ visitDate: -1 })
-      .populate('teamLeaderId', 'name'),
-    Medication.find({ patientId }).sort({ createdAt: -1 }),
-    LaboratoryTest.find({ patientId }).sort({ dateOrdered: -1 }),
-    Referral.find({ patientId }).sort({ createdAt: -1 }),
-    HospitalAdmission.find({ patientId }).sort({ admissionDate: -1 }),
-    ImagingOrder.find({ patientId }).sort({ createdAt: -1 }),
-    PatientProgressNote.find({ patientId })
-      .sort({ createdAt: -1 })
-      .limit(20),
-    DischargeSummary.findOne({ patientId }).sort({ createdAt: -1 }),
-  ]);
+  if (!patient) throw new ApiError(404, 'Patient not found');
+
+  const latestDischarge = patient.dischargeSummaries[0] ?? null;
 
   return {
     patient: {
-      id: patient._id.toString(),
+      id: patient.id,
       firstName: patient.firstName,
       lastName: patient.lastName,
       age: patient.age,
       sex: patient.sex,
       status: patient.status,
       currentLocation: patient.currentLocation,
-      patientDisplayId: patient.patientDisplayId,
     },
     diagnosis: {
       primary: patient.primaryDiagnosis,
       secondary: patient.secondaryDiagnoses,
       stage: patient.diseaseStage,
     },
-    visits: visits.map((v) => ({
-      id: v._id.toString(),
-      date: v.visitDate,
-      outcome: v.outcome,
-      staff: {
-        id: (v.teamLeaderId as any)?._id?.toString() || '',
-        name: (v.teamLeaderId as any)?.name || 'Unknown',
-      },
-    })),
-    medications: medications.map((m) => ({
-      id: m._id.toString(),
+    visits: patient.visits.map((v) => {
+      // Team leader = the staff flagged as leader on a signature row,
+      // falling back to the staff member who created the visit.
+      const leaderSignature = v.signatures.find((s) => s.isTeamLeader);
+      const displayStaff = leaderSignature
+        ? { id: leaderSignature.staffId, name: leaderSignature.name }
+        : { id: v.createdByStaff.id, name: v.createdByStaff.name };
+
+      return {
+        id: v.id,
+        date: v.visitDate,
+        outcome: v.outcome,
+        staff: displayStaff,
+        signatures: v.signatures,
+      };
+    }),
+    medications: patient.medications.map((m) => ({
+      id: m.id,
       name: m.name,
       dosage: m.dosage,
       status: m.status,
       administeredAt: m.administeredAt,
     })),
-    labTests: labTests.map((l) => ({
-      id: l._id.toString(),
+    labTests: patient.labTests.map((l) => ({
+      id: l.id,
       name: l.testName,
       dateOrdered: l.dateOrdered,
       result: l.result,
+      status: l.status,
     })),
-    imagingOrders: imagingOrders.map((o) => ({
-      id: o._id.toString(),
+    imagingOrders: patient.imagingOrders.map((o) => ({
+      id: o.id,
       modality: o.modality,
       bodyRegion: o.bodyRegion,
       priority: o.priority,
       status: o.status,
-      hasReport: !!(o.report && o.report.findings),
+      hasReport: !!o.findings,
       dateOrdered: o.createdAt,
       performedAt: o.performedAt,
     })),
-    progressNotes: progressNotes.map((n) => ({
-      id: n._id.toString(),
-      admissionId: n.admissionId?.toString(),
+    progressNotes: patient.progressNotes.map((n) => ({
+      id: n.id,
+      admissionId: n.admissionId,
       generalCondition: n.generalCondition,
       levelOfConsciousness: n.levelOfConsciousness,
       attendingClinician: n.attendingClinician,
       overallAssessment: n.overallAssessment,
       createdAt: n.createdAt,
     })),
-    referrals: referrals.map((r) => ({
-      id: r._id.toString(),
+    referrals: patient.referrals.map((r) => ({
+      id: r.id,
       date: r.createdAt,
       status: r.status,
     })),
-    admissions: admissions.map((a) => ({
-      id: a._id.toString(),
+    admissions: patient.admissions.map((a) => ({
+      id: a.id,
       date: a.admissionDate,
       dischargeDate: a.dischargeDate,
       ward: a.ward,
@@ -309,83 +299,75 @@ export const getPatientSummary = async (patientId: string) => {
       status: a.status,
       dischargeReason: a.dischargeReason,
     })),
-    dischargeSummary: dischargeSummary
+    dischargeSummary: latestDischarge
       ? {
-          id: dischargeSummary._id.toString(),
-          dateOfDischarge: dischargeSummary.dateOfDischarge,
-          timeOfDischarge: dischargeSummary.timeOfDischarge,
-          dischargeType: dischargeSummary.dischargeType,
-          overallCondition: dischargeSummary.overallCondition,
-          dischargedTo: dischargeSummary.dischargedTo,
-          status: dischargeSummary.status,
+          id: latestDischarge.id,
+          dateOfDischarge: latestDischarge.dateOfDischarge,
+          timeOfDischarge: latestDischarge.timeOfDischarge,
+          dischargeType: latestDischarge.dischargeType,
+          overallCondition: latestDischarge.overallCondition,
+          dischargedTo: latestDischarge.dischargedTo,
+          status: latestDischarge.status,
         }
       : null,
   };
 };
 
 // ─────────────────────────────────────────────────────────────
-// Patient progress (KPS/PPS over time)
+// Progress — KPS/PPS over time (sourced from HomeVisit)
 // ─────────────────────────────────────────────────────────────
 export const getPatientProgress = async (patientId: string) => {
-  const patient = await Patient.findById(patientId);
+  const id = toId(patientId, 'patient id');
 
-  if (!patient) {
-    throw new ApiError(404, 'Patient not found');
-  }
+  const patient = await prisma.patient.findUnique({
+    where: { id },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  if (!patient) throw new ApiError(404, 'Patient not found');
 
-  // Primary source: home visits carry ppsScore / kpsScore
-  const visits = await HomeVisit.find({ patientId })
-    .sort({ visitDate: 1 })
-    .select('visitDate ppsScore kpsScore _id');
+  const visits = await prisma.homeVisit.findMany({
+    where: { patientId: id },
+    orderBy: { visitDate: 'asc' },
+    select: { id: true, visitDate: true, ppsScore: true, kpsScore: true },
+  });
 
-  const progressData = visits.map((v) => ({
-    visitId: v._id.toString(),
-    visitDate: v.visitDate,
-    kpsScore: v.kpsScore,
-    ppsScore: v.ppsScore,
-  }));
-
-  if (progressData.length === 0) {
+  if (visits.length === 0) {
     return {
-      patientId: patient._id.toString(),
+      patientId: patient.id,
       patientName: `${patient.firstName} ${patient.lastName}`,
       visits: [],
       trends: null,
     };
   }
 
-  const firstKps = progressData[0].kpsScore;
-  const lastKps = progressData[progressData.length - 1].kpsScore;
-  const firstPps = progressData[0].ppsScore;
-  const lastPps = progressData[progressData.length - 1].ppsScore;
+  const first = visits[0];
+  const last = visits[visits.length - 1];
 
-  const calculateTrend = (first: number, last: number) => {
-    if (last > first) return 'improving';
-    if (last < first) return 'declining';
-    return 'stable';
-  };
-
-  const calculatePercentageChange = (first: number, last: number) => {
-    if (first === 0) return 0;
-    return Math.round(((last - first) / first) * 100);
-  };
+  const trend = (a: number, b: number) =>
+    b > a ? 'improving' : b < a ? 'declining' : 'stable';
+  const pct = (a: number, b: number) => (a === 0 ? 0 : Math.round(((b - a) / a) * 100));
 
   return {
-    patientId: patient._id.toString(),
+    patientId: patient.id,
     patientName: `${patient.firstName} ${patient.lastName}`,
-    visits: progressData,
+    visits: visits.map((v) => ({
+      visitId: v.id,
+      visitDate: v.visitDate,
+      kpsScore: v.kpsScore,
+      ppsScore: v.ppsScore,
+    })),
     trends: {
       kps: {
-        trend: calculateTrend(firstKps, lastKps),
-        percentageChange: calculatePercentageChange(firstKps, lastKps),
-        firstScore: firstKps,
-        lastScore: lastKps,
+        trend: trend(first.kpsScore, last.kpsScore),
+        percentageChange: pct(first.kpsScore, last.kpsScore),
+        firstScore: first.kpsScore,
+        lastScore: last.kpsScore,
       },
       pps: {
-        trend: calculateTrend(firstPps, lastPps),
-        percentageChange: calculatePercentageChange(firstPps, lastPps),
-        firstScore: firstPps,
-        lastScore: lastPps,
+        trend: trend(first.ppsScore, last.ppsScore),
+        percentageChange: pct(first.ppsScore, last.ppsScore),
+        firstScore: first.ppsScore,
+        lastScore: last.ppsScore,
       },
     },
   };

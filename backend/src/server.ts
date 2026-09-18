@@ -1,5 +1,5 @@
 import app from './app.js';
-import { connectDB } from '@config/database.js';
+import { connectDB, disconnectDB } from '@config/database.js';
 import env from '@config/env.js';
 import { logger } from '@config/logger.js';
 
@@ -7,7 +7,7 @@ const PORT = parseInt(env.PORT) || 5000;
 
 const startServer = async () => {
   try {
-    // Connect to MongoDB
+    // Connect to PostgreSQL (Prisma)
     await connectDB();
     logger.info('Database connected successfully');
 
@@ -19,16 +19,27 @@ const startServer = async () => {
     });
 
     // Graceful shutdown
-    const shutdown = async () => {
-      logger.info('Shutting down gracefully...');
+    const shutdown = async (signal: string) => {
+      logger.info(`${signal} received — shutting down gracefully...`);
       server.close(async () => {
         logger.info('HTTP server closed');
+
+        // Close Prisma connection pool
+        await disconnectDB();
+
+        logger.info('Shutdown complete');
         process.exit(0);
       });
+
+      // Force exit if shutdown hangs
+      setTimeout(() => {
+        logger.error('Forced shutdown after timeout');
+        process.exit(1);
+      }, 10_000).unref();
     };
 
-    process.on('SIGTERM', shutdown);
-    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
 
   } catch (error) {
     logger.error('Failed to start server:', error);

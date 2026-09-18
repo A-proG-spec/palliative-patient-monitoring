@@ -1,3 +1,4 @@
+
 export { default as authController } from './auth.controller.js';
 export { default as adminController } from './admin.controller.js';
 export { default as patientController } from './patient.controller.js';
@@ -10,4 +11,6 @@ export { default as staffController } from './staff.controller.js';
 export { default as imagingController } from './imaging.controller.js';          
 export { default as progressNoteController } from './progress-note.controller.js'; 
 export { default as dischargeController } from './discharge.controller.js';  
-export { default as profileController } from './profile.routes.js';
+export { default as profileController } from './profile.controller.js';
+export {default as hospiceNursingController} from './hospice-nursing.controller.js'
+export { default as staffContributionController } from './staff-contribution.controller.js';

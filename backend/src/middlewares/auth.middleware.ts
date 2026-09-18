@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '@utils/jwt.js';
-import { Staff } from '@models/Staff.js';
-import { Admin } from '@models/Admin.js';
+import { prisma } from '@db/prisma.js';
 import { ApiError } from '@utils/ApiError.js';
 import { User } from '../types/index.js';
 
@@ -16,8 +15,8 @@ declare global {
 
 export const authMiddleware = async (
   req: Request,
-  _res: Response,  // ✅ Added underscore for unused parameter
-  next: NextFunction
+  _res: Response,
+  next: NextFunction,
 ) => {
   try {
     const authHeader = req.headers.authorization;
@@ -30,29 +29,54 @@ export const authMiddleware = async (
 
     const decoded = verifyToken(token);
 
-    // Try to find user as staff
-    let user = await Staff.findById(decoded.id).select('-password');
+    // JWT stores id as string; convert to number for Prisma
+    const userId = Number(decoded.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new ApiError(401, 'Unauthorized');
+    }
 
-    if (user) {
+    // ── Try staff ──
+    const staff = await prisma.staff.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        status: true,
+        isEmailVerified: true,
+        // NOTE: 'password' deliberately NOT selected
+      },
+    });
+
+    if (staff) {
       req.user = {
-        id: user._id.toString(),
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,  // ✅ Now works with null
+        id: staff.id,
+        name: staff.name,
+        email: staff.email,
+        phone: staff.phone,
+        role: staff.role,
         type: 'staff',
-        status: user.status,
-        isEmailVerified: user.isEmailVerified,
+        status: staff.status,
+        isEmailVerified: staff.isEmailVerified,
       };
       return next();
     }
 
-    // Try to find user as admin
-    let admin = await Admin.findById(decoded.id).select('-password');
+    // ── Try admin ──
+    const admin = await prisma.admin.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
 
     if (admin) {
       req.user = {
-        id: admin._id.toString(),
+        id: admin.id,
         name: admin.name,
         email: admin.email,
         type: 'admin',

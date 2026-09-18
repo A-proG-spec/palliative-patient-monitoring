@@ -1,10 +1,5 @@
 import { z } from 'zod';
 
-const symptomRowSchema = z.object({
-  severity: z.enum(['None', 'Mild', 'Moderate', 'Severe']).default('None'),
-  managementNotes: z.string().default(''),
-});
-
 const medRowSchema = z.object({
   medication: z.string().default(''),
   dose: z.string().default(''),
@@ -13,6 +8,8 @@ const medRowSchema = z.object({
   purpose: z.string().default(''),
   instructions: z.string().default(''),
 });
+
+const symptomSeverity = z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default('');
 
 export const createDischargeSummarySchema = z.object({
   body: z.object({
@@ -27,8 +24,8 @@ export const createDischargeSummarySchema = z.object({
     timeOfDischarge: z.string().optional(),
     dischargeType: z.enum([
       'PlannedDischarge', 'Transfer', 'DischargeToHome', 'DischargeToHospice',
-      'DischargeToLongTermCare', 'TransferToAnotherHospital', 'Other', '',
-    ]).default(''),
+      'DischargeToLongTermCare', 'TransferToAnotherHospital', 'Other',
+    ]).optional(),
     dischargeTypeOther: z.string().optional(),
 
     // Patient snapshot
@@ -55,14 +52,11 @@ export const createDischargeSummarySchema = z.object({
     importantInvestigations: z.string().optional(),
 
     // 4. Condition at Discharge
-    overallCondition: z.enum([
-      'Stable', 'Improved', 'Unchanged', 'Deteriorating',
-      'RequiresOngoingPalliativeCare', '',
-    ]).default(''),
-    levelOfConsciousness: z.enum(['Alert', 'Drowsy', 'Confused', 'Delirious', 'Unresponsive', '']).default(''),
-    functionalStatus: z.enum(['Independent', 'RequiresAssistance', 'Bedbound', 'FullyDependent', '']).default(''),
-    mobility: z.enum(['Independent', 'Assisted', 'Wheelchair', 'Bedbound', '']).default(''),
-    oralIntake: z.enum(['Adequate', 'Reduced', 'Minimal', 'None', '']).default(''),
+    overallCondition: z.enum(['Stable', 'Improved', 'Unchanged', 'Deteriorating', 'RequiresOngoingPalliativeCare']).optional(),
+    levelOfConsciousness: z.enum(['Alert', 'Drowsy', 'Confused', 'Delirious', 'Unresponsive']).optional(),
+    functionalStatus: z.enum(['Independent', 'RequiresAssistance', 'Bedbound', 'FullyDependent']).optional(),
+    mobility: z.enum(['Independent', 'Assisted', 'Wheelchair', 'Bedbound']).optional(),
+    oralIntake: z.enum(['Adequate', 'Reduced', 'Minimal', 'None']).optional(),
 
     // 5. Vital Signs
     temperature: z.string().optional(),
@@ -72,16 +66,35 @@ export const createDischargeSummarySchema = z.object({
     oxygenSaturation: z.string().optional(),
     oxygenRequirement: z.string().optional(),
 
-    // 6. Symptoms
-    symptoms: z.record(z.string(), symptomRowSchema).optional(),
+    // 6. Symptom status — flat columns
+    pain: symptomSeverity,
+    painNote: z.string().optional(),
+    shortnessOfBreath: symptomSeverity,
+    shortnessOfBreathNote: z.string().optional(),
+    nausea: symptomSeverity,
+    nauseaNote: z.string().optional(),
+    vomiting: symptomSeverity,
+    vomitingNote: z.string().optional(),
+    constipation: symptomSeverity,
+    constipationNote: z.string().optional(),
+    fatigue: symptomSeverity,
+    fatigueNote: z.string().optional(),
+    anxiety: symptomSeverity,
+    anxietyNote: z.string().optional(),
+    delirium: symptomSeverity,
+    deliriumNote: z.string().optional(),
+    appetiteLoss: symptomSeverity,
+    appetiteLossNote: z.string().optional(),
+    other: symptomSeverity,
+    otherNote: z.string().optional(),
     painScore: z.string().optional(),
-    painControl: z.enum(['WellControlled', 'PartiallyControlled', 'PoorlyControlled', '']).default(''),
+    painControl: z.enum(['WellControlled', 'PartiallyControlled', 'PoorlyControlled']).optional(),
 
     // 7. Medications
     dischargeMedications: z.array(medRowSchema).optional().default([]),
     prnMedications: z.string().optional(),
     medicationChanges: z.string().optional(),
-    medicationReconciliationCompleted: z.enum(['No', 'Yes', '']).default(''),
+    medicationReconciliationCompleted: z.enum(['NotRequired', 'Required']).optional(),
 
     // 8. Symptom Management Instructions
     painManagementInstructions: z.string().optional(),
@@ -92,57 +105,57 @@ export const createDischargeSummarySchema = z.object({
     otherSymptomManagement: z.string().optional(),
 
     // 9. Nutrition
-    diet: z.enum(['Regular', 'Soft', 'Pureed', 'Modified', 'Other', '']).default(''),
+    diet: z.enum(['Regular', 'Soft', 'Pureed', 'Modified', 'Other']).optional(),
     dietOther: z.string().optional(),
-    feedingAssistance: z.enum(['NotRequired', 'Required', '']).default(''),
-    enteralFeeding: z.enum(['No', 'Yes', '']).default(''),
-    feedingTube: z.enum(['None', 'NG', 'PEG', 'Other', '']).default(''),
+    feedingAssistance: z.enum(['NotRequired', 'Required']).optional(),
+    enteralFeeding: z.enum(['NotRequired', 'Required']).optional(),
+    feedingTube: z.enum(['None', 'NG', 'PEG', 'Other']).optional(),
     feedingTubeOther: z.string().optional(),
     hydrationInstructions: z.string().optional(),
-    nutritionDietitianFollowUp: z.enum(['No', 'Yes', '']).default(''),
+    nutritionDietitianFollowUp: z.enum(['NotRequired', 'Required']).optional(),
 
     // 10. Wound / Skin
-    woundPresent: z.enum(['No', 'Yes', '']).default(''),
+    woundPresent: z.enum(['NotRequired', 'Required']).optional(),
     woundLocation: z.string().optional(),
     woundCareInstructions: z.string().optional(),
     dressingChanges: z.string().optional(),
     pressureInjuryPrevention: z.string().optional(),
 
     // 11. Oxygen / Equipment
-    oxygenRequired: z.enum(['No', 'Yes', '']).default(''),
-    oxygenDeliveryMethod: z.enum(['NasalCannula', 'Mask', 'Other', '']).default(''),
+    oxygenRequired: z.enum(['NotRequired', 'Required']).optional(),
+    oxygenDeliveryMethod: z.enum(['NasalCannula', 'Mask', 'Other']).optional(),
     oxygenDeliveryMethodOther: z.string().optional(),
     oxygenFlowRate: z.string().optional(),
     equipmentRequired: z.array(z.string()).optional().default([]),
     equipmentOther: z.string().optional(),
-    equipmentArranged: z.enum(['No', 'Yes', '']).default(''),
+    equipmentArranged: z.enum(['NotRequired', 'Required']).optional(),
 
     // 12. Goals of Care
     currentGoalsOfCare: z.array(z.string()).optional().default([]),
     currentGoalsOfCareOther: z.string().optional(),
-    goalsOfCareReviewed: z.enum(['No', 'Yes', '']).default(''),
+    goalsOfCareReviewed: z.enum(['NotRequired', 'Required']).optional(),
     patientDecisionMakerPreferences: z.string().optional(),
-    codeStatus: z.enum(['FullResuscitation', 'DNAR', 'Other', '']).default(''),
+    codeStatus: z.enum(['FullResuscitation', 'DNAR', 'Other']).optional(),
     codeStatusOther: z.string().optional(),
-    advanceCarePlan: z.enum(['NotAvailable', 'Completed', 'Reviewed', 'Updated', '']).default(''),
+    advanceCarePlan: z.enum(['NotAvailable', 'Completed', 'Reviewed', 'Updated']).optional(),
 
     // 13. Destination
     dischargedTo: z.enum([
       'Home', 'FamilyCaregiverHome', 'Hospice', 'NursingLongTermCare',
-      'AnotherHospital', 'Other', '',
-    ]).default(''),
+      'AnotherHospital', 'Other',
+    ]).optional(),
     dischargedToOther: z.string().optional(),
     destinationAddress: z.string().optional(),
-    transport: z.enum(['FamilyPrivateTransport', 'Ambulance', 'MedicalTransport', 'Other', '']).default(''),
+    transport: z.enum(['FamilyPrivateTransport', 'Ambulance', 'MedicalTransport', 'Other']).optional(),
     transportOther: z.string().optional(),
     escortCaregiver: z.string().optional(),
 
     // 14. Home / Hospice
-    homePalliativeCareRequired: z.enum(['No', 'Yes', '']).default(''),
-    hospiceReferral: z.enum(['No', 'Yes', 'AlreadyEnrolled', '']).default(''),
-    communityNursingRequired: z.enum(['No', 'Yes', '']).default(''),
-    homeVisitsRequired: z.enum(['No', 'Yes', '']).default(''),
-    caregiverSupportRequired: z.enum(['No', 'Yes', '']).default(''),
+    homePalliativeCareRequired: z.enum(['NotRequired', 'Required']).optional(),
+    hospiceReferral: z.enum(['No', 'Yes', 'AlreadyEnrolled']).optional(),
+    communityNursingRequired: z.enum(['NotRequired', 'Required']).optional(),
+    homeVisitsRequired: z.enum(['NotRequired', 'Required']).optional(),
+    caregiverSupportRequired: z.enum(['NotRequired', 'Required']).optional(),
     servicesArranged: z.string().optional(),
     responsibleProvider: z.string().optional(),
     responsibleProviderPhone: z.string().optional(),
@@ -151,9 +164,8 @@ export const createDischargeSummarySchema = z.object({
     educationTopics: z.array(z.string()).optional().default([]),
     educationOther: z.string().optional(),
     patientUnderstanding: z.enum([
-      'VerbalizedUnderstanding', 'DemonstratedUnderstanding',
-      'RequiresFurtherEducation', '',
-    ]).default(''),
+      'VerbalizedUnderstanding', 'DemonstratedUnderstanding', 'RequiresFurtherEducation',
+    ]).optional(),
     additionalEducationRequired: z.string().optional(),
 
     // 16. Warning Signs
@@ -162,7 +174,7 @@ export const createDischargeSummarySchema = z.object({
     warningSignsSpecificInstructions: z.string().optional(),
 
     // 17. Follow-up
-    palliativeCareFollowUp: z.enum(['No', 'Yes', '']).default(''),
+    palliativeCareFollowUp: z.enum(['NotRequired', 'Required']).optional(),
     palliativeCareFollowUpDate: z.string().optional(),
     palliativeCareFollowUpTime: z.string().optional(),
     physicianSpecialistFollowUp: z.string().optional(),
@@ -181,6 +193,9 @@ export const createDischargeSummarySchema = z.object({
 
     // 19. Notes
     dischargeNotes: z.string().optional(),
+
+    // Workflow
+    status: z.enum(['Draft', 'Final']).optional(),
   }),
 });
 

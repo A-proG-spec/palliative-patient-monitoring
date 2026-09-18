@@ -1,0 +1,2455 @@
+// ─────────────────────────────────────────────────────────────
+// Prisma Schema — Palliative Care Backend
+// Migrated from MongoDB (Mongoose) → PostgreSQL
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═════════════════════════════════════════════════════════════
+// ENUMS
+// ═════════════════════════════════════════════════════════════
+
+// ── Shared / cross-cutting ──
+enum YesNo {
+  No
+  Yes
+}
+
+enum YesNoEmpty {
+  No
+  Yes
+  Empty
+}
+
+enum DiseaseStage {
+  Early
+  Advanced
+  EndStage
+}
+
+enum DiseaseStageAdmission {
+  Early
+  Advanced
+  Terminal
+}
+
+enum Prognosis {
+  Days
+  Weeks
+  Months
+  Uncertain
+}
+
+enum Sex {
+  Male
+  Female
+}
+
+enum PatientStatus {
+  Active
+  Discharged
+}
+
+enum CurrentLocation {
+  Home
+  ReferredHospital
+}
+
+// ── Staff / Admin ──
+enum StaffRole {
+  Physician
+  Nurse
+  Pharmacist
+  Radiologist
+  LaboratoryTechnician
+}
+
+enum StaffStatus {
+  Pending
+  Active
+  Rejected
+}
+
+// ── Notification ──
+enum NotificationType {
+  StaffApproval
+  ReferralApproval
+  CloseCase
+}
+
+// ── Referral ──
+enum ReferralType {
+  Incoming
+  Outgoing
+}
+
+enum ReferralStatus {
+  Pending
+  Accepted
+  Declined
+  Admitted
+  InfoRequested
+}
+
+enum ReferralActionTaken {
+  ReferralAccepted
+  AppointmentScheduled
+  AdditionalInfoRequested
+  ReferralDeclined
+  PatientAdmitted
+  PatientTransferred
+}
+
+enum ReferralFollowUpStatus {
+  Completed
+  Pending
+  UnableToContact
+}
+
+enum ReferralReason {
+  PainManagement
+  SymptomControl
+  EndOfLifeCare
+  HomeHospiceCare
+  InpatientAdmission
+  PsychologicalSupport
+  SpiritualCare
+  CaregiverSupport
+  BereavementServices
+  EmergencyCare
+  DiagnosticEvaluation
+  Other
+}
+
+// ── Medication ──
+enum MedicationAdministeredAt {
+  Home
+  Hospital
+}
+
+enum MedicationStatus {
+  Ordered
+  Given
+}
+
+// ── Laboratory ──
+enum LabCategory {
+  Hematology
+  Chemistry
+  Hormone
+  Urinalysis
+  Stool
+  Microbiology
+  Histopathology
+  Immunology
+  Cardiac
+}
+
+enum LabPriority {
+  Routine
+  Urgent
+  Emergency
+}
+
+enum LabStatus {
+  Ordered
+  Completed
+  Cancelled
+}
+
+enum LabLocation {
+  Home
+  Hospital
+}
+
+enum LabAbnormalFlag {
+  Low
+  High
+  Critical
+  Normal
+}
+
+// ── Imaging ──
+enum ImagingModality {
+  XRay
+  Ultrasound
+  CT
+  MRI
+  Mammography
+  Fluoroscopy
+  Interventional
+  NuclearMedicine
+  Other
+}
+
+enum ImagingContrastDecision {
+  No
+  Yes
+  ToBeDetermined
+  NotApplicable
+}
+
+enum ImagingPregnancyStatus {
+  NotPregnant
+  Pregnant
+  PossiblyPregnant
+  NotApplicable
+}
+
+enum ImagingMetallicForeignBody {
+  No
+  Yes
+  Unknown
+}
+
+enum ImagingPriority {
+  Routine
+  Urgent
+  Emergency
+}
+
+enum ImagingLaterality {
+  Right
+  Left
+  Bilateral
+  NotApplicable
+}
+
+enum ImagingImageQuality {
+  Diagnostic
+  Limited
+  NonDiagnostic
+  RepeatRequired
+}
+
+enum ImagingPreparation {
+  None
+  Fasting
+  FullBladder
+  EmptyBladder
+  SpecialMedicationPreparation
+  Other
+}
+
+enum ImagingPerformedContrast {
+  None
+  Administered
+  NotAdministered
+}
+
+enum ImagingStatus {
+  Ordered
+  Completed
+  Cancelled
+}
+
+// ── Hospital Admission ──
+enum AdmissionReferredFrom {
+  InternalWard
+  OutpatientDepartment
+  ICU
+  ExternalHospital
+  Community
+  Home
+  Other
+}
+
+enum AdmissionReferralReason {
+  PainManagement
+  EndOfLifeCare
+  SymptomControl
+  HomeBasedCare
+  PsychosocialSupport
+  Other
+}
+
+enum AdmissionFunctionalStatus {
+  FullyIndependent
+  PartiallyDependent
+  FullyDependent
+}
+
+enum AdmissionPainType {
+  Acute
+  Chronic
+  Neuropathic
+  Mixed
+}
+
+enum AdmissionSymptom {
+  Dyspnea
+  Nausea
+  Fatigue
+  Anxiety
+  Depression
+  Insomnia
+  Other
+}
+
+enum AdmissionEmotionalStatus {
+  Stable
+  Anxious
+  Depressed
+  Distressed
+}
+
+enum AdmissionFamilySupport {
+  Strong
+  Moderate
+  Weak
+  None
+}
+
+enum AdmissionSpiritualSupport {
+  ReligiousLeader
+  Counselor
+  Other
+}
+
+enum AdmissionDischargeReason {
+  Improved
+  Deceased
+}
+
+enum AdmissionStatus {
+  Active
+  Discharged
+}
+
+// ── Home Visit ──
+enum VisitType {
+  Routine
+  Emergency
+  FirstAssessment
+  PostDischarge
+  EndOfLife
+  Bereavement
+}
+
+enum VisitTeamRole {
+  Physician
+  Nurse
+}
+
+enum VisitOverallStatus {
+  Stable
+  Deteriorating
+  Critical
+  BedBound
+}
+
+enum ActivityOfDailyLivingStatus {
+  Independent
+  NeedsAssistance
+  FullyDependent
+}
+
+enum VisitMobility {
+  Ambulatory
+  RequiresAssistance
+  Bedridden
+}
+
+enum VisitPainLocation {
+  Head
+  Neck
+  Chest
+  Abdomen
+  Back
+  Limbs
+  Generalized
+  Other
+}
+
+enum VisitPainCharacteristic {
+  Sharp
+  Dull
+  Burning
+  Cramping
+  Intermittent
+  Continuous
+}
+
+enum VisitSymptom {
+  Dyspnea
+  Nausea
+  Constipation
+  Anxiety
+  Fatigue
+  PoorAppetite
+  PressureSores
+  Other
+}
+
+enum VisitADLLevel {
+  Independent
+  NeedsAssistance
+  FullyDependent
+}
+
+enum VisitAppetite {
+  Good
+  Fair
+  Poor
+  UnableToEat
+}
+
+enum VisitOralIntake {
+  Adequate
+  Reduced
+  Minimal
+}
+
+enum ADL {
+  Independent
+  NeedAssistance
+  Dependent
+}
+
+enum VisitHydrationStatus {
+  Adequate
+  MildDehydration
+  SevereDehydration
+}
+
+enum VisitEmotionalStatus {
+  Stable
+  Anxious
+  Depressed
+  Fearful
+  Distressed
+}
+
+enum VisitFamilySupport {
+  Excellent
+  Good
+  Limited
+  None
+}
+
+enum VisitAdherenceLevel {
+  Good
+  Partial
+  Poor
+}
+
+enum VisitCaregiverBurden {
+  Low
+  Moderate
+  High
+}
+
+enum VisitCaregiverUnderstanding {
+  Good
+  Fair
+  Poor
+}
+
+enum VisitCaregivingCapacity {
+  Strong
+  Moderate
+  Weak
+}
+
+enum VisitFamilyEmotionalStatus {
+  Stable
+  Stressed
+  Overwhelmed
+}
+
+enum VisitEducationProvided {
+  MedicationAdministration
+  PainManagement
+  NutritionSupport
+  SkinCare
+  PressureSorePrevention
+  EndOfLifeCare
+  EmergencySigns
+  EmotionalSupport
+  Other
+}
+
+enum VisitHomeCondition {
+  Clean
+  Fair
+  Poor
+}
+
+enum VisitHomeObservation {
+  AdequateLighting
+  Ventilation
+  SafeBed
+  CleanWater
+  SanitationIssues
+}
+
+enum VisitNursingCare {
+  Hygiene
+  WoundCare
+  MedicationAdmin
+  PositionChange
+  FeedingAssistance
+  Counseling
+  Other
+}
+
+enum VisitRedFlag {
+  SevereUncontrolledPain
+  SevereShortnessOfBreath
+  MassiveBleeding
+  UncontrolledSeizures
+  AlteredMentalStatus
+  SevereDehydration
+  None
+}
+
+enum VisitReferralMade {
+  PhysicianReview
+  HospitalAdmission
+  SocialWorker
+  Psychologist
+  SpiritualCare
+  NutritionSupport
+}
+
+enum VisitOutcome {
+  Stable
+  SymptomsImproved
+  SymptomsUnchanged
+  SymptomsWorsened
+  ReferredToFacility
+  Deceased
+}
+
+// ── Progress Note ──
+enum ProgressNoteSignatureRole {
+  Physician
+  Nurse
+  Reviewer
+}
+
+enum SymptomSeverity {
+  None
+  Mild
+  Moderate
+  Severe
+}
+
+enum ProgressNoteGeneralCondition {
+  Stable
+  Improving
+  Deteriorating
+  Critical
+  ActivelyDying
+}
+
+enum ProgressNoteConsciousness {
+  Alert
+  Drowsy
+  Confused
+  Delirious
+  Unresponsive
+}
+
+enum ProgressNoteOrientation {
+  Oriented
+  PartiallyOriented
+  Disoriented
+  UnableToAssess
+}
+
+enum ProgressNoteFunctionalStatus {
+  Independent
+  RequiresAssistance
+  Bedbound
+  FullyDependent
+}
+
+enum ProgressNoteResponse {
+  Good
+  Partial
+  Poor
+  NotApplicable
+}
+
+enum ProgressNoteBreathing {
+  Comfortable
+  MildDistress
+  ModerateDistress
+  SevereDistress
+}
+
+enum ProgressNoteOxygenDelivery {
+  NasalCannula
+  Mask
+  Other
+}
+
+enum ProgressNoteSecretions {
+  None
+  Mild
+  Moderate
+  Excessive
+}
+
+enum ProgressNoteOralIntake {
+  Good
+  Reduced
+  Minimal
+  None
+}
+
+enum ProgressNoteUrineOutput {
+  Normal
+  Reduced
+  Minimal
+  UnableToAssess
+}
+
+enum ProgressNoteBowelMovement {
+  Normal
+  Constipated
+  Diarrhea
+  NoRecentBM
+}
+
+enum ProgressNoteSkin {
+  Intact
+  Dry
+  Fragile
+  Edematous
+  Other
+}
+
+enum ProgressNoteMoodBehavior {
+  Calm
+  Anxious
+  Fearful
+  Sad
+  Depressed
+  Agitated
+  Withdrawn
+}
+
+enum ProgressNoteDistress {
+  None
+  Mild
+  Moderate
+  Severe
+}
+
+enum ProgressNoteGoalsOfCare {
+  ComfortSymptomControl
+  QualityOfLife
+  FunctionalSupport
+  DiseaseDirectedTreatment
+  EndOfLifeCare
+  HomeHospiceCare
+  Other
+}
+
+enum ProgressNotePRNEffectiveness {
+  Effective
+  PartiallyEffective
+  Ineffective
+}
+
+enum ProgressNoteNursingCare {
+  PositioningComfortMeasures
+  PersonalHygiene
+  OralCare
+  PressureInjuryPrevention
+  WoundCare
+  OxygenTherapy
+  SymptomMonitoring
+  MedicationAdministration
+  NutritionHydrationSupport
+  EmotionalSupport
+  FamilyCaregiverEducation
+  Other
+}
+
+enum ProgressNoteInvestigation {
+  LaboratoryTests
+  Imaging
+  ECGOtherDiagnosticTest
+  None
+  Other
+}
+
+// ── Discharge Summary ──
+enum DischargeType {
+  PlannedDischarge
+  Transfer
+  DischargeToHome
+  DischargeToHospice
+  DischargeToLongTermCare
+  TransferToAnotherHospital
+  Other
+}
+
+enum DischargeOverallCondition {
+  Stable
+  Improved
+  Unchanged
+  Deteriorating
+  RequiresOngoingPalliativeCare
+}
+
+enum DischargeConsciousness {
+  Alert
+  Drowsy
+  Confused
+  Delirious
+  Unresponsive
+}
+
+enum DischargeFunctionalStatus {
+  Independent
+  RequiresAssistance
+  Bedbound
+  FullyDependent
+}
+
+enum DischargeMobility {
+  Independent
+  Assisted
+  Wheelchair
+  Bedbound
+}
+
+enum DischargeOralIntake {
+  Adequate
+  Reduced
+  Minimal
+  None
+}
+
+enum DischargePainControl {
+  WellControlled
+  PartiallyControlled
+  PoorlyControlled
+}
+
+enum DischargeDiet {
+  Regular
+  Soft
+  Pureed
+  Modified
+  Other
+}
+
+enum DischargeFeedingAssistance {
+  NotRequired
+  Required
+}
+
+enum DischargeFeedingTube {
+  None
+  NG
+  PEG
+  Other
+}
+
+enum DischargeOxygenDelivery {
+  NasalCannula
+  Mask
+  Other
+}
+
+enum DischargeCodeStatus {
+  FullResuscitation
+  DNAR
+  Other
+}
+
+enum DischargeAdvanceCarePlan {
+  NotAvailable
+  Completed
+  Reviewed
+  Updated
+}
+
+enum DischargeDestination {
+  Home
+  FamilyCaregiverHome
+  Hospice
+  NursingLongTermCare
+  AnotherHospital
+  Other
+}
+
+enum DischargeTransport {
+  FamilyPrivateTransport
+  Ambulance
+  MedicalTransport
+  Other
+}
+
+enum DischargeHospiceReferral {
+  No
+  Yes
+  AlreadyEnrolled
+}
+
+enum DischargePatientUnderstanding {
+  VerbalizedUnderstanding
+  DemonstratedUnderstanding
+  RequiresFurtherEducation
+}
+
+enum DischargeStatus {
+  Draft
+  Final
+}
+
+// ── Hospice ──
+enum HospiceConsciousness {
+  Alert
+  Drowsy
+  Confused
+  Unresponsive
+  Comatose
+}
+
+enum HospiceOrientation {
+  OrientedToPerson
+  OrientedToPlace
+  OrientedToTime
+  Disoriented
+}
+
+enum HospiceGeneralAppearance {
+  Comfortable
+  MildDistress
+  ModerateDistress
+  SevereDistress
+  Cachectic
+  Bedridden
+  WellGroomed
+  PoorHygiene
+}
+
+enum HospiceBreathingPattern {
+  Normal
+  Labored
+  Shallow
+  Rapid
+  Slow
+}
+
+enum HospiceDyspneaSeverity {
+  None
+  Mild
+  Moderate
+  Severe
+}
+
+enum HospiceCoughType {
+  None
+  Dry
+  Productive
+}
+
+enum HospiceSputumColor {
+  None
+  Clear
+  Yellow
+  Green
+  Bloody
+}
+
+enum HospicePulseRhythm {
+  Regular
+  Irregular
+}
+
+enum HospiceEdemaSeverity {
+  None
+  Mild
+  Moderate
+  Severe
+}
+
+enum HospiceSkinColor {
+  Normal
+  Pale
+  Cyanotic
+  Jaundiced
+}
+
+enum HospiceAppetite {
+  Good
+  Fair
+  Poor
+  UnableToEat
+}
+
+enum HospiceNauseaSeverity {
+  None
+  Mild
+  Moderate
+  Severe
+}
+
+enum HospiceBowelFunction {
+  Normal
+  Constipation
+  Diarrhea
+  Incontinence
+}
+
+enum HospiceUrinaryFunction {
+  Normal
+  Frequency
+  Retention
+  Incontinence
+  Catheterized
+}
+
+enum HospiceUrineAppearance {
+  Clear
+  Cloudy
+  Bloody
+  Dark
+}
+
+enum HospiceSkinIntegrity {
+  Intact
+  Dry
+  Fragile
+  WoundPresent
+  PressureUlcer
+}
+
+enum HospicePressureInjuryRisk {
+  Low
+  Moderate
+  High
+}
+
+enum HospicePressureUlcerStage {
+  I
+  II
+  III
+  IV
+}
+
+enum HospiceMobilityStatus {
+  Independent
+  RequiresAssistance
+  WheelchairDependent
+  Bedridden
+}
+
+enum HospiceFallRisk {
+  Low
+  Moderate
+  High
+}
+
+enum HospiceAssistiveDevice {
+  None
+  Cane
+  Walker
+  Wheelchair
+  Other
+}
+
+enum HospiceADLLevel {
+  Independent
+  Assistance
+  Dependent
+}
+
+enum HospiceADLActivity {
+  Feeding
+  Bathing
+  Dressing
+  Toileting
+  Mobility
+}
+
+enum HospiceEmotionalStatus {
+  Stable
+  Anxious
+  Depressed
+  Fearful
+  Agitated
+  Grieving
+}
+
+enum HospiceCommunicationAbility {
+  Normal
+  Impaired
+  NonVerbal
+}
+
+enum HospiceCognitiveStatus {
+  Intact
+  MildImpairment
+  SevereImpairment
+}
+
+enum HospiceFamilySupport {
+  Strong
+  Moderate
+  Limited
+  None
+}
+
+enum HospiceCaregiverStress {
+  Low
+  Moderate
+  High
+}
+
+enum HospiceReligiousAffiliation {
+  Orthodox
+  Muslim
+  Protestant
+  Catholic
+  Other
+}
+
+enum HospiceNursingDiagnosis {
+  AcutePain
+  ChronicPain
+  ImpairedMobility
+  RiskForFalls
+  ImpairedSkinIntegrity
+  ImbalancedNutrition
+  Anxiety
+  CaregiverStrain
+  IneffectiveBreathingPattern
+  Other
+}
+
+// ═════════════════════════════════════════════════════════════
+// 1. ADMIN
+// ═════════════════════════════════════════════════════════════
+model Admin {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  approvedReferrals                Referral[]                 @relation("ReferralApprovedBy")
+  staffAssigned                    Staff[]                    @relation("StaffAssignedBy")
+  patientsUpdated                  Patient[]                  @relation("PatientUpdatedBy")
+  visitsUpdated                    HomeVisit[]                @relation("VisitUpdatedBy")
+  visitsDeleted                    HomeVisit[]                @relation("VisitDeletedBy")
+  admissionsUpdated                HospitalAdmission[]        @relation("AdmissionUpdatedBy")
+  admissionsDeleted                HospitalAdmission[]        @relation("AdmissionDeletedBy")
+  imagingUpdated                   ImagingOrder[]             @relation("ImagingUpdatedBy")
+  imagingDeleted                   ImagingOrder[]             @relation("ImagingDeletedBy")
+  labsUpdated                      LaboratoryTest[]           @relation("LabUpdatedBy")
+  labsDeleted                      LaboratoryTest[]           @relation("LabDeletedBy")
+  medicationsUpdated               Medication[]               @relation("MedicationUpdatedBy")
+  medicationsDeleted               Medication[]               @relation("MedicationDeletedBy")
+  progressNotesUpdated             PatientProgressNote[]      @relation("ProgressNoteUpdatedBy")
+  progressNotesDeleted             PatientProgressNote[]      @relation("ProgressNoteDeletedBy")
+  dischargeUpdated                 DischargeSummary[]         @relation("DischargeUpdatedBy")
+  dischargeDeleted                 DischargeSummary[]         @relation("DischargeDeletedBy")
+  staffUpdated                     Staff[]                    @relation("StaffUpdatedBy")
+  staffDeleted                     Staff[]                    @relation("StaffDeletedBy")
+  hospiceNursingAssessments        HospiceNursingAssessment[] @relation("HospiceNursingUpdatedBy")
+  hospiceNursingDeletedAssessments HospiceNursingAssessment[] @relation("HospiceNursingDeletedBy")
+}
+
+// ═════════════════════════════════════════════════════════════
+// 2. STAFF
+// ═════════════════════════════════════════════════════════════
+model Staff {
+  id                           Int         @id @default(autoincrement())
+  name                         String
+  email                        String      @unique
+  phone                        String
+  password                     String
+  role                         StaffRole?
+  status                       StaffStatus @default(Pending)
+  isEmailVerified              Boolean     @default(false)
+  emailVerificationOtp         String?
+  emailVerificationOtpExpires  DateTime?
+  emailVerificationOtpAttempts Int         @default(0)
+  assignedBy                   Int?
+  assignedByAdmin              Admin?      @relation("StaffAssignedBy", fields: [assignedBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Soft delete
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("StaffDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+  updatedBy      Int?
+  updatedByAdmin Admin?    @relation("StaffUpdatedBy", fields: [updatedBy], references: [id])
+
+  // Relations (as actor)
+  patientsRegistered       Patient[]                  @relation("PatientRegisteredBy")
+  visitsCreated            HomeVisit[]                @relation("VisitCreatedBy")
+  visitSignatures          HomeVisitSignature[]
+  medicationsPrescribed    Medication[]               @relation("MedicationPrescribedBy")
+  labsOrdered              LaboratoryTest[]           @relation("LabOrderedBy")
+  imagingOrdered           ImagingOrder[]             @relation("ImagingOrderedBy")
+  referralsRequested       Referral[]                 @relation("ReferralRequestedBy")
+  admissionsCreated        HospitalAdmission[]        @relation("AdmissionCreatedBy")
+  dischargeCreated         DischargeSummary[]         @relation("DischargeCreatedBy")
+  progressNotesCreated     PatientProgressNote[]      @relation("ProgressNoteCreatedBy")
+  progressNotesResponsible PatientProgressNote[]      @relation("ProgressNoteResponsible")
+  progressNoteSignatures   ProgressNoteSignature[]
+  hospiceNursingCreated    HospiceNursingAssessment[] @relation("HospiceNursingCreatedBy")
+  hospiceNursingAssessed   HospiceNursingAssessment[] @relation("HospiceNursingAssessedBy")
+
+  @@index([status])
+  @@index([isEmailVerified])
+  @@index([emailVerificationOtpExpires])
+  @@index([role])
+  @@index([deletedAt])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 3. PATIENT
+// ═════════════════════════════════════════════════════════════
+model Patient {
+  id                    Int             @id @default(autoincrement())
+  firstName             String
+  lastName              String
+  age                   Int
+  sex                   Sex
+  dateOfBirth           DateTime
+  address               String
+  phone                 String
+  emergencyContactName  String
+  emergencyContactPhone String
+  caregiverName         String
+  caregiverPhone        String
+  caregiverRelation     String?
+  primaryDiagnosis      String
+  secondaryDiagnoses    String[]        @default([])
+  diseaseStage          DiseaseStage
+  comorbidities         String[]        @default([])
+  estimatedPrognosis    Prognosis
+  status                PatientStatus   @default(Active)
+  currentLocation       CurrentLocation @default(Home)
+  hospitalPatientId     String?
+
+  registeredBy      Int
+  registeredByStaff Staff @relation("PatientRegisteredBy", fields: [registeredBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("PatientUpdatedBy", fields: [updatedBy], references: [id])
+
+  // Relations
+  visits                    HomeVisit[]
+  medications               Medication[]
+  labTests                  LaboratoryTest[]
+  referrals                 Referral[]
+  admissions                HospitalAdmission[]
+  dischargeSummaries        DischargeSummary[]
+  progressNotes             PatientProgressNote[]
+  imagingOrders             ImagingOrder[]
+  labResults                LabResult[]
+  hospiceNursingAssessments HospiceNursingAssessment[]
+
+  @@index([status])
+  @@index([currentLocation])
+  @@index([registeredBy])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 4. MEDICATION
+// ═════════════════════════════════════════════════════════════
+model Medication {
+  id                Int                      @id @default(autoincrement())
+  patientId         Int
+  patient           Patient                  @relation(fields: [patientId], references: [id])
+  name              String
+  dosage            String
+  frequency         String
+  route             String
+  prescribedBy      Int
+  prescribedByStaff Staff                    @relation("MedicationPrescribedBy", fields: [prescribedBy], references: [id])
+  administeredAt    MedicationAdministeredAt
+  status            MedicationStatus         @default(Ordered)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("MedicationUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("MedicationDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  @@index([patientId])
+  @@index([createdAt])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 5. NOTIFICATION
+// ═════════════════════════════════════════════════════════════
+model Notification {
+  id        Int              @id @default(autoincrement())
+  type      NotificationType
+  message   String
+  data      Json             @default("{}")
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([read])
+  @@index([createdAt])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 6. REFERRAL
+// ═════════════════════════════════════════════════════════════
+model Referral {
+  id        Int     @id @default(autoincrement())
+  patientId Int
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  referralType ReferralType
+  referralDate DateTime
+
+  primaryDiagnosis String
+  diseaseStage     DiseaseStage
+  ppsScore         Int
+  kpsScore         Int
+  currentSymptoms  Json         @default("{}")
+
+  reasons     ReferralReason[] @default([])
+  otherReason String?
+
+  referringFacility String
+  receivingFacility String
+  contactPerson     String
+  contactNumber     String
+
+  status      ReferralStatus       @default(Pending)
+  actionTaken ReferralActionTaken?
+  outcome     String               @default("")
+
+  followUpDate   DateTime?
+  followUpStatus ReferralFollowUpStatus?
+
+  requestedBy      Int
+  requestedByStaff Staff               @relation("ReferralRequestedBy", fields: [requestedBy], references: [id])
+  approvedBy       Int?
+  approvedByAdmin  Admin?              @relation("ReferralApprovedBy", fields: [approvedBy], references: [id])
+  admissions       HospitalAdmission[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([requestedBy])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 7. LABORATORY TEST
+// ═════════════════════════════════════════════════════════════
+model LaboratoryTest {
+  id Int @id @default(autoincrement())
+
+  // Header
+  hospitalClinic       String   @default("Yekatit 12 Hospital Medical College")
+  departmentLaboratory String   @default("Clinical Laboratory")
+  dateOfRequest        DateTime @default(now())
+
+  // Patient + requester
+  patientId          Int
+  patient            Patient @relation(fields: [patientId], references: [id])
+  wardClinic         String?
+  physicianRequester String
+  contactExtension   String?
+
+  // Section 2 — investigation
+  category     LabCategory
+  testName     String
+  otherText    String?
+  specimenType String?
+  specimenSite String?
+
+  // Section 3 — clinical history
+  clinicalHistory String?
+
+  // Section 4 — priority
+  priority LabPriority @default(Routine)
+
+  // Section 5 — collection & submission
+  collectionDate DateTime?
+  collectionTime String?
+  receivedDate   DateTime?
+  receivedTime   String?
+
+  dateOrdered DateTime
+  location    LabLocation
+
+  status LabStatus @default(Ordered)
+
+  // Result
+  datePerformed  DateTime?
+  result         String?
+  referenceRange String?
+  abnormalFlag   LabAbnormalFlag?
+  resultNotes    String?
+  performedBy    String?
+
+  // Meta
+  orderedBy      Int
+  orderedByStaff Staff @relation("LabOrderedBy", fields: [orderedBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("LabUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("LabDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  labResult           LabResult?
+  hospitalAdmission   HospitalAdmission? @relation(fields: [hospitalAdmissionId], references: [id])
+  hospitalAdmissionId Int?
+
+  @@index([patientId, dateOrdered])
+  @@index([patientId, status])
+  @@index([status])
+  @@index([priority])
+  @@index([category])
+  @@index([testName])
+  @@index([dateOfRequest])
+}
+
+model LabResult {
+  id             Int            @id @default(autoincrement())
+  labTestOrderId Int            @unique
+  labTestOrder   LaboratoryTest @relation(fields: [labTestOrderId], references: [id], onDelete: Cascade)
+
+  // =====================================================
+  // REPORT INFORMATION
+  // =====================================================
+
+  reportNumber String?   @unique
+  collectedAt  DateTime?
+  reportedAt   DateTime?
+  verifiedAt   DateTime?
+
+  // =====================================================
+  // STOOL EXAMINATION
+  // =====================================================
+
+  stoolMacroscopic String?
+  stoolChemical    String?
+  stoolMicroscopic String?
+  stoolAdditional  String?
+
+  // =====================================================
+  // URINE ANALYSIS
+  // =====================================================
+
+  urineChemical    String?
+  urineMicroscopic String?
+  urineAdditional  String?
+
+  // =====================================================
+  // COMPLETE BLOOD COUNT (CBC)
+  // =====================================================
+
+  hemoglobin    Float?
+  hematocrit    Float?
+  rbcCount      Float?
+  wbcCount      Float?
+  plateletCount Float?
+
+  mcv  Float?
+  mch  Float?
+  mchc Float?
+  rdw  Float?
+
+  // Differential Leukocyte Count
+  neutrophils    Float?
+  neutrophilsAbs Float?
+
+  lymphocytes    Float?
+  lymphocytesAbs Float?
+
+  monocytes    Float?
+  monocytesAbs Float?
+
+  eosinophils    Float?
+  eosinophilsAbs Float?
+
+  basophils    Float?
+  basophilsAbs Float?
+
+  // Blood film
+  bloodFilm String?
+
+  // Additional blood tests
+  additionalBloodTests String?
+
+  // =====================================================
+  // CLINICAL CHEMISTRY
+  // =====================================================
+
+  glucose    Float?
+  urea       Float?
+  creatinine Float?
+  uricAcid   Float?
+
+  totalProtein Float?
+  albumin      Float?
+
+  totalBilirubin  Float?
+  directBilirubin Float?
+
+  alt Float?
+  ast Float?
+  alp Float?
+
+  totalCholesterol Float?
+  triglycerides    Float?
+  hdlC             Float?
+  ldlC             Float?
+
+  sodium    Float?
+  potassium Float?
+  chloride  Float?
+  calcium   Float?
+  phosphate Float?
+
+  // =====================================================
+  // HORMONE ANALYSIS
+  // =====================================================
+
+  tsh    Float?
+  freeT4 Float?
+  freeT3 Float?
+
+  fsh       Float?
+  lh        Float?
+  prolactin Float?
+
+  estradiol    Float?
+  progesterone Float?
+  testosterone Float?
+
+  cortisol Float?
+  insulin  Float?
+
+  hcg     Float?
+  betaHcg Float?
+
+  growthHormone Float?
+  acth          Float?
+  pth           Float?
+
+  // =====================================================
+  // GENERAL
+  // =====================================================
+
+  interpretation String?
+  comments       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient   Patient? @relation(fields: [patientId], references: [id])
+  patientId Int?
+
+  @@index([reportedAt])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 8. IMAGING ORDER
+// ═════════════════════════════════════════════════════════════
+model ImagingOrder {
+  id         Int     @id @default(autoincrement())
+  hospital   String? @default("Diagnostics imaging/Radiology")
+  department String?
+
+  // Section 1 — patient
+  patientId       Int
+  patient         Patient @relation(fields: [patientId], references: [id])
+  patientName     String?
+  medicalRecordNo String?
+  wardClinic      String?
+  contactNo       String?
+
+  // Section 2 — clinical info
+  provisionalDiagnosis   String?
+  presentingSymptoms     String?
+  medicalHistory         String?
+  previousImaging        Boolean @default(false)
+  previousImagingDetails String?
+
+  // Section 3 — examination requested
+  modality            ImagingModality
+  modalityOtherText   String?
+  bodyRegion          String
+  bodyRegionOtherText String?
+  laterality          ImagingLaterality       @default(NotApplicable)
+  contrastRequested   ImagingContrastDecision @default(No)
+
+  // Section 4 — details
+  specificSite            String?
+  protocolViews           String?
+  specialClinicalQuestion String?
+
+  // Section 5 — contrast / meds
+  previousContrastReaction           Boolean @default(false)
+  previousContrastReactionDetails    String?
+  knownAllergies                     String?
+  creatinine                         String?
+  egfr                               String?
+  otherRelevantMedicationOrCondition String?
+
+  // Section 6 — safety screening
+  pregnancyStatus           ImagingPregnancyStatus     @default(NotApplicable)
+  implantedMedicalDevice    Boolean                    @default(false)
+  deviceImplantDetails      String?
+  metallicForeignBody       ImagingMetallicForeignBody @default(No)
+  otherSafetyConsiderations String?
+
+  // Section 7 — preparation
+  preparation             ImagingPreparation[] @default([])
+  preparationInstructions String?
+
+  // Section 8 — priority
+  priority         ImagingPriority @default(Routine)
+  reasonForUrgency String?
+
+  // Section 9 — referring clinician
+  clinicianName       String?
+  clinicianDepartment String?
+  clinicianLicenseNo  String?
+  clinicianContact    String?
+
+  // Section 10 — imaging department use
+  examinationPerformed Boolean                  @default(false)
+  performedModality    String?
+  performedProtocol    String?
+  performedContrast    ImagingPerformedContrast @default(None)
+  technologistName     String?
+  radiologistName      String?
+  performedAt          DateTime?
+  imageQuality         ImagingImageQuality?
+
+  // Imaging report
+  findings       String?
+  impression     String?
+  recommendation String?
+  reportDate     DateTime?
+
+  // Workflow
+  status ImagingStatus @default(Ordered)
+
+  // Meta
+  orderedBy      Int
+  orderedByStaff Staff @relation("ImagingOrderedBy", fields: [orderedBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("ImagingUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("ImagingDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  @@index([patientId])
+  @@index([status])
+  @@index([modality])
+  @@index([priority])
+  @@index([createdAt])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 9. HOSPITAL ADMISSION
+// ═════════════════════════════════════════════════════════════
+model HospitalAdmission {
+  id Int @id @default(autoincrement())
+
+  // Patient reference
+  patientId         Int
+  patient           Patient @relation(fields: [patientId], references: [id])
+  hospitalPatientId String?
+
+  // Section 2 — referral info
+  referralId          Int?
+  referral            Referral?                @relation(fields: [referralId], references: [id])
+  referredFrom        AdmissionReferredFrom?
+  referredFromOther   String?
+  referringClinician  String?
+  diagnosisAtReferral String?
+  referralReason      AdmissionReferralReason?
+  referralReasonOther String?
+
+  // Admission details
+  admissionDate      DateTime
+  dischargeDate      DateTime?
+  bedNumber          String
+  ward               String
+  admittingPhysician String
+  careTeam           String
+
+  // Section 3 — medical diagnosis
+  primaryDiagnosis   String
+  secondaryDiagnoses String[]              @default([])
+  diseaseStage       DiseaseStageAdmission
+  comorbidities      String[]              @default([])
+
+  // Section 4 — palliative eligibility
+  estimatedPrognosis Prognosis
+  ppsScore           Int
+  kpsScore           Int?
+  functionalStatus   AdmissionFunctionalStatus
+
+  // Section 5 — pain & symptom
+  painScore            Int
+  painType             AdmissionPainType
+  symptomsPresent      AdmissionSymptom[] @default([])
+  symptomsPresentOther String?
+
+  // Section 6 — psychosocial
+  emotionalStatus  AdmissionEmotionalStatus
+  familySupport    AdmissionFamilySupport
+  socialChallenges String?
+
+  // Section 7 — spiritual
+  spiritualConcerns              Boolean
+  spiritualNeedsDescription      String?
+  spiritualSupportPreferred      AdmissionSpiritualSupport?
+  spiritualSupportPreferredOther String?
+
+  // Section 8 — initial care plan
+  painManagementPlan      String
+  medicationPlan          String
+  nursingCarePlan         String
+  homeBasedCareRequired   Boolean
+  psychosocialSupportPlan String?
+  physiotherapyRequired   Boolean
+
+  // Section 10 — admission decision
+  admittedToHospiceUnit Boolean @default(true)
+
+  // Discharge / lifecycle
+  dischargeReason AdmissionDischargeReason?
+  status          AdmissionStatus           @default(Active)
+
+  // Meta
+  createdBy      Int
+  createdByStaff Staff @relation("AdmissionCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("AdmissionUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("AdmissionDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  // Reverse relations
+  labTests                  LaboratoryTest[]
+  dischargeSummaries        DischargeSummary[]
+  progressNotes             PatientProgressNote[]
+  hospiceNursingAssessments HospiceNursingAssessment[]
+
+  @@index([patientId])
+  @@index([status])
+  @@index([admissionDate])
+  @@index([referralId])
+  @@index([bedNumber, status])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 10. HOME VISIT
+// ═════════════════════════════════════════════════════════════
+model HomeVisit {
+  id Int @id @default(autoincrement())
+
+  // Section 1 — patient
+  patientId Int
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  // Section 2 — visit details
+  visitDate   DateTime
+  timeStarted String
+  timeEnded   String
+  visitType   VisitType
+
+  // Section 3 — general condition
+  overallStatus VisitOverallStatus
+  mobility      VisitMobility
+
+  // Section 4 — vitals
+  temperature    String?
+  pulse         String?
+  bloodPressure String?
+  respiration   String?
+  spO2          String?
+
+  // Section 5 — pain
+  painPresent                     Boolean?
+  painScore                       Int
+  painLocation                    VisitPainLocation[]       @default([])
+  painLocationOther               String?
+  painCharacteristics             VisitPainCharacteristic[] @default([])
+  currentPainMedication           Boolean?
+  painMedicationEffective         Boolean
+  painManagementIneffectiveReason String?
+
+  // Section 6 — symptoms
+  symptoms      VisitSymptom[] @default([])
+  symptomsOther String?
+
+  // Section 7 — ADL
+  feeding   ActivityOfDailyLivingStatus
+  bathing   ActivityOfDailyLivingStatus
+  dressing  ActivityOfDailyLivingStatus
+  toileting ActivityOfDailyLivingStatus
+  Mobility  ActivityOfDailyLivingStatus
+  ppsScore  Int
+  kpsScore  Int
+
+  // Section 8 — nutrition
+  appetite          VisitAppetite
+  oralIntake        VisitOralIntake
+  hydrationStatus   VisitHydrationStatus
+  nutritionComments String?
+
+  // Section 9 — psychosocial
+  emotionalStatus     VisitEmotionalStatus
+  emotionalComments   String?
+  familySupport       VisitFamilySupport
+  financialDifficulty Boolean
+  financialComments   String?
+
+  // Section 10 — spiritual
+  spiritualNeeds            Boolean
+  spiritualNeedsDescription String?
+  religiousSupportRequested Boolean
+  religiousSupportSpecify   String?
+
+  // Section 11 — medication review
+  medicationAvailable      Boolean
+  medicationCorrectlyTaken Boolean
+  medicationSideEffects    Boolean
+  medicationRefillNeeded   Boolean
+  morphineAvailable        Boolean?            @default(true)
+  adherenceLevel           VisitAdherenceLevel
+  medicationIssues         String?
+
+  // Section 12 — caregiver
+  primaryCaregiver       String?
+  caregiverBurden        VisitCaregiverBurden
+  caregiverUnderstanding VisitCaregiverUnderstanding
+  caregivingCapacity     VisitCaregivingCapacity
+  familyEmotionalStatus  VisitFamilyEmotionalStatus
+
+  // Section 13 — education
+  educationProvided        VisitEducationProvided[] @default([])
+  educationProvidedOther   String?
+  trainingNeeds            String[]                 @default([])
+  additionalSupportNeeded  Boolean?
+  additionalSupportSpecify String?
+
+  // Section 14 — home environment
+  homeCondition          VisitHomeCondition
+  homeObservations       VisitHomeObservation[] @default([])
+  homeEnvironmentDetails String?
+
+  // Section 15 — nursing care
+  nursingCareGiven VisitNursingCare[] @default([])
+  nursingCareOther String?
+
+  // Section 16 — red flags
+  redFlags       VisitRedFlag[] @default([])
+  redFlagActions String?
+
+  // Section 17 — referrals made
+  referralsMade VisitReferralMade[] @default([])
+
+  // Section 18 — key issues
+  keyIssues String?
+
+  // Section 19 — action plan
+  immediateActions String?
+  followUpPlan     String?
+  nextVisitDate    DateTime?
+
+  // Section 20 — outcome
+  outcome     VisitOutcome
+  dateOfDeath DateTime?
+
+  // Meta
+  createdBy      Int
+  createdByStaff Staff @relation("VisitCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("VisitUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("VisitDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  // Child relations
+  signatures         HomeVisitSignature[]
+  currentMedications HomeVisitMedication[]
+
+  @@index([patientId])
+  @@index([visitDate])
+  @@index([outcome])
+  @@index([redFlags])
+  @@index([nextVisitDate])
+}
+
+// ── HomeVisit child: signatures ──
+model HomeVisitSignature {
+  id          Int       @id @default(autoincrement())
+  homeVisitId Int
+  homeVisit   HomeVisit @relation(fields: [homeVisitId], references: [id], onDelete: Cascade)
+
+  staffId      Int
+  staff        Staff         @relation(fields: [staffId], references: [id])
+  name         String
+  role         VisitTeamRole
+  isTeamLeader Boolean       @default(false)
+  signedAt     DateTime      @default(now())
+
+  @@index([homeVisitId])
+  @@index([staffId])
+  @@index([homeVisitId, isTeamLeader])
+}
+
+// ── HomeVisit child: current medications ──
+model HomeVisitMedication {
+  id          Int       @id @default(autoincrement())
+  homeVisitId Int
+  homeVisit   HomeVisit @relation(fields: [homeVisitId], references: [id], onDelete: Cascade)
+
+  name      String?
+  dosage    String?
+  frequency String?
+  route     String?
+
+  @@index([homeVisitId])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 11. DISCHARGE SUMMARY
+// ═════════════════════════════════════════════════════════════
+model DischargeSummary {
+  id Int @id @default(autoincrement())
+
+  // Relationships
+  patientId   Int
+  patient     Patient            @relation(fields: [patientId], references: [id])
+  admissionId Int?
+  admission   HospitalAdmission? @relation(fields: [admissionId], references: [id])
+
+  // Header
+  hospitalName       String         @default("")
+  palliativeCareUnit String         @default("")
+  dateOfAdmission    String?
+  dateOfDischarge    String
+  timeOfDischarge    String?
+  dischargeType      DischargeType?
+  dischargeTypeOther String?
+
+  // Section 3 — clinical summary
+  finalDischargeDiagnosis String?
+  clinicalProblemsManaged String[] @default([])
+  summaryOfClinicalCourse String?
+  importantInvestigations String?
+
+  // Section 4 — condition at discharge
+  overallCondition     DischargeOverallCondition?
+  levelOfConsciousness DischargeConsciousness?
+  functionalStatus     DischargeFunctionalStatus?
+  mobility             DischargeMobility?
+  oralIntake           DischargeOralIntake?
+
+  // Section 5 — vital signs
+  temperature       String?
+  pulse             String?
+  respiratoryRate   String?
+  bloodPressure     String?
+  oxygenSaturation  String?
+  oxygenRequirement String?
+
+  // Section 6 — symptom status
+  pain                  ProgressNoteDistress?
+  painNote              String?
+  shortnessOfBreath     ProgressNoteDistress?
+  shortnessOfBreathNote String?
+  nausea                ProgressNoteDistress?
+  nauseaNote            String?
+  vomiting              ProgressNoteDistress?
+  vomitingNote          String?
+  constipation          ProgressNoteDistress?
+  constipationNote      String?
+  fatigue               ProgressNoteDistress?
+  fatigueNote           String?
+  anxiety               ProgressNoteDistress?
+  anxietyNote           String?
+  delirium              ProgressNoteDistress?
+  deliriumNote          String?
+  appetiteLoss          ProgressNoteDistress?
+  appetiteLossNote      String?
+  other                 ProgressNoteDistress?
+  otherNote             String?
+  painScore             String?
+  painControl           DischargePainControl?
+
+  // Section 7 — discharge medications
+  prnMedications                    String?
+  medicationChanges                 String?
+  medicationReconciliationCompleted DischargeFeedingAssistance?
+
+  // Section 8 — symptom management instructions
+  painManagementInstructions         String?
+  breathlessnessManagement           String?
+  nauseaVomitingManagement           String?
+  constipationManagement             String?
+  anxietyAgitationDeliriumManagement String?
+  otherSymptomManagement             String?
+
+  // Section 9 — nutrition & hydration
+  diet                       DischargeDiet?
+  dietOther                  String?
+  feedingAssistance          DischargeFeedingAssistance?
+  enteralFeeding             DischargeFeedingAssistance?
+  feedingTube                DischargeFeedingTube?
+  feedingTubeOther           String?
+  hydrationInstructions      String?
+  nutritionDietitianFollowUp DischargeFeedingAssistance?
+
+  // Section 10 — wound / skin
+  woundPresent             DischargeFeedingAssistance?
+  woundLocation            String?
+  woundCareInstructions    String?
+  dressingChanges          String?
+  pressureInjuryPrevention String?
+
+  // Section 11 — oxygen / equipment
+  oxygenRequired            DischargeFeedingAssistance?
+  oxygenDeliveryMethod      DischargeOxygenDelivery?
+  oxygenDeliveryMethodOther String?
+  oxygenFlowRate            String?
+  equipmentRequired         String[]                    @default([])
+  equipmentOther            String?
+  equipmentArranged         DischargeFeedingAssistance?
+
+  // Section 12 — goals of care
+  currentGoalsOfCare              String[]                    @default([])
+  currentGoalsOfCareOther         String?
+  goalsOfCareReviewed             DischargeFeedingAssistance?
+  patientDecisionMakerPreferences String?
+  codeStatus                      DischargeCodeStatus?
+  codeStatusOther                 String?
+  advanceCarePlan                 DischargeAdvanceCarePlan?
+
+  // Section 13 — destination
+  dischargedTo       DischargeDestination?
+  dischargedToOther  String?
+  destinationAddress String?
+  transport          DischargeTransport?
+  transportOther     String?
+  escortCaregiver    String?
+
+  // Section 14 — home / hospice care plan
+  homePalliativeCareRequired DischargeFeedingAssistance?
+  hospiceReferral            DischargeHospiceReferral?
+  communityNursingRequired   DischargeFeedingAssistance?
+  homeVisitsRequired         DischargeFeedingAssistance?
+  caregiverSupportRequired   DischargeFeedingAssistance?
+  servicesArranged           String?
+  responsibleProvider        String?
+  responsibleProviderPhone   String?
+
+  // Section 15 — education
+  educationTopics             String[]                       @default([])
+  educationOther              String?
+  patientUnderstanding        DischargePatientUnderstanding?
+  additionalEducationRequired String?
+
+  // Section 16 — warning signs
+  warningSigns                     String[] @default([])
+  warningSignsOther                String?
+  warningSignsSpecificInstructions String?
+
+  // Section 17 — follow-up
+  palliativeCareFollowUp      DischargeFeedingAssistance?
+  palliativeCareFollowUpDate  String?
+  palliativeCareFollowUpTime  String?
+  physicianSpecialistFollowUp String?
+  primaryCareFollowUp         String?
+  hospiceHomeCareFollowUp     String?
+  otherAppointments           String?
+
+  // Section 18 — contacts
+  palliativeCareUnitContact String?
+  palliativeCareUnitPhone   String?
+  attendingClinician        String?
+  attendingClinicianPhone   String?
+  emergencyContactInfo      String?
+  homeHospiceService        String?
+  homeHospiceServicePhone   String?
+
+  // Section 19 — notes
+  dischargeNotes String?
+
+  // Workflow
+  status DischargeStatus @default(Final)
+
+  // Meta
+  createdBy      Int
+  createdByStaff Staff @relation("DischargeCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("DischargeUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("DischargeDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  // Children
+  dischargeMedications DischargeMedication[]
+
+  @@index([patientId])
+  @@index([admissionId])
+  @@index([dateOfDischarge])
+  @@index([status])
+  @@index([createdBy])
+}
+
+// ── DischargeSummary child: medications ──
+model DischargeMedication {
+  id                 Int              @id @default(autoincrement())
+  dischargeSummaryId Int
+  dischargeSummary   DischargeSummary @relation(fields: [dischargeSummaryId], references: [id], onDelete: Cascade)
+
+  medication   String? @default("")
+  dose         String? @default("")
+  route        String? @default("")
+  frequency    String? @default("")
+  purpose      String? @default("")
+  instructions String? @default("")
+
+  @@index([dischargeSummaryId])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 12. PATIENT PROGRESS NOTE
+// ═════════════════════════════════════════════════════════════
+model PatientProgressNote {
+  id Int @id @default(autoincrement())
+
+  // Relationships
+  patientId   Int
+  patient     Patient            @relation(fields: [patientId], references: [id])
+  admissionId Int?
+  admission   HospitalAdmission? @relation(fields: [admissionId], references: [id])
+
+  // Header
+  attendingClinician String
+  palliativeCareUnit String?
+
+  // Section 1 — current clinical status
+  generalCondition           ProgressNoteGeneralCondition?
+  levelOfConsciousness       ProgressNoteConsciousness?
+  orientation                ProgressNoteOrientation?
+  functionalStatus           ProgressNoteFunctionalStatus?
+  changesSincePreviousReview String?                       @default("")
+
+  // Section 2 — vitals
+  temperature                String?
+  pulse                     String?
+  respiratoryRate           String?
+  bloodPressure             String?
+  oxygenFlow                String?
+  spO2                      String?
+  otherRelevantObservations String? @default("")
+
+  // Section 3 — symptom assessment
+  pain                  ProgressNoteDistress?
+  painNote              String?
+  shortnessOfBreath     ProgressNoteDistress?
+  shortnessOfBreathNote String?
+  nausea                ProgressNoteDistress?
+  nauseaNote            String?
+  vomiting              ProgressNoteDistress?
+  vomitingNote          String?
+  constipation          ProgressNoteDistress?
+  constipationNote      String?
+  diarrhea              ProgressNoteDistress?
+  diarrheaNote          String?
+  fatigue               ProgressNoteDistress?
+  fatigueNote           String?
+  anxiety               ProgressNoteDistress?
+  anxietyNote           String?
+  delirium              ProgressNoteDistress?
+  deliriumNote          String?
+  insomania             ProgressNoteDistress?
+  insomaniaNote         String?
+  appetiteLoss          ProgressNoteDistress?
+  appetiteLossNote      String?
+  other                 ProgressNoteDistress?
+  otherNote             String?
+
+  painScore                 String?                     @default("")
+  painLocation              String?                     @default("")
+  painCharacter             String?                     @default("")
+  currentPainManagement     String?                     @default("")
+  responseToTreatment       ProgressNoteResponse?
+  breakthroughPainEpisodes  DischargeFeedingAssistance?
+  breakthroughPainFrequency String?                     @default("")
+
+  // Section 4 — respiratory
+  breathing                ProgressNoteBreathing?
+  oxygenTherapy            DischargeFeedingAssistance?
+  oxygenDelivery           ProgressNoteOxygenDelivery?
+  oxygenDeliveryOther      String?                     @default("")
+  respiratorySecretions    ProgressNoteSecretions?
+  cough                    DischargeFeedingAssistance?
+  otherRespiratoryFindings String?                     @default("")
+
+  // Section 5 — nutrition
+  oralIntake                    ProgressNoteOralIntake?
+  diet                          String?                     @default("")
+  fluidIntake                   String?                     @default("")
+  feedingAssistance             DischargeFeedingAssistance?
+  enteralFeeding                DischargeFeedingAssistance?
+  ivFluids                      DischargeFeedingAssistance?
+  nauseaVomitingAffectingIntake DischargeFeedingAssistance?
+  nutritionHydrationConcerns    String?                     @default("")
+
+  // Section 6 — elimination
+  urineOutput              ProgressNoteUrineOutput?
+  urinaryCatheter          DischargeFeedingAssistance?
+  bowelMovement            ProgressNoteBowelMovement?
+  lastBowelMovement        String?                     @default("")
+  otherEliminationConcerns String?                     @default("")
+
+  // Section 7 — skin
+  skin                        ProgressNoteSkin?
+  skinOther                   String?                     @default("")
+  pressureInjury              DischargeFeedingAssistance?
+  pressureInjuryLocationStage String?                     @default("")
+  woundCareProvided           DischargeFeedingAssistance?
+  woundPressureInjuryChanges  String?                     @default("")
+
+  // Section 8 — psychological
+  moodBehavior                           ProgressNoteMoodBehavior[]  @default([])
+  psychologicalDistress                  ProgressNoteDistress?
+  patientsMainConcernsToday              String?                     @default("")
+  counselingPsychologicalSupportProvided DischargeFeedingAssistance?
+
+  // Section 9 — spiritual
+  spiritualDistressIdentified       DischargeFeedingAssistance?
+  patientsSpiritualCulturalConcerns String?                     @default("")
+  spiritualCareProvided             DischargeFeedingAssistance?
+  spiritualReferralRequired         DischargeFeedingAssistance?
+  spiritualNotes                    String?                     @default("")
+
+  // Section 10 — family
+  familyCaregiverPresent         DischargeFeedingAssistance?
+  familyCaregiverConcerns        String?                     @default("")
+  familyEducationSupportProvided String?                     @default("")
+  familyMeetingHeld              DischargeFeedingAssistance?
+  familyMeetingParticipants      String?                     @default("")
+
+  // Section 11 — goals of care
+  currentGoalsOfCare              ProgressNoteGoalsOfCare[]   @default([])
+  currentGoalsOfCareOther         String?                     @default("")
+  goalsReviewedToday              DischargeFeedingAssistance?
+  changeInGoalsIdentified         DischargeFeedingAssistance?
+  patientDecisionMakerPreferences String?                     @default("")
+  codeStatus                      DischargeCodeStatus?
+  codeStatusOther                 String?                     @default("")
+  advanceCarePlanReviewed         DischargeFeedingAssistance?
+
+  // Section 12 — medication review
+  currentMedicationRegimenReviewed DischargeFeedingAssistance?
+  changesMade                      DischargeFeedingAssistance?
+  prnBreakthroughMedicationUsed    DischargeFeedingAssistance?
+  prnEffectiveness                 ProgressNotePRNEffectiveness?
+  medicationSideEffects            String?                       @default("None")
+  medicationSideEffectsDetail      String?                       @default("")
+
+  // Section 13 — nursing / supportive care
+  nursingSupportiveCareProvided ProgressNoteNursingCare[] @default([])
+  nursingSupportiveCareOther    String?                   @default("")
+  responseToSupportiveCare      String?                   @default("")
+
+  // Section 14 — investigations
+  investigationsPerformedReviewed      ProgressNoteInvestigation[] @default([])
+  investigationsPerformedReviewedOther String?                     @default("")
+  significantResults                   String?                     @default("")
+  clinicalSignificanceActionTaken      String?                     @default("")
+
+  // Section 16 — clinical assessment
+  overallAssessment       String?  @default("")
+  problemsIdentifiedToday String[] @default([])
+
+  // Section 17 — plan
+  symptomManagementPlan            String? @default("")
+  medicationPlan                   String? @default("")
+  nursingSupportiveCarePlan        String? @default("")
+  investigationsMonitoring         String? @default("")
+  familyCaregiverPlan              String? @default("")
+  referralsConsultations           String? @default("")
+  dischargeTransferHospicePlanning String? @default("")
+
+  // Section 18 — SOAP
+  soapSubjective String? @default("")
+  soapObjective  String? @default("")
+  soapAssessment String? @default("")
+  soapPlan       String? @default("")
+
+  // Section 20 — authorization
+  responsibleClinicianId Int
+  responsibleClinician   Staff @relation("ProgressNoteResponsible", fields: [responsibleClinicianId], references: [id])
+
+  facilityStamp String? @default("")
+
+  // Meta
+  createdBy      Int
+  createdByStaff Staff @relation("ProgressNoteCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("ProgressNoteUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("ProgressNoteDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  // Children
+  medications                 ProgressNoteMedication[]
+  signatures                  ProgressNoteSignature[]
+  multidisciplinaryTeamReview ProgressNoteMDTReview[]
+  additionalProgressNotes     ProgressNoteAdditionalNote[]
+
+  @@index([patientId, createdAt])
+  @@index([admissionId, createdAt])
+  @@index([createdBy])
+  @@index([responsibleClinicianId])
+}
+
+// ── ProgressNote child: medications ──
+model ProgressNoteMedication {
+  id             Int                 @id @default(autoincrement())
+  progressNoteId Int
+  progressNote   PatientProgressNote @relation(fields: [progressNoteId], references: [id], onDelete: Cascade)
+
+  medicationTreatment String? @default("")
+  dose                String? @default("")
+  route               String? @default("")
+  frequency           String? @default("")
+  reasonResponse      String? @default("")
+
+  @@index([progressNoteId])
+}
+
+// ── ProgressNote child: signatures ──
+model ProgressNoteSignature {
+  id             Int                 @id @default(autoincrement())
+  progressNoteId Int
+  progressNote   PatientProgressNote @relation(fields: [progressNoteId], references: [id], onDelete: Cascade)
+
+  staffId  Int
+  staff    Staff                     @relation(fields: [staffId], references: [id])
+  name     String
+  role     ProgressNoteSignatureRole
+  signedAt DateTime                  @default(now())
+
+  @@index([progressNoteId])
+  @@index([staffId])
+}
+
+// ── ProgressNote child: MDT review ──
+model ProgressNoteMDTReview {
+  id             Int                 @id @default(autoincrement())
+  progressNoteId Int
+  progressNote   PatientProgressNote @relation(fields: [progressNoteId], references: [id], onDelete: Cascade)
+
+  discipline         String?                     @default("")
+  reviewIntervention String?                     @default("")
+  followUpRequired   DischargeFeedingAssistance?
+
+  @@index([progressNoteId])
+}
+
+// ── ProgressNote child: additional notes ──
+model ProgressNoteAdditionalNote {
+  id             Int                 @id @default(autoincrement())
+  progressNoteId Int
+  progressNote   PatientProgressNote @relation(fields: [progressNoteId], references: [id], onDelete: Cascade)
+
+  date          String? @default("")
+  time          String? @default("")
+  note          String? @default("")
+  clinicianName String? @default("")
+
+  @@index([progressNoteId])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 13. HOSPICE NURSING ASSESSMENT
+// ═════════════════════════════════════════════════════════════
+model HospiceNursingAssessment {
+  id Int @id @default(autoincrement())
+
+  // Relationships
+  patientId Int
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  assessmentDate    DateTime @default(now())
+  assessedByStaffId Int?
+  assessedByStaff   Staff?   @relation("HospiceNursingAssessedBy", fields: [assessedByStaffId], references: [id])
+
+  // ── General Observation ──
+  levelOfConsciousness HospiceConsciousness?
+  orientation          HospiceOrientation[]       @default([])
+  generalAppearance    HospiceGeneralAppearance[] @default([])
+
+  // ── Section C: Vital Signs ──
+  bloodPressure    String?
+  pulseRate        Float?
+  respiratoryRate  Float?
+  temperature      Float?
+  oxygenSaturation Float?
+  weightKg         Float?
+  heightCm         Float?
+
+  // ── Section D: Pain ──
+  painPresent         Boolean?
+  painScore           Int?
+  painLocation        String[] @default([])
+  painLocationOther   String?
+  painCharacteristics String[] @default([])
+  painReliefMeasures  String[] @default([])
+  painReliefOther     String?
+
+  // ── Section E: Respiratory ──
+  breathingPattern HospiceBreathingPattern?
+  dyspneaSeverity  HospiceDyspneaSeverity?
+  oxygenTherapy    Boolean?
+  oxygenFlowRate   String?
+  cough            HospiceCoughType?
+  sputumColor      HospiceSputumColor?
+  respiratoryNotes String?
+
+  // ── Section F: Cardiovascular ──
+  pulseRhythm     HospicePulseRhythm?
+  peripheralEdema HospiceEdemaSeverity?
+  edemaLocation   String?
+  skinColor       HospiceSkinColor?
+
+  // ── Section G: Gastrointestinal ──
+  appetite          HospiceAppetite?
+  nausea            HospiceNauseaSeverity?
+  vomiting          Boolean?
+  vomitingFrequency String?
+  bowelFunction     HospiceBowelFunction?
+  lastBowelMovement DateTime?
+
+  // ── Section H: Genitourinary ──
+  urinaryFunction HospiceUrinaryFunction?
+  urineAppearance HospiceUrineAppearance?
+
+  // ── Section I: Skin ──
+  skinIntegrity         HospiceSkinIntegrity?
+  pressureInjuryRisk    HospicePressureInjuryRisk?
+  pressureUlcerPresent  Boolean?
+  pressureUlcerLocation String?
+  pressureUlcerStage    HospicePressureUlcerStage?
+
+  // ── Section J: Mobility ──
+  mobilityStatus        HospiceMobilityStatus?
+  fallRisk              HospiceFallRisk?
+  assistiveDevices      HospiceAssistiveDevice[] @default([])
+  assistiveDevicesOther String?
+
+  //activity of daily living
+  feeding   ADL?
+  bathing   ADL?
+  dressing  ADL?
+  toileting ADL?
+  mobility  ADL?
+
+  // ── Section L: Psychological ──
+  emotionalStatus      HospiceEmotionalStatus?
+  communicationAbility HospiceCommunicationAbility?
+  cognitiveStatus      HospiceCognitiveStatus?
+
+  // ── Section M: Family / Caregiver ──
+  primaryCaregiverName         String?
+  primaryCaregiverRelationship String?
+  primaryCaregiverPhone        String?
+  familySupport                HospiceFamilySupport?
+  caregiverStressLevel         HospiceCaregiverStress?
+
+  // ── Section N: Spiritual / Cultural ──
+  spiritualSupportRequested Boolean?
+  religiousAffiliation      HospiceReligiousAffiliation?
+  religiousAffiliationOther String?
+  culturalConsiderations    String?
+
+  // ── Section O: Nursing Diagnoses ──
+  nursingDiagnoses      HospiceNursingDiagnosis[] @default([])
+  nursingDiagnosesOther String?
+
+  // ── Section Q: Nurse's Summary ──
+  nurseSummary String?
+
+  // ── Meta ──
+  createdBy      Int
+  createdByStaff Staff @relation("HospiceNursingCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("HospiceNursingUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt           DateTime?
+  deletedBy           Int?
+  deletedByAdmin      Admin?             @relation("HospiceNursingDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason      String?
+  hospitalAdmission   HospitalAdmission? @relation(fields: [hospitalAdmissionId], references: [id])
+  hospitalAdmissionId Int?
+
+  @@index([patientId, assessmentDate])
+  @@index([createdBy])
+}

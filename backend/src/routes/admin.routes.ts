@@ -15,6 +15,12 @@ import {
 } from '@schemas/admin.schema.js';
 import { updateVisitSchema } from '@schemas/visit.schema.js';
 import * as adminController from '@controllers/admin.controller.js';
+import * as contributionController from '@controllers/staff-contribution.controller.js';
+import {
+  getStaffContributionParamsSchema,
+  getStaffContributionDetailParamsSchema,
+  getStaffContributionQuerySchema,
+} from '@schemas/staff-contribution.schema.js';
 
 const router = Router();
 
@@ -109,5 +115,19 @@ router.put(
 );
 router.delete('/visits/:visitId', adminController.deleteVisit);
 router.post('/visits/:visitId/restore', adminController.restoreVisit);
+
+router.get(
+  '/staff/:staffId/contributions/summary',
+  validate(getStaffContributionParamsSchema),
+  contributionController.getStaffContributionSummary,
+);
+
+router.get(
+  '/staff/:staffId/contributions/:category',
+  validate(
+    getStaffContributionDetailParamsSchema.merge(getStaffContributionQuerySchema),
+  ),
+  contributionController.getStaffContributionDetail,
+);
 
 export default router;

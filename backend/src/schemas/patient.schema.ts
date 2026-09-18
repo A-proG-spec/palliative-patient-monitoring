@@ -13,6 +13,7 @@ export const createPatientSchema = z.object({
     emergencyContactPhone: z.string().min(10, 'Emergency contact phone is required'),
     caregiverName: z.string().min(1, 'Caregiver name is required'),
     caregiverPhone: z.string().min(10, 'Caregiver phone is required'),
+    caregiverRelation: z.string().optional(),
     primaryDiagnosis: z.string().min(1, 'Primary diagnosis is required'),
     secondaryDiagnoses: z.array(z.string()).optional(),
     diseaseStage: z.enum(['Early', 'Advanced', 'EndStage']),
@@ -30,11 +31,16 @@ export const getPatientsQuerySchema = z.object({
   }),
 });
 
+// ─────────────────────────────────────────────────────────────
+// Params — this is the ONLY place `getPatientParamsSchema` lives.
+// The version in lab.schema.ts was a duplicate and has been removed.
+// ─────────────────────────────────────────────────────────────
 export const getPatientParamsSchema = z.object({
   params: z.object({
     patientId: z.string().min(1, 'Patient ID is required'),
   }),
 });
+
 export const updatePatientSchema = z.object({
   body: z.object({
     firstName: z.string().min(2).optional(),
@@ -48,6 +54,7 @@ export const updatePatientSchema = z.object({
     emergencyContactPhone: z.string().min(10).optional(),
     caregiverName: z.string().min(1).optional(),
     caregiverPhone: z.string().min(10).optional(),
+    caregiverRelation: z.string().optional(),
     hospitalPatientId: z.string().optional(),
   }),
 });

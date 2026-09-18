@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// ─────────────────────────────────────────────────────────────
+// Create
+// ─────────────────────────────────────────────────────────────
 export const createReferralSchema = z.object({
   body: z.object({
     referralType: z.enum(['Incoming', 'Outgoing']),
@@ -30,7 +33,7 @@ export const createReferralSchema = z.object({
           'EmergencyCare',
           'DiagnosticEvaluation',
           'Other',
-        ])
+        ]),
       )
       .min(1, 'At least one reason is required'),
     otherReason: z.string().optional(),
@@ -38,26 +41,43 @@ export const createReferralSchema = z.object({
     receivingFacility: z.string().min(1, 'Receiving facility is required'),
     contactPerson: z.string().min(1, 'Contact person is required'),
     contactNumber: z.string().min(1, 'Contact number is required'),
-    // NOTE: preparedBy, preparedByDesignation, signature removed.
-    // The staff who submits the referral is captured server-side via
-    // req.user.id and stored as `requestedBy`.
   }),
 });
 
+// ─────────────────────────────────────────────────────────────
+// Update — all body fields optional (same shape as create)
+// ─────────────────────────────────────────────────────────────
+export const updateReferralSchema = z.object({
+  body: createReferralSchema.shape.body.partial(),
+});
+
+// ─────────────────────────────────────────────────────────────
+// Queries
+// ─────────────────────────────────────────────────────────────
 export const getReferralsQuerySchema = z.object({
   query: z.object({
-    status: z.enum(['Pending', 'Accepted', 'Declined', 'Admitted', 'InfoRequested']).optional(),
+    status: z
+      .enum(['Pending', 'Accepted', 'Declined', 'Admitted', 'InfoRequested'])
+      .optional(),
     page: z.coerce.number().int().positive().optional().default(1),
     limit: z.coerce.number().int().positive().max(100).optional().default(20),
   }),
 });
 
+
+
+// For routes that have both :patientId and :referralId
 export const getReferralParamsSchema = z.object({
   params: z.object({
+    patientId: z.string().min(1, 'Patient ID is required'),
     referralId: z.string().min(1, 'Referral ID is required'),
   }),
 });
 
+// ─────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────
 export type CreateReferralSchema = z.infer<typeof createReferralSchema>;
+export type UpdateReferralSchema = z.infer<typeof updateReferralSchema>;
 export type GetReferralsQuerySchema = z.infer<typeof getReferralsQuerySchema>;
 export type GetReferralParamsSchema = z.infer<typeof getReferralParamsSchema>;
