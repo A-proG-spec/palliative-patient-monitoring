@@ -71,7 +71,7 @@ export const ProgressNoteModal: React.FC<ProgressNoteModalProps> = ({
 
   // ── Access control ──
   const isAdmin = user?.type === 'admin';
-  const isAuthor = note?.createdBy?.id === user?.id;
+  const isAuthor = note?.responsibleClinician?.staffId === user?.id;
   const canEdit = isAuthor || isAdmin;
   const canDelete = isAdmin;
 
@@ -783,7 +783,7 @@ export const ProgressNoteModal: React.FC<ProgressNoteModalProps> = ({
       </div>
 
       {/* Print Styles */}
-      <style jsx>{`
+      <style>{`
         @media print {
           body {
             overflow: visible !important;

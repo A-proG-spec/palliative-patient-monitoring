@@ -51,6 +51,15 @@ export const createVisitSchema = z.object({
   overallStatus: z.enum(['Stable', 'Deteriorating', 'Critical', 'BedBound']),
   mobility: z.enum(['Ambulatory', 'RequiresAssistance', 'Bedridden']),
 
+  // ── Section A: General Observation (frontend-only pending backend support) ──
+  generalObservation: z
+    .object({
+      levelOfConsciousness: z.string().optional(),
+      orientation: z.array(z.string()).optional(),
+      generalAppearance: z.array(z.string()).optional(),
+    })
+    .optional(),
+
   // ── Section 4: Vital Signs ──
   vitals: z
     .object({
@@ -59,6 +68,9 @@ export const createVisitSchema = z.object({
       bp: z.string().optional(),
       respiration: z.coerce.number().optional(),
       spo2: z.coerce.number().optional(),
+      // frontend-only pending backend support
+      weight: z.coerce.number().optional(),
+      height: z.coerce.number().optional(),
     })
     .optional(),
 
@@ -71,6 +83,9 @@ export const createVisitSchema = z.object({
   currentPainMedication: booleanFromRadioOptional,
   painMedicationEffective: booleanFromRadio,
   painManagementIneffectiveReason: z.string().optional(),
+  // frontend-only pending backend support
+  painReliefMeasures: z.array(z.string()).optional(),
+  painReliefMeasuresOther: z.string().optional(),
 
   // ── Section 6: Symptoms ──
   symptoms: z.array(z.string()).optional().default([]),
@@ -92,6 +107,12 @@ export const createVisitSchema = z.object({
   oralIntake: z.enum(['Adequate', 'Reduced', 'Minimal']),
   hydrationStatus: z.enum(['Adequate', 'MildDehydration', 'SevereDehydration']),
   nutritionComments: z.string().optional(),
+  // frontend-only pending backend support
+  nausea: z.string().optional(),
+  vomiting: booleanFromRadioOptional,
+  vomitingFrequency: z.string().optional(),
+  bowelFunction: z.string().optional(),
+  lastBowelMovement: z.string().optional(),
 
   // ── Section 9: Psychosocial Assessment ──
   emotionalStatus: z.enum(['Stable', 'Anxious', 'Depressed', 'Fearful', 'Distressed']),
@@ -99,12 +120,19 @@ export const createVisitSchema = z.object({
   familySupport: z.enum(['Excellent', 'Good', 'Limited', 'None']),
   financialDifficulty: booleanFromRadio,
   financialComments: z.string().optional(),
+  // frontend-only pending backend support
+  communicationAbility: z.string().optional(),
+  cognitiveStatus: z.string().optional(),
 
   // ── Section 10: Spiritual Assessment ──
   spiritualNeeds: booleanFromRadio,
   spiritualNeedsDescription: z.string().optional(),
   religiousSupportRequested: booleanFromRadio,
   religiousSupportSpecify: z.string().optional(),
+  // frontend-only pending backend support
+  religiousAffiliation: z.string().optional(),
+  religiousAffiliationOther: z.string().optional(),
+  culturalConsiderations: z.string().optional(),
 
   // ── Section 11: Medication Review ──
   medicationAvailable: booleanFromRadio,
@@ -132,6 +160,9 @@ export const createVisitSchema = z.object({
   caregiverUnderstanding: z.enum(['Good', 'Fair', 'Poor']),
   caregivingCapacity: z.enum(['Strong', 'Moderate', 'Weak']),
   familyEmotionalStatus: z.enum(['Stable', 'Stressed', 'Overwhelmed']),
+  // frontend-only pending backend support
+  caregiverRelationship: z.string().optional(),
+  caregiverPhone: z.string().optional(),
 
   // ── Section 13: Education Provided ──
   educationProvided: z.array(z.string()).optional().default([]),
@@ -177,6 +208,66 @@ export const createVisitSchema = z.object({
 
   // ── Section 21: Team Leader ──
   teamLeaderId: z.string().min(1, 'Team leader is required'),
+
+  // ── New sections (frontend-only pending backend support) ──
+  respiratory: z
+    .object({
+      breathingPattern: z.string().optional(),
+      dyspnea: z.string().optional(),
+      oxygenTherapy: booleanFromRadioOptional,
+      oxygenFlowRate: z.string().optional(),
+      cough: z.string().optional(),
+      sputum: z.string().optional(),
+    })
+    .optional(),
+
+  cardiovascular: z
+    .object({
+      pulseRhythm: z.string().optional(),
+      peripheralEdema: z.string().optional(),
+      peripheralEdemaLocation: z.string().optional(),
+      skinColor: z.string().optional(),
+    })
+    .optional(),
+
+  genitourinary: z
+    .object({
+      urinaryFunction: z.string().optional(),
+      urineAppearance: z.string().optional(),
+    })
+    .optional(),
+
+  skin: z
+    .object({
+      skinIntegrity: z.string().optional(),
+      pressureInjuryRisk: z.string().optional(),
+      pressureUlcerPresent: booleanFromRadioOptional,
+      pressureUlcerLocation: z.string().optional(),
+      pressureUlcerStage: z.string().optional(),
+    })
+    .optional(),
+
+  mobilityAssessment: z
+    .object({
+      mobilityStatus: z.string().optional(),
+      fallRisk: z.string().optional(),
+      assistiveDevices: z.array(z.string()).optional(),
+      assistiveDevicesOther: z.string().optional(),
+    })
+    .optional(),
+
+  nursingDiagnoses: z.array(z.string()).optional(),
+  nursingDiagnosesOther: z.string().optional(),
+
+  nursingCarePlan: z
+    .object({
+      problemsIdentified: z.string().optional(),
+      plannedInterventions: z.string().optional(),
+      expectedOutcomes: z.string().optional(),
+    })
+    .optional(),
+
+  nursesSummary: z.string().optional(),
 });
 
 export type CreateVisitFormData = z.infer<typeof createVisitSchema>;

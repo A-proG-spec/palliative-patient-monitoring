@@ -45,7 +45,7 @@ const VisitDetailPage: React.FC = () => {
             <>
               <Row label="Temperature" value={`${visit.vitals.temperature}°C`} />
               <Row label="Pulse" value={`${visit.vitals.pulse} bpm`} />
-              <Row label="Blood Pressure" value={visit.vitals.bp} />
+              <Row label="Blood Pressure" value={visit.vitals.bp ?? '—'} />
               <Row label="Respiration" value={`${visit.vitals.respiration}/min`} />
               <Row label="SpO₂" value={`${visit.vitals.spo2}%`} />
             </>

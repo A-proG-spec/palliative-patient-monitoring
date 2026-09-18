@@ -12,7 +12,8 @@ export const mockImagingApi = {
       patientId,
       ...data,
       status: 'Ordered',
-      orderedBy: 'staff-001',
+      orderedBy: { id: 'staff-001', name: 'Staff Member' },
+      performedContrast: 'None',
       dateOrdered: new Date().toISOString().split('T')[0],
       createdAt: new Date().toISOString(),
     } as ImagingOrder;
@@ -25,7 +26,7 @@ export const mockImagingApi = {
     let filtered = MOCK_IMAGING_ORDERS.filter((i) => i.patientId === patientId);
     if (params?.status) filtered = filtered.filter((i) => i.status === params.status);
     // Sort by date descending (newest first)
-    filtered = filtered.sort((a, b) => new Date(b.dateOrdered).getTime() - new Date(a.dateOrdered).getTime());
+    filtered = filtered.sort((a, b) => new Date(b.dateOrdered ?? 0).getTime() - new Date(a.dateOrdered ?? 0).getTime());
     const page = params?.page || 1;
     const limit = params?.limit || 20;
     const start = (page - 1) * limit;
@@ -55,7 +56,7 @@ export const mockImagingApi = {
     return MOCK_IMAGING_ORDERS[idx];
   },
 
-  updateStatus: async (patientId: string, imagingId: string, status: 'Ordered' | 'Completed'): Promise<ImagingOrder> => {
+  updateStatus: async (patientId: string, imagingId: string, status: 'Ordered' | 'Completed' | 'Cancelled'): Promise<ImagingOrder> => {
     await delay(400);
     const idx = MOCK_IMAGING_ORDERS.findIndex((i) => i.id === imagingId && i.patientId === patientId);
     if (idx === -1) throw new Error('Imaging order not found');

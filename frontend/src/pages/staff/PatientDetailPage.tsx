@@ -13,6 +13,7 @@ import { usePatientLabs } from '@/hooks/useLabs';
 import { usePatientImaging } from '@/hooks/useImaging';
 import { usePatientReferrals } from '@/hooks/useReferrals';
 import { usePatientAdmissions } from '@/hooks/useAdmissions';
+import type { HospitalAdmission } from '@/types/admission.types';
 import { useProgressNotes } from '@/hooks/useProgressNotes';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -358,7 +359,7 @@ const PatientDetailPage: React.FC = () => {
         medications: medsData?.items ?? [],
         labs: labsData?.items ?? [],
         referrals: refsData?.items ?? [],
-        admissions: admsData?.items ?? [],
+        admissions: (admsData?.items ?? []) as unknown as HospitalAdmission[],
         appName: APP_NAME,
       });
       setIsPrinting(false);

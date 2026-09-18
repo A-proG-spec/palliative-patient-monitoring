@@ -300,6 +300,73 @@ const RecordVisitPage: React.FC = () => {
           </div>
         </Section>
 
+        {/* A. GENERAL OBSERVATION */}
+        <Section title="A. GENERAL OBSERVATION">
+          <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
+            Fields in this section are not yet saved — pending backend support.
+          </p>
+
+          <Select
+            label="Level of Consciousness"
+            options={[
+              { value: 'Alert', label: 'Alert' },
+              { value: 'Drowsy', label: 'Drowsy' },
+              { value: 'Confused', label: 'Confused' },
+              { value: 'Unresponsive', label: 'Unresponsive' },
+              { value: 'Comatose', label: 'Comatose' },
+            ]}
+            placeholder="Select…"
+            {...register('generalObservation.levelOfConsciousness')}
+          />
+
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">Orientation</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {(['Person', 'Place', 'Time', 'Disoriented'] as const).map((opt) => (
+                <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors">
+                  <input
+                    type="checkbox"
+                    value={opt}
+                    {...register('generalObservation.orientation')}
+                    className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary"
+                  />
+                  {opt === 'Person' ? 'Oriented to Person'
+                    : opt === 'Place' ? 'Oriented to Place'
+                    : opt === 'Time' ? 'Oriented to Time'
+                    : 'Disoriented'}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">General Appearance</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {([
+                'Comfortable', 'MildDistress', 'ModerateDistress', 'SevereDistress',
+                'Cachectic', 'Bedridden', 'WellGroomed', 'PoorHygiene',
+              ] as const).map((opt) => (
+                <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors">
+                  <input
+                    type="checkbox"
+                    value={opt}
+                    {...register('generalObservation.generalAppearance')}
+                    className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary"
+                  />
+                  {opt === 'Comfortable' ? 'Comfortable'
+                    : opt === 'MildDistress' ? 'Mild Distress'
+                    : opt === 'ModerateDistress' ? 'Moderate Distress'
+                    : opt === 'SevereDistress' ? 'Severe Distress'
+                    : opt === 'Cachectic' ? 'Cachectic'
+                    : opt === 'Bedridden' ? 'Bedridden'
+                    : opt === 'WellGroomed' ? 'Well Groomed'
+                    : 'Poor Hygiene'}
+                </label>
+              ))}
+            </div>
+          </div>
+        </Section>
+
         {/* 4. VITAL SIGNS */}
         <Section title="4. VITAL SIGNS (IF AVAILABLE)" defaultOpen={false}>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -309,6 +376,17 @@ const RecordVisitPage: React.FC = () => {
             <Input label="Respiration (/min)" type="number" {...register('vitals.respiration')} />
             <Input label="SpO₂ (%)" type="number" {...register('vitals.spo2')} />
           </div>
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <Input label="Weight (kg)" type="number" step="0.1" {...register('vitals.weight')} />
+            </div>
+            <div>
+              <Input label="Height (cm)" type="number" step="0.1" {...register('vitals.height')} />
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+            Weight and Height are not yet saved — pending backend support.
+          </p>
         </Section>
 
         {/* 5. PAIN ASSESSMENT */}
@@ -385,6 +463,142 @@ const RecordVisitPage: React.FC = () => {
           {!watch('painMedicationEffective') && (
             <Textarea label="If No, explain:" rows={2} {...register('painManagementIneffectiveReason')} />
           )}
+
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">Pain Relief Measures</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {(['Analgesics', 'Positioning', 'Massage', 'RelaxationTherapy', 'Other'] as const).map((opt) => (
+                <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors">
+                  <input
+                    type="checkbox"
+                    value={opt}
+                    {...register('painReliefMeasures')}
+                    className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary"
+                  />
+                  {opt === 'RelaxationTherapy' ? 'Relaxation Therapy' : opt}
+                </label>
+              ))}
+            </div>
+            <Input placeholder="Other: specify" className="mt-2" {...register('painReliefMeasuresOther')} />
+            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              Pain Relief Measures are not yet saved — pending backend support.
+            </p>
+          </div>
+        </Section>
+
+        {/* B1. RESPIRATORY ASSESSMENT */}
+        <Section title="B1. RESPIRATORY ASSESSMENT" defaultOpen={false}>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
+            Fields in this section are not yet saved — pending backend support.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Select
+              label="Breathing Pattern"
+              options={[
+                { value: 'Normal', label: 'Normal' },
+                { value: 'Labored', label: 'Labored' },
+                { value: 'Shallow', label: 'Shallow' },
+                { value: 'Rapid', label: 'Rapid' },
+                { value: 'Slow', label: 'Slow' },
+              ]}
+              placeholder="Select…"
+              {...register('respiratory.breathingPattern')}
+            />
+            <Select
+              label="Dyspnea"
+              options={[
+                { value: 'None', label: 'None' },
+                { value: 'Mild', label: 'Mild' },
+                { value: 'Moderate', label: 'Moderate' },
+                { value: 'Severe', label: 'Severe' },
+              ]}
+              placeholder="Select…"
+              {...register('respiratory.dyspnea')}
+            />
+            <Select
+              label="Cough"
+              options={[
+                { value: 'None', label: 'None' },
+                { value: 'Dry', label: 'Dry' },
+                { value: 'Productive', label: 'Productive' },
+              ]}
+              placeholder="Select…"
+              {...register('respiratory.cough')}
+            />
+            <Select
+              label="Sputum"
+              options={[
+                { value: 'None', label: 'None' },
+                { value: 'Clear', label: 'Clear' },
+                { value: 'Yellow', label: 'Yellow' },
+                { value: 'Green', label: 'Green' },
+                { value: 'Bloody', label: 'Bloody' },
+              ]}
+              placeholder="Select…"
+              {...register('respiratory.sputum')}
+            />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">Oxygen Therapy</p>
+            <div className="flex gap-4 mb-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" value="true" {...register('respiratory.oxygenTherapy')} className="h-4 w-4 text-primary" />
+                Yes
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" value="false" {...register('respiratory.oxygenTherapy')} className="h-4 w-4 text-primary" />
+                No
+              </label>
+            </div>
+            {watch('respiratory.oxygenTherapy' as any) === true && (
+              <Input label="Flow Rate (L/min)" placeholder="e.g. 2" {...register('respiratory.oxygenFlowRate')} />
+            )}
+          </div>
+        </Section>
+
+        {/* B2. CARDIOVASCULAR ASSESSMENT */}
+        <Section title="B2. CARDIOVASCULAR ASSESSMENT" defaultOpen={false}>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
+            Fields in this section are not yet saved — pending backend support.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Select
+              label="Pulse"
+              options={[
+                { value: 'Regular', label: 'Regular' },
+                { value: 'Irregular', label: 'Irregular' },
+              ]}
+              placeholder="Select…"
+              {...register('cardiovascular.pulseRhythm')}
+            />
+            <Select
+              label="Skin Color"
+              options={[
+                { value: 'Normal', label: 'Normal' },
+                { value: 'Pale', label: 'Pale' },
+                { value: 'Cyanotic', label: 'Cyanotic' },
+                { value: 'Jaundiced', label: 'Jaundiced' },
+              ]}
+              placeholder="Select…"
+              {...register('cardiovascular.skinColor')}
+            />
+            <Select
+              label="Peripheral Edema"
+              options={[
+                { value: 'None', label: 'None' },
+                { value: 'Mild', label: 'Mild' },
+                { value: 'Moderate', label: 'Moderate' },
+                { value: 'Severe', label: 'Severe' },
+              ]}
+              placeholder="Select…"
+              {...register('cardiovascular.peripheralEdema')}
+            />
+            <Input
+              label="Edema Location"
+              placeholder="e.g. bilateral ankles"
+              {...register('cardiovascular.peripheralEdemaLocation')}
+            />
+          </div>
         </Section>
 
         {/* 6. SYMPTOMS */}
@@ -451,6 +665,193 @@ const RecordVisitPage: React.FC = () => {
             />
           </div>
           <Textarea label="Comments" rows={2} {...register('nutritionComments')} />
+
+          {/* GI additions — pending backend support */}
+          <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-border-base">
+            <Select
+              label="Nausea"
+              options={[
+                { value: 'None', label: 'None' },
+                { value: 'Mild', label: 'Mild' },
+                { value: 'Moderate', label: 'Moderate' },
+                { value: 'Severe', label: 'Severe' },
+              ]}
+              placeholder="Select…"
+              {...register('nausea')}
+            />
+            <Select
+              label="Bowel Function"
+              options={[
+                { value: 'Normal', label: 'Normal' },
+                { value: 'Constipation', label: 'Constipation' },
+                { value: 'Diarrhea', label: 'Diarrhea' },
+                { value: 'Incontinence', label: 'Incontinence' },
+              ]}
+              placeholder="Select…"
+              {...register('bowelFunction')}
+            />
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm font-medium text-on-surface mb-2">Vomiting</p>
+              <div className="flex gap-4 mb-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="true" {...register('vomiting')} className="h-4 w-4 text-primary" />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" value="false" {...register('vomiting')} className="h-4 w-4 text-primary" />
+                  No
+                </label>
+              </div>
+              {watch('vomiting' as any) === true && (
+                <Input label="Frequency" placeholder="e.g. 3×/day" {...register('vomitingFrequency')} />
+              )}
+            </div>
+            <Input label="Last Bowel Movement" type="date" {...register('lastBowelMovement')} />
+          </div>
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Nausea, Vomiting, Bowel Function, and Last Bowel Movement are not yet saved — pending backend support.
+          </p>
+        </Section>
+
+        {/* C1. GENITOURINARY ASSESSMENT */}
+        <Section title="C1. GENITOURINARY ASSESSMENT" defaultOpen={false}>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
+            Fields in this section are not yet saved — pending backend support.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Select
+              label="Urinary Function"
+              options={[
+                { value: 'Normal', label: 'Normal' },
+                { value: 'Frequency', label: 'Frequency' },
+                { value: 'Retention', label: 'Retention' },
+                { value: 'Incontinence', label: 'Incontinence' },
+                { value: 'Catheterized', label: 'Catheterized' },
+              ]}
+              placeholder="Select…"
+              {...register('genitourinary.urinaryFunction')}
+            />
+            <Select
+              label="Urine Appearance"
+              options={[
+                { value: 'Clear', label: 'Clear' },
+                { value: 'Cloudy', label: 'Cloudy' },
+                { value: 'Bloody', label: 'Bloody' },
+                { value: 'Dark', label: 'Dark' },
+              ]}
+              placeholder="Select…"
+              {...register('genitourinary.urineAppearance')}
+            />
+          </div>
+        </Section>
+
+        {/* C2. SKIN ASSESSMENT */}
+        <Section title="C2. SKIN ASSESSMENT" defaultOpen={false}>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
+            Fields in this section are not yet saved — pending backend support.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Select
+              label="Skin Integrity"
+              options={[
+                { value: 'Intact', label: 'Intact' },
+                { value: 'Dry', label: 'Dry' },
+                { value: 'Fragile', label: 'Fragile' },
+                { value: 'WoundPresent', label: 'Wound Present' },
+                { value: 'PressureUlcer', label: 'Pressure Ulcer' },
+              ]}
+              placeholder="Select…"
+              {...register('skin.skinIntegrity')}
+            />
+            <Select
+              label="Pressure Injury Risk"
+              options={[
+                { value: 'Low', label: 'Low' },
+                { value: 'Moderate', label: 'Moderate' },
+                { value: 'High', label: 'High' },
+              ]}
+              placeholder="Select…"
+              {...register('skin.pressureInjuryRisk')}
+            />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">Existing Pressure Ulcer</p>
+            <div className="flex gap-4 mb-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" value="true" {...register('skin.pressureUlcerPresent')} className="h-4 w-4 text-primary" />
+                Yes
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" value="false" {...register('skin.pressureUlcerPresent')} className="h-4 w-4 text-primary" />
+                No
+              </label>
+            </div>
+            {watch('skin.pressureUlcerPresent' as any) === true && (
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Input label="Location" placeholder="e.g. sacrum" {...register('skin.pressureUlcerLocation')} />
+                <Select
+                  label="Stage"
+                  options={[
+                    { value: 'I', label: 'Stage I' },
+                    { value: 'II', label: 'Stage II' },
+                    { value: 'III', label: 'Stage III' },
+                    { value: 'IV', label: 'Stage IV' },
+                  ]}
+                  placeholder="Select stage…"
+                  {...register('skin.pressureUlcerStage')}
+                />
+              </div>
+            )}
+          </div>
+        </Section>
+
+        {/* C3. MOBILITY ASSESSMENT */}
+        <Section title="C3. MOBILITY ASSESSMENT" defaultOpen={false}>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
+            Fields in this section are not yet saved — pending backend support.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Select
+              label="Mobility Status"
+              options={[
+                { value: 'Independent', label: 'Independent' },
+                { value: 'RequiresAssistance', label: 'Requires Assistance' },
+                { value: 'WheelchairDependent', label: 'Wheelchair Dependent' },
+                { value: 'Bedridden', label: 'Bedridden' },
+              ]}
+              placeholder="Select…"
+              {...register('mobilityAssessment.mobilityStatus')}
+            />
+            <Select
+              label="Fall Risk"
+              options={[
+                { value: 'Low', label: 'Low' },
+                { value: 'Moderate', label: 'Moderate' },
+                { value: 'High', label: 'High' },
+              ]}
+              placeholder="Select…"
+              {...register('mobilityAssessment.fallRisk')}
+            />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">Assistive Devices</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {(['None', 'Cane', 'Walker', 'Wheelchair', 'Other'] as const).map((opt) => (
+                <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors">
+                  <input
+                    type="checkbox"
+                    value={opt}
+                    {...register('mobilityAssessment.assistiveDevices')}
+                    className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary"
+                  />
+                  {opt}
+                </label>
+              ))}
+            </div>
+            <Input placeholder="Other: specify" className="mt-2" {...register('mobilityAssessment.assistiveDevicesOther')} />
+          </div>
         </Section>
 
         {/* 9. PSYCHOSOCIAL */}
@@ -494,6 +895,33 @@ const RecordVisitPage: React.FC = () => {
             </div>
           </div>
           <Textarea label="Comments" rows={2} {...register('financialComments')} />
+
+          {/* Psychological additions — pending backend support */}
+          <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-border-base">
+            <Select
+              label="Communication Ability"
+              options={[
+                { value: 'Normal', label: 'Normal' },
+                { value: 'Impaired', label: 'Impaired' },
+                { value: 'NonVerbal', label: 'Non-Verbal' },
+              ]}
+              placeholder="Select…"
+              {...register('communicationAbility')}
+            />
+            <Select
+              label="Cognitive Status"
+              options={[
+                { value: 'Intact', label: 'Intact' },
+                { value: 'MildImpairment', label: 'Mild Impairment' },
+                { value: 'SevereImpairment', label: 'Severe Impairment' },
+              ]}
+              placeholder="Select…"
+              {...register('cognitiveStatus')}
+            />
+          </div>
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Communication Ability and Cognitive Status are not yet saved — pending backend support.
+          </p>
         </Section>
 
         {/* 10. SPIRITUAL */}
@@ -531,6 +959,36 @@ const RecordVisitPage: React.FC = () => {
           {watch('religiousSupportRequested') && (
             <Textarea label="Specify:" rows={2} {...register('religiousSupportSpecify')} />
           )}
+
+          {/* Spiritual additions — pending backend support */}
+          <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-border-base">
+            <Select
+              label="Religious Affiliation"
+              options={[
+                { value: 'Orthodox', label: 'Orthodox' },
+                { value: 'Muslim', label: 'Muslim' },
+                { value: 'Protestant', label: 'Protestant' },
+                { value: 'Catholic', label: 'Catholic' },
+                { value: 'Other', label: 'Other' },
+              ]}
+              placeholder="Select…"
+              {...register('religiousAffiliation')}
+            />
+            <Input
+              label="Other (specify)"
+              placeholder="If Other selected above"
+              {...register('religiousAffiliationOther')}
+            />
+          </div>
+          <Textarea
+            label="Cultural Considerations"
+            rows={2}
+            placeholder="Note any cultural beliefs or practices relevant to care…"
+            {...register('culturalConsiderations')}
+          />
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Religious Affiliation and Cultural Considerations are not yet saved — pending backend support.
+          </p>
         </Section>
 
         {/* 11. MEDICATION REVIEW */}
@@ -614,6 +1072,21 @@ const RecordVisitPage: React.FC = () => {
         {/* 12. CAREGIVER */}
         <Section title="12. CAREGIVER ASSESSMENT" defaultOpen={false}>
           <Input label="Primary Caregiver" {...register('primaryCaregiver')} />
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Input
+              label="Relationship"
+              placeholder="e.g. Spouse, Child"
+              {...register('caregiverRelationship')}
+            />
+            <Input
+              label="Phone"
+              placeholder="Contact number"
+              {...register('caregiverPhone')}
+            />
+          </div>
+          <p className="text-xs text-amber-600 dark:text-amber-400 -mt-2">
+            Relationship and Phone are not yet saved — pending backend support.
+          </p>
           <div className="grid sm:grid-cols-2 gap-4">
             <Select
               label="Caregiver Burden"
@@ -772,6 +1245,63 @@ const RecordVisitPage: React.FC = () => {
         {/* 18. KEY ISSUES */}
         <Section title="18. KEY ISSUES IDENTIFIED">
           <Textarea rows={4} placeholder="List key issues identified during the visit..." {...register('keyIssues')} />
+        </Section>
+
+        {/* E1. NURSING DIAGNOSES */}
+        <Section title="E1. NURSING DIAGNOSES" defaultOpen={false}>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
+            Fields in this section are not yet saved — pending backend support.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {([
+              'AcutePain', 'ChronicPain', 'ImpairedMobility', 'RiskForFalls',
+              'ImpairedSkinIntegrity', 'ImbalancedNutrition', 'Anxiety',
+              'CaregiverStrain', 'IneffectiveBreathingPattern', 'Other',
+            ] as const).map((opt) => (
+              <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors">
+                <input
+                  type="checkbox"
+                  value={opt}
+                  {...register('nursingDiagnoses')}
+                  className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary"
+                />
+                {opt === 'AcutePain' ? 'Acute Pain'
+                  : opt === 'ChronicPain' ? 'Chronic Pain'
+                  : opt === 'ImpairedMobility' ? 'Impaired Mobility'
+                  : opt === 'RiskForFalls' ? 'Risk for Falls'
+                  : opt === 'ImpairedSkinIntegrity' ? 'Impaired Skin Integrity'
+                  : opt === 'ImbalancedNutrition' ? 'Imbalanced Nutrition'
+                  : opt === 'Anxiety' ? 'Anxiety'
+                  : opt === 'CaregiverStrain' ? 'Caregiver Strain'
+                  : opt === 'IneffectiveBreathingPattern' ? 'Ineffective Breathing Pattern'
+                  : 'Other'}
+              </label>
+            ))}
+          </div>
+          <Input placeholder="Other: specify" className="mt-2" {...register('nursingDiagnosesOther')} />
+        </Section>
+
+        {/* E2. NURSING CARE PLAN */}
+        <Section title="E2. NURSING CARE PLAN" defaultOpen={false}>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
+            Fields in this section are not yet saved — pending backend support.
+          </p>
+          <Textarea label="Nursing Problems Identified" rows={3} placeholder="List the nursing problems identified…" {...register('nursingCarePlan.problemsIdentified')} />
+          <Textarea label="Planned Interventions" rows={3} placeholder="Describe planned nursing interventions…" {...register('nursingCarePlan.plannedInterventions')} />
+          <Textarea label="Expected Outcomes" rows={3} placeholder="State the expected outcomes…" {...register('nursingCarePlan.expectedOutcomes')} />
+        </Section>
+
+        {/* E3. NURSE'S SUMMARY */}
+        <Section title="E3. NURSE'S SUMMARY" defaultOpen={false}>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
+            This field is not yet saved — pending backend support.
+          </p>
+          <Textarea
+            label="Nurse's Summary"
+            rows={5}
+            placeholder="Provide an overall nursing summary of this visit…"
+            {...register('nursesSummary')}
+          />
         </Section>
 
         {/* 19. ACTION PLAN */}

@@ -2,16 +2,16 @@ import type { LaboratoryTest, LabListResponse } from '@/types/lab.types';
 import { delay } from '@/lib/utils';
 
 export const MOCK_LABS: LaboratoryTest[] = [
-  { id: 'lab-001', patientId: 'pat-001', testName: 'Complete Blood Count', orderedBy: 'staff-001', dateOrdered: '2026-08-20T00:00:00Z', datePerformed: '2026-08-21T00:00:00Z', result: 'Hb: 9.5 g/dL, WBC: 6.2×10³/μL, Plt: 180×10³/μL', location: 'Home', status: 'Completed', createdAt: '2026-08-20T08:00:00Z' },
-  { id: 'lab-002', patientId: 'pat-001', testName: 'Serum Creatinine', orderedBy: 'staff-001', dateOrdered: '2026-08-25T00:00:00Z', location: 'Home', status: 'Ordered', createdAt: '2026-08-25T08:00:00Z' },
-  { id: 'lab-003', patientId: 'pat-002', testName: 'Arterial Blood Gas', orderedBy: 'staff-001', dateOrdered: '2026-08-18T00:00:00Z', datePerformed: '2026-08-18T00:00:00Z', result: 'pH 7.36, PO2 68 mmHg, PCO2 42 mmHg', location: 'Hospital', status: 'Completed', createdAt: '2026-08-18T08:00:00Z' },
-  { id: 'lab-004', patientId: 'pat-002', testName: 'Chest X-Ray', orderedBy: 'staff-001', dateOrdered: '2026-08-20T00:00:00Z', location: 'Hospital', status: 'Ordered', createdAt: '2026-08-20T08:00:00Z' },
-  { id: 'lab-005', patientId: 'pat-003', testName: 'Pap Smear', orderedBy: 'staff-002', dateOrdered: '2026-08-15T00:00:00Z', datePerformed: '2026-08-16T00:00:00Z', result: 'Atypical cells present', location: 'Home', status: 'Completed', createdAt: '2026-08-15T08:00:00Z' },
-  { id: 'lab-006', patientId: 'pat-004', testName: 'LFT (Liver Function Tests)', orderedBy: 'staff-001', dateOrdered: '2026-08-24T00:00:00Z', location: 'Home', status: 'Ordered', createdAt: '2026-08-24T08:00:00Z' },
-  { id: 'lab-007', patientId: 'pat-005', testName: 'CA-125 Tumour Marker', orderedBy: 'staff-003', dateOrdered: '2026-08-22T00:00:00Z', datePerformed: '2026-08-23T00:00:00Z', result: 'CA-125: 850 U/mL (elevated)', location: 'Home', status: 'Completed', createdAt: '2026-08-22T08:00:00Z' },
-  { id: 'lab-008', patientId: 'pat-008', testName: 'Urinalysis', orderedBy: 'staff-003', dateOrdered: '2026-08-29T00:00:00Z', location: 'Home', status: 'Ordered', createdAt: '2026-08-29T08:00:00Z' },
-  { id: 'lab-009', patientId: 'pat-009', testName: 'MRI Brain', orderedBy: 'staff-001', dateOrdered: '2026-08-10T00:00:00Z', datePerformed: '2026-08-12T00:00:00Z', result: 'Tumour progression noted in left temporal lobe', location: 'Hospital', status: 'Completed', createdAt: '2026-08-10T08:00:00Z' },
-  { id: 'lab-010', patientId: 'pat-010', testName: 'Barium Swallow', orderedBy: 'staff-002', dateOrdered: '2026-08-14T00:00:00Z', location: 'Hospital', status: 'Ordered', createdAt: '2026-08-14T08:00:00Z' },
+  { id: 'lab-001', patientId: 'pat-001', testName: 'Complete Blood Count', orderedBy: { id: 'staff-001', name: 'Staff Member' }, dateOrdered: '2026-08-20T00:00:00Z', datePerformed: '2026-08-21T00:00:00Z', result: 'Hb: 9.5 g/dL, WBC: 6.2×10³/μL, Plt: 180×10³/μL', location: 'Home', status: 'Completed', createdAt: '2026-08-20T08:00:00Z', category: 'Hematology', priority: 'Routine' },
+  { id: 'lab-002', patientId: 'pat-001', testName: 'Serum Creatinine', orderedBy: { id: 'staff-001', name: 'Staff Member' }, dateOrdered: '2026-08-25T00:00:00Z', location: 'Home', status: 'Ordered', createdAt: '2026-08-25T08:00:00Z', category: 'Chemistry', priority: 'Routine' },
+  { id: 'lab-003', patientId: 'pat-002', testName: 'Arterial Blood Gas', orderedBy: { id: 'staff-001', name: 'Staff Member' }, dateOrdered: '2026-08-18T00:00:00Z', datePerformed: '2026-08-18T00:00:00Z', result: 'pH 7.36, PO2 68 mmHg, PCO2 42 mmHg', location: 'Hospital', status: 'Completed', createdAt: '2026-08-18T08:00:00Z', category: 'Chemistry', priority: 'Urgent' },
+  { id: 'lab-004', patientId: 'pat-002', testName: 'Chest X-Ray', orderedBy: { id: 'staff-001', name: 'Staff Member' }, dateOrdered: '2026-08-20T00:00:00Z', location: 'Hospital', status: 'Ordered', createdAt: '2026-08-20T08:00:00Z', category: 'Hematology', priority: 'Routine' },
+  { id: 'lab-005', patientId: 'pat-003', testName: 'Pap Smear', orderedBy: { id: 'staff-002', name: 'Staff Member' }, dateOrdered: '2026-08-15T00:00:00Z', datePerformed: '2026-08-16T00:00:00Z', result: 'Atypical cells present', location: 'Home', status: 'Completed', createdAt: '2026-08-15T08:00:00Z', category: 'Histopathology', priority: 'Routine' },
+  { id: 'lab-006', patientId: 'pat-004', testName: 'LFT (Liver Function Tests)', orderedBy: { id: 'staff-001', name: 'Staff Member' }, dateOrdered: '2026-08-24T00:00:00Z', location: 'Home', status: 'Ordered', createdAt: '2026-08-24T08:00:00Z', category: 'Chemistry', priority: 'Routine' },
+  { id: 'lab-007', patientId: 'pat-005', testName: 'CA-125 Tumour Marker', orderedBy: { id: 'staff-003', name: 'Staff Member' }, dateOrdered: '2026-08-22T00:00:00Z', datePerformed: '2026-08-23T00:00:00Z', result: 'CA-125: 850 U/mL (elevated)', location: 'Home', status: 'Completed', createdAt: '2026-08-22T08:00:00Z', category: 'Immunology', priority: 'Routine' },
+  { id: 'lab-008', patientId: 'pat-008', testName: 'Urinalysis', orderedBy: { id: 'staff-003', name: 'Staff Member' }, dateOrdered: '2026-08-29T00:00:00Z', location: 'Home', status: 'Ordered', createdAt: '2026-08-29T08:00:00Z', category: 'Urinalysis', priority: 'Routine' },
+  { id: 'lab-009', patientId: 'pat-009', testName: 'MRI Brain', orderedBy: { id: 'staff-001', name: 'Staff Member' }, dateOrdered: '2026-08-10T00:00:00Z', datePerformed: '2026-08-12T00:00:00Z', result: 'Tumour progression noted in left temporal lobe', location: 'Hospital', status: 'Completed', createdAt: '2026-08-10T08:00:00Z', category: 'Hematology', priority: 'Urgent' },
+  { id: 'lab-010', patientId: 'pat-010', testName: 'Barium Swallow', orderedBy: { id: 'staff-002', name: 'Staff Member' }, dateOrdered: '2026-08-14T00:00:00Z', location: 'Hospital', status: 'Ordered', createdAt: '2026-08-14T08:00:00Z', category: 'Chemistry', priority: 'Routine' },
 ];
 
 export const mockLabApi = {
@@ -21,10 +21,12 @@ export const mockLabApi = {
       id: 'lab-new-' + Date.now(),
       patientId,
       testName: data.testName as string,
-      orderedBy: 'staff-001',
+      orderedBy: { id: 'staff-001', name: 'Staff Member' },
       dateOrdered: data.dateOrdered as string,
       location: data.location as 'Home' | 'Hospital',
       status: 'Ordered',
+      category: (data.category as LaboratoryTest['category']) ?? 'Hematology',
+      priority: (data.priority as LaboratoryTest['priority']) ?? 'Routine',
       createdAt: new Date().toISOString(),
     };
     MOCK_LABS.push(newLab);

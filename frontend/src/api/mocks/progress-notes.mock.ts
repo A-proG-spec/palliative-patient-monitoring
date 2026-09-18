@@ -21,7 +21,7 @@ export const mockProgressNotesApi = {
     await delay(400);
     let filtered = MOCK_PROGRESS_NOTES.filter((n) => n.patientId === patientId);
     // Sort by date descending (newest first)
-    filtered = filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    filtered = filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const page = params?.page || 1;
     const limit = params?.limit || 20;
     const start = (page - 1) * limit;

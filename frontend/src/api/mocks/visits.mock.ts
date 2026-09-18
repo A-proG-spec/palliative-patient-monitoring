@@ -52,8 +52,9 @@ const makeVisit = (id: string, patientId: string, date: string, outcome: HomeVis
   outcome,
   nextVisitDate: '2026-09-05',
   teamLeaderId: 'staff-002',
-  physicianId: 'staff-001',
-  nurseId: 'staff-003',
+  trainingNeeds: [],
+  signatures: [],
+  allSigned: false,
   createdAt: date + 'T11:00:00Z',
 });
 

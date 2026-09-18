@@ -1,44 +1,42 @@
 import type { Signature, SignVisitRequest, VisitSignaturesResponse } from '@/types/signature.types';
 import { delay } from '@/lib/utils';
 
-// ── In-memory store ──────────────────────────────────────────────
-const MOCK_SIGNATURES: Record<string, { teamLeader: Signature | null; physician: Signature | null; nurse: Signature | null }> = {};
+// ── In-memory store: visitId → array of signatures ──────────────
+const MOCK_SIGNATURES: Record<string, Signature[]> = {};
 
-const getDefaultSignatures = (visitId: string, teamLeaderName?: string) => ({
-  teamLeader: teamLeaderName ? {
-    id: `sig-tl-${Date.now()}`,
-    visitId,
-    staffId: 'staff-002',
-    staffName: teamLeaderName,
-    role: 'TeamLeader' as const,
-    signedAt: new Date().toISOString(),
-    autoSigned: true,
-  } : null,
-  physician: null,
-  nurse: null,
-});
+const makeTeamLeaderSig = (teamLeaderName?: string): Signature | null =>
+  teamLeaderName
+    ? {
+        staffId: 'staff-002',
+        name: teamLeaderName,
+        role: 'TeamLeader',
+        signedAt: new Date().toISOString(),
+      }
+    : null;
 
 export const mockSignaturesApi = {
   signVisit: async (visitId: string, data: SignVisitRequest): Promise<Signature> => {
     await delay(600);
+
+    // Ensure the store has an entry for this visit (auto-sign team leader)
     if (!MOCK_SIGNATURES[visitId]) {
-      MOCK_SIGNATURES[visitId] = getDefaultSignatures(visitId, 'Team Leader');
+      const tl = makeTeamLeaderSig('Team Leader');
+      MOCK_SIGNATURES[visitId] = tl ? [tl] : [];
     }
 
     const sig: Signature = {
-      id: `sig-${Date.now()}`,
-      visitId,
       staffId: `staff-${data.role.toLowerCase()}`,
-      staffName: data.email.split('@')[0] || 'Staff',
+      name: data.email.split('@')[0] || 'Staff',
       role: data.role,
       signedAt: new Date().toISOString(),
-      autoSigned: false,
     };
 
-    if (data.role === 'Physician') {
-      MOCK_SIGNATURES[visitId].physician = sig;
-    } else if (data.role === 'Nurse') {
-      MOCK_SIGNATURES[visitId].nurse = sig;
+    // Replace any existing signature for this role, or append
+    const existingIdx = MOCK_SIGNATURES[visitId].findIndex((s) => s.role === data.role);
+    if (existingIdx >= 0) {
+      MOCK_SIGNATURES[visitId][existingIdx] = sig;
+    } else {
+      MOCK_SIGNATURES[visitId].push(sig);
     }
 
     return sig;
@@ -46,18 +44,26 @@ export const mockSignaturesApi = {
 
   getVisitSignatures: async (visitId: string): Promise<VisitSignaturesResponse> => {
     await delay(400);
-    const sigs = MOCK_SIGNATURES[visitId] || getDefaultSignatures(visitId, 'Team Leader');
-    const allSigned = !!(sigs.teamLeader && sigs.physician && sigs.nurse);
-    const totalSignatures = [sigs.teamLeader, sigs.physician, sigs.nurse].filter(Boolean).length;
+
+    const sigs = MOCK_SIGNATURES[visitId] ?? [];
+    const defaultTl = makeTeamLeaderSig('Team Leader');
+    const allSigs: Signature[] = sigs.length > 0 ? sigs : (defaultTl ? [defaultTl] : []);
+
+    const teamLeader = allSigs.find((s) => s.role === 'TeamLeader') ?? null;
+    const allSigned =
+      !!allSigs.find((s) => s.role === 'TeamLeader') &&
+      !!allSigs.find((s) => s.role === 'Physician') &&
+      !!allSigs.find((s) => s.role === 'Nurse');
 
     return {
       visitId,
       visitDate: new Date().toISOString(),
-      teamLeader: sigs.teamLeader,
-      physician: sigs.physician,
-      nurse: sigs.nurse,
+      teamLeader: teamLeader
+        ? { staffId: teamLeader.staffId, name: teamLeader.name, role: teamLeader.role }
+        : null,
+      signatures: allSigs,
       allSigned,
-      totalSignatures,
+      totalSignatures: allSigs.length,
     };
   },
 };

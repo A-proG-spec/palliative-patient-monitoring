@@ -22,7 +22,7 @@ export const MOCK_ADMISSIONS: HospitalAdmission[] = [
     homeBasedCareRequired: false, psychosocialSupportPlan: 'Psychologist review twice weekly',
     physiotherapyRequired: false,
     status: 'Active',
-    createdBy: 'staff-001', createdAt: '2026-08-24T10:00:00Z', updatedAt: '2026-08-24T10:00:00Z',
+    createdBy: { id: 'staff-001', name: 'Staff Member' }, createdAt: '2026-08-24T10:00:00Z', updatedAt: '2026-08-24T10:00:00Z',
   },
   {
     id: 'adm-002', patientId: 'pat-012', referralId: 'ref-old-001',
@@ -45,7 +45,7 @@ export const MOCK_ADMISSIONS: HospitalAdmission[] = [
     physiotherapyRequired: true,
     dischargeReason: 'Improved',
     status: 'Discharged',
-    createdBy: 'staff-002', createdAt: '2026-07-10T10:00:00Z', updatedAt: '2026-08-05T10:00:00Z',
+    createdBy: { id: 'staff-002', name: 'Staff Member' }, createdAt: '2026-07-10T10:00:00Z', updatedAt: '2026-08-05T10:00:00Z',
   },
 ];
 
@@ -57,7 +57,7 @@ export const mockAdmissionApi = {
       patientId,
       ...(data as Partial<HospitalAdmission>),
       status: 'Active',
-      createdBy: 'staff-001',
+      createdBy: { id: 'staff-001', name: 'Staff Member' },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     } as HospitalAdmission;
