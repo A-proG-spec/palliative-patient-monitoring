@@ -1,188 +1,251 @@
-import { Staff } from '@models/Staff.js';
-import { Admin } from '@models/Admin.js';
-import { Notification } from '@models/Notification.js';
+import { prisma, prismaBase } from '@db/prisma.js';
 import { ApiError } from '@utils/ApiError.js';
 import { hashPassword, comparePassword } from '@utils/password.js';
 import { generateToken } from '@utils/jwt.js';
-import { generateOtp, generateVerificationToken, hashOtp,compareOtpHash } from '@utils/token.js';
-import { sendVerificationEmail } from '@utils/email.js';
-import env from '@config/env.js';
+import { generateOtp, hashOtp, compareOtpHash } from '@utils/token.js';
+import { sendVerificationEmail,sendAdminRegistrationNoticeEmail } from '@utils/email.js';
 
+// ─────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────
+const OTP_EXPIRY_MS = 10 * 60 * 1000;         // 10 minutes
+const RESEND_COOLDOWN_MS = 60 * 1000;         // 60 seconds
+const MAX_OTP_ATTEMPTS = 5;
+
+// ═════════════════════════════════════════════════════════════
+// Register staff
+// ═════════════════════════════════════════════════════════════
 export const registerStaff = async (
   name: string,
   email: string,
   phone: string,
-  password: string
+  password: string,
+  requestedRole: string,   // ← NEW — never persisted
 ) => {
-  // Check if email already exists
-  const existingStaff = await Staff.findOne({ email });
-  if (existingStaff) {
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const existing = await prisma.staff.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true },
+  });
+  if (existing) {
     throw new ApiError(400, 'Email already registered');
   }
 
-  // Hash password
   const hashedPassword = await hashPassword(password);
 
-  // Generate verification token
   const otp = generateOtp();
-  const hashedOtp = hashOtp(otp)
-  const otpExpiry = new Date(Date.now()+10*60*1000);
+  const hashedOtp = hashOtp(otp);
+  const otpExpiry = new Date(Date.now() + OTP_EXPIRY_MS);
 
-  // Create staff
-  const staff = await Staff.create({
-    name,
-    email,
-    phone,
-    password: hashedPassword,
-    status: 'Pending',
-    isEmailVerified: false,
-    emailVerificationOtp: hashedOtp,
-    emailVerificationOtpExpires: otpExpiry,
-    emailVerificationOtpAttempts:0,
+  const staff = await prisma.staff.create({
+    data: {
+      name: name.trim(),
+      email: normalizedEmail,
+      phone: phone.trim(),
+      password: hashedPassword,
+      // NOTE: `role` deliberately NOT set here — it stays null until
+      // an admin approves and assigns one. `requestedRole` only goes
+      // into the admin notification email.
+      status: 'Pending',
+      isEmailVerified: false,
+      emailVerificationOtp: hashedOtp,
+      emailVerificationOtpExpires: otpExpiry,
+      emailVerificationOtpAttempts: 0,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      status: true,
+      isEmailVerified: true,
+      createdAt: true,
+    },
   });
 
-  // Send verification email
+  // ── 1. Verification email to the registrant ──
   try {
-    await sendVerificationEmail(email, name, otp);
-  } catch (error) {
-    console.error('Failed to send verification email:', error);
-    // Don't throw error - staff is created, they can request resend
+    await sendVerificationEmail(normalizedEmail, name, otp);
+  } catch (err) {
+    console.error('Failed to send verification email:', err);
   }
 
-  // Return staff without password
-  const { password: _, ...staffWithoutPassword } = staff.toObject();
-  return {
-    ...staffWithoutPassword,
-    id: staffWithoutPassword._id.toString(),
-  };
-};
+  // ── 2. Notification email(s) to all admins ──
+  try {
+    const admins = await prisma.admin.findMany({
+      select: { email: true, name: true },
+    });
+    await Promise.all(
+      admins.map((a) =>
+        sendAdminRegistrationNoticeEmail(a.email, {
+          name: staff.name,
+          email: staff.email,
+          phone: staff.phone,
+          role: requestedRole,
+        }),
+      ),
+    );
+  } catch (err) {
+    console.error('Failed to notify admins about registration:', err);
+  }
 
+  return staff;
+};
+// ═════════════════════════════════════════════════════════════
+// Verify email
+// ═════════════════════════════════════════════════════════════
 export const verifyEmail = async (email: string, otp: string) => {
   const normalizedEmail = email.toLowerCase().trim();
 
-  // 1. Find the staff by email
-  const staff = await Staff.findOne({ email: normalizedEmail });
+  const staff = await prisma.staff.findUnique({
+    where: { email: normalizedEmail },
+  });
   if (!staff) {
     throw new ApiError(400, 'Invalid verification code');
   }
 
-  // 2. Check verified already
   if (staff.isEmailVerified) {
     throw new ApiError(400, 'Email already verified. Please login.');
   }
 
-  // 3. Check we have an active OTP
   if (!staff.emailVerificationOtp || !staff.emailVerificationOtpExpires) {
     throw new ApiError(400, 'No verification code found. Please request a new one.');
   }
 
-  // 4. Check expiry
   if (staff.emailVerificationOtpExpires.getTime() < Date.now()) {
-    // Clear the expired OTP
-    staff.emailVerificationOtp = null;
-    staff.emailVerificationOtpExpires = null;
-    staff.emailVerificationOtpAttempts = 0;
-    await staff.save();
+    await prisma.staff.update({
+      where: { id: staff.id },
+      data: {
+        emailVerificationOtp: null,
+        emailVerificationOtpExpires: null,
+        emailVerificationOtpAttempts: 0,
+      },
+    });
     throw new ApiError(400, 'Verification code has expired. Please request a new one.');
   }
 
-  // 5. Check attempts limit (max 5 wrong tries)
-  if (staff.emailVerificationOtpAttempts >= 5) {
-    // Invalidate the OTP — too many failures
-    staff.emailVerificationOtp = null;
-    staff.emailVerificationOtpExpires = null;
-    staff.emailVerificationOtpAttempts = 0;
-    await staff.save();
-    throw new ApiError(
-      429,
-      'Too many incorrect attempts. Please request a new code.',
-    );
+  if (staff.emailVerificationOtpAttempts >= MAX_OTP_ATTEMPTS) {
+    await prisma.staff.update({
+      where: { id: staff.id },
+      data: {
+        emailVerificationOtp: null,
+        emailVerificationOtpExpires: null,
+        emailVerificationOtpAttempts: 0,
+      },
+    });
+    throw new ApiError(429, 'Too many incorrect attempts. Please request a new code.');
   }
 
-  // 6. Compare OTP (constant-time)
   const isMatch = compareOtpHash(otp, staff.emailVerificationOtp);
   if (!isMatch) {
-    staff.emailVerificationOtpAttempts += 1;
-    await staff.save();
-    const remaining = 5 - staff.emailVerificationOtpAttempts;
+    const updated = await prisma.staff.update({
+      where: { id: staff.id },
+      data: { emailVerificationOtpAttempts: { increment: 1 } },
+      select: { emailVerificationOtpAttempts: true },
+    });
+    const remaining = MAX_OTP_ATTEMPTS - updated.emailVerificationOtpAttempts;
     throw new ApiError(
       400,
       `Invalid verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
     );
   }
 
-  // 7. Success — mark verified, clear OTP
-  staff.isEmailVerified = true;
-  staff.emailVerificationOtp = null;
-  staff.emailVerificationOtpExpires = null;
-  staff.emailVerificationOtpAttempts = 0;
-  await staff.save();
-
-  // 8. Notify admins
-  await Notification.create({
-    type: 'StaffApproval',
-    message: `New staff registration pending: ${staff.name}`,
+  // Success
+  await prisma.staff.update({
+    where: { id: staff.id },
     data: {
-      staffId: staff._id,
-      staffName: staff.name,
+      isEmailVerified: true,
+      emailVerificationOtp: null,
+      emailVerificationOtpExpires: null,
+      emailVerificationOtpAttempts: 0,
     },
-    read: false,
   });
 
-  return {
-    email: staff.email,
-    isEmailVerified: true,
-  };
+  // Notify admins (fan-out not implemented — just create one notification)
+  await prisma.notification.create({
+    data: {
+      type: 'StaffApproval',
+      message: `New staff registration pending: ${staff.name}`,
+      data: { staffId: staff.id, staffName: staff.name },
+      read: false,
+    },
+  });
+
+  return { email: staff.email, isEmailVerified: true };
 };
 
+// ═════════════════════════════════════════════════════════════
+// Resend verification email
+// ═════════════════════════════════════════════════════════════
 export const resendVerificationEmail = async (email: string) => {
   const normalizedEmail = email.toLowerCase().trim();
 
-  const staff = await Staff.findOne({ email: normalizedEmail });
+  const staff = await prisma.staff.findUnique({
+    where: { email: normalizedEmail },
+  });
   if (!staff) {
     throw new ApiError(404, 'No account found with this email');
   }
-
   if (staff.isEmailVerified) {
     throw new ApiError(400, 'Email already verified. Please login.');
   }
 
-  // Rate limit: don't allow resend more than once every 60 seconds
-  if (staff.updatedAt) {
-    const secondsSinceUpdate = (Date.now() - staff.updatedAt.getTime()) / 1000;
-    if (secondsSinceUpdate < 60) {
-      const wait = Math.ceil(60 - secondsSinceUpdate);
-      throw new ApiError(429, `Please wait ${wait} seconds before requesting a new code.`);
-    }
+  const secondsSinceUpdate = (Date.now() - staff.updatedAt.getTime()) / 1000;
+  if (secondsSinceUpdate < 60) {
+    const wait = Math.ceil(60 - secondsSinceUpdate);
+    throw new ApiError(429, `Please wait ${wait} seconds before requesting a new code.`);
   }
 
-  // Generate a fresh OTP
   const otp = generateOtp();
   const hashedOtp = hashOtp(otp);
-  const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+  const otpExpiry = new Date(Date.now() + OTP_EXPIRY_MS);
 
-  staff.emailVerificationOtp = hashedOtp;
-  staff.emailVerificationOtpExpires = otpExpiry;
-  staff.emailVerificationOtpAttempts = 0;
-  await staff.save();
+  await prisma.staff.update({
+    where: { id: staff.id },
+    data: {
+      emailVerificationOtp: hashedOtp,
+      emailVerificationOtpExpires: otpExpiry,
+      emailVerificationOtpAttempts: 0,
+    },
+  });
 
   await sendVerificationEmail(staff.email, staff.name, otp);
 
-  return {
-    email: staff.email,
-  };
+  return { email: staff.email };
 };
 
+// ═════════════════════════════════════════════════════════════
+// Login
+// ═════════════════════════════════════════════════════════════
 export const loginUser = async (email: string, password: string) => {
-  // Try to find staff
-  let user = await Staff.findOne({ email });
-  let userType = 'staff';
+  const normalizedEmail = email.toLowerCase().trim();
+
+  let userType: 'staff' | 'admin' = 'staff';
+
+  let user = await prisma.staff.findUnique({ where: { email: normalizedEmail } });
 
   if (!user) {
-    // Try to find admin
-    const admin = await Admin.findOne({ email });
+    const admin = await prisma.admin.findUnique({ where: { email: normalizedEmail } });
     if (admin) {
-      user = admin as any;
+      // Uniform shape for the rest of the function
+      user = {
+        ...admin,
+        phone: '',
+        role: null,
+        status: 'Active',
+        isEmailVerified: true,
+        emailVerificationOtp: null,
+        emailVerificationOtpExpires: null,
+        emailVerificationOtpAttempts: 0,
+        assignedBy: null,
+        deletedAt: null,
+        deletedBy: null,
+        deletionReason: null,
+        updatedBy: null,
+        // Admin has no `updatedAt` — Prisma returns it anyway because we @updatedAt on the model
+      } as any;
       userType = 'admin';
     }
   }
@@ -191,74 +254,30 @@ export const loginUser = async (email: string, password: string) => {
     throw new ApiError(401, 'Invalid email or password');
   }
 
-  // Compare password
   const isPasswordValid = await comparePassword(password, user.password);
   if (!isPasswordValid) {
     throw new ApiError(401, 'Invalid email or password');
   }
 
-  // Staff-specific checks
   if (userType === 'staff') {
-    const staff = user as any;
-
-    if (!staff.isEmailVerified) {
+    if (!user.isEmailVerified) {
       throw new ApiError(401, 'Please verify your email before logging in');
     }
-
-    if (staff.status === 'Pending') {
+    if (user.status === 'Pending') {
       throw new ApiError(401, 'Account pending admin approval');
     }
-
-    if (staff.status === 'Rejected') {
+    if (user.status === 'Rejected') {
       throw new ApiError(401, 'Account has been rejected');
     }
-  }
-
-  // Generate JWT token
-  const token = generateToken(user._id.toString(), user.email);
-
-  // Build user response
-  const userResponse: any = {
-    id: user._id.toString(),
-    name: user.name,
-    email: user.email,
-    type: userType,
-    createdAt: user.createdAt,
-  };
-
-  if (userType === 'staff') {
-    const staff = user as any;
-    userResponse.phone = staff.phone;
-    userResponse.role = staff.role;
-    userResponse.status = staff.status;
-    userResponse.isEmailVerified = staff.isEmailVerified;
-  }
-
-  return {
-    token,
-    user: userResponse,
-  };
-};
-
-export const getCurrentUser = async (userId: string) => {
-  // Try to find staff
-  let user = await Staff.findById(userId).select('-password');
-  let userType = 'staff';
-
-  if (!user) {
-    const admin = await Admin.findById(userId).select('-password');
-    if (admin) {
-      user = admin as any;
-      userType = 'admin';
+    if (user.deletedAt) {
+      throw new ApiError(401, 'Account has been deactivated');
     }
   }
 
-  if (!user) {
-    throw new ApiError(404, 'User not found');
-  }
+  const token = generateToken(String(user.id), user.email);
 
   const userResponse: any = {
-    id: user._id.toString(),
+    id: user.id,
     name: user.name,
     email: user.email,
     type: userType,
@@ -266,19 +285,59 @@ export const getCurrentUser = async (userId: string) => {
   };
 
   if (userType === 'staff') {
-    const staff = user as any;
-    userResponse.phone = staff.phone;
-    userResponse.role = staff.role;
-    userResponse.status = staff.status;
-    userResponse.isEmailVerified = staff.isEmailVerified;
+    userResponse.phone = user.phone;
+    userResponse.role = user.role;
+    userResponse.status = user.status;
+    userResponse.isEmailVerified = user.isEmailVerified;
   }
 
-  return userResponse;
+  return { token, user: userResponse };
 };
 
-export const logoutUser = async (token: string) => {
-  // Stateless JWT - no server-side action needed
-  // Token is discarded on client side
+// ═════════════════════════════════════════════════════════════
+// Get current user
+// ═════════════════════════════════════════════════════════════
+export const getCurrentUser = async (userId: string | number) => {
+  const id = Number(userId);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new ApiError(400, 'Invalid user id');
+  }
+
+  const staff = await prisma.staff.findUnique({
+    where: { id },
+    select: {
+      id: true, name: true, email: true, phone: true, role: true,
+      status: true, isEmailVerified: true, createdAt: true,
+    },
+  });
+
+  if (staff) {
+    return {
+      id: staff.id, name: staff.name, email: staff.email, phone: staff.phone,
+      role: staff.role, type: 'staff' as const, status: staff.status,
+      isEmailVerified: staff.isEmailVerified, createdAt: staff.createdAt,
+    };
+  }
+
+  const admin = await prisma.admin.findUnique({
+    where: { id },
+    select: { id: true, name: true, email: true, createdAt: true },
+  });
+
+  if (admin) {
+    return {
+      id: admin.id, name: admin.name, email: admin.email,
+      type: 'admin' as const, createdAt: admin.createdAt,
+    };
+  }
+
+  throw new ApiError(404, 'User not found');
+};
+
+// ═════════════════════════════════════════════════════════════
+// Logout (stateless)
+// ═════════════════════════════════════════════════════════════
+export const logoutUser = async (_token: string) => {
   return;
 };
 

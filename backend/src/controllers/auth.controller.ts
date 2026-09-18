@@ -4,8 +4,8 @@ import { SuccessResponse } from '@utils/ApiResponse.js';
 import * as authService from '@services/auth.service.js';
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
-  const { name, email, phone, password } = req.body;
-  const result = await authService.registerStaff(name, email, phone, password);
+  const { name, email, phone, password, role } = req.body;
+  const result = await authService.registerStaff(name, email, phone, password, role);
   return SuccessResponse(201, 'Registration successful. Please check your email to verify your account.', result);
 });
 

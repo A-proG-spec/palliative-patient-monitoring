@@ -1,7 +1,6 @@
-import { Medication } from '@models/Medication.js';
-import { Patient } from '@models/Patient.js';
-import { Staff } from '@models/Staff.js';
+import { prisma } from '@db/prisma.js';
 import { ApiError } from '@utils/ApiError.js';
+import { toId } from '@utils/prisma.js';
 
 // ─────────────────────────────────────────────────────────────
 // Order medication
@@ -9,36 +8,42 @@ import { ApiError } from '@utils/ApiError.js';
 export const orderMedication = async (
   patientId: string,
   data: any,
-  staffId: string,
+  staffId: string | number,
 ) => {
+  const pid = toId(patientId, 'patient id');
+  const sid = toId(staffId, 'staff id');
+
   const [patient, staff] = await Promise.all([
-    Patient.findById(patientId),
-    Staff.findById(staffId),
+    prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
+    prisma.staff.findUnique({ where: { id: sid }, select: { id: true, name: true } }),
   ]);
 
   if (!patient) throw new ApiError(404, 'Patient not found');
   if (!staff) throw new ApiError(404, 'Staff member not found');
 
-  const medication = await Medication.create({
-    patientId,
-    ...data,
-    prescribedBy: staffId,
-    status: 'Ordered',
+  const medication = await prisma.medication.create({
+    data: {
+      patientId: pid,
+      name: data.name,
+      dosage: data.dosage,
+      frequency: data.frequency,
+      route: data.route,
+      administeredAt: data.administeredAt,
+      prescribedBy: sid,
+      status: 'Ordered',
+    },
   });
 
   return {
-    id: medication._id.toString(),
-    patientId: medication.patientId.toString(),
+    id: medication.id,
+    patientId: medication.patientId,
     name: medication.name,
     dosage: medication.dosage,
     frequency: medication.frequency,
     route: medication.route,
     administeredAt: medication.administeredAt,
     status: medication.status,
-    prescribedBy: {
-      id: staff._id.toString(),
-      name: staff.name,
-    },
+    prescribedBy: { id: staff.id, name: staff.name },
     createdAt: medication.createdAt,
   };
 };
@@ -52,37 +57,46 @@ export const getMedications = async (
   page: number = 1,
   limit: number = 20,
 ) => {
-  const patient = await Patient.findById(patientId);
+  const pid = toId(patientId, 'patient id');
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: pid },
+    select: { id: true },
+  });
   if (!patient) throw new ApiError(404, 'Patient not found');
 
-  const filter: any = { patientId };
-  if (status) filter.status = status;
+  const where: any = { patientId: pid };
+  if (status) where.status = status;
 
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
-    Medication.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate('prescribedBy', 'name'),
-    Medication.countDocuments(filter),
+    prisma.medication.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        prescribedByStaff: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.medication.count({ where }),
   ]);
 
   return {
-    items: items.map((med) => ({
-      id: med._id.toString(),
-      name: med.name,
-      dosage: med.dosage,
-      frequency: med.frequency,
-      route: med.route,
-      administeredAt: med.administeredAt,
-      status: med.status,
+    items: items.map((m) => ({
+      id: m.id,
+      name: m.name,
+      dosage: m.dosage,
+      frequency: m.frequency,
+      route: m.route,
+      administeredAt: m.administeredAt,
+      status: m.status,
       prescribedBy: {
-        id: (med.prescribedBy as any)?._id?.toString() || '',
-        name: (med.prescribedBy as any)?.name || 'Unknown',
+        id: m.prescribedByStaff.id,
+        name: m.prescribedByStaff.name,
       },
-      createdAt: med.createdAt,
+      createdAt: m.createdAt,
     })),
     page,
     limit,
@@ -97,18 +111,21 @@ export const getMedicationById = async (
   patientId: string,
   medicationId: string,
 ) => {
-  const patient = await Patient.findById(patientId);
-  if (!patient) throw new ApiError(404, 'Patient not found');
+  const pid = toId(patientId, 'patient id');
+  const mid = toId(medicationId, 'medication id');
 
-  const medication = await Medication
-    .findOne({ _id: medicationId, patientId })
-    .populate('prescribedBy', 'name');
+  const medication = await prisma.medication.findFirst({
+    where: { id: mid, patientId: pid },
+    include: {
+      prescribedByStaff: { select: { id: true, name: true } },
+    },
+  });
 
   if (!medication) throw new ApiError(404, 'Medication not found');
 
   return {
-    id: medication._id.toString(),
-    patientId: medication.patientId.toString(),
+    id: medication.id,
+    patientId: medication.patientId,
     name: medication.name,
     dosage: medication.dosage,
     frequency: medication.frequency,
@@ -116,105 +133,128 @@ export const getMedicationById = async (
     administeredAt: medication.administeredAt,
     status: medication.status,
     prescribedBy: {
-      id: (medication.prescribedBy as any)?._id?.toString() || '',
-      name: (medication.prescribedBy as any)?.name || 'Unknown',
+      id: medication.prescribedByStaff.id,
+      name: medication.prescribedByStaff.name,
     },
     createdAt: medication.createdAt,
   };
 };
 
 // ─────────────────────────────────────────────────────────────
-// Update medication status — records who made the change
+// Update status (Ordered ↔ Given) — records auditor
 // ─────────────────────────────────────────────────────────────
 export const updateMedicationStatus = async (
   patientId: string,
   medicationId: string,
-  status: string,
-  adminId: string,
+  status: 'Ordered' | 'Given',
+  adminId: string | number,
 ) => {
-  const [patient, admin] = await Promise.all([
-    Patient.findById(patientId),
-    Staff.findById(adminId),
-  ]);
-
-  if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!admin) throw new ApiError(404, 'Staff member not found');
-
-  const medication = await Medication.findOne({ _id: medicationId, patientId });
-  if (!medication) throw new ApiError(404, 'Medication not found');
+  const pid = toId(patientId, 'patient id');
+  const mid = toId(medicationId, 'medication id');
+  const aid = toId(adminId, 'admin id');
 
   if (!['Ordered', 'Given'].includes(status)) {
     throw new ApiError(400, 'Invalid status value');
   }
 
-  medication.status = status as 'Ordered' | 'Given';
-  medication.updatedBy = adminId as any;   // ← audit
-  await medication.save();
+  const existing = await prisma.medication.findFirst({
+    where: { id: mid, patientId: pid },
+    select: { id: true },
+  });
+  if (!existing) throw new ApiError(404, 'Medication not found');
+
+  const updated = await prisma.medication.update({
+    where: { id: mid },
+    data: { status, updatedBy: aid },
+    include: {
+      prescribedByStaff: { select: { id: true, name: true } },
+    },
+  });
 
   return {
-    id: medication._id.toString(),
-    patientId: medication.patientId.toString(),
-    name: medication.name,
-    dosage: medication.dosage,
-    frequency: medication.frequency,
-    route: medication.route,
-    administeredAt: medication.administeredAt,
-    status: medication.status,
+    id: updated.id,
+    patientId: updated.patientId,
+    name: updated.name,
+    dosage: updated.dosage,
+    frequency: updated.frequency,
+    route: updated.route,
+    administeredAt: updated.administeredAt,
+    status: updated.status,
     prescribedBy: {
-      id: admin._id.toString(),
-      name: admin.name,
+      id: updated.prescribedByStaff.id,
+      name: updated.prescribedByStaff.name,
     },
-    updatedAt: medication.updatedAt,
+    updatedAt: updated.updatedAt,
   };
 };
 
 // ─────────────────────────────────────────────────────────────
-// Soft delete medication (admin only)
+// Soft delete (admin only)
 // ─────────────────────────────────────────────────────────────
 export const deleteMedication = async (
   patientId: string,
   medicationId: string,
-  adminId: string,
+  adminId: string | number,
   reason?: string,
 ) => {
-  const medication = await Medication.findOne({ _id: medicationId, patientId });
+  const pid = toId(patientId, 'patient id');
+  const mid = toId(medicationId, 'medication id');
+  const aid = toId(adminId, 'admin id');
+
+  const medication = await prisma.medication.findFirst({
+    where: { id: mid, patientId: pid },
+  });
   if (!medication) throw new ApiError(404, 'Medication not found');
 
   if (medication.deletedAt) {
     throw new ApiError(400, 'Medication is already deleted');
   }
 
-  medication.deletedAt = new Date();
-  medication.deletedBy = adminId as any;
-  medication.deletionReason = reason;
-  medication.updatedBy = adminId as any;
-  await medication.save();
+  const updated = await prisma.medication.update({
+    where: { id: mid },
+    data: {
+      deletedAt: new Date(),
+      deletedBy: aid,
+      deletionReason: reason ?? null,
+      updatedBy: aid,
+    },
+  });
 
-  return { id: medicationId, success: true, deletedAt: medication.deletedAt };
+  return { id: medicationId, success: true, deletedAt: updated.deletedAt };
 };
 
 // ─────────────────────────────────────────────────────────────
 // Restore a soft-deleted medication (admin only)
+//
+// Uses prismaBase to bypass the soft-delete extension on read,
+// then update clears the deletedAt fields.
 // ─────────────────────────────────────────────────────────────
 export const restoreMedication = async (
   patientId: string,
   medicationId: string,
-  adminId: string,
+  adminId: string | number,
 ) => {
-  const medication = await Medication
-    .findOne({ _id: medicationId, patientId })
-    .setOptions({ includeDeleted: true });
+  const pid = toId(patientId, 'patient id');
+  const mid = toId(medicationId, 'medication id');
+  const aid = toId(adminId, 'admin id');
 
+  const medication = await prisma.medication.findFirst({
+    where: { id: mid, patientId: pid },
+  });
   if (!medication) throw new ApiError(404, 'Medication not found');
   if (!medication.deletedAt) {
     throw new ApiError(400, 'Medication is not deleted');
   }
 
-  medication.deletedAt = null;
-  medication.deletedBy = null as any;
-  medication.deletionReason = undefined;
-  medication.updatedBy = adminId as any;
-  await medication.save();
+  await prisma.medication.update({
+    where: { id: mid },
+    data: {
+      deletedAt: null,
+      deletedBy: null,
+      deletionReason: null,
+      updatedBy: aid,
+    },
+  });
 
   return { id: medicationId, restored: true };
 };

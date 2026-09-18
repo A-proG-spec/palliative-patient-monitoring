@@ -18,8 +18,9 @@ export const createVisitSchema = z.object({
       .array(
         z.object({
           staffId: z.string().optional(),
-          role: z.enum(['TeamLeader', 'Physician', 'Nurse']),
+          role: z.enum(['Physician', 'Nurse']),
           name: z.string().min(1, 'Team member name is required'),
+          isTeamLeader: z.boolean().optional(),
         })
       )
       .min(1, 'At least one team member is required'),
@@ -31,11 +32,11 @@ export const createVisitSchema = z.object({
     // ── Section 4: Vital Signs ──
     vitals: z
       .object({
-        temperature: z.number().optional(),
-        pulse: z.number().optional(),
-        bp: z.string().optional(),
-        respiration: z.number().optional(),
-        spo2: z.number().optional(),
+        temperature: z.string().optional(),
+        pulse: z.string().optional(),
+        bloodPressure: z.string().optional(),
+        respiration: z.string().optional(),
+        spO2: z.string().optional(),
       })
       .optional(),
 
@@ -151,22 +152,17 @@ export const createVisitSchema = z.object({
       'Deceased',
     ]),
     dateOfDeath: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').optional(),
-
-    // ── Section 21: Team Leader (auto-signed by backend) ──
-    teamLeaderId: z.string().min(1, 'Team leader is required'),
-    // NOTE: physicianId and nurseId are NO LONGER accepted — signatures
-    // are captured via the POST /visits/:visitId/sign endpoint.
   }),
 });
 
 // ─────────────────────────────────────────────────────────────
-// Sign Visit — re-authentication via email + password
+// Sign Visit — re-auth via email + password
 // ─────────────────────────────────────────────────────────────
 export const signVisitSchema = z.object({
   body: z.object({
     email: z.string().email('Invalid email address'),
     password: z.string().min(1, 'Password is required'),
-    role: z.enum(['TeamLeader', 'Physician', 'Nurse']),
+    role: z.enum(['Physician', 'Nurse']),
   }),
 });
 

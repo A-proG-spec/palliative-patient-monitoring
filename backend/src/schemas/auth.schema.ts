@@ -6,6 +6,10 @@ export const registerSchema = z.object({
     email: z.string().email('Invalid email address'),
     phone: z.string().min(10, 'Phone number must be at least 10 characters'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
+    role: z.enum(
+      ['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'],
+      { message: 'Please select a valid role' },
+    ),
   }),
 });
 
@@ -25,6 +29,7 @@ export const verifyEmailSchema = z.object({
       .regex(/^\d{6}$/, 'Code must contain only numbers'),
   }),
 });
+
 export const resendVerificationSchema = z.object({
   body: z.object({
     email: z.string().email('Invalid email address'),

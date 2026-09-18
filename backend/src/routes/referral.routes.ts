@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '@middlewares/auth.middleware.js';
 import { validate } from '@middlewares/validate.middleware.js';
-import { createReferralSchema, getReferralsQuerySchema } from '@schemas/referral.schema.js';
+import { createReferralSchema, getReferralsQuerySchema, updateReferralSchema, getReferralParamsSchema } from '@schemas/referral.schema.js';
 import * as referralController from '@controllers/referral.controller.js';
 
 const router = Router({ mergeParams: true });
@@ -22,5 +22,10 @@ router.get(
 );
 
 router.get('/:referralId', referralController.getReferralById);
+router.patch(
+  '/:referralId',   // ← just the child segment
+  validate(updateReferralSchema.merge(getReferralParamsSchema)),
+  referralController.updateReferral,
+);
 
 export default router;

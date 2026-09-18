@@ -6,17 +6,30 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "dev": "tsx watch src/server.ts",
-    "seed": "tsx scripts/seed-admin.ts",
-    "seed:prod": "node dist/scripts/seed-admin.js",
+    "dev": "nodemon --exec tsx src/server.ts",
+    "seed": "tsx prisma/seed.ts",
+    "seed:prod": "node dist/prisma/seed.js",
     "test": "vitest",
-    "test:watch": "vitest --watch"
+    "test:watch": "vitest --watch",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:reset": "prisma migrate reset",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:format": "prisma format",
+    "db:seed": "prisma db seed",
+    "postinstall": "prisma generate"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
+    "@prisma/client": "^6.1.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -24,7 +37,6 @@
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.9.4",
     "morgan": "^1.12.0",
     "nodemailer": "^9.0.6",
     "winston": "^3.19.0",
@@ -41,6 +53,7 @@
     "@types/nodemailer": "^8.0.1",
     "@types/winston": "^2.4.4",
     "nodemon": "^3.1.14",
+    "prisma": "^6.1.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"

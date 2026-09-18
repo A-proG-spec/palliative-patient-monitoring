@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+const dateString = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (expected YYYY-MM-DD)');
+
+const dateTimeString = z.string().datetime({ offset: true }).or(z.string().datetime());
+
 export const createImagingSchema = z.object({
   body: z.object({
     // Section 2: Clinical Information
@@ -50,13 +56,11 @@ export const createImagingSchema = z.object({
     priority: z.enum(['Routine', 'Urgent', 'Emergency']).default('Routine'),
     reasonForUrgency: z.string().optional(),
 
-    // Section 9: Referring Clinician
+    // Section 9: Referring clinician (no signature — that's typed on the report)
     clinicianName: z.string().optional(),
     clinicianDepartment: z.string().optional(),
     clinicianLicenseNo: z.string().optional(),
     clinicianContact: z.string().optional(),
-    clinicianSignature: z.string().optional(),
-    clinicianSignedAt: z.string().datetime().optional(),
 
     // Meta from patient snapshot (optional — server fills from Patient)
     patientName: z.string().optional(),
@@ -68,14 +72,10 @@ export const createImagingSchema = z.object({
 
 export const updateImagingReportSchema = z.object({
   body: z.object({
-    reportNo: z.string().optional(),
     findings: z.string().min(1, 'Findings are required'),
     impression: z.string().min(1, 'Impression is required'),
-    recommendations: z.string().optional(),
-    reportingPhysician: z.string().min(1, 'Reporting physician is required'),
-    signature: z.string().optional(),
-    reportDate: z.string().datetime().optional(),
-    hospitalDepartmentStamp: z.string().optional(),
+    recommendation: z.string().optional(),
+    reportDate: dateTimeString.optional(),
   }),
 });
 
@@ -86,7 +86,7 @@ export const recordImagingPerformedSchema = z.object({
     performedContrast: z.enum(['None', 'Administered', 'NotAdministered']).default('None'),
     technologistName: z.string().optional(),
     radiologistName: z.string().optional(),
-    performedAt: z.string().datetime().optional(),
+    performedAt: dateTimeString.optional(),
     imageQuality: z.enum(['Diagnostic', 'Limited', 'NonDiagnostic', 'RepeatRequired']).optional(),
   }),
 });

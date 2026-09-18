@@ -3,6 +3,7 @@ import { asyncHandler } from '@utils/asyncHandler.js';
 import { SuccessResponse } from '@utils/ApiResponse.js';
 import * as adminService from '@services/admin.service.js';
 import * as visitService from '@services/visit.service.js';
+import type { StaffRole } from '@prisma/client';
 
 // ─────────────────────────────────────────────────────────────
 // Staff Management
@@ -107,7 +108,7 @@ export const getReports = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// Admin Visit Edit / Delete / Restore (delegates to visit.service)
+// Admin Visit Edit / Delete / Restore
 // ─────────────────────────────────────────────────────────────
 
 export const updateVisit = asyncHandler(async (req: Request, res: Response) => {
@@ -138,8 +139,7 @@ export const getStaffList = asyncHandler(async (req: Request, res: Response) => 
   const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
   const status = req.query.status as
     | 'Active' | 'Pending' | 'Rejected' | 'Deleted' | 'All' | undefined;
-  const role = req.query.role as
-    | 'TeamLeader' | 'Physician' | 'Nurse' | undefined;
+  const role = req.query.role as StaffRole | undefined;
   const search = req.query.search as string | undefined;
 
   const result = await adminService.getStaffList(page, limit, {
@@ -152,8 +152,6 @@ export const getStaffList = asyncHandler(async (req: Request, res: Response) => 
 
 export const getStaffById = asyncHandler(async (req: Request, res: Response) => {
   const staffId = req.params.staffId as string;
-  // Admins viewing a specific staff member always include deleted
-  // so the UI can show a "Restore" button on deleted records.
   const result = await adminService.getStaffById(staffId, true);
   return SuccessResponse(200, 'OK', result);
 });
@@ -198,5 +196,5 @@ export default {
   getStaffById,
   updateStaff,
   deleteStaff,
-  restoreStaff
+  restoreStaff,
 };

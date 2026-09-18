@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '@utils/asyncHandler.js';
 import { SuccessResponse } from '@utils/ApiResponse.js';
 import * as labService from '@services/lab.service.js';
-import type { LabCategory } from '@models/LaboratoryTest.js';
+import type { LabCategory } from '@prisma/client';
 
 // ─────────────────────────────────────────────────────────────
 // Order a lab test

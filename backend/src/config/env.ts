@@ -9,7 +9,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
   // Database
-  MONGODB_URI: z.string().default('mongodb://localhost:27017/palliative-care'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+
 
   // JWT
   JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),

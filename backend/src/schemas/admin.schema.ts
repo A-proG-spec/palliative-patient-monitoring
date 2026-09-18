@@ -1,19 +1,20 @@
 import { z } from 'zod';
 
 // ─────────────────────────────────────────────────────────────
-// Staff approvals (existing)
+// Staff approvals
 // ─────────────────────────────────────────────────────────────
 
 export const approveStaffSchema = z.object({
   body: z.object({
-    role: z.enum(['TeamLeader', 'Physician', 'Nurse'], {
-      message: 'Invalid role. Must be TeamLeader, Physician, or Nurse',
+    role: z.enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'], {
+      message:
+        'Invalid role. Must be Physician, Nurse, Pharmacist, Radiologist, or LaboratoryTechnician',
     }),
   }),
 });
 
 // ─────────────────────────────────────────────────────────────
-// Close case (existing)
+// Close case
 // ─────────────────────────────────────────────────────────────
 
 export const closeCaseSchema = z.object({
@@ -25,7 +26,7 @@ export const closeCaseSchema = z.object({
 });
 
 // ─────────────────────────────────────────────────────────────
-// Notifications (existing)
+// Notifications
 // ─────────────────────────────────────────────────────────────
 
 export const getNotificationsQuerySchema = z.object({
@@ -36,7 +37,7 @@ export const getNotificationsQuerySchema = z.object({
 });
 
 // ─────────────────────────────────────────────────────────────
-// Admin patients list (existing)
+// Admin patients list
 // ─────────────────────────────────────────────────────────────
 
 export const getAdminPatientsQuerySchema = z.object({
@@ -49,7 +50,7 @@ export const getAdminPatientsQuerySchema = z.object({
 });
 
 // ─────────────────────────────────────────────────────────────
-// Reports (existing)
+// Reports
 // ─────────────────────────────────────────────────────────────
 
 export const getReportsQuerySchema = z.object({
@@ -66,33 +67,19 @@ export const getVisitEditHistoryParamsSchema = z.object({
 });
 
 // ─────────────────────────────────────────────────────────────
-// ── NEW: Staff management ──
+// Staff management
 // ─────────────────────────────────────────────────────────────
 
-/**
- * List all staff (with soft-deleted records opt-in via `status=Deleted`).
- * `status` filter values:
- *   Active | Pending | Rejected   → status X, deletedAt null
- *   Deleted                       → deletedAt not null (any status)
- *   All                           → everything
- *   (omitted)                     → deletedAt null
- */
 export const getStaffListQuerySchema = z.object({
   query: z.object({
     page: z.coerce.number().int().positive().optional().default(1),
     limit: z.coerce.number().int().positive().max(100).optional().default(20),
     status: z.enum(['Active', 'Pending', 'Rejected', 'Deleted', 'All']).optional(),
-    role: z.enum(['TeamLeader', 'Physician', 'Nurse']).optional(),
+    role: z.enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician']).optional(),
     search: z.string().trim().optional(),
   }),
 });
 
-/**
- * Update a staff member. Only whitelisted fields are accepted.
- * Email changes are intentionally disallowed — they would need
- * re-verification. Role changes go through `approveStaff` for
- * pending users, but for active users this is a legitimate edit.
- */
 export const updateStaffSchema = z.object({
   body: z
     .object({
@@ -108,7 +95,7 @@ export const updateStaffSchema = z.object({
         .min(10, 'Phone number must be at least 10 characters')
         .max(20, 'Phone number is too long')
         .optional(),
-      role: z.enum(['TeamLeader', 'Physician', 'Nurse']).optional(),
+      role: z.enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician']).optional(),
     })
     .refine(
       (data) =>
@@ -119,9 +106,6 @@ export const updateStaffSchema = z.object({
     ),
 });
 
-/**
- * Soft-delete a staff member. Optional reason is stored for audit.
- */
 export const deleteStaffSchema = z.object({
   body: z
     .object({

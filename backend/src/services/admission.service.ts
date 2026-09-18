@@ -1,10 +1,6 @@
-import { HospitalAdmission } from '@models/HospitalAdmission.js';
-import { Patient } from '@models/Patient.js';
-import { Referral } from '@models/Referral.js';
-import { Staff } from '@models/Staff.js';
-import { DischargeSummary } from '@models/DischargeSummary.js';
-import { PatientProgressNote } from '@models/PatientProgressNote.js';
+import { prisma } from '@db/prisma.js';
 import { ApiError } from '@utils/ApiError.js';
+import { toId } from '@utils/prisma.js';
 
 // ─────────────────────────────────────────────────────────────
 // Record admission
@@ -12,38 +8,35 @@ import { ApiError } from '@utils/ApiError.js';
 export const recordAdmission = async (
   patientId: string,
   data: any,
-  staffId: string,
+  staffId: string | number,
 ) => {
-  const patient = await Patient.findById(patientId);
+  const pid = toId(patientId, 'patient id');
+  const sid = toId(staffId, 'staff id');
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: pid },
+    select: { id: true, firstName: true, lastName: true, hospitalPatientId: true },
+  });
   if (!patient) throw new ApiError(404, 'Patient not found');
 
-  // ── 1. referralId is required at the schema level, but double-check
-  //      here so the service is safe to call programmatically too ──
   if (!data.referralId) {
     throw new ApiError(400, 'A referral is required before admission');
   }
 
-  // ── 2. Load the referral and confirm it belongs to this patient ──
-  const referral = await Referral.findById(data.referralId);
+  const referralId = toId(data.referralId, 'referral id');
+  const referral = await prisma.referral.findUnique({
+    where: { id: referralId },
+  });
   if (!referral) throw new ApiError(404, 'Referral not found');
 
-  if (referral.patientId.toString() !== patientId) {
-    throw new ApiError(
-      400,
-      'Referral does not belong to this patient',
-    );
+  if (referral.patientId !== pid) {
+    throw new ApiError(400, 'Referral does not belong to this patient');
   }
 
-  // ── 3. Reject if the referral has already been consumed by a previous
-  //      admission ──
   if (referral.status === 'Admitted') {
-    throw new ApiError(
-      400,
-      'Referral has already been used for a previous admission',
-    );
+    throw new ApiError(400, 'Referral has already been used for a previous admission');
   }
 
-  // ── 4. Require admin acceptance ──
   if (referral.status !== 'Accepted') {
     throw new ApiError(
       400,
@@ -51,28 +44,82 @@ export const recordAdmission = async (
     );
   }
 
-  // ── 5. Create the admission ──
-  const admission = await HospitalAdmission.create({
-    patientId,
-    ...data,
-    patientName: `${patient.firstName} ${patient.lastName}`,
-    hospitalPatientId: data.hospitalPatientId || patient.patientDisplayId,
-    createdBy: staffId,
-    status: 'Active',
+  const admission = await prisma.$transaction(async (tx) => {
+    const created = await tx.hospitalAdmission.create({
+      data: {
+        patientId: pid,
+        hospitalPatientId: data.hospitalPatientId ?? patient.hospitalPatientId,
+
+        referralId,
+
+        referredFrom: data.referredFrom ?? null,
+        referredFromOther: data.referredFromOther ?? null,
+        referringClinician: data.referringClinician ?? null,
+        diagnosisAtReferral: data.diagnosisAtReferral ?? null,
+        referralReason: data.referralReason ?? null,
+        referralReasonOther: data.referralReasonOther ?? null,
+
+        admissionDate: new Date(data.admissionDate),
+        bedNumber: data.bedNumber,
+        ward: data.ward,
+        admittingPhysician: data.admittingPhysician,
+        careTeam: data.careTeam,
+
+        primaryDiagnosis: data.primaryDiagnosis,
+        secondaryDiagnoses: data.secondaryDiagnoses ?? [],
+        diseaseStage: data.diseaseStage,
+        comorbidities: data.comorbidities ?? [],
+
+        estimatedPrognosis: data.estimatedPrognosis,
+        ppsScore: data.ppsScore,
+        kpsScore: data.kpsScore ?? null,
+        functionalStatus: data.functionalStatus,
+
+        painScore: data.painScore,
+        painType: data.painType,
+        symptomsPresent: data.symptomsPresent ?? [],
+        symptomsPresentOther: data.symptomsPresentOther ?? null,
+
+        emotionalStatus: data.emotionalStatus,
+        familySupport: data.familySupport,
+        socialChallenges: data.socialChallenges ?? null,
+
+        spiritualConcerns: data.spiritualConcerns,
+        spiritualNeedsDescription: data.spiritualNeedsDescription ?? null,
+        spiritualSupportPreferred: data.spiritualSupportPreferred ?? null,
+        spiritualSupportPreferredOther: data.spiritualSupportPreferredOther ?? null,
+
+        painManagementPlan: data.painManagementPlan,
+        medicationPlan: data.medicationPlan,
+        nursingCarePlan: data.nursingCarePlan,
+        homeBasedCareRequired: data.homeBasedCareRequired,
+        psychosocialSupportPlan: data.psychosocialSupportPlan ?? null,
+        physiotherapyRequired: data.physiotherapyRequired,
+
+        admittedToHospiceUnit: data.admittedToHospiceUnit ?? true,
+        status: 'Active',
+
+        createdBy: sid,
+      },
+    });
+
+    await tx.referral.update({
+      where: { id: referralId },
+      data: { status: 'Admitted' },
+    });
+
+    await tx.patient.update({
+      where: { id: pid },
+      data: { currentLocation: 'ReferredHospital' },
+    });
+
+    return created;
   });
 
-  // ── 6. Flip the referral to 'Admitted' so it can't be reused ──
-  referral.status = 'Admitted';
-  await referral.save();
-
-  // ── 7. Update the patient's current location ──
-  patient.currentLocation = 'ReferredHospital';
-  await patient.save();
-
   return {
-    id: admission._id.toString(),
-    patientId: admission.patientId.toString(),
-    referralId: admission.referralId?.toString(),
+    id: admission.id,
+    patientId: admission.patientId,
+    referralId: admission.referralId,
     admissionDate: admission.admissionDate,
     bedNumber: admission.bedNumber,
     ward: admission.ward,
@@ -80,6 +127,7 @@ export const recordAdmission = async (
     createdAt: admission.createdAt,
   };
 };
+
 // ─────────────────────────────────────────────────────────────
 // List admissions for a patient
 // ─────────────────────────────────────────────────────────────
@@ -89,25 +137,32 @@ export const getAdmissions = async (
   page: number = 1,
   limit: number = 20,
 ) => {
-  const patient = await Patient.findById(patientId);
+  const pid = toId(patientId, 'patient id');
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: pid },
+    select: { id: true },
+  });
   if (!patient) throw new ApiError(404, 'Patient not found');
 
-  const query: any = { patientId };
-  if (status) query.status = status;
+  const where: any = { patientId: pid };
+  if (status) where.status = status;
 
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
-    HospitalAdmission.find(query)
-      .sort({ admissionDate: -1 })
-      .skip(skip)
-      .limit(limit),
-    HospitalAdmission.countDocuments(query),
+    prisma.hospitalAdmission.findMany({
+      where,
+      orderBy: { admissionDate: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.hospitalAdmission.count({ where }),
   ]);
 
   return {
     items: items.map((a) => ({
-      id: a._id.toString(),
+      id: a.id,
       admissionDate: a.admissionDate,
       dischargeDate: a.dischargeDate,
       bedNumber: a.bedNumber,
@@ -125,50 +180,58 @@ export const getAdmissions = async (
 };
 
 // ─────────────────────────────────────────────────────────────
-// Get one admission (populated patient + related records)
+// Get one admission
 // ─────────────────────────────────────────────────────────────
 export const getAdmissionById = async (
   patientId: string,
   admissionId: string,
 ) => {
-  const admission = await HospitalAdmission
-    .findOne({ _id: admissionId, patientId })
-    .populate(
-      'patientId',
-      'patientDisplayId firstName lastName age sex dateOfBirth address phone emergencyContactName emergencyContactPhone',
-    )
-    .populate('createdBy', 'name role')
-    .populate('referralId', 'referralType referralDate receivingFacility');
+  const pid = toId(patientId, 'patient id');
+  const aid = toId(admissionId, 'admission id');
+
+  const admission = await prisma.hospitalAdmission.findFirst({
+    where: { id: aid, patientId: pid },
+    include: {
+      patient: {
+        select: {
+          id: true, firstName: true, lastName: true, age: true, sex: true,
+          dateOfBirth: true, address: true, phone: true,
+          emergencyContactName: true, emergencyContactPhone: true,
+          hospitalPatientId: true,
+        },
+      },
+      createdByStaff: { select: { id: true, name: true, role: true } },
+      referral: {
+        select: {
+          id: true, referralType: true, referralDate: true,
+          receivingFacility: true, status: true,
+        },
+      },
+      _count: { select: { progressNotes: true, dischargeSummaries: true } },
+    },
+  });
 
   if (!admission) throw new ApiError(404, 'Admission not found');
 
-  const p = admission.patientId as any;
-
-  const [progressNoteCount, dischargeSummary] = await Promise.all([
-    PatientProgressNote.countDocuments({ admissionId: admission._id }),
-    DischargeSummary.findOne({ admissionId: admission._id }).select(
-      '_id status dateOfDischarge',
-    ),
-  ]);
+  const latestDischarge = await prisma.dischargeSummary.findFirst({
+    where: { admissionId: aid },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, status: true, dateOfDischarge: true },
+  });
 
   return {
-    id: admission._id.toString(),
+    id: admission.id,
+    patientId: admission.patient.id,
+    patientName: `${admission.patient.firstName} ${admission.patient.lastName}`,
+    hospitalPatientId: admission.hospitalPatientId ?? admission.patient.hospitalPatientId,
+    age: admission.patient.age,
+    sex: admission.patient.sex,
+    dateOfBirth: admission.patient.dateOfBirth,
+    address: admission.patient.address,
+    phone: admission.patient.phone,
 
-    patientId: p?._id?.toString(),
-    patientName:
-      admission.patientName || `${p?.firstName ?? ''} ${p?.lastName ?? ''}`.trim(),
-    hospitalPatientId: admission.hospitalPatientId || p?.patientDisplayId,
-    age: p?.age,
-    sex: p?.sex,
-    dateOfBirth: p?.dateOfBirth,
-    address: p?.address,
-    phone: p?.phone,
-
-    emergencyContactName: admission.emergencyContactName || p?.emergencyContactName,
-    emergencyContactRelationship: admission.emergencyContactRelationship,
-    emergencyContactPhone: admission.emergencyContactPhone || p?.emergencyContactPhone,
-
-    referralId: admission.referralId,
+    referralId: admission.referral?.id ?? null,
+    referral: admission.referral,
     referredFrom: admission.referredFrom,
     referredFromOther: admission.referredFromOther,
     referringClinician: admission.referringClinician,
@@ -216,17 +279,15 @@ export const getAdmissionById = async (
     dischargeReason: admission.dischargeReason,
     status: admission.status,
 
-    progressNoteCount,
-    dischargeSummaryId: dischargeSummary?._id?.toString(),
-    dischargeSummaryStatus: dischargeSummary?.status,
+    progressNoteCount: admission._count.progressNotes,
+    dischargeSummaryId: latestDischarge?.id ?? null,
+    dischargeSummaryStatus: latestDischarge?.status ?? null,
 
-    createdBy: admission.createdBy
-      ? {
-          id: (admission.createdBy as any)._id?.toString(),
-          name: (admission.createdBy as any).name,
-          role: (admission.createdBy as any).role,
-        }
-      : null,
+    createdBy: {
+      id: admission.createdByStaff.id,
+      name: admission.createdByStaff.name,
+      role: admission.createdByStaff.role,
+    },
 
     createdAt: admission.createdAt,
     updatedAt: admission.updatedAt,
@@ -234,105 +295,125 @@ export const getAdmissionById = async (
 };
 
 // ─────────────────────────────────────────────────────────────
-// Update admission — records who made the change
+// Update admission (discharge or status change)
 // ─────────────────────────────────────────────────────────────
 export const updateAdmission = async (
   patientId: string,
   admissionId: string,
   data: any,
-  adminId: string,
+  adminId: string|number,
 ) => {
-  const admission = await HospitalAdmission.findOne({
-    _id: admissionId,
-    patientId,
+  const pid = toId(patientId, 'patient id');
+  const aid = toId(admissionId, 'admission id');
+  const adm = toId(adminId, 'admin id');
+
+  const existing = await prisma.hospitalAdmission.findFirst({
+    where: { id: aid, patientId: pid },
   });
-  if (!admission) throw new ApiError(404, 'Admission not found');
+  if (!existing) throw new ApiError(404, 'Admission not found');
 
   if (!['Active', 'Discharged'].includes(data.status)) {
     throw new ApiError(400, 'Invalid status value');
   }
 
+  const updateData: any = {
+    status: data.status,
+    updatedBy: adm,
+  };
+
   if (data.status === 'Discharged') {
     if (!data.dischargeDate || !data.dischargeReason) {
       throw new ApiError(400, 'Discharge date and reason required');
     }
-    admission.dischargeDate = new Date(data.dischargeDate);
-    admission.dischargeReason = data.dischargeReason;
+    updateData.dischargeDate = new Date(data.dischargeDate);
+    updateData.dischargeReason = data.dischargeReason;
   }
 
-  admission.status = data.status;
-  admission.updatedBy = adminId as any;   // ← audit
-  await admission.save();
+  const updated = await prisma.hospitalAdmission.update({
+    where: { id: aid },
+    data: updateData,
+  });
 
   return {
-    id: admission._id.toString(),
-    status: admission.status,
-    dischargeDate: admission.dischargeDate,
-    dischargeReason: admission.dischargeReason,
-    updatedAt: admission.updatedAt,
+    id: updated.id,
+    status: updated.status,
+    dischargeDate: updated.dischargeDate,
+    dischargeReason: updated.dischargeReason,
+    updatedAt: updated.updatedAt,
   };
 };
 
 // ─────────────────────────────────────────────────────────────
-// Soft delete admission (admin only)
+// Soft delete
 // ─────────────────────────────────────────────────────────────
 export const deleteAdmission = async (
   patientId: string,
   admissionId: string,
-  adminId: string,
+  adminId: string|number,
   reason?: string,
 ) => {
-  const admission = await HospitalAdmission.findOne({
-    _id: admissionId,
-    patientId,
+  const pid = toId(patientId, 'patient id');
+  const aid = toId(admissionId, 'admission id');
+  const adm = toId(adminId, 'admin id');
+
+  const admission = await prisma.hospitalAdmission.findFirst({
+    where: { id: aid, patientId: pid },
   });
   if (!admission) throw new ApiError(404, 'Admission not found');
+  if (admission.deletedAt) throw new ApiError(400, 'Admission is already deleted');
 
-  if (admission.deletedAt) {
-    throw new ApiError(400, 'Admission is already deleted');
-  }
+  const updated = await prisma.hospitalAdmission.update({
+    where: { id: aid },
+    data: {
+      deletedAt: new Date(),
+      deletedBy: adm,
+      deletionReason: reason ?? null,
+      updatedBy: adm,
+    },
+  });
 
-  admission.deletedAt = new Date();
-  admission.deletedBy = adminId as any;
-  admission.deletionReason = reason;
-  admission.updatedBy = adminId as any;
-  await admission.save();
-
-  return { id: admissionId, success: true, deletedAt: admission.deletedAt };
+  return { id: admissionId, success: true, deletedAt: updated.deletedAt };
 };
 
 // ─────────────────────────────────────────────────────────────
-// Restore a soft-deleted admission (admin only)
+// Restore
 // ─────────────────────────────────────────────────────────────
 export const restoreAdmission = async (
   patientId: string,
   admissionId: string,
-  adminId: string,
+  adminId: string|number,
 ) => {
-  const admission = await HospitalAdmission
-    .findOne({ _id: admissionId, patientId })
-    .setOptions({ includeDeleted: true });
+  const pid = toId(patientId, 'patient id');
+  const aid = toId(admissionId, 'admission id');
+  const adm = toId(adminId, 'admin id');
 
+  const admission = await prisma.hospitalAdmission.findFirst({
+    where: { id: aid, patientId: pid },
+  });
   if (!admission) throw new ApiError(404, 'Admission not found');
-  if (!admission.deletedAt) {
-    throw new ApiError(400, 'Admission is not deleted');
-  }
+  if (!admission.deletedAt) throw new ApiError(400, 'Admission is not deleted');
 
-  admission.deletedAt = null;
-  admission.deletedBy = null as any;
-  admission.deletionReason = undefined;
-  admission.updatedBy = adminId as any;
-  await admission.save();
+  await prisma.hospitalAdmission.update({
+    where: { id: aid },
+    data: {
+      deletedAt: null,
+      deletedBy: null,
+      deletionReason: null,
+      updatedBy: adm,
+    },
+  });
 
   return { id: admissionId, restored: true };
 };
 
 // ─────────────────────────────────────────────────────────────
-// Helper: get the current active admission for a patient
+// Helper
 // ─────────────────────────────────────────────────────────────
 export const getActiveAdmissionForPatient = async (patientId: string) => {
-  return HospitalAdmission.findOne({ patientId, status: 'Active' }).sort({
-    admissionDate: -1,
+  const pid = toId(patientId, 'patient id');
+  return prisma.hospitalAdmission.findFirst({
+    where: { patientId: pid, status: 'Active' },
+    orderBy: { admissionDate: 'desc' },
   });
 };
 
