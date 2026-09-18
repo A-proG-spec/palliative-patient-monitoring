@@ -82,6 +82,8 @@ const notifTypeIcon = (type: string) => {
   return <CheckCircle2 size={15} className="text-success" />;
 };
 
+import type { ApprovableStaffRole } from '@/types/admin.types';
+
 const AdminDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { data: stats, isLoading, error, refetch } = useDashboardStats();
@@ -265,7 +267,7 @@ const AdminDashboardPage: React.FC = () => {
                             roleSelections[staff.id] &&
                             approveStaffMutation.mutate({
                               staffId: staff.id,
-                              data: { role: roleSelections[staff.id] as 'TeamLeader' | 'Physician' | 'Nurse' },
+                              data: { role: roleSelections[staff.id] as ApprovableStaffRole },
                             })
                           }
                         >

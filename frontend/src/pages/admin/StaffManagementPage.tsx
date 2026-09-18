@@ -37,6 +37,7 @@ import type {
   StaffListItem,
   StaffListFilterStatus,
   StaffRole,
+  ApprovableStaffRole,
 } from '@/types/admin.types';
 
 // ─────────────────────────────────────────────────────────────
@@ -568,9 +569,12 @@ const StaffManagementPage: React.FC = () => {
                       <td className="px-5 py-4">
                         <Select
                           options={[
-                            { value: 'TeamLeader', label: 'Team Leader' },
-                            { value: 'Physician', label: 'Physician' },
-                            { value: 'Nurse', label: 'Nurse' },
+                            { value: 'TeamLeader',    label: 'Team Leader' },
+                            { value: 'Physician',     label: 'Physician' },
+                            { value: 'Nurse',         label: 'Nurse' },
+                            { value: 'Pharmacist',    label: 'Pharmacist' },
+                            { value: 'LabTechnician', label: 'Lab Technician' },
+                            { value: 'Radiologist',   label: 'Radiologist' },
                           ]}
                           placeholder="Select role…"
                           value={roleSelections[staff.id] || ''}
@@ -595,9 +599,7 @@ const StaffManagementPage: React.FC = () => {
                                 approveStaffMutation.mutate({
                                   staffId: staff.id,
                                   data: {
-                                    role: roleSelections[
-                                      staff.id
-                                    ] as 'TeamLeader' | 'Physician' | 'Nurse',
+                                    role: roleSelections[staff.id] as ApprovableStaffRole,
                                   },
                                 });
                               }

@@ -13,8 +13,21 @@ export interface PendingStaff {
   createdAt: string;
 }
 
+/**
+ * All six assignable staff roles.
+ * Mirrors the `role` enum on the backend Staff model and the
+ * `StaffRole` union in `src/config/permissions.ts`.
+ */
+export type ApprovableStaffRole =
+  | 'TeamLeader'
+  | 'Physician'
+  | 'Nurse'
+  | 'Pharmacist'
+  | 'LabTechnician'
+  | 'Radiologist';
+
 export interface ApproveStaffRequest {
-  role: 'TeamLeader' | 'Physician' | 'Nurse';
+  role: ApprovableStaffRole;
 }
 
 export interface ApprovedStaffResponse {
@@ -22,7 +35,7 @@ export interface ApprovedStaffResponse {
   name: string;
   email: string;
   phone: string;
-  role: 'TeamLeader' | 'Physician' | 'Nurse';
+  role: ApprovableStaffRole;
   status: 'Active';
   assignedBy: { id: string; name: string };
   updatedAt: string;
