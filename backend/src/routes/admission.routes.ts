@@ -38,14 +38,14 @@ router.put(
   admissionController.updateAdmission
 );
 
-// ── Soft delete (admin only) ──  ← NEW
+// ── Soft delete (admin only) ──  
 router.delete(
   '/:admissionId',
   roleMiddleware(['admin']),
   admissionController.deleteAdmission
 );
 
-// ── Restore (admin only) ──  ← NEW
+// ── Restore (admin only) ── 
 router.post(
   '/:admissionId/restore',
   roleMiddleware(['admin']),
