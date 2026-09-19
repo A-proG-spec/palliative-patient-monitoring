@@ -3,17 +3,12 @@ import { z } from 'zod';
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
-
 const dateString = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)');
 
 /**
  * Optional enum that tolerates the Select placeholder value ('').
- * A <Select> with a placeholder submits '' when untouched; plain
- * `z.enum(...).optional()` only allows `undefined`. This coerces
- * '' → undefined before the enum check runs.
- *
  * Must match the backend's identical helper.
  */
 const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
@@ -23,9 +18,8 @@ const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
   );
 
 // ─────────────────────────────────────────────────────────────
-// Canonical enums — must match backend + model
+// Canonical enums — must match backend + Prisma model
 // ─────────────────────────────────────────────────────────────
-
 export const ADMISSION_REFERRED_FROM_VALUES = [
   'InternalWard',
   'OutpatientDepartment',
@@ -62,16 +56,15 @@ export const ADMISSION_SPIRITUAL_SUPPORT_VALUES = [
 ] as const;
 
 // ─────────────────────────────────────────────────────────────
-// Create Admission
+// Create Admission — matches backend `createAdmissionSchema.body`
 // ─────────────────────────────────────────────────────────────
-
 export const createAdmissionSchema = z.object({
   // ── Section 1: Patient identification (snapshot — auto-filled) ──
   patientName: z.string().optional(),
   hospitalPatientId: z.string().optional(),
-  age: z.number().min(0).max(150).optional(),
+  age: z.coerce.number().min(0).max(150).optional(),
   sex: z.enum(['Male', 'Female']).optional(),
-  dateOfBirth: z.string().optional(),
+  dateOfBirth: dateString.optional(),
   address: z.string().optional(),
   phone: z.string().optional(),
   emergencyContactName: z.string().optional(),
@@ -105,8 +98,8 @@ export const createAdmissionSchema = z.object({
 
   // ── Section 4: Palliative Care Eligibility ──
   estimatedPrognosis: z.enum(['Days', 'Weeks', 'Months', 'Uncertain']),
-  ppsScore: z.number().min(0).max(100),
-  kpsScore: z.number().min(0).max(100).optional(),
+  ppsScore: z.coerce.number().min(0).max(100),
+  kpsScore: z.coerce.number().min(0).max(100).optional(),
   functionalStatus: z.enum([
     'FullyIndependent',
     'PartiallyDependent',
@@ -114,7 +107,7 @@ export const createAdmissionSchema = z.object({
   ]),
 
   // ── Section 5: Pain & Symptom Assessment ──
-  painScore: z.number().min(0).max(10),
+  painScore: z.coerce.number().min(0).max(10),
   painType: z.enum(['Acute', 'Chronic', 'Neuropathic', 'Mixed']),
   symptomsPresent: z
     .array(z.enum(ADMISSION_SYMPTOM_VALUES))
@@ -149,9 +142,8 @@ export const createAdmissionSchema = z.object({
 });
 
 // ─────────────────────────────────────────────────────────────
-// Update Admission — discharge / status change
+// Update Admission — matches backend `updateAdmissionSchema.body`
 // ─────────────────────────────────────────────────────────────
-
 export const updateAdmissionSchema = z.object({
   dischargeDate: dateString.optional(),
   dischargeReason: optionalEnum(['Improved', 'Deceased'] as const),
@@ -159,19 +151,25 @@ export const updateAdmissionSchema = z.object({
 });
 
 // ─────────────────────────────────────────────────────────────
+// Query
+// ─────────────────────────────────────────────────────────────
+export const getAdmissionsQuerySchema = z.object({
+  status: z.enum(['Active', 'Discharged']).optional(),
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().positive().max(100).optional().default(20),
+});
+
+// ─────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────
-
 export type CreateAdmissionFormData = z.infer<typeof createAdmissionSchema>;
 export type UpdateAdmissionFormData = z.infer<typeof updateAdmissionSchema>;
+export type GetAdmissionsQueryFormData = z.infer<typeof getAdmissionsQuerySchema>;
 
 export type AdmissionReferredFrom =
   (typeof ADMISSION_REFERRED_FROM_VALUES)[number];
-
 export type AdmissionReferralReason =
   (typeof ADMISSION_REFERRAL_REASON_VALUES)[number];
-
 export type AdmissionSymptom = (typeof ADMISSION_SYMPTOM_VALUES)[number];
-
 export type AdmissionSpiritualSupport =
   (typeof ADMISSION_SPIRITUAL_SUPPORT_VALUES)[number];

@@ -2,7 +2,6 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useOrderImaging } from '@/hooks/useImaging';
 import { usePatient } from '@/hooks/usePatients';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +12,10 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { cn } from '@/lib/utils';
+import {
+  createImagingSchema,
+  type CreateImagingFormData,
+} from '@/schemas/imaging.schema';
 
 // ── Layout helpers ──────────────────────────────────────────────
 
@@ -53,65 +56,6 @@ const CheckboxGroup: React.FC<{
   </div>
 );
 
-// ── Zod schema — matches backend `createImagingSchema` ──────────
-
-const orderImagingSchema = z.object({
-  // §2 Clinical
-  provisionalDiagnosis: z.string().optional(),
-  presentingSymptoms: z.string().optional(),
-  medicalHistory: z.string().optional(),
-  previousImaging: z.boolean().default(false),
-  previousImagingDetails: z.string().optional(),
-
-  // §3 Imaging examination requested
-  modality: z.enum([
-    'XRay', 'Ultrasound', 'CT', 'MRI',
-    'Mammography', 'Fluoroscopy', 'Interventional', 'NuclearMedicine', 'Other',
-  ]),
-  modalityOtherText: z.string().optional(),
-  bodyRegion: z.string().min(1, 'Body region is required'),
-  bodyRegionOtherText: z.string().optional(),
-  laterality: z.enum(['Right', 'Left', 'Bilateral', 'NotApplicable']).default('NotApplicable'),
-  contrastRequested: z.enum(['No', 'Yes', 'ToBeDetermined', 'NotApplicable']).default('No'),
-
-  // §4 Exam details
-  specificSite: z.string().optional(),
-  protocolViews: z.string().optional(),
-  specialClinicalQuestion: z.string().optional(),
-
-  // §5 Contrast / medication
-  previousContrastReaction: z.boolean().default(false),
-  previousContrastReactionDetails: z.string().optional(),
-  knownAllergies: z.string().optional(),
-  creatinine: z.string().optional(),
-  egfr: z.string().optional(),
-  otherRelevantMedicationOrCondition: z.string().optional(),
-
-  // §6 Safety screening
-  pregnancyStatus: z.enum(['NotPregnant', 'Pregnant', 'PossiblyPregnant', 'NotApplicable']).default('NotApplicable'),
-  implantedMedicalDevice: z.boolean().default(false),
-  deviceImplantDetails: z.string().optional(),
-  metallicForeignBody: z.enum(['No', 'Yes', 'Unknown']).default('No'),
-  otherSafetyConsiderations: z.string().optional(),
-
-  // §7 Preparation
-  preparation: z.array(z.string()).optional().default([]),
-  preparationInstructions: z.string().optional(),
-
-  // §8 Priority
-  priority: z.enum(['Routine', 'Urgent', 'Emergency']).default('Routine'),
-  reasonForUrgency: z.string().optional(),
-
-  // §9 Referring clinician
-  clinicianName: z.string().optional(),
-  clinicianDepartment: z.string().optional(),
-  clinicianLicenseNo: z.string().optional(),
-  clinicianContact: z.string().optional(),
-  clinicianSignature: z.string().optional(),
-});
-
-type OrderImagingFormData = z.infer<typeof orderImagingSchema>;
-
 // ── Component ───────────────────────────────────────────────────
 
 const OrderImagingPage: React.FC = () => {
@@ -125,8 +69,8 @@ const OrderImagingPage: React.FC = () => {
     handleSubmit,
     formState: { errors },
     watch,
-  } = useForm<OrderImagingFormData>({
-    resolver: zodResolver(orderImagingSchema),
+  } = useForm<CreateImagingFormData>({
+    resolver: zodResolver(createImagingSchema),
     defaultValues: {
       modality: 'XRay',
       contrastRequested: 'No',
@@ -144,7 +88,6 @@ const OrderImagingPage: React.FC = () => {
   const selectedModality = watch('modality');
   const contrastRequested = watch('contrastRequested');
   const priority = watch('priority');
-  const pregnancyStatus = watch('pregnancyStatus');
 
   // ── Modality options ──
   const modalityOptions = [
@@ -235,7 +178,7 @@ const OrderImagingPage: React.FC = () => {
   ];
 
   // ── Submit ──
-  const onSubmit = (data: OrderImagingFormData) => {
+  const onSubmit = (data: CreateImagingFormData) => {
     // Strip empty-string modalityOtherText so backend gets undefined, not ""
     const payload: any = { ...data };
     if (!payload.modalityOtherText) delete payload.modalityOtherText;
@@ -317,8 +260,7 @@ const OrderImagingPage: React.FC = () => {
                 <input
                   type="radio"
                   value="false"
-                  checked={!watch('previousImaging')}
-                  onChange={() => register('previousImaging').onChange({ target: { value: false } })}
+                  {...register('previousImaging')}
                   className="h-4 w-4 text-primary"
                 />
                 None
@@ -327,8 +269,7 @@ const OrderImagingPage: React.FC = () => {
                 <input
                   type="radio"
                   value="true"
-                  checked={!!watch('previousImaging')}
-                  onChange={() => register('previousImaging').onChange({ target: { value: true } })}
+                  {...register('previousImaging')}
                   className="h-4 w-4 text-primary"
                 />
                 Yes
@@ -429,8 +370,7 @@ const OrderImagingPage: React.FC = () => {
                 <input
                   type="radio"
                   value="false"
-                  checked={!watch('previousContrastReaction')}
-                  onChange={() => register('previousContrastReaction').onChange({ target: { value: false } })}
+                  {...register('previousContrastReaction')}
                   className="h-4 w-4 text-primary"
                 />
                 No
@@ -439,8 +379,7 @@ const OrderImagingPage: React.FC = () => {
                 <input
                   type="radio"
                   value="true"
-                  checked={!!watch('previousContrastReaction')}
-                  onChange={() => register('previousContrastReaction').onChange({ target: { value: true } })}
+                  {...register('previousContrastReaction')}
                   className="h-4 w-4 text-primary"
                 />
                 Yes
@@ -490,8 +429,7 @@ const OrderImagingPage: React.FC = () => {
                 <input
                   type="radio"
                   value="false"
-                  checked={!watch('implantedMedicalDevice')}
-                  onChange={() => register('implantedMedicalDevice').onChange({ target: { value: false } })}
+                  {...register('implantedMedicalDevice')}
                   className="h-4 w-4 text-primary"
                 />
                 No
@@ -500,8 +438,7 @@ const OrderImagingPage: React.FC = () => {
                 <input
                   type="radio"
                   value="true"
-                  checked={!!watch('implantedMedicalDevice')}
-                  onChange={() => register('implantedMedicalDevice').onChange({ target: { value: true } })}
+                  {...register('implantedMedicalDevice')}
                   className="h-4 w-4 text-primary"
                 />
                 Yes
