@@ -2,11 +2,13 @@ import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Mail, Phone, Lock, CheckCircle2 } from 'lucide-react';
-import { registerSchema, type RegisterFormData } from '@/schemas/auth.schema';
+import { z } from 'zod';
+import { User, Mail, Phone, Lock, CheckCircle2, Briefcase } from 'lucide-react';
+import { registerSchema } from '@/schemas/auth.schema';
 import { useRegister } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import {
   Card,
   CardHeader,
@@ -15,6 +17,42 @@ import {
   CardContent,
 } from '@/components/ui/Card';
 
+// ─────────────────────────────────────────────────────────────
+// Staff roles accepted by the backend `registerSchema`.
+// Keep this list in sync with `registerSchema` (auth.schema.ts).
+// ─────────────────────────────────────────────────────────────
+const STAFF_ROLE_OPTIONS = [
+  { value: 'Physician',            label: 'Physician' },
+  { value: 'Nurse',                label: 'Nurse' },
+  { value: 'Pharmacist',           label: 'Pharmacist' },
+  { value: 'Radiologist',          label: 'Radiologist' },
+  { value: 'LaboratoryTechnician', label: 'Laboratory Technician' },
+] as const;
+
+// ─────────────────────────────────────────────────────────────
+// Local form shape — first/last name are UI-only.
+// The real `registerSchema` is applied after they're combined.
+// ─────────────────────────────────────────────────────────────
+const registerFormSchema = z
+  .object({
+    firstName: z.string().trim().min(1, 'First name is required'),
+    lastName:  z.string().trim().min(1, 'Last name is required'),
+    email:     z.string().email('Invalid email address'),
+    phone:     z.string().min(10, 'Phone number must be at least 10 characters'),
+    password:  z.string().min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string(),
+    role: z.enum(
+      ['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'],
+      { message: 'Please select a valid role' },
+    ),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "Passwords don't match",
+    path: ['confirmPassword'],
+  });
+
+type RegisterFormFields = z.infer<typeof registerFormSchema>;
+
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const {
@@ -22,8 +60,13 @@ const RegisterPage: React.FC = () => {
     handleSubmit,
     formState: { errors },
     setError,
-  } = useForm<RegisterFormData>({
-    resolver: zodResolver(registerSchema),
+  } = useForm<RegisterFormFields>({
+    resolver: zodResolver(registerFormSchema),
+    // Pre-select the most common role so the form is valid out of
+    // the box. The user can still change it.
+    defaultValues: {
+      role: 'Nurse',
+    },
   });
   const registerMutation = useRegister();
 
@@ -31,17 +74,62 @@ const RegisterPage: React.FC = () => {
   // page so the OTP submission carries the correct identifier.
   const [registeredEmail, setRegisteredEmail] = React.useState('');
 
-  const onSubmit = (data: RegisterFormData) => {
+  const onSubmit = (data: RegisterFormFields) => {
+    // 1. Combine first + last name into the single `name` field the
+    //    backend (and `registerSchema`) expects. Collapse whitespace.
+    const combinedName = `${data.firstName} ${data.lastName}`
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // 2. Validate the combined payload against the real registerSchema.
+    const parsed = registerSchema.safeParse({
+      name: combinedName,
+      email: data.email,
+      phone: data.phone,
+      password: data.password,
+      confirmPassword: data.confirmPassword,
+      role: data.role,
+    });
+
+    if (!parsed.success) {
+      // Surface any field-level errors from the shared schema onto
+      // the RHF form so the user sees them inline.
+      for (const issue of parsed.error.issues) {
+        const path = issue.path[0];
+
+        // The `name` field doesn't exist on this form — map its
+        // errors onto `firstName` so the user sees them somewhere
+        // meaningful.
+        if (path === 'name') {
+          setError('firstName', { message: issue.message });
+          continue;
+        }
+
+        if (
+          path === 'email' ||
+          path === 'phone' ||
+          path === 'password' ||
+          path === 'confirmPassword' ||
+          path === 'role'
+        ) {
+          setError(path, { message: issue.message });
+        }
+      }
+      return;
+    }
+
+    // 3. Send the validated payload to the backend.
     registerMutation.mutate(
       {
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-        password: data.password,
+        name: parsed.data.name,
+        email: parsed.data.email,
+        phone: parsed.data.phone,
+        password: parsed.data.password,
+        role: parsed.data.role,
       },
       {
         onSuccess: () => {
-          setRegisteredEmail(data.email);
+          setRegisteredEmail(parsed.data.email);
         },
         onError: (err: unknown) => {
           const message =
@@ -112,15 +200,27 @@ const RegisterPage: React.FC = () => {
             </div>
           )}
 
-          <Input
-            label="Full name"
-            type="text"
-            placeholder="Dr. Jane Smith"
-            autoComplete="name"
-            leftIcon={<User size={15} />}
-            error={errors.name?.message}
-            {...register('name')}
-          />
+          {/* ── First + Last name on one row ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="First name"
+              type="text"
+              placeholder="Jane"
+              autoComplete="given-name"
+              leftIcon={<User size={15} />}
+              error={errors.firstName?.message}
+              {...register('firstName')}
+            />
+            <Input
+              label="Last name"
+              type="text"
+              placeholder="Smith"
+              autoComplete="family-name"
+              leftIcon={<User size={15} />}
+              error={errors.lastName?.message}
+              {...register('lastName')}
+            />
+          </div>
 
           <Input
             label="Email address"
@@ -141,6 +241,20 @@ const RegisterPage: React.FC = () => {
             error={errors.phone?.message}
             {...register('phone')}
           />
+
+          {/* ── Role dropdown ── */}
+          <div>
+            <Select
+              label="Requested role"
+              options={STAFF_ROLE_OPTIONS as unknown as { value: string; label: string }[]}
+              placeholder="Select your role…"
+              error={errors.role?.message}
+              {...register('role')}
+            />
+            <p className="mt-1 text-xs text-text-muted">
+              An administrator will confirm your role during account approval.
+            </p>
+          </div>
 
           <Input
             label="Password"

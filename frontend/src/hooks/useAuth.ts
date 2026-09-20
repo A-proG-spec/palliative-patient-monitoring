@@ -6,9 +6,38 @@ import { useAuthStore } from '@/store/auth.store';
 import type {
   LoginRequest,
   RegisterRequest,
-  UpdateStaffProfileRequest,
+  StaffRole,
 } from '@/types/auth.types';
+import type { UpdateProfileRequest } from '@/types/profile.types';
 import { useToast } from '@/context/ToastContext';
+
+// ─────────────────────────────────────────────────────────────
+// Default route per role
+//
+// Note: the backend enum is `LaboratoryTechnician` (long form).
+// Using the short form here would silently fall through to the
+// default case and every lab tech would land on /dashboard.
+// ─────────────────────────────────────────────────────────────
+function getDefaultRoute(user: {
+  type: string;
+  role?: StaffRole | null;
+}): string {
+  if (user.type === 'admin') return '/admin';
+
+  switch (user.role) {
+    case 'Pharmacist':
+      return '/medication-orders';
+    case 'LaboratoryTechnician':
+      return '/lab-requests';
+    case 'Radiologist':
+      return '/imaging-orders';
+    case 'Physician':
+    case 'Nurse':
+    case 'TeamLeader':
+    default:
+      return '/dashboard';
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // Register
@@ -62,8 +91,7 @@ export function useLogin() {
     onSuccess: (response) => {
       setAuth(response.user, response.token);
       toast.success(`Welcome back, ${response.user.name}!`);
-      if (response.user.type === 'admin') navigate('/admin');
-      else navigate('/dashboard');
+      navigate(getDefaultRoute(response.user));
     },
   });
 }
@@ -148,6 +176,9 @@ export function useStaffProfile() {
 
 // ─────────────────────────────────────────────────────────────
 // Update staff profile
+//
+// The endpoint serves both staff and admin. The canonical request/
+// response types live in `profile.types.ts`.
 // ─────────────────────────────────────────────────────────────
 
 export function useUpdateStaffProfile() {
@@ -156,9 +187,12 @@ export function useUpdateStaffProfile() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: (data: UpdateStaffProfileRequest) => authApi.updateProfile(data),
+    mutationFn: (data: UpdateProfileRequest) => authApi.updateProfile(data),
     onSuccess: (response) => {
-      updateUser({ name: response.name, phone: response.phone });
+      // The response is a Profile union — admin has no phone.
+      const phone = 'phone' in response ? response.phone : undefined;
+      updateUser({ name: response.name, ...(phone ? { phone } : {}) });
+
       queryClient.invalidateQueries({ queryKey: ['staff', 'profile'] });
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });

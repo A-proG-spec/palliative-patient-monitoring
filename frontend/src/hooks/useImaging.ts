@@ -1,8 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { imagingApi, CreateImagingRequest, UpdateImagingReportRequest, ImagingOrder } from '@/api/imaging';
+import {
+  imagingApi,
+  CreateImagingRequest,
+  UpdateImagingReportRequest,
+  ImagingOrder,
+} from '@/api/imaging';
 import { useToast } from '@/context/ToastContext';
+import api from '@/api/client';
+import { QUERY_KEYS } from '@/constants';
 
-export function usePatientImaging(patientId: string, params?: { status?: 'Ordered' | 'Completed'; page?: number; limit?: number }) {
+// ─────────────────────────────────────────────────────────────
+// Queries — patient-scoped
+// ─────────────────────────────────────────────────────────────
+
+export function usePatientImaging(
+  patientId: string,
+  params?: { status?: 'Ordered' | 'Completed'; page?: number; limit?: number },
+) {
   return useQuery({
     queryKey: ['patients', patientId, 'imaging', params],
     queryFn: () => imagingApi.getByPatient(patientId, params),
@@ -18,14 +32,53 @@ export function useImagingDetail(patientId: string, imagingId: string) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────
+// Radiologist queue — top-level pending orders
+// ─────────────────────────────────────────────────────────────
+
+export interface PendingImagingOrder {
+  id: number;
+  patientId: number;
+  patientName: string;
+  modality: string;
+  bodyRegion: string;
+  requestingClinician: string;
+  dateOrdered: string;
+  priority: 'Routine' | 'Urgent' | 'Emergency';
+  status: 'Ordered' | 'Completed' | 'Cancelled';
+}
+
+export function useImagingOrders(opts?: { enabled?: boolean }) {
+  const enabled = opts?.enabled !== false;
+
+  return useQuery({
+    queryKey: QUERY_KEYS.IMAGING_ORDERS,
+    queryFn: async (): Promise<PendingImagingOrder[]> => {
+      const response = await api.get('/imaging/pending-orders');
+      return response.data.imagingOrders ?? [];
+    },
+    enabled,
+    refetchInterval: enabled ? 30000 : false,
+    staleTime: 30 * 1000,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Mutations — patient-scoped
+// ─────────────────────────────────────────────────────────────
+
 export function useOrderImaging(patientId: string) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: (data: CreateImagingRequest) => imagingApi.create(patientId, data),
+    mutationFn: (data: CreateImagingRequest) =>
+      imagingApi.create(patientId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'imaging'] });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'imaging'],
+      });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.IMAGING_ORDERS });
       toast.success('Imaging order submitted successfully.');
     },
     onError: () => {
@@ -39,10 +92,18 @@ export function useUpdateImagingReport(patientId: string) {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: ({ imagingId, data }: { imagingId: string; data: UpdateImagingReportRequest }) =>
-      imagingApi.updateReport(patientId, imagingId, data),
+    mutationFn: ({
+      imagingId,
+      data,
+    }: {
+      imagingId: string;
+      data: UpdateImagingReportRequest;
+    }) => imagingApi.updateReport(patientId, imagingId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'imaging'] });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'imaging'],
+      });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.IMAGING_ORDERS });
       toast.success('Imaging report saved successfully.');
     },
     onError: () => {
@@ -56,10 +117,18 @@ export function useUpdateImagingStatus(patientId: string) {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: ({ imagingId, status }: { imagingId: string; status: 'Ordered' | 'Completed' }) =>
-      imagingApi.updateStatus(patientId, imagingId, status),
+    mutationFn: ({
+      imagingId,
+      status,
+    }: {
+      imagingId: string;
+      status: 'Ordered' | 'Completed';
+    }) => imagingApi.updateStatus(patientId, imagingId, status),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'imaging'] });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'imaging'],
+      });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.IMAGING_ORDERS });
       toast.success('Imaging status updated.');
     },
     onError: () => {
@@ -75,7 +144,10 @@ export function useDeleteImaging(patientId: string) {
   return useMutation({
     mutationFn: (imagingId: string) => imagingApi.delete(patientId, imagingId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'imaging'] });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'imaging'],
+      });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.IMAGING_ORDERS });
       toast.success('Imaging order deleted.');
     },
     onError: () => {

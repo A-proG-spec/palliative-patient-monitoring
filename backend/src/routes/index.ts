@@ -13,7 +13,9 @@ import dischargeRoutes from './discharge.routes.js';
 import staffRoutes from './staff.routes.js';
 import profileRoutes  from './profile.routes.js';
 import hospiceNursingRoutes from './hospice-nursing.routes.js';
-
+import medicationQueueRoutes from './medication-queue.routes.js';
+import labQueueRoutes from './lab-queue.routes.js'
+import imagingQueueRoutes from './imaging-queue.routes.js';
 const router = Router();
 
 // ── Health check ──
@@ -32,6 +34,9 @@ router.use('/staff', staffRoutes);
 router.use('/profile', profileRoutes);
 router.use('/patients', patientRoutes);
 router.use('/hospice', hospiceNursingRoutes);
+router.use('/medications', medicationQueueRoutes);
+router.use('/labs', labQueueRoutes);
+router.use('/imaging', imagingQueueRoutes);
 
 // ── Patient-scoped sub-resources ──
 router.use('/patients/:patientId/visits', visitRoutes);

@@ -64,6 +64,42 @@ export const restoreMedication = asyncHandler(async (req: Request, res: Response
   return SuccessResponse(200, 'Medication restored', result);
 });
 
+// ─────────────────────────────────────────────────────────────
+// Pharmacist queue — flat list across all patients
+// ─────────────────────────────────────────────────────────────
+export const getPendingOrders = asyncHandler(
+  async (req: Request, res: Response) => {
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+    const limit = req.query.limit
+      ? parseInt(req.query.limit as string, 10)
+      : 100;
+    const result = await medicationService.getPendingMedicationOrders(
+      page,
+      limit,
+    );
+    return SuccessResponse(200, 'OK', result);
+  },
+);
+
+export const getOrderDetail = asyncHandler(
+  async (req: Request, res: Response) => {
+    const medicationId = req.params.id as string;
+    const result = await medicationService.getMedicationOrderById(medicationId);
+    return SuccessResponse(200, 'OK', result);
+  },
+);
+
+export const markOrderGiven = asyncHandler(
+  async (req: Request, res: Response) => {
+    const medicationId = req.params.id as string;
+    const result = await medicationService.markMedicationGivenByQueue(
+      medicationId,
+      req.user.id,
+    );
+    return SuccessResponse(200, 'Medication marked as given', result);
+  },
+);
+
 export default {
   orderMedication,
   getMedications,
@@ -71,4 +107,7 @@ export default {
   updateMedicationStatus,
   deleteMedication,
   restoreMedication,
+  getPendingOrders,
+  getOrderDetail,
+  markOrderGiven,
 };

@@ -1,7 +1,5 @@
-
 export type MedicationStatus = 'Ordered' | 'Given';
 export type MedicationAdministeredAt = 'Home' | 'Hospital';
-
 
 export interface Medication {
   id: string;
@@ -13,7 +11,7 @@ export interface Medication {
 
   /**
    * Backend returns a populated object on list/detail endpoints
-   * (`{ id, name }`), but the raw model field is an ObjectId.
+   * (`{ id, name }`), but the raw model field is a numeric ID.
    */
   prescribedBy?: { id: string; name: string } | string;
 
@@ -38,6 +36,7 @@ export interface CreateMedicationRequest {
 export interface UpdateMedicationRequest {
   status: MedicationStatus;
 }
+
 export interface MedicationListResponse {
   items: Medication[];
   page: number;

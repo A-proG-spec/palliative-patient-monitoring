@@ -2,6 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { labApi } from '@/api/labs';
 import type { CreateLabRequest, UpdateLabRequest } from '@/types/lab.types';
 import { useToast } from '@/context/ToastContext';
+import api from '@/api/client';
+import { QUERY_KEYS } from '@/constants';
+
+// ─────────────────────────────────────────────────────────────
+// Queries — patient-scoped
+// ─────────────────────────────────────────────────────────────
 
 export function usePatientLabs(
   patientId: string,
@@ -26,6 +32,40 @@ export function useLabDetail(patientId: string, labId: string) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────
+// Lab technician queue — top-level pending requests
+// ─────────────────────────────────────────────────────────────
+
+export interface PendingLabRequest {
+  id: number;
+  patientId: number;
+  patientName: string;
+  testName: string;
+  requestingClinician: string;
+  dateRequested: string;
+  priority: 'Routine' | 'Urgent' | 'Emergency';
+  status: 'Ordered' | 'Completed' | 'Cancelled';
+}
+
+export function useLabRequests(opts?: { enabled?: boolean }) {
+  const enabled = opts?.enabled !== false;
+
+  return useQuery({
+    queryKey: QUERY_KEYS.LAB_REQUESTS,
+    queryFn: async (): Promise<PendingLabRequest[]> => {
+      const response = await api.get('/labs/pending-requests');
+      return response.data.labs ?? [];
+    },
+    enabled,
+    refetchInterval: enabled ? 30000 : false,
+    staleTime: 30 * 1000,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Mutations
+// ─────────────────────────────────────────────────────────────
+
 export function useOrderLab(patientId: string) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -38,6 +78,7 @@ export function useOrderLab(patientId: string) {
       queryClient.invalidateQueries({
         queryKey: ['patients', patientId, 'summary'],
       });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.LAB_REQUESTS });
       toast.success('Lab test ordered successfully.');
     },
     onError: (error: any) => {
@@ -62,6 +103,7 @@ export function useUpdateLabResult(patientId: string) {
       queryClient.invalidateQueries({
         queryKey: ['patients', patientId, 'summary'],
       });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.LAB_REQUESTS });
       toast.success('Lab result saved successfully.');
     },
     onError: (error: any) => {

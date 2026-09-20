@@ -7,112 +7,17 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonTable } from '@/components/common/LoadingSpinner';
 import { EmptyState, ErrorState } from '@/components/common/EmptyState';
+import { Pagination } from '@/components/common/Pagination';
 import { formatResponseTime } from '@/lib/utils';
 import { ROLE_LABELS } from '@/constants';
+import { useStaffPerformanceList } from '@/hooks/useAdmin';
 import type { StaffRole } from '@/types/admin.types';
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Types
-// ══════════════════════════════════════════════════════════════════════════════
-
-export interface StaffPerformanceItem {
-  id: string;
-  name: string;
-  role: StaffRole | null;
-  totalPatientsAssigned: number;
-  totalVisitsRecorded: number;
-  averageResponseTimeMinutes: number | null;
-}
-
-interface StaffPerformanceListResponse {
-  items: StaffPerformanceItem[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// API Functions (TODO: Backend endpoints)
-// ══════════════════════════════════════════════════════════════════════════════
-
-// TODO: Backend endpoint GET /api/admin/staff/performance
-// Expected query params: { page?: number, limit?: number, search?: string, role?: StaffRole }
-// Expected response: StaffPerformanceListResponse
-async function fetchStaffPerformanceList(params: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  role?: StaffRole;
-}): Promise<StaffPerformanceListResponse> {
-  // TODO: Replace with real API call when backend endpoint is ready
-  throw new Error('Backend endpoint GET /api/admin/staff/performance not implemented yet');
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Custom Hook
-// ══════════════════════════════════════════════════════════════════════════════
-
-function useStaffPerformanceList(params: {
-  page: number;
-  limit: number;
-  search?: string;
-  role?: StaffRole;
-}) {
-  const [data, setData] = useState<StaffPerformanceListResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    setIsLoading(true);
-    setError(null);
-
-    fetchStaffPerformanceList(params)
-      .then((response) => {
-        if (!cancelled) {
-          setData(response);
-          setIsLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err);
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [params.page, params.limit, params.search, params.role]);
-
-  const refetch = () => {
-    setIsLoading(true);
-    setError(null);
-    fetchStaffPerformanceList(params)
-      .then((response) => {
-        setData(response);
-        setIsLoading(false);
-      })
-      .catch((err) => {
-        setError(err);
-        setIsLoading(false);
-      });
-  };
-
-  return { data, isLoading, error, refetch };
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Component
-// ══════════════════════════════════════════════════════════════════════════════
 
 export const StaffPerformanceTab: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<StaffRole | ''>('');
-  const [page] = useState(1);
+  const [page, setPage] = useState(1);
   const limit = 15;
 
   const { data, isLoading, error, refetch } = useStaffPerformanceList({
@@ -126,25 +31,29 @@ export const StaffPerformanceTab: React.FC = () => {
     <Card padding="none">
       {/* Filters */}
       <div className="flex flex-wrap gap-3 p-4 border-b border-border-base">
-        <Input
-          placeholder="Search by name…"
+        <Input          placeholder="Search by name…"
           leftIcon={<Search size={15} />}
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setPage(1);
+          }}
           className="w-72"
         />
         <Select
           options={[
             { value: '', label: 'All Roles' },
-            { value: 'TeamLeader', label: 'Team Leader' },
             { value: 'Physician', label: 'Physician' },
             { value: 'Nurse', label: 'Nurse' },
             { value: 'Pharmacist', label: 'Pharmacist' },
-            { value: 'LabTechnician', label: 'Laboratory Technician' },
+            { value: 'LaboratoryTechnician', label: 'Laboratory Technician' },
             { value: 'Radiologist', label: 'Radiologist' },
           ]}
           value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value as StaffRole | '')}
+          onChange={(e) => {
+            setRoleFilter(e.target.value as StaffRole | '');
+            setPage(1);
+          }}
           className="w-48"
         />
       </div>
@@ -219,6 +128,18 @@ export const StaffPerformanceTab: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {data && data.total > limit && (
+        <div className="px-5 py-4 border-t border-border-base">
+          <Pagination
+            page={page}
+            total={data.total}
+            limit={limit}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </Card>

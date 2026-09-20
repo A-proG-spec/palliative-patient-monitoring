@@ -1,12 +1,9 @@
 // ─────────────────────────────────────────────────────────────
-// Enum-like unions — mirror the backend model
+// Enums — mirror backend
 // ─────────────────────────────────────────────────────────────
-
 export type AdmissionStatus = 'Active' | 'Discharged';
 export type AdmissionDischargeReason = 'Improved' | 'Deceased';
-
 export type AdmissionDiseaseStage = 'Early' | 'Advanced' | 'Terminal';
-
 export type AdmissionPrognosis = 'Days' | 'Weeks' | 'Months' | 'Uncertain';
 
 export type AdmissionFunctionalStatus =
@@ -56,15 +53,13 @@ export type AdmissionSpiritualSupport =
   | 'Other';
 
 // ─────────────────────────────────────────────────────────────
-// Main document (aggregate returned by
-// GET /patients/:patientId/admissions/:admissionId)
+// Admission document
 // ─────────────────────────────────────────────────────────────
-
 export interface HospitalAdmission {
   id: string;
   patientId: string;
 
-  // ── Section 1: Patient snapshot ──
+  // Section 1 — Patient snapshot
   patientName?: string;
   hospitalPatientId?: string;
   age?: number;
@@ -76,7 +71,7 @@ export interface HospitalAdmission {
   emergencyContactRelationship?: string;
   emergencyContactPhone?: string;
 
-  // ── Section 2: Referral information ──
+  // Section 2 — Referral
   referralId?: string | null;
   referredFrom?: AdmissionReferredFrom;
   referredFromOther?: string;
@@ -85,7 +80,7 @@ export interface HospitalAdmission {
   referralReason?: AdmissionReferralReason;
   referralReasonOther?: string;
 
-  // ── Admission details ──
+  // Admission details
   admissionDate: string;
   dischargeDate?: string | null;
   bedNumber: string;
@@ -93,36 +88,36 @@ export interface HospitalAdmission {
   admittingPhysician: string;
   careTeam: string;
 
-  // ── Section 3: Medical diagnosis ──
+  // Section 3 — Medical diagnosis
   primaryDiagnosis: string;
   secondaryDiagnoses: string[];
   diseaseStage: AdmissionDiseaseStage;
   comorbidities: string[];
 
-  // ── Section 4: Eligibility ──
+  // Section 4 — Eligibility
   estimatedPrognosis: AdmissionPrognosis;
   ppsScore: number;
   kpsScore?: number;
   functionalStatus: AdmissionFunctionalStatus;
 
-  // ── Section 5: Pain & symptom ──
+  // Section 5 — Pain & symptom
   painScore: number;
   painType: AdmissionPainType;
   symptomsPresent: AdmissionSymptom[];
   symptomsPresentOther?: string;
 
-  // ── Section 6: Psychosocial ──
+  // Section 6 — Psychosocial
   emotionalStatus: AdmissionEmotionalStatus;
   familySupport: AdmissionFamilySupport;
   socialChallenges?: string;
 
-  // ── Section 7: Spiritual ──
+  // Section 7 — Spiritual
   spiritualConcerns: boolean;
   spiritualNeedsDescription?: string;
   spiritualSupportPreferred?: AdmissionSpiritualSupport;
   spiritualSupportPreferredOther?: string;
 
-  // ── Section 8: Care plan ──
+  // Section 8 — Care plan
   painManagementPlan: string;
   medicationPlan: string;
   nursingCarePlan: string;
@@ -130,19 +125,19 @@ export interface HospitalAdmission {
   psychosocialSupportPlan?: string;
   physiotherapyRequired: boolean;
 
-  // ── Section 10: Decision ──
+  // Section 10 — Decision
   admittedToHospiceUnit?: boolean;
 
-  // ── Discharge ──
+  // Discharge lifecycle
   status: AdmissionStatus;
   dischargeReason?: AdmissionDischargeReason;
 
-  // ── Aggregates ──
+  // Aggregates
   progressNoteCount?: number;
   dischargeSummaryId?: string | null;
   dischargeSummaryStatus?: 'Draft' | 'Final' | null;
 
-  // ── Meta ──
+  // Meta
   createdBy?: {
     id: string;
     name: string;
@@ -153,9 +148,8 @@ export interface HospitalAdmission {
 }
 
 // ─────────────────────────────────────────────────────────────
-// List DTO — GET /patients/:patientId/admissions
+// List DTO
 // ─────────────────────────────────────────────────────────────
-
 export interface AdmissionListItem {
   id: string;
   admissionDate: string;
@@ -170,9 +164,8 @@ export interface AdmissionListItem {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Request payloads
+// Requests
 // ─────────────────────────────────────────────────────────────
-
 export interface CreateAdmissionRequest {
   // Section 1 (snapshot)
   patientName?: string;
@@ -252,7 +245,6 @@ export interface UpdateAdmissionRequest {
 // ─────────────────────────────────────────────────────────────
 // List envelope
 // ─────────────────────────────────────────────────────────────
-
 export interface AdmissionListResponse {
   items: AdmissionListItem[];
   page: number;

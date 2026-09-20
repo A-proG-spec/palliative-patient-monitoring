@@ -3,14 +3,36 @@ import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 
 // ═════════════════════════════════════════════════════════════
+// HELPERS
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Derive a stable, human-readable patient identifier.
+ * Prefers `hospitalPatientId` when set; falls back to
+ * `PAT-0001` derived from the numeric primary key.
+ */
+const patientDisplayId = (p: {
+  id: number;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
+
+// ═════════════════════════════════════════════════════════════
 // STAFF APPROVALS
 // ═════════════════════════════════════════════════════════════
+
 export const getPendingStaff = async () => {
   const pending = await prisma.staff.findMany({
-    where: { status: 'Pending', isEmailVerified: true },
+    where: { status: 'Pending', isEmailVerified: true, deletedAt: null },
     select: {
-      id: true, name: true, email: true, phone: true, role: true,
-      status: true, isEmailVerified: true, createdAt: true,
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      status: true,
+      isEmailVerified: true,
+      createdAt: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -20,12 +42,18 @@ export const getPendingStaff = async () => {
 export const approveStaff = async (
   staffId: string,
   role: string,
-  adminId: string|number,
+  adminId: string | number,
 ) => {
   const id = toId(staffId, 'staff id');
   const adm = toId(adminId, 'admin id');
 
-  const validRoles = ['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'];
+  const validRoles = [
+    'Physician',
+    'Nurse',
+    'Pharmacist',
+    'Radiologist',
+    'LaboratoryTechnician',
+  ];
   if (!validRoles.includes(role)) {
     throw new ApiError(400, 'Invalid role specified');
   }
@@ -90,6 +118,7 @@ export const rejectStaff = async (staffId: string) => {
 // ═════════════════════════════════════════════════════════════
 // DASHBOARD
 // ═════════════════════════════════════════════════════════════
+
 export const getDashboardStats = async () => {
   const [
     totalPatients,
@@ -109,7 +138,7 @@ export const getDashboardStats = async () => {
     prisma.patient.count({ where: { status: 'Discharged' } }),
     prisma.patient.count({ where: { currentLocation: 'ReferredHospital' } }),
     prisma.referral.count({ where: { status: 'Pending' } }),
-    prisma.staff.count({ where: { status: 'Pending', isEmailVerified: true } }),
+    prisma.staff.count({ where: { status: 'Pending', isEmailVerified: true, deletedAt: null } }),
     prisma.notification.count({ where: { type: 'StaffApproval', read: false } }),
     prisma.notification.count({
       where: {
@@ -169,6 +198,7 @@ export const getDashboardStats = async () => {
 // ═════════════════════════════════════════════════════════════
 // NOTIFICATIONS
 // ═════════════════════════════════════════════════════════════
+
 export const getNotifications = async (limit: number = 20, read?: string) => {
   const where: any = {};
   if (read !== undefined) where.read = read === 'true';
@@ -207,6 +237,7 @@ export const markNotificationRead = async (notificationId: string) => {
 // ═════════════════════════════════════════════════════════════
 // PATIENTS (admin view)
 // ═════════════════════════════════════════════════════════════
+
 export const getPatients = async (
   page: number = 1,
   limit: number = 20,
@@ -219,6 +250,7 @@ export const getPatients = async (
     where.OR = [
       { firstName: { contains: search, mode: 'insensitive' } },
       { lastName: { contains: search, mode: 'insensitive' } },
+      { hospitalPatientId: { contains: search, mode: 'insensitive' } },
     ];
   }
 
@@ -238,6 +270,7 @@ export const getPatients = async (
   return {
     items: items.map((p) => ({
       id: p.id,
+      patientDisplayId: patientDisplayId(p),
       firstName: p.firstName,
       lastName: p.lastName,
       age: p.age,
@@ -245,6 +278,7 @@ export const getPatients = async (
       status: p.status,
       currentLocation: p.currentLocation,
       primaryDiagnosis: p.primaryDiagnosis,
+      diseaseStage: p.diseaseStage,
       registeredAt: p.createdAt,
       registeredBy: {
         id: p.registeredByStaff.id,
@@ -287,6 +321,7 @@ export const getPatientDetail = async (patientId: string) => {
 
   return {
     id: patient.id,
+    patientDisplayId: patientDisplayId(patient),
     firstName: patient.firstName,
     lastName: patient.lastName,
     age: patient.age,
@@ -392,16 +427,16 @@ export const getPatientDetail = async (patientId: string) => {
 
     dischargeSummary: latestDischarge
       ? {
-          id: latestDischarge.id,
-          admissionId: latestDischarge.admissionId,
-          dateOfDischarge: latestDischarge.dateOfDischarge,
-          timeOfDischarge: latestDischarge.timeOfDischarge,
-          dischargeType: latestDischarge.dischargeType,
-          overallCondition: latestDischarge.overallCondition,
-          dischargedTo: latestDischarge.dischargedTo,
-          status: latestDischarge.status,
-          createdAt: latestDischarge.createdAt,
-        }
+        id: latestDischarge.id,
+        admissionId: latestDischarge.admissionId,
+        dateOfDischarge: latestDischarge.dateOfDischarge,
+        timeOfDischarge: latestDischarge.timeOfDischarge,
+        dischargeType: latestDischarge.dischargeType,
+        overallCondition: latestDischarge.overallCondition,
+        dischargedTo: latestDischarge.dischargedTo,
+        status: latestDischarge.status,
+        createdAt: latestDischarge.createdAt,
+      }
       : null,
 
     createdAt: patient.createdAt,
@@ -411,10 +446,11 @@ export const getPatientDetail = async (patientId: string) => {
 // ═════════════════════════════════════════════════════════════
 // CLOSE CASE (legacy fast path)
 // ═════════════════════════════════════════════════════════════
+
 export const closeCase = async (
   patientId: string,
   reason: string,
-  _adminId: string|number,
+  _adminId: string | number,
 ) => {
   const id = toId(patientId, 'patient id');
 
@@ -454,11 +490,19 @@ export const closeCase = async (
 // ═════════════════════════════════════════════════════════════
 // REFERRALS (admin view)
 // ═════════════════════════════════════════════════════════════
+
 export const getPendingReferrals = async () => {
   const referrals = await prisma.referral.findMany({
     where: { status: 'Pending' },
     include: {
-      patient: { select: { id: true, firstName: true, lastName: true } },
+      patient: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          hospitalPatientId: true,
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -467,6 +511,7 @@ export const getPendingReferrals = async () => {
     id: r.id,
     patientId: r.patient.id,
     patientName: `${r.patient.firstName} ${r.patient.lastName}`,
+    patientDisplayId: patientDisplayId(r.patient),
     referralType: r.referralType,
     referralDate: r.referralDate,
     primaryDiagnosis: r.primaryDiagnosis,
@@ -475,6 +520,7 @@ export const getPendingReferrals = async () => {
     kpsScore: r.kpsScore,
     currentSymptoms: r.currentSymptoms,
     reasons: r.reasons,
+    otherReason: r.otherReason,
     referringFacility: r.referringFacility,
     receivingFacility: r.receivingFacility,
     contactPerson: r.contactPerson,
@@ -484,13 +530,18 @@ export const getPendingReferrals = async () => {
   }));
 };
 
-export const approveReferral = async (referralId: string, adminId: string|number) => {
+export const approveReferral = async (
+  referralId: string,
+  adminId: string | number,
+) => {
   const rid = toId(referralId, 'referral id');
   const adm = toId(adminId, 'admin id');
 
   const referral = await prisma.referral.findUnique({
     where: { id: rid },
-    include: { patient: { select: { id: true, firstName: true, lastName: true } } },
+    include: {
+      patient: { select: { id: true, firstName: true, lastName: true } },
+    },
   });
   if (!referral) throw new ApiError(404, 'Referral not found');
   if (referral.status !== 'Pending') {
@@ -552,12 +603,13 @@ export const declineReferral = async (referralId: string) => {
 // ═════════════════════════════════════════════════════════════
 // REPORTS
 // ═════════════════════════════════════════════════════════════
+
 export const getReports = async (startDate?: string, endDate?: string) => {
   const dateFilter: any = {};
   if (startDate) dateFilter.gte = new Date(startDate);
   if (endDate) dateFilter.lte = new Date(endDate);
-  const createdAtFilter = Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
-  const visitDateFilter = Object.keys(dateFilter).length > 0 ? { visitDate: dateFilter } : {};
+  const createdAtFilter =
+    Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
 
   const [
     totalPatients,
@@ -568,7 +620,7 @@ export const getReports = async (startDate?: string, endDate?: string) => {
     patientsByLocationRaw,
     patientsByStageRaw,
     closeCasesByReasonRaw,
-    visitsByMonthRaw,
+    visitsByMonthRows,
     imagingByModalityRaw,
     imagingByStatusRaw,
     progressNotesByConditionRaw,
@@ -577,7 +629,9 @@ export const getReports = async (startDate?: string, endDate?: string) => {
     prisma.patient.count({ where: createdAtFilter }),
     prisma.patient.count({ where: { ...createdAtFilter, status: 'Active' } }),
     prisma.patient.count({ where: { ...createdAtFilter, status: 'Discharged' } }),
-    prisma.patient.count({ where: { ...createdAtFilter, currentLocation: 'ReferredHospital' } }),
+    prisma.patient.count({
+      where: { ...createdAtFilter, currentLocation: 'ReferredHospital' },
+    }),
     prisma.referral.groupBy({
       by: ['status'],
       where: createdAtFilter,
@@ -597,13 +651,13 @@ export const getReports = async (startDate?: string, endDate?: string) => {
       where: { ...createdAtFilter, type: 'CloseCase' },
       select: { data: true },
     }),
-    prisma.$queryRaw<Array<{ month: string; count: bigint }>>`
-      SELECT to_char("visitDate", 'YYYY-MM') AS month, COUNT(*)::bigint AS count
-      FROM "HomeVisit"
-      WHERE ${startDate ? prisma.$queryRaw`"visitDate" >= ${new Date(startDate)}` : prisma.$queryRaw`TRUE`}
-      GROUP BY month
-      ORDER BY month ASC
-    `,
+    prisma.homeVisit.findMany({
+      where:
+        Object.keys(dateFilter).length > 0
+          ? { visitDate: dateFilter }
+          : undefined,
+      select: { visitDate: true },
+    }),
     prisma.imagingOrder.groupBy({
       by: ['modality'],
       where: createdAtFilter,
@@ -626,6 +680,19 @@ export const getReports = async (startDate?: string, endDate?: string) => {
     }),
   ]);
 
+  // ── Aggregate visits by month (client-side, JSON-safe) ──
+  // Format is 'YYYY-MM' — lexicographically sortable.
+  const visitsByMonthMap = new Map<string, number>();
+  for (const v of visitsByMonthRows) {
+    const month = v.visitDate.toISOString().slice(0, 7);
+    visitsByMonthMap.set(month, (visitsByMonthMap.get(month) ?? 0) + 1);
+  }
+
+  const visitsByMonth = Array.from(visitsByMonthMap.entries())
+    .map(([month, count]) => ({ month, count }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+
+  // ── Aggregate close cases by reason ──
   const closeCasesByReasonMap: Record<string, number> = {};
   for (const n of closeCasesByReasonRaw) {
     const reason = (n.data as any)?.reason ?? 'Unknown';
@@ -652,10 +719,7 @@ export const getReports = async (startDate?: string, endDate?: string) => {
     closeCasesByReason: Object.entries(closeCasesByReasonMap).map(
       ([reason, count]) => ({ reason, count }),
     ),
-    visitsByMonth: visitsByMonthRaw.map((r) => ({
-      month: r.month,
-      count: Number(r.count),
-    })),
+    visitsByMonth,
     imagingByModality: imagingByModalityRaw.map((r) => ({
       modality: r.modality,
       count: r._count._all,
@@ -678,12 +742,18 @@ export const getReports = async (startDate?: string, endDate?: string) => {
 // ═════════════════════════════════════════════════════════════
 // STAFF MANAGEMENT (active staff)
 // ═════════════════════════════════════════════════════════════
+
 export const getStaffList = async (
   page: number = 1,
   limit: number = 20,
   filters: {
     status?: 'Active' | 'Pending' | 'Rejected' | 'Deleted' | 'All';
-    role?: 'Physician' | 'Nurse' | 'Pharmacist' | 'Radiologist' | 'LaboratoryTechnician';
+    role?:
+    | 'Physician'
+    | 'Nurse'
+    | 'Pharmacist'
+    | 'Radiologist'
+    | 'LaboratoryTechnician';
     search?: string;
   } = {},
 ) => {
@@ -718,9 +788,16 @@ export const getStaffList = async (
       take: limit,
       orderBy: { createdAt: 'desc' },
       select: {
-        id: true, name: true, email: true, phone: true, role: true,
-        status: true, isEmailVerified: true, deletedAt: true,
-        createdAt: true, updatedAt: true,
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        status: true,
+        isEmailVerified: true,
+        deletedAt: true,
+        createdAt: true,
+        updatedAt: true,
       },
     }),
     prismaBase.staff.count({ where: query }),
@@ -739,9 +816,16 @@ export const getStaffById = async (
   const staff = await client.staff.findUnique({
     where: { id },
     select: {
-      id: true, name: true, email: true, phone: true, role: true,
-      status: true, isEmailVerified: true, deletedAt: true,
-      createdAt: true, updatedAt: true,
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      status: true,
+      isEmailVerified: true,
+      deletedAt: true,
+      createdAt: true,
+      updatedAt: true,
     },
   });
 
@@ -752,7 +836,7 @@ export const getStaffById = async (
 export const updateStaff = async (
   staffId: string,
   data: { name?: string; phone?: string; role?: any },
-  adminId: string|number,
+  adminId: string | number,
 ) => {
   const id = toId(staffId, 'staff id');
   const adm = toId(adminId, 'admin id');
@@ -774,8 +858,14 @@ export const updateStaff = async (
     where: { id },
     data: { ...data, updatedBy: adm },
     select: {
-      id: true, name: true, email: true, phone: true, role: true,
-      status: true, isEmailVerified: true, updatedAt: true,
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      status: true,
+      isEmailVerified: true,
+      updatedAt: true,
     },
   });
 
@@ -784,15 +874,15 @@ export const updateStaff = async (
 
 export const deleteStaff = async (
   staffId: string,
-  adminId: string|number,
+  adminId: string | number,
   reason?: string,
 ) => {
-  if (staffId === adminId) {
-    throw new ApiError(400, 'You cannot delete your own account');
-  }
-
   const id = toId(staffId, 'staff id');
   const adm = toId(adminId, 'admin id');
+
+  if (id === adm) {
+    throw new ApiError(400, 'You cannot delete your own account');
+  }
 
   const staff = await prisma.staff.findUnique({ where: { id } });
   if (!staff) throw new ApiError(404, 'Staff member not found');
@@ -811,7 +901,7 @@ export const deleteStaff = async (
   return { id: updated.id, success: true, deletedAt: updated.deletedAt };
 };
 
-export const restoreStaff = async (staffId: string, adminId: string|number) => {
+export const restoreStaff = async (staffId: string, adminId: string | number) => {
   const id = toId(staffId, 'staff id');
   const adm = toId(adminId, 'admin id');
 
@@ -833,25 +923,285 @@ export const restoreStaff = async (staffId: string, adminId: string|number) => {
 };
 
 // ═════════════════════════════════════════════════════════════
+// STAFF PERFORMANCE
+// ═════════════════════════════════════════════════════════════
+
+export const getStaffPerformanceList = async (
+  page: number = 1,
+  limit: number = 20,
+  search?: string,
+  role?: string,
+) => {
+  const where: any = {
+    status: 'Active',
+    deletedAt: null,
+  };
+  if (role) where.role = role;
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { email: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [staff, total] = await Promise.all([
+    prisma.staff.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, name: true, role: true },
+    }),
+    prisma.staff.count({ where }),
+  ]);
+
+  // Fan out the per-staff metrics.
+  const items = await Promise.all(
+    staff.map(async (s) => {
+      const [visitCount, patientCount] = await Promise.all([
+        prisma.homeVisit.count({ where: { createdBy: s.id } }),
+        prisma.patient.count({ where: { registeredBy: s.id } }),
+      ]);
+      return {
+        id: s.id,
+        name: s.name,
+        role: s.role,
+        totalPatientsAssigned: patientCount,
+        totalVisitsRecorded: visitCount,
+        // Placeholder — the schema doesn't currently track response time.
+        averageResponseTimeMinutes: null,
+      };
+    }),
+  );
+
+  return { items, page, limit, total };
+};
+
+export const getStaffPerformanceDetail = async (staffId: string) => {
+  const id = toId(staffId, 'staff id');
+
+  const staff = await prisma.staff.findUnique({
+    where: { id },
+    select: { id: true, name: true, role: true },
+  });
+  if (!staff) throw new ApiError(404, 'Staff member not found');
+
+  const [
+    totalVisitsRecorded,
+    totalPatientsAssigned,
+    totalMedicationsOrdered,
+    totalLabTestsRequested,
+    totalImagingOrdersPlaced,
+    totalReferralsSubmitted,
+  ] = await Promise.all([
+    prisma.homeVisit.count({ where: { createdBy: id } }),
+    prisma.patient.count({ where: { registeredBy: id } }),
+    prisma.medication.count({ where: { prescribedBy: id } }),
+    prisma.laboratoryTest.count({ where: { orderedBy: id } }),
+    prisma.imagingOrder.count({ where: { orderedBy: id } }),
+    prisma.referral.count({ where: { requestedBy: id } }),
+  ]);
+
+  // Recent activity — capped at 20 items for the initial load.
+  const recentActivityResult = await getStaffActivity(id, 1, 20);
+
+  return {
+    id: staff.id,
+    name: staff.name,
+    role: staff.role,
+    totalVisitsRecorded,
+    totalPatientsAssigned,
+    totalMedicationsOrdered,
+    totalLabTestsRequested,
+    totalImagingOrdersPlaced,
+    totalReferralsSubmitted,
+    averageResponseTimeMinutes: null,
+    recentActivity: recentActivityResult.items,
+  };
+};
+
+export const getStaffActivity = async (
+  staffId: number,
+  page: number = 1,
+  limit: number = 20,
+) => {
+  const skip = (page - 1) * limit;
+
+  // Collect activity across every model that stamps the staff id.
+  const [
+    visits,
+    medications,
+    labs,
+    imaging,
+    referrals,
+    admissions,
+    notes,
+  ] = await Promise.all([
+    prisma.homeVisit.findMany({
+      where: { createdBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.medication.findMany({
+      where: { prescribedBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.laboratoryTest.findMany({
+      where: { orderedBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.imagingOrder.findMany({
+      where: { orderedBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.referral.findMany({
+      where: { requestedBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.hospitalAdmission.findMany({
+      where: { createdBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.patientProgressNote.findMany({
+      where: { createdBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+  ]);
+
+  const activity = [
+    ...visits.map((v) => ({
+      id: `visit-${v.id}`,
+      type: 'visit' as const,
+      patientId: String(v.patient.id),
+      patientName: `${v.patient.firstName} ${v.patient.lastName}`,
+      timestamp: v.createdAt.toISOString(),
+      description: `Visit recorded · ${v.visitType}`,
+    })),
+    ...medications.map((m) => ({
+      id: `medication-${m.id}`,
+      type: 'medication' as const,
+      patientId: String(m.patient.id),
+      patientName: `${m.patient.firstName} ${m.patient.lastName}`,
+      timestamp: m.createdAt.toISOString(),
+      description: `${m.name} · ${m.dosage}`,
+    })),
+    ...labs.map((l) => ({
+      id: `lab-${l.id}`,
+      type: 'lab' as const,
+      patientId: String(l.patient.id),
+      patientName: `${l.patient.firstName} ${l.patient.lastName}`,
+      timestamp: l.createdAt.toISOString(),
+      description: `${l.testName} · ${l.category}`,
+    })),
+    ...imaging.map((i) => ({
+      id: `imaging-${i.id}`,
+      type: 'imaging' as const,
+      patientId: String(i.patient.id),
+      patientName: `${i.patient.firstName} ${i.patient.lastName}`,
+      timestamp: i.createdAt.toISOString(),
+      description: `${i.modality} · ${i.bodyRegion}`,
+    })),
+    ...referrals.map((r) => ({
+      id: `referral-${r.id}`,
+      type: 'referral' as const,
+      patientId: String(r.patient.id),
+      patientName: `${r.patient.firstName} ${r.patient.lastName}`,
+      timestamp: r.createdAt.toISOString(),
+      description: `${r.referralType} · ${r.receivingFacility}`,
+    })),
+    ...admissions.map((a) => ({
+      id: `admission-${a.id}`,
+      type: 'admission' as const,
+      patientId: String(a.patient.id),
+      patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+      timestamp: a.createdAt.toISOString(),
+      description: `${a.ward} · Bed ${a.bedNumber}`,
+    })),
+    ...notes.map((n) => ({
+      id: `progress_note-${n.id}`,
+      type: 'progress_note' as const,
+      patientId: String(n.patient.id),
+      patientName: `${n.patient.firstName} ${n.patient.lastName}`,
+      timestamp: n.createdAt.toISOString(),
+      description: `Progress note · ${n.generalCondition ?? 'Condition recorded'}`,
+    })),
+  ]
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(skip, skip + limit);
+
+  return {
+    items: activity,
+    total: activity.length,
+    hasMore: activity.length === limit,
+  };
+};
+
+// ═════════════════════════════════════════════════════════════
 // EXPORTS
 // ═════════════════════════════════════════════════════════════
+
 export default {
+  // Staff approvals
   getPendingStaff,
   approveStaff,
   rejectStaff,
+
+  // Dashboard
   getDashboardStats,
   getNotifications,
   markNotificationRead,
+
+  // Patients
   getPatients,
   getPatientDetail,
   closeCase,
+
+  // Referrals
   getPendingReferrals,
   approveReferral,
   declineReferral,
+
+  // Reports
   getReports,
+
+  // Staff management
   getStaffList,
   getStaffById,
   updateStaff,
   deleteStaff,
   restoreStaff,
+
+  // Staff performance
+  getStaffPerformanceList,
+  getStaffPerformanceDetail,
+  getStaffActivity,
 };

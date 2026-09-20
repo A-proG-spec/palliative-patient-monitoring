@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   TrendingUp,
@@ -16,116 +16,18 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
-import { ErrorState } from '@/components/common/EmptyState';
+import { ErrorState, EmptyState } from '@/components/common/EmptyState';
 import { formatResponseTime, formatRelativeTime } from '@/lib/utils';
 import { ROLE_LABELS } from '@/constants';
-import type { StaffRole } from '@/types/admin.types';
+import {
+  useStaffPerformanceDetail,
+  useStaffActivity,
+} from '@/hooks/useAdmin';
+import type { StaffActivityItem, StaffActivityType } from '@/types/admin.types';
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Types
-// ══════════════════════════════════════════════════════════════════════════════
-
-interface ActivityItem {
-  id: string;
-  type: 'visit' | 'medication' | 'lab' | 'imaging' | 'referral' | 'admission' | 'progress_note';
-  patientName: string | null;
-  patientId: string | null;
-  timestamp: string;
-  description: string;
-}
-
-interface StaffPerformanceDetail {
-  id: string;
-  name: string;
-  role: StaffRole | null;
-  totalVisitsRecorded: number;
-  totalPatientsAssigned: number;
-  totalMedicationsOrdered: number;
-  totalLabTestsRequested: number;
-  totalImagingOrdersPlaced: number;
-  totalReferralsSubmitted: number;
-  averageResponseTimeMinutes: number | null;
-  recentActivity: ActivityItem[];
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// API Functions (TODO: Backend endpoints)
-// ══════════════════════════════════════════════════════════════════════════════
-
-// TODO: Backend endpoint GET /api/admin/staff/performance/:staffId
-// Expected response: StaffPerformanceDetail
-async function fetchStaffPerformanceDetail(staffId: string): Promise<StaffPerformanceDetail> {
-  // TODO: Replace with real API call when backend endpoint is ready
-  throw new Error(`Backend endpoint GET /api/admin/staff/performance/${staffId} not implemented yet`);
-}
-
-// TODO: Backend endpoint GET /api/admin/staff/performance/:staffId/activity
-// Expected query params: { page?: number, limit?: number }
-// Expected response: { items: ActivityItem[], total: number, hasMore: boolean }
-async function fetchStaffActivity(
-  staffId: string,
-  params: { page: number; limit: number }
-): Promise<{ items: ActivityItem[]; total: number; hasMore: boolean }> {
-  // TODO: Replace with real API call when backend endpoint is ready
-  throw new Error(
-    `Backend endpoint GET /api/admin/staff/performance/${staffId}/activity not implemented yet`
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Custom Hook
-// ══════════════════════════════════════════════════════════════════════════════
-
-function useStaffPerformanceDetail(staffId: string) {
-  const [data, setData] = useState<StaffPerformanceDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    setIsLoading(true);
-    setError(null);
-
-    fetchStaffPerformanceDetail(staffId)
-      .then((response) => {
-        if (!cancelled) {
-          setData(response);
-          setIsLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err);
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [staffId]);
-
-  const refetch = () => {
-    setIsLoading(true);
-    setError(null);
-    fetchStaffPerformanceDetail(staffId)
-      .then((response) => {
-        setData(response);
-        setIsLoading(false);
-      })
-      .catch((err) => {
-        setError(err);
-        setIsLoading(false);
-      });
-  };
-
-  return { data, isLoading, error, refetch };
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Stat Card Component
-// ══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// Stat Card
+// ═══════════════════════════════════════════════════════════════════
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -134,7 +36,12 @@ interface StatCardProps {
   color?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ icon, label, value, color = 'text-primary' }) => (
+const StatCard: React.FC<StatCardProps> = ({
+  icon,
+  label,
+  value,
+  color = 'text-primary',
+}) => (
   <Card padding="md">
     <div className="flex items-center gap-3">
       <div
@@ -150,11 +57,11 @@ const StatCard: React.FC<StatCardProps> = ({ icon, label, value, color = 'text-p
   </Card>
 );
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Activity Icon Helper
-// ══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// Activity helpers
+// ═══════════════════════════════════════════════════════════════════
 
-const getActivityIcon = (type: ActivityItem['type']) => {
+const activityIcon = (type: StaffActivityType) => {
   switch (type) {
     case 'visit':
       return <ClipboardList size={16} className="text-blue-600" />;
@@ -175,7 +82,7 @@ const getActivityIcon = (type: ActivityItem['type']) => {
   }
 };
 
-const getActivityLabel = (type: ActivityItem['type']) => {
+const activityLabel = (type: StaffActivityType) => {
   switch (type) {
     case 'visit':
       return 'Visit Recorded';
@@ -196,46 +103,44 @@ const getActivityLabel = (type: ActivityItem['type']) => {
   }
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Main Component
-// ══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// Main
+// ═══════════════════════════════════════════════════════════════════
 
 const StaffPerformanceDetailPage: React.FC = () => {
   const { staffId } = useParams<{ staffId: string }>();
-  const { data: staff, isLoading, error, refetch } = useStaffPerformanceDetail(staffId!);
 
+  const {
+    data: staff,
+    isLoading,
+    error,
+    refetch,
+  } = useStaffPerformanceDetail(staffId!);
+
+  // ── Activity pagination ──
+  // The detail response ships the first ~20 items; additional pages
+  // are fetched via a separate endpoint.
   const [activityPage, setActivityPage] = useState(1);
-  const [allActivity, setAllActivity] = useState<ActivityItem[]>([]);
-  const [hasMoreActivity, setHasMoreActivity] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const { data: extraActivity, isLoading: extraLoading } = useStaffActivity(
+    staffId!,
+    { page: activityPage, limit: 20 },
+  );
 
-  // Initialize activity from staff data
-  React.useEffect(() => {
-    if (staff?.recentActivity) {
-      setAllActivity(staff.recentActivity);
-      setHasMoreActivity(staff.recentActivity.length >= 20);
-    }
-  }, [staff]);
+  // Merge initial page + any extra pages, dedupe by id, sort desc.
+  const allActivity: StaffActivityItem[] = useMemo(() => {
+    const initial = staff?.recentActivity ?? [];
+    const extra = activityPage > 1 ? (extraActivity?.items ?? []) : [];
+    const seen = new Set<string>();
+    return [...initial, ...extra]
+      .filter((a) => {
+        if (seen.has(a.id)) return false;
+        seen.add(a.id);
+        return true;
+      })
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  }, [staff?.recentActivity, extraActivity?.items, activityPage]);
 
-  const handleLoadMore = async () => {
-    if (!staffId || loadingMore) return;
-
-    setLoadingMore(true);
-    try {
-      const response = await fetchStaffActivity(staffId, {
-        page: activityPage + 1,
-        limit: 20,
-      });
-      setAllActivity((prev) => [...prev, ...(response.items ?? [])]);
-      setHasMoreActivity(response.hasMore ?? false);
-      setActivityPage((p) => p + 1);
-    } catch (err) {
-      // Silently fail for now - activity already loaded from initial data
-      setHasMoreActivity(false);
-    } finally {
-      setLoadingMore(false);
-    }
-  };
+  const hasMore = extraActivity?.hasMore ?? false;
 
   if (isLoading) return <PageLoader />;
   if (error || !staff) return <ErrorState onRetry={refetch} />;
@@ -257,7 +162,7 @@ const StaffPerformanceDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Metrics Grid */}
+      {/* Metrics grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={<ClipboardList size={18} />}
@@ -267,7 +172,7 @@ const StaffPerformanceDetailPage: React.FC = () => {
         />
         <StatCard
           icon={<Users size={18} />}
-          label="Patients Assigned"
+          label="Patients Registered"
           value={staff.totalPatientsAssigned ?? 0}
           color="text-primary"
         />
@@ -303,7 +208,7 @@ const StaffPerformanceDetailPage: React.FC = () => {
         />
       </div>
 
-      {/* Activity Timeline */}
+      {/* Activity timeline */}
       <Card padding="none">
         <div className="px-5 pt-5 pb-4 border-b border-border-base">
           <h3 className="text-base font-semibold text-on-surface">Recent Activity</h3>
@@ -314,24 +219,26 @@ const StaffPerformanceDetailPage: React.FC = () => {
 
         <div className="p-5">
           {!allActivity.length ? (
-            <div className="text-sm text-text-muted text-center py-8">
-              No recent activity recorded
-            </div>
+            <EmptyState
+              icon={<TrendingUp size={28} />}
+              title="No activity yet"
+              description="This staff member hasn't recorded any clinical actions yet."
+            />
           ) : (
             <div className="space-y-3">
-              {allActivity.map((activity, index) => (
+              {allActivity.map((activity) => (
                 <div
                   key={activity.id}
                   className="flex items-start gap-3 pb-3 border-b border-border-base last:border-0 last:pb-0"
                 >
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-low flex-shrink-0 mt-0.5">
-                    {getActivityIcon(activity.type)}
+                    {activityIcon(activity.type)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-on-surface">
-                          {getActivityLabel(activity.type)}
+                          {activityLabel(activity.type)}
                         </p>
                         {activity.patientName && (
                           <p className="text-xs text-text-secondary mt-0.5">
@@ -339,7 +246,9 @@ const StaffPerformanceDetailPage: React.FC = () => {
                           </p>
                         )}
                         {activity.description && (
-                          <p className="text-xs text-text-muted mt-1">{activity.description}</p>
+                          <p className="text-xs text-text-muted mt-1">
+                            {activity.description}
+                          </p>
                         )}
                       </div>
                       <span className="text-xs text-text-muted whitespace-nowrap">
@@ -352,14 +261,14 @@ const StaffPerformanceDetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* Load More Button */}
-          {hasMoreActivity && allActivity.length > 0 && (
+          {/* Load More */}
+          {hasMore && allActivity.length > 0 && (
             <div className="mt-4 pt-4 border-t border-border-base text-center">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleLoadMore}
-                loading={loadingMore}
+                onClick={() => setActivityPage((p) => p + 1)}
+                loading={extraLoading}
               >
                 Load More Activity
               </Button>

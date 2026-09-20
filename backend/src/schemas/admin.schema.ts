@@ -6,10 +6,13 @@ import { z } from 'zod';
 
 export const approveStaffSchema = z.object({
   body: z.object({
-    role: z.enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'], {
-      message:
-        'Invalid role. Must be Physician, Nurse, Pharmacist, Radiologist, or LaboratoryTechnician',
-    }),
+    role: z.enum(
+      ['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'],
+      {
+        message:
+          'Invalid role. Must be Physician, Nurse, Pharmacist, Radiologist, or LaboratoryTechnician',
+      },
+    ),
   }),
 });
 
@@ -75,7 +78,9 @@ export const getStaffListQuerySchema = z.object({
     page: z.coerce.number().int().positive().optional().default(1),
     limit: z.coerce.number().int().positive().max(100).optional().default(20),
     status: z.enum(['Active', 'Pending', 'Rejected', 'Deleted', 'All']).optional(),
-    role: z.enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician']).optional(),
+    role: z
+      .enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'])
+      .optional(),
     search: z.string().trim().optional(),
   }),
 });
@@ -95,7 +100,9 @@ export const updateStaffSchema = z.object({
         .min(10, 'Phone number must be at least 10 characters')
         .max(20, 'Phone number is too long')
         .optional(),
-      role: z.enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician']).optional(),
+      role: z
+        .enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'])
+        .optional(),
     })
     .refine(
       (data) =>
@@ -116,6 +123,34 @@ export const deleteStaffSchema = z.object({
 });
 
 // ─────────────────────────────────────────────────────────────
+// Staff performance
+// ─────────────────────────────────────────────────────────────
+
+export const getStaffPerformanceListQuerySchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().positive().optional().default(1),
+    limit: z.coerce.number().int().positive().max(100).optional().default(20),
+    search: z.string().trim().optional(),
+    role: z
+      .enum(['TeamLeader', 'Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'])
+      .optional(),
+  }),
+});
+
+export const getStaffPerformanceParamsSchema = z.object({
+  params: z.object({
+    staffId: z.string().min(1, 'Staff ID is required'),
+  }),
+});
+
+export const getStaffActivityQuerySchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().positive().optional().default(1),
+    limit: z.coerce.number().int().positive().max(100).optional().default(20),
+  }),
+});
+
+// ─────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────
 
@@ -128,3 +163,10 @@ export type GetVisitEditHistoryParamsSchema = z.infer<typeof getVisitEditHistory
 export type GetStaffListQuerySchema = z.infer<typeof getStaffListQuerySchema>;
 export type UpdateStaffSchema = z.infer<typeof updateStaffSchema>;
 export type DeleteStaffSchema = z.infer<typeof deleteStaffSchema>;
+export type GetStaffPerformanceListQuerySchema = z.infer<
+  typeof getStaffPerformanceListQuerySchema
+>;
+export type GetStaffPerformanceParamsSchema = z.infer<
+  typeof getStaffPerformanceParamsSchema
+>;
+export type GetStaffActivityQuerySchema = z.infer<typeof getStaffActivityQuerySchema>;

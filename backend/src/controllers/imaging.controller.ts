@@ -3,6 +3,10 @@ import { asyncHandler } from '@utils/asyncHandler.js';
 import { SuccessResponse } from '@utils/ApiResponse.js';
 import * as imagingService from '@services/imaging.service.js';
 
+// ═════════════════════════════════════════════════════════════
+// PATIENT-SCOPED (existing)
+// ═════════════════════════════════════════════════════════════
+
 export const orderImaging = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const result = await imagingService.orderImaging(patientId, req.body, req.user.id);
@@ -92,7 +96,50 @@ export const restoreImagingOrder = asyncHandler(async (req: Request, res: Respon
   return SuccessResponse(200, 'Imaging order restored', result);
 });
 
+// ═════════════════════════════════════════════════════════════
+// RADIOLOGIST QUEUE
+//
+// NOTE: these routes are mounted at `/imaging/*` (top-level, not
+// under `/patients/:patientId`). They are NOT patient-scoped so the
+// radiologist can see every pending order across the system.
+// ═════════════════════════════════════════════════════════════
+
+// GET /imaging/pending-orders
+export const getPendingOrders = asyncHandler(
+  async (req: Request, res: Response) => {
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+    const limit = req.query.limit
+      ? parseInt(req.query.limit as string, 10)
+      : 100;
+    const result = await imagingService.getPendingImagingOrders(page, limit);
+    return SuccessResponse(200, 'OK', result);
+  },
+);
+
+// GET /imaging/queue/:id
+export const getOrderDetail = asyncHandler(
+  async (req: Request, res: Response) => {
+    const imagingId = req.params.id as string;
+    const result = await imagingService.getImagingOrderDetailForQueue(imagingId);
+    return SuccessResponse(200, 'OK', result);
+  },
+);
+
+// PATCH /imaging/queue/:id/report
+export const submitReport = asyncHandler(
+  async (req: Request, res: Response) => {
+    const imagingId = req.params.id as string;
+    const result = await imagingService.submitImagingReportFromQueue(
+      imagingId,
+      req.body,
+      req.user.id,
+    );
+    return SuccessResponse(200, 'Imaging report submitted', result);
+  },
+);
+
 export default {
+  // Patient-scoped
   orderImaging,
   getImagingOrders,
   getImagingOrderById,
@@ -101,4 +148,8 @@ export default {
   updateImagingStatus,
   deleteImagingOrder,
   restoreImagingOrder,
+  // Radiologist queue
+  getPendingOrders,
+  getOrderDetail,
+  submitReport,
 };

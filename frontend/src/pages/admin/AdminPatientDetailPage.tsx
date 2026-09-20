@@ -2,9 +2,21 @@ import React, { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   XCircle, Phone, MapPin, User, Calendar, FileText, Printer,
-  AlertTriangle, NotebookPen,
+  AlertTriangle, NotebookPen, Trash2,
 } from 'lucide-react';
-import { useAdminPatientDetail } from '@/hooks/useAdmin';
+import {
+  useAdminPatientDetail,
+  useDeleteMedication,
+  useRestoreMedication,
+  useDeleteLabTest,
+  useRestoreLabTest,
+  useDeleteImaging,
+  useRestoreImaging,
+  useDeleteAdmission,
+  useRestoreAdmission,
+  useDeleteProgressNote,
+  useRestoreProgressNote,
+} from '@/hooks/useAdmin';
 import { useDischargeSummary } from '@/hooks/useDischarge';
 import { usePatientVisits } from '@/hooks/useVisits';
 import { usePatientMedications } from '@/hooks/useMedications';
@@ -20,12 +32,14 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { EmptyState, ErrorState } from '@/components/common/EmptyState';
+import { AdminDeleteButton } from '@/components/admin/AdminDeleteButton';
+import { AdminRestoreButton } from '@/components/admin/AdminRestoreButton';
 import { formatDate, cn } from '@/lib/utils';
 import { DISEASE_STAGE_LABELS as DSL, VISIT_TYPE_LABELS } from '@/constants';
 import type { DischargeSummary } from '@/components/admin/DischargePatientModal';
 import { printDischargeSummary } from '@/lib/printDischargeSummary';
 
-// ── Discharge summary viewer modal ────────────────────────────────
+// ── Discharge summary viewer modal (unchanged) ──
 interface DischargeSummaryViewerProps {
   summary: DischargeSummary;
   patientName: string;
@@ -97,10 +111,6 @@ const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
               </div>
             </div>
           )}
-
-          <p className="text-xs text-text-muted mt-4">
-            This is a summary view. Use "Print / Save as PDF" to see the full discharge form with all sections.
-          </p>
         </div>
 
         <div className="flex gap-3 px-6 pb-5">
@@ -121,11 +131,13 @@ const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
   );
 };
 
-// ── Tabs ──────────────────────────────────────────────────────────
+// ── Tabs ──
 const tabs = ['Visits', 'Progress Notes', 'Medications', 'Labs', 'Imaging', 'Referrals', 'Admissions'] as const;
 type Tab = typeof tabs[number];
 
-// ── Main page ─────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Main page
+// ─────────────────────────────────────────────────────────────
 const AdminPatientDetailPage: React.FC = () => {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
@@ -133,11 +145,11 @@ const AdminPatientDetailPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<Tab>('Visits');
   const [showDischargeSummaryViewer, setShowDischargeSummaryViewer] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
 
   // ── Discharge summary ──
-  // Try router state first (set by DischargePatientPage on success),
-  // then fall back to the API for persisted summaries.
-  const locationState = (location.state as { dischargeSummary?: DischargeSummary } | null) ?? null;
+  const locationState =
+    (location.state as { dischargeSummary?: DischargeSummary } | null) ?? null;
   const { data: fetchedDischargeSummary } = useDischargeSummary(patientId!);
   const dischargeSummary: DischargeSummary | null =
     locationState?.dischargeSummary ?? fetchedDischargeSummary ?? null;
@@ -145,7 +157,7 @@ const AdminPatientDetailPage: React.FC = () => {
   // ── Primary patient data ──
   const { data: patient, isLoading, error, refetch } = useAdminPatientDetail(patientId!);
 
-  // ── Sub-record data (each has its own endpoint now) ──
+  // ── Sub-record data ──
   const { data: visitsData } = usePatientVisits(patientId!);
   const { data: medsData } = usePatientMedications(patientId!);
   const { data: labsData } = usePatientLabs(patientId!);
@@ -157,6 +169,18 @@ const AdminPatientDetailPage: React.FC = () => {
   const progressNotes = progressNotesData?.items ?? [];
   const labOrders = labsData?.items ?? [];
   const imagingOrders = imagingData?.items ?? [];
+
+  // ── Delete / restore mutations ──
+  const deleteMedication = useDeleteMedication();
+  const restoreMedication = useRestoreMedication();
+  const deleteLab = useDeleteLabTest();
+  const restoreLab = useRestoreLabTest();
+  const deleteImaging = useDeleteImaging();
+  const restoreImaging = useRestoreImaging();
+  const deleteAdmission = useDeleteAdmission();
+  const restoreAdmission = useRestoreAdmission();
+  const deleteProgressNote = useDeleteProgressNote();
+  const restoreProgressNote = useRestoreProgressNote();
 
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
@@ -225,7 +249,7 @@ const AdminPatientDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Demographics + Medical cards ── */}
+      {/* ── Demographics ── */}
       <div className="grid lg:grid-cols-2 gap-5">
         <Card>
           <CardHeader><CardTitle>Patient Information</CardTitle></CardHeader>
@@ -255,54 +279,57 @@ const AdminPatientDetailPage: React.FC = () => {
               <Row label="Comorbidities" value={patient.comorbidities.join(', ')} />
             )}
             <Row label="Registered" value={formatDate(patient.createdAt)} />
-            {dischargeSummary && (
-              <Row label="Discharged">
-                <button
-                  onClick={() => setShowDischargeSummaryViewer(true)}
-                  className="text-primary text-xs underline underline-offset-2 hover:text-primary-hover transition-colors"
-                >
-                  {dischargeSummary.dateOfDischarge
-                    ? formatDate(dischargeSummary.dateOfDischarge)
-                    : 'View summary'}
-                </button>
-              </Row>
-            )}
           </CardContent>
         </Card>
       </div>
 
       {/* ── Tabbed records ── */}
       <Card padding="none">
-        <div className="flex border-b border-border-base overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                'flex items-center gap-2 px-5 py-3.5 text-sm font-medium whitespace-nowrap transition-all border-b-2',
-                activeTab === tab
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-low'
-              )}
-            >
-              {tab}
-              {tabCounts[tab] > 0 && (
-                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-surface-container text-[10px] font-bold text-text-secondary px-1">
-                  {tabCounts[tab]}
-                </span>
-              )}
-            </button>
-          ))}
+        {/* Tab bar + Show Deleted toggle */}
+        <div className="flex items-center justify-between border-b border-border-base">
+          <div className="flex overflow-x-auto flex-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  'flex items-center gap-2 px-5 py-3.5 text-sm font-medium whitespace-nowrap transition-all border-b-2',
+                  activeTab === tab
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-low',
+                )}
+              >
+                {tab}
+                {tabCounts[tab] > 0 && (
+                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-surface-container text-[10px] font-bold text-text-secondary px-1">
+                    {tabCounts[tab]}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Show deleted toggle */}
+          <label className="flex items-center gap-2 px-4 py-3 text-xs text-text-secondary cursor-pointer hover:text-on-surface transition-colors flex-shrink-0">
+            <input
+              type="checkbox"
+              checked={showDeleted}
+              onChange={(e) => setShowDeleted(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-border-base text-error focus:ring-error"
+            />
+            <Trash2 size={12} className={showDeleted ? 'text-error' : ''} />
+            Show deleted
+          </label>
         </div>
 
         <div className="p-5 overflow-x-auto">
-          {/* Visits */}
+          {/* ── Visits ── */}
           {activeTab === 'Visits' && (
             visitsData?.items?.length ? (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-text-muted">
-                    {['Date', 'Type', 'Status', 'Outcome', 'Scores'].map((h) => (
+                    {['Date', 'Type', 'Status', 'Outcome', 'Scores', ''].map((h) => (
                       <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
                     ))}
                   </tr>
@@ -321,6 +348,7 @@ const AdminPatientDetailPage: React.FC = () => {
                       <td className="py-3 pr-4"><StatusBadge status={v.overallStatus} /></td>
                       <td className="py-3 pr-4"><StatusBadge status={v.outcome} type="visit" /></td>
                       <td className="py-3 text-text-muted text-xs">PPS {v.ppsScore}% · KPS {v.kpsScore}</td>
+                      <td className="py-3 text-xs text-primary hover:underline">View</td>
                     </tr>
                   ))}
                 </tbody>
@@ -330,23 +358,22 @@ const AdminPatientDetailPage: React.FC = () => {
             )
           )}
 
-          {/* Progress Notes */}
+          {/* ── Progress Notes ── */}
           {activeTab === 'Progress Notes' && (
             progressNotes.length ? (
               <div className="space-y-3">
                 {progressNotes.map((note) => {
-                  // The backend list DTO does not include a `date`/`time`
-                  // string — derive from createdAt.
                   const created = note.createdAt ? new Date(note.createdAt) : null;
                   const dateLabel = created ? formatDate(created.toISOString()) : '—';
-                  const timeLabel = created
-                    ? created.toTimeString().slice(0, 5)
-                    : '';
-
+                  const timeLabel = created ? created.toTimeString().slice(0, 5) : '';
+                  const isDeleted = (note as any).deletedAt;
                   return (
                     <div
                       key={note.id}
-                      className="border border-border-base rounded-xl p-4 hover:bg-surface-low/40 transition-colors"
+                      className={cn(
+                        'border border-border-base rounded-xl p-4 transition-colors',
+                        isDeleted ? 'bg-error-bg/20 opacity-60' : 'hover:bg-surface-low/40',
+                      )}
                     >
                       <div className="flex items-start justify-between gap-3 flex-wrap">
                         <div className="flex-1 min-w-0">
@@ -355,6 +382,7 @@ const AdminPatientDetailPage: React.FC = () => {
                               <NotebookPen size={11} className="mr-0.5" />
                               Progress Note
                             </Badge>
+                            {isDeleted && <Badge variant="error">Deleted</Badge>}
                             <span className="text-xs text-text-muted">
                               {dateLabel}{timeLabel ? ` · ${timeLabel}` : ''}
                             </span>
@@ -366,15 +394,38 @@ const AdminPatientDetailPage: React.FC = () => {
                             <p className="text-sm text-on-surface">
                               <span className="text-text-muted">Condition:</span>{' '}
                               <span className="font-medium">{note.generalCondition}</span>
-                              {note.overallAssessment && (
-                                <span className="text-text-secondary"> — {note.overallAssessment}</span>
-                              )}
                             </p>
                           )}
-                          {note.soapSubjective && (
-                            <p className="text-xs text-text-muted mt-1 truncate max-w-lg">
-                              S: {note.soapSubjective}
-                            </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {isDeleted ? (
+                            <AdminRestoreButton
+                              resourceLabel="progress note"
+                              onRestore={() =>
+                                restoreProgressNote.mutate({
+                                  patientId: patientId!,
+                                  resourceId: note.id,
+                                })
+                              }
+                              isPending={
+                                restoreProgressNote.isPending &&
+                                (restoreProgressNote.variables as any)?.resourceId === note.id
+                              }
+                            />
+                          ) : (
+                            <AdminDeleteButton
+                              resourceLabel="Progress Note"
+                              resourceIdentifier={`Note from ${dateLabel}`}
+                              onConfirm={(reason) =>
+                                deleteProgressNote.mutate({
+                                  patientId: patientId!,
+                                  resourceId: note.id,
+                                  reason,
+                                })
+                              }
+                              isPending={deleteProgressNote.isPending}
+                              compact
+                            />
                           )}
                         </div>
                       </div>
@@ -383,37 +434,45 @@ const AdminPatientDetailPage: React.FC = () => {
                 })}
               </div>
             ) : (
-              <EmptyState
-                title="No progress notes recorded"
-                description="Progress notes are recorded for hospitalised patients."
-              />
+              <EmptyState title="No progress notes recorded" description="Progress notes are recorded for hospitalised patients." />
             )
           )}
 
-          {/* Medications */}
+          {/* ── Medications ── */}
           {activeTab === 'Medications' && (
             medsData?.items?.length ? (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-text-muted">
-                    {['Medication', 'Dosage', 'Frequency', 'Route', 'Admin At', 'Status'].map((h) => (
+                    {['Medication', 'Dosage', 'Frequency', 'Route', 'Admin At', 'Status', ''].map((h) => (
                       <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-base">
                   {medsData.items.map((m) => (
-                    <tr
-                      key={m.id}
-                      className="hover:bg-surface-low cursor-pointer"
-                      onClick={() => navigate(`/admin/patients/${patientId}/medications/${m.id}`)}
-                    >
-                      <td className="py-3 pr-4 font-medium">{m.name}</td>
+                    <tr key={m.id} className="hover:bg-surface-low">
+                      <td className="py-3 pr-4 font-medium cursor-pointer" onClick={() => navigate(`/admin/patients/${patientId}/medications/${m.id}`)}>{m.name}</td>
                       <td className="py-3 pr-4 text-text-secondary">{m.dosage}</td>
                       <td className="py-3 pr-4 text-text-secondary">{m.frequency}</td>
                       <td className="py-3 pr-4 text-text-secondary">{m.route}</td>
                       <td className="py-3 pr-4 text-text-secondary">{m.administeredAt}</td>
                       <td className="py-3 pr-4"><StatusBadge status={m.status} type="medication" /></td>
+                      <td className="py-3 text-right">
+                        <AdminDeleteButton
+                          resourceLabel="Medication"
+                          resourceIdentifier={`${m.name} ${m.dosage}`}
+                          onConfirm={(reason) =>
+                            deleteMedication.mutate({
+                              patientId: patientId!,
+                              resourceId: m.id,
+                              reason,
+                            })
+                          }
+                          isPending={deleteMedication.isPending}
+                          compact
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -423,30 +482,41 @@ const AdminPatientDetailPage: React.FC = () => {
             )
           )}
 
-          {/* Labs */}
+          {/* ── Labs ── */}
           {activeTab === 'Labs' && (
             labOrders.length ? (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-text-muted">
-                    {['Test', 'Ordered', 'Performed', 'Location', 'Status', 'Result'].map((h) => (
+                    {['Test', 'Ordered', 'Performed', 'Location', 'Status', 'Result', ''].map((h) => (
                       <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-base">
                   {labOrders.map((l) => (
-                    <tr
-                      key={l.id}
-                      className="hover:bg-surface-low cursor-pointer"
-                      onClick={() => navigate(`/admin/patients/${patientId}/labs/${l.id}`)}
-                    >
-                      <td className="py-3 pr-4 font-medium">{l.testName}</td>
+                    <tr key={l.id} className="hover:bg-surface-low">
+                      <td className="py-3 pr-4 font-medium cursor-pointer" onClick={() => navigate(`/admin/patients/${patientId}/labs/${l.id}`)}>{l.testName}</td>
                       <td className="py-3 pr-4 text-text-secondary">{formatDate(l.dateOrdered)}</td>
                       <td className="py-3 pr-4 text-text-secondary">{l.datePerformed ? formatDate(l.datePerformed) : '—'}</td>
                       <td className="py-3 pr-4 text-text-secondary">{l.location}</td>
                       <td className="py-3 pr-4"><StatusBadge status={l.status} type="lab" /></td>
                       <td className="py-3 text-text-muted text-xs max-w-[160px] truncate">{l.result || '—'}</td>
+                      <td className="py-3 text-right">
+                        <AdminDeleteButton
+                          resourceLabel="Lab test"
+                          resourceIdentifier={l.testName}
+                          onConfirm={(reason) =>
+                            deleteLab.mutate({
+                              patientId: patientId!,
+                              resourceId: l.id,
+                              reason,
+                            })
+                          }
+                          isPending={deleteLab.isPending}
+                          compact
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -456,31 +526,42 @@ const AdminPatientDetailPage: React.FC = () => {
             )
           )}
 
-          {/* Imaging */}
+          {/* ── Imaging ── */}
           {activeTab === 'Imaging' && (
             imagingOrders.length ? (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-text-muted">
-                    {['Modality', 'Body Region', 'Ordered', 'Performed', 'Priority', 'Status', 'Report'].map((h) => (
+                    {['Modality', 'Body Region', 'Ordered', 'Performed', 'Priority', 'Status', 'Report', ''].map((h) => (
                       <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-base">
                   {imagingOrders.map((img) => (
-                    <tr
-                      key={img.id}
-                      className="hover:bg-surface-low cursor-pointer"
-                      onClick={() => navigate(`/admin/patients/${patientId}/imaging/${img.id}`)}
-                    >
-                      <td className="py-3 pr-4"><Badge variant="primary">{img.modality}</Badge></td>
+                    <tr key={img.id} className="hover:bg-surface-low">
+                      <td className="py-3 pr-4 cursor-pointer" onClick={() => navigate(`/admin/patients/${patientId}/imaging/${img.id}`)}><Badge variant="primary">{img.modality}</Badge></td>
                       <td className="py-3 pr-4 text-text-secondary">{img.bodyRegion || '—'}</td>
                       <td className="py-3 pr-4 text-text-secondary">{img.dateOrdered ? formatDate(img.dateOrdered) : '—'}</td>
                       <td className="py-3 pr-4 text-text-secondary">{img.performedAt ? formatDate(img.performedAt) : '—'}</td>
                       <td className="py-3 pr-4"><StatusBadge status={img.priority} /></td>
                       <td className="py-3 pr-4"><StatusBadge status={img.status} type="lab" /></td>
                       <td className="py-3 text-text-muted text-xs">{img.report ? 'Available' : '—'}</td>
+                      <td className="py-3 text-right">
+                        <AdminDeleteButton
+                          resourceLabel="Imaging order"
+                          resourceIdentifier={`${img.modality} ${img.bodyRegion}`}
+                          onConfirm={(reason) =>
+                            deleteImaging.mutate({
+                              patientId: patientId!,
+                              resourceId: img.id,
+                              reason,
+                            })
+                          }
+                          isPending={deleteImaging.isPending}
+                          compact
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -490,7 +571,7 @@ const AdminPatientDetailPage: React.FC = () => {
             )
           )}
 
-          {/* Referrals */}
+          {/* ── Referrals (no soft delete on backend) ── */}
           {activeTab === 'Referrals' && (
             refsData?.items?.length ? (
               <table className="w-full text-sm">
@@ -522,30 +603,41 @@ const AdminPatientDetailPage: React.FC = () => {
             )
           )}
 
-          {/* Admissions */}
+          {/* ── Admissions ── */}
           {activeTab === 'Admissions' && (
             admsData?.items?.length ? (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-text-muted">
-                    {['Admission Date', 'Bed', 'Ward', 'Physician', 'Status', 'Discharge'].map((h) => (
+                    {['Admission Date', 'Bed', 'Ward', 'Physician', 'Status', 'Discharge', ''].map((h) => (
                       <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-base">
                   {admsData.items.map((a) => (
-                    <tr
-                      key={a.id}
-                      className="hover:bg-surface-low cursor-pointer"
-                      onClick={() => navigate(`/admin/patients/${patientId}/admissions/${a.id}`)}
-                    >
-                      <td className="py-3 pr-4">{formatDate(a.admissionDate)}</td>
+                    <tr key={a.id} className="hover:bg-surface-low">
+                      <td className="py-3 pr-4 cursor-pointer" onClick={() => navigate(`/admin/patients/${patientId}/admissions/${a.id}`)}>{formatDate(a.admissionDate)}</td>
                       <td className="py-3 pr-4 text-text-secondary">{a.bedNumber}</td>
                       <td className="py-3 pr-4 text-text-secondary">{a.ward}</td>
                       <td className="py-3 pr-4 text-text-secondary">{a.admittingPhysician}</td>
                       <td className="py-3 pr-4"><StatusBadge status={a.status} type="admission" /></td>
                       <td className="py-3 text-text-muted text-xs">{a.dischargeDate ? formatDate(a.dischargeDate) : 'Ongoing'}</td>
+                      <td className="py-3 text-right">
+                        <AdminDeleteButton
+                          resourceLabel="Admission"
+                          resourceIdentifier={`${a.ward} · Bed ${a.bedNumber}`}
+                          onConfirm={(reason) =>
+                            deleteAdmission.mutate({
+                              patientId: patientId!,
+                              resourceId: a.id,
+                              reason,
+                            })
+                          }
+                          isPending={deleteAdmission.isPending}
+                          compact
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -570,7 +662,7 @@ const AdminPatientDetailPage: React.FC = () => {
   );
 };
 
-// ── Helpers ──────────────────────────────────────────────────────
+// ── Helpers ──
 const Row: React.FC<{
   icon?: React.ReactNode;
   label: string;

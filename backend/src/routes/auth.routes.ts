@@ -8,6 +8,7 @@ import {
   resendVerificationSchema,
 } from '@schemas/auth.schema.js';
 import * as authController from '@controllers/auth.controller.js';
+import { authMiddleware } from '@/middlewares';
 
 const router = Router();
 
@@ -40,7 +41,7 @@ router.post(
 );
 
 // Protected routes
-router.get('/me', authController.getMe);
-router.post('/logout', authController.logout);
+router.get('/me',authMiddleware, authController.getMe);
+router.post('/logout',authMiddleware, authController.logout);
 
 export default router;

@@ -10,7 +10,16 @@ import { useAuthStore } from '@/store/auth.store';
 import { useLogout } from '@/hooks/useAuth';
 import { ROLE_LABELS } from '@/constants';
 import { APP_NAME } from '@/lib/config';
-import { getSidebarItems, type NavItem } from '@/config/permissions';
+import {
+  getSidebarItems,
+  type NavItem,
+  type SidebarBadges,
+} from '@/config/permissions';
+import {
+  useMedicationQueue,
+} from '@/hooks/useMedicationQueue';
+import { useLabQueue } from '@/hooks/useLabQueue';
+import { useImagingQueue } from '@/hooks/useImagingQueue';
 
 // ── Stethoscope SVG icon (custom medical motif) ─────────────────
 const StethoscopeIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -49,11 +58,24 @@ const HeartbeatAccent: React.FC<{ className?: string }> = ({ className }) => (
 );
 
 // ── Admin nav items ──────────────────────────────────────────────
-const adminNavItems = (pendingStaff = 0, pendingReferrals = 0): NavItem[] => [
+const adminNavItems = (
+  pendingStaff = 0,
+  pendingReferrals = 0,
+): NavItem[] => [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, end: true },
   { label: 'Patients', href: '/admin/patients', icon: Users },
-  { label: 'Staff Management', href: '/admin/staff', icon: UserCheck, badge: pendingStaff || undefined },
-  { label: 'Referrals', href: '/admin/referrals', icon: GitBranch, badge: pendingReferrals || undefined },
+  {
+    label: 'Staff Management',
+    href: '/admin/staff',
+    icon: UserCheck,
+    badge: pendingStaff || undefined,
+  },
+  {
+    label: 'Referrals',
+    href: '/admin/referrals',
+    icon: GitBranch,
+    badge: pendingReferrals || undefined,
+  },
   { label: 'Reports', href: '/admin/reports', icon: BarChart3 },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
@@ -70,7 +92,11 @@ interface LogoutDialogProps {
   isPending: boolean;
 }
 
-const LogoutDialog: React.FC<LogoutDialogProps> = ({ onConfirm, onCancel, isPending }) => (
+const LogoutDialog: React.FC<LogoutDialogProps> = ({
+  onConfirm,
+  onCancel,
+  isPending,
+}) => (
   <div
     className="fixed inset-0 z-[60] flex items-center justify-center bg-on-surface/30 backdrop-blur-sm p-4"
     role="dialog"
@@ -82,7 +108,10 @@ const LogoutDialog: React.FC<LogoutDialogProps> = ({ onConfirm, onCancel, isPend
         <LogOut size={20} />
       </div>
 
-      <h2 id="logout-dialog-title" className="text-base font-semibold text-on-surface mb-1">
+      <h2
+        id="logout-dialog-title"
+        className="text-base font-semibold text-on-surface mb-1"
+      >
         Sign out?
       </h2>
       <p className="text-sm text-text-secondary mb-6">
@@ -116,7 +145,33 @@ const LogoutDialog: React.FC<LogoutDialogProps> = ({ onConfirm, onCancel, isPend
   </div>
 );
 
-export const Sidebar: React.FC<SidebarProps> = ({ pendingStaff = 0, pendingReferrals = 0 }) => {
+/**
+ * useStaffQueueBadges
+ *
+ * Fetches pending counts for the role-specific queues so the
+ * sidebar can render small badges next to Medication Orders /
+ * Lab Requests / Imaging Orders. Only the query relevant to the
+ * current role is enabled.
+ */
+function useStaffQueueBadges(role: string | null | undefined): SidebarBadges {
+  const isPharmacist = role === 'Pharmacist';
+  const isLabTech = role === 'LaboratoryTechnician';
+  const isRadiologist = role === 'Radiologist';
+
+  const { data: meds } = useMedicationQueue({ enabled: isPharmacist });
+  const { data: labs } = useLabQueue({ enabled: isLabTech });
+  const { data: imaging } = useImagingQueue({ enabled: isRadiologist });
+
+  return {
+    medicationPending: isPharmacist ? meds?.items.length : undefined,
+    labPending: isLabTech ? labs?.items.length : undefined,
+    imagingPending: isRadiologist ? imaging?.items.length : undefined,
+  };
+}
+export const Sidebar: React.FC<SidebarProps> = ({
+  pendingStaff = 0,
+  pendingReferrals = 0,
+}) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const { user } = useAuthStore();
@@ -124,10 +179,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingStaff = 0, pendingRefer
 
   const isAdmin = user?.type === 'admin';
 
+  // Fetch queue badges for the current role (no-op for non-queue roles)
+  const badges = useStaffQueueBadges(user?.role);
+
   // Build nav items from permissions module
   const navItems = isAdmin
     ? adminNavItems(pendingStaff, pendingReferrals)
-    : getSidebarItems(user?.role);
+    : getSidebarItems(user?.role, badges);
 
   // Human-readable role label — always use ROLE_LABELS for staff
   const roleDisplay = isAdmin
@@ -148,7 +206,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingStaff = 0, pendingRefer
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-sm flex-shrink-0">
             <Heart size={18} className="text-white animate-heartbeat" />
           </div>
-          <span className="text-sm font-bold text-on-surface leading-tight">{APP_NAME}</span>
+          <span className="text-sm font-bold text-on-surface leading-tight">
+            {APP_NAME}
+          </span>
         </div>
         <div className="flex items-center gap-2 px-1">
           <StethoscopeIcon className="h-4 w-4 flex-shrink-0 text-primary/40" />
@@ -171,13 +231,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingStaff = 0, pendingRefer
                   'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
                   isActive
                     ? 'bg-primary-light text-primary'
-                    : 'text-on-surface-variant hover:bg-surface-low hover:text-on-surface'
+                    : 'text-on-surface-variant hover:bg-surface-low hover:text-on-surface',
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  <span className={cn('flex-shrink-0 transition-colors', isActive ? 'text-primary' : 'text-text-muted group-hover:text-on-surface')}>
+                  <span
+                    className={cn(
+                      'flex-shrink-0 transition-colors',
+                      isActive
+                        ? 'text-primary'
+                        : 'text-text-muted group-hover:text-on-surface',
+                    )}
+                  >
                     <Icon size={18} />
                   </span>
                   <span className="flex-1">{item.label}</span>
@@ -203,7 +270,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingStaff = 0, pendingRefer
             {getInitials(user?.name || 'U')}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-on-surface truncate">{user?.name}</p>
+            <p className="text-sm font-medium text-on-surface truncate">
+              {user?.name}
+            </p>
             {/* Always display human-readable role name, never raw role code */}
             <p className="text-xs text-text-muted truncate">{roleDisplay}</p>
           </div>
@@ -248,7 +317,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingStaff = 0, pendingRefer
       <aside
         className={cn(
           'lg:hidden fixed top-0 left-0 z-50 h-full w-64 bg-surface-lowest border-r border-border-base shadow-xl transition-transform duration-300',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
         <button

@@ -1,7 +1,6 @@
 // ─────────────────────────────────────────────────────────────
-// Enum-like unions — mirror the backend model
+// Enums — mirror backend
 // ─────────────────────────────────────────────────────────────
-
 export type ReferralType = 'Incoming' | 'Outgoing';
 
 export type ReferralStatus =
@@ -20,7 +19,7 @@ export type ReferralActionTaken =
   | 'PatientTransferred'
   | null;
 
-export type DiseaseStage = 'Early' | 'Advanced' | 'EndStage';
+export type ReferralDiseaseStage = 'Early' | 'Advanced' | 'EndStage';
 
 export type ReferralReason =
   | 'PainManagement'
@@ -45,9 +44,8 @@ export interface ReferralSymptoms {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Staff / patient-scoped referral (GET /patients/:id/referrals/:id)
+// Referral document
 // ─────────────────────────────────────────────────────────────
-
 export interface Referral {
   id: string;
   patientId: string;
@@ -56,7 +54,7 @@ export interface Referral {
   referralDate: string;
 
   primaryDiagnosis: string;
-  diseaseStage: DiseaseStage;
+  diseaseStage: ReferralDiseaseStage;
   ppsScore: number;
   kpsScore: number;
   currentSymptoms: ReferralSymptoms;
@@ -93,17 +91,11 @@ export interface Referral {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Admin pending DTO — shape returned by
-// GET /admin/referrals/pending
-//
-// The backend populates `patientId` from the Referral collection
-// so the response contains a `patientName` and `patientDisplayId`
-// on each row. Do NOT try to render `patientId` as a string here.
+// Admin pending DTO — GET /admin/referrals/pending
 // ─────────────────────────────────────────────────────────────
-
 export interface AdminPendingReferral {
-  id: string;
-  patientId: string;
+  id: number;
+  patientId: number;
   patientName: string;
   patientDisplayId?: string;
 
@@ -111,7 +103,7 @@ export interface AdminPendingReferral {
   referralDate: string;
 
   primaryDiagnosis: string;
-  diseaseStage: DiseaseStage;
+  diseaseStage: ReferralDiseaseStage;
   ppsScore: number;
   kpsScore: number;
   currentSymptoms: ReferralSymptoms;
@@ -129,14 +121,13 @@ export interface AdminPendingReferral {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Request payloads
+// Requests
 // ─────────────────────────────────────────────────────────────
-
 export interface CreateReferralRequest {
   referralType: ReferralType;
   referralDate: string;
   primaryDiagnosis: string;
-  diseaseStage: DiseaseStage;
+  diseaseStage: ReferralDiseaseStage;
   ppsScore: number;
   kpsScore: number;
   currentSymptoms: ReferralSymptoms;
@@ -148,10 +139,11 @@ export interface CreateReferralRequest {
   contactNumber: string;
 }
 
-// ─────────────────────────────────────────────────────────────
-// List / pagination envelope
-// ─────────────────────────────────────────────────────────────
+export type UpdateReferralRequest = Partial<CreateReferralRequest>;
 
+// ─────────────────────────────────────────────────────────────
+// List envelope
+// ─────────────────────────────────────────────────────────────
 export interface ReferralListResponse {
   items: Referral[];
   page: number;

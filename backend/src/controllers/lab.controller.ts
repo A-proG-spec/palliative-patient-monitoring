@@ -97,6 +97,35 @@ export const restoreLabTest = asyncHandler(async (req: Request, res: Response) =
   return SuccessResponse(200, 'Lab test restored', result);
 });
 
+export const getPendingRequests = asyncHandler(
+  async (req: Request, res: Response) => {
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+    const result = await labService.getPendingLabRequests(page, limit);
+    return SuccessResponse(200, 'OK', result);
+  },
+);
+
+export const getRequestDetail = asyncHandler(
+  async (req: Request, res: Response) => {
+    const labId = req.params.id as string;
+    const result = await labService.getLabRequestById(labId);
+    return SuccessResponse(200, 'OK', result);
+  },
+);
+
+export const enterResult = asyncHandler(
+  async (req: Request, res: Response) => {
+    const labId = req.params.id as string;
+    const result = await labService.enterLabResultFromQueue(
+      labId,
+      req.body,
+      req.user.id,
+    );
+    return SuccessResponse(200, 'Lab result entered', result);
+  },
+);
+
 export default {
   orderLabTest,
   getLabTests,
@@ -105,4 +134,7 @@ export default {
   cancelLabTest,
   deleteLabTest,
   restoreLabTest,
+  getPendingRequests,
+  getRequestDetail,
+  enterResult,
 };

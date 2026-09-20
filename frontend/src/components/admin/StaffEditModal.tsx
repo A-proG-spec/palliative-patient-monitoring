@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useUpdateStaff } from '@/hooks/useAdmin';
-import type { StaffDetail, StaffRole } from '@/types/admin.types';
+import type { StaffDetail } from '@/types/admin.types';
 
 // ─────────────────────────────────────────────────────────────
 // Schema
@@ -28,7 +28,9 @@ const editStaffSchema = z
       .max(20, 'Phone number is too long')
       .optional()
       .or(z.literal('')),
-    role: z.enum(['TeamLeader', 'Physician', 'Nurse']).optional(),
+    role: z
+      .enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'])
+      .optional(),
   })
   .refine(
     (d) =>
@@ -58,15 +60,15 @@ const StaffEditModal: React.FC<StaffEditModalProps> = ({ staff, onClose }) => {
     defaultValues: {
       name: staff.name,
       phone: staff.phone,
-      role: (staff.role ?? undefined) as StaffRole | undefined,
+      role: staff.role ?? undefined,
     },
   });
 
   const currentRole = watch('role');
 
   const onSubmit = (data: EditStaffFormData) => {
-    // Build a payload with only the changed fields.
-    const payload: { name?: string; phone?: string; role?: StaffRole } = {};
+    const payload: { name?: string; phone?: string; role?: any } = {};
+
     if (data.name && data.name.trim() && data.name.trim() !== staff.name) {
       payload.name = data.name.trim();
     }
@@ -78,7 +80,6 @@ const StaffEditModal: React.FC<StaffEditModalProps> = ({ staff, onClose }) => {
     }
 
     if (Object.keys(payload).length === 0) {
-      // Nothing changed — just close.
       onClose();
       return;
     }
@@ -90,13 +91,8 @@ const StaffEditModal: React.FC<StaffEditModalProps> = ({ staff, onClose }) => {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/30 backdrop-blur-sm p-4"
-      role="dialog"
-      aria-modal="true"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/30 backdrop-blur-sm p-4">
       <div className="w-full max-w-md bg-surface-lowest rounded-2xl border border-border-base shadow-xl">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border-base">
           <div>
             <h2 className="text-base font-semibold text-on-surface">
@@ -114,7 +110,6 @@ const StaffEditModal: React.FC<StaffEditModalProps> = ({ staff, onClose }) => {
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-5 space-y-4">
           {errors.root && (
             <div className="rounded-lg bg-error-bg border border-error/20 px-4 py-3 text-sm text-error">
@@ -141,9 +136,11 @@ const StaffEditModal: React.FC<StaffEditModalProps> = ({ staff, onClose }) => {
           <Select
             label="Role"
             options={[
-              { value: 'TeamLeader', label: 'Team Leader' },
               { value: 'Physician', label: 'Physician' },
               { value: 'Nurse', label: 'Nurse' },
+              { value: 'Pharmacist', label: 'Pharmacist' },
+              { value: 'Radiologist', label: 'Radiologist' },
+              { value: 'LaboratoryTechnician', label: 'Laboratory Technician' },
             ]}
             placeholder="Select role…"
             value={currentRole ?? ''}
@@ -151,8 +148,8 @@ const StaffEditModal: React.FC<StaffEditModalProps> = ({ staff, onClose }) => {
           />
 
           <div className="rounded-lg bg-surface-low border border-border-base px-3 py-2 text-xs text-text-muted">
-            Email cannot be changed here — it is tied to the account and
-            would require re-verification.
+            Email cannot be changed here — it is tied to the account and would
+            require re-verification.
           </div>
 
           <div className="flex gap-3 pt-2">
@@ -165,11 +162,7 @@ const StaffEditModal: React.FC<StaffEditModalProps> = ({ staff, onClose }) => {
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              className="flex-1"
-              loading={updateMutation.isPending}
-            >
+            <Button type="submit" className="flex-1" loading={updateMutation.isPending}>
               Save Changes
             </Button>
           </div>

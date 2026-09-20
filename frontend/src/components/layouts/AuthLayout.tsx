@@ -8,20 +8,29 @@ const PulseBackground: React.FC = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
     <svg
       viewBox="0 0 1440 320"
-      className="absolute bottom-0 w-full opacity-8 text-primary"
+      className="absolute bottom-0 w-full opacity-10 text-primary"
       fill="currentColor"
       preserveAspectRatio="none"
     >
       <path d="M0,160 C360,320 1080,0 1440,160 L1440,320 L0,320 Z" />
     </svg>
     {/* Decorative circles */}
-    <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-primary/5" />
-    <div className="absolute -bottom-32 -left-32 h-80 w-80 rounded-full bg-primary/5" />
+    <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-primary/10" />
+    <div className="absolute -bottom-32 -left-32 h-80 w-80 rounded-full bg-primary/10" />
   </div>
 );
 
 const AuthLayout: React.FC = () => (
-  <div className="relative min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary-light via-background to-surface-low px-4 py-12">
+  <div
+    className="relative min-h-screen flex flex-col items-center justify-center px-4 py-12"
+    style={{
+      // Theme-aware gradient using the same CSS custom properties
+      // that the rest of the app uses. Flips automatically with
+      // the `.dark` / `.system` classes on <html>.
+      background:
+        'linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-background) 45%, var(--color-surface-low) 100%)',
+    }}
+  >
     <PulseBackground />
 
     {/* Logo */}

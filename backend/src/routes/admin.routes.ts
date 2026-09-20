@@ -3,6 +3,7 @@ import { authMiddleware } from '@middlewares/auth.middleware.js';
 import { roleMiddleware } from '@middlewares/role.middleware.js';
 import { validate } from '@middlewares/validate.middleware.js';
 import { rateLimiter } from '@middlewares/rateLimiter.middleware.js';
+
 import {
   approveStaffSchema,
   closeCaseSchema,
@@ -12,10 +13,16 @@ import {
   getStaffListQuerySchema,
   updateStaffSchema,
   deleteStaffSchema,
+  getStaffPerformanceListQuerySchema,
+  getStaffPerformanceParamsSchema,
+  getStaffActivityQuerySchema,
 } from '@schemas/admin.schema.js';
+
 import { updateVisitSchema } from '@schemas/visit.schema.js';
+
 import * as adminController from '@controllers/admin.controller.js';
 import * as contributionController from '@controllers/staff-contribution.controller.js';
+
 import {
   getStaffContributionParamsSchema,
   getStaffContributionDetailParamsSchema,
@@ -29,11 +36,37 @@ router.use(authMiddleware);
 router.use(roleMiddleware(['admin']));
 router.use(rateLimiter);
 
-// Staff Management
+// ═════════════════════════════════════════════════════════════
+// STAFF MANAGEMENT
+// ═════════════════════════════════════════════════════════════
 
+// Pending approvals
 router.get('/staff/pending', adminController.getPendingStaff);
 
-//  Active staff list + CRUD ──
+// ⚠️ ORDER MATTERS: literal paths BEFORE :param paths
+//    `/staff/performance` must come before `/staff/:staffId`,
+//    otherwise `:staffId` captures the literal "performance".
+
+// ── Performance (must be above /staff/:staffId) ──
+router.get(
+  '/staff/performance',
+  validate(getStaffPerformanceListQuerySchema),
+  adminController.getStaffPerformanceList,
+);
+router.get(
+  '/staff/performance/:staffId',
+  validate(getStaffPerformanceParamsSchema),
+  adminController.getStaffPerformanceDetail,
+);
+router.get(
+  '/staff/performance/:staffId/activity',
+  validate(
+    getStaffPerformanceParamsSchema.merge(getStaffActivityQuerySchema),
+  ),
+  adminController.getStaffActivity,
+);
+
+// ── Active staff list + CRUD ──
 router.get(
   '/staff',
   validate(getStaffListQuerySchema),
@@ -52,7 +85,7 @@ router.delete(
 );
 router.post('/staff/:staffId/restore', adminController.restoreStaff);
 
-// ── Existing approve / reject ──
+// ── Approve / reject ──
 router.put(
   '/staff/:staffId/approve',
   validate(approveStaffSchema),
@@ -60,8 +93,9 @@ router.put(
 );
 router.put('/staff/:staffId/reject', adminController.rejectStaff);
 
-
-// Dashboard
+// ═════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═════════════════════════════════════════════════════════════
 
 router.get('/dashboard/stats', adminController.getDashboardStats);
 router.get(
@@ -74,8 +108,9 @@ router.put(
   adminController.markNotificationRead,
 );
 
-
-// Patient Management
+// ═════════════════════════════════════════════════════════════
+// PATIENT MANAGEMENT
+// ═════════════════════════════════════════════════════════════
 
 router.get(
   '/patients',
@@ -89,15 +124,17 @@ router.put(
   adminController.closeCase,
 );
 
-
-// Referral Management
+// ═════════════════════════════════════════════════════════════
+// REFERRAL MANAGEMENT
+// ═════════════════════════════════════════════════════════════
 
 router.get('/referrals/pending', adminController.getPendingReferrals);
 router.put('/referrals/:referralId/approve', adminController.approveReferral);
 router.put('/referrals/:referralId/decline', adminController.declineReferral);
 
-
-// Reports
+// ═════════════════════════════════════════════════════════════
+// REPORTS
+// ═════════════════════════════════════════════════════════════
 
 router.get(
   '/reports',
@@ -105,8 +142,9 @@ router.get(
   adminController.getReports,
 );
 
-
-// Visit Edit / Delete / Restore
+// ═════════════════════════════════════════════════════════════
+// VISIT EDIT / DELETE / RESTORE
+// ═════════════════════════════════════════════════════════════
 
 router.put(
   '/visits/:visitId',
@@ -115,6 +153,10 @@ router.put(
 );
 router.delete('/visits/:visitId', adminController.deleteVisit);
 router.post('/visits/:visitId/restore', adminController.restoreVisit);
+
+// ═════════════════════════════════════════════════════════════
+// STAFF CONTRIBUTIONS (existing feature)
+// ═════════════════════════════════════════════════════════════
 
 router.get(
   '/staff/:staffId/contributions/summary',

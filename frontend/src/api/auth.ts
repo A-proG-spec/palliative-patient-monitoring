@@ -1,12 +1,19 @@
 import apiClient from './client';
 import type {
-  LoginRequest, LoginResponse,
-  RegisterRequest, RegisterResponse,
-  User, StaffProfile,
-  UpdateStaffProfileRequest, UpdateStaffProfileResponse,
+  LoginRequest,
+  LoginResponse,
+  RegisterRequest,
+  RegisterResponse,
+  User,
   VerifyEmailResponse,
-  ResendVerificationRequest, ResendVerificationResponse,
+  ResendVerificationRequest,
+  ResendVerificationResponse,
 } from '@/types/auth.types';
+import type {
+  StaffProfile,
+  UpdateProfileRequest,
+  UpdateProfileResponse,
+} from '@/types/profile.types';
 
 /**
  * Auth API — no mock branches.
@@ -15,7 +22,9 @@ import type {
  */
 export const authApi = {
   register: (data: RegisterRequest): Promise<RegisterResponse> => {
-    return apiClient.post<RegisterResponse>('/auth/register', data).then((r) => r.data);
+    return apiClient
+      .post<RegisterResponse>('/auth/register', data)
+      .then((r) => r.data);
   },
 
   /**
@@ -37,7 +46,9 @@ export const authApi = {
   },
 
   login: (data: LoginRequest): Promise<LoginResponse> => {
-    return apiClient.post<LoginResponse>('/auth/login', data).then((r) => r.data);
+    return apiClient
+      .post<LoginResponse>('/auth/login', data)
+      .then((r) => r.data);
   },
 
   getCurrentUser: (): Promise<User> => {
@@ -56,8 +67,10 @@ export const authApi = {
   },
 
   updateProfile: (
-    data: UpdateStaffProfileRequest,
-  ): Promise<UpdateStaffProfileResponse> => {
-    return apiClient.put<UpdateStaffProfileResponse>('/profile', data).then((r) => r.data);
+    data: UpdateProfileRequest,
+  ): Promise<UpdateProfileResponse> => {
+    return apiClient
+      .put<UpdateProfileResponse>('/profile', data)
+      .then((r) => r.data);
   },
 };

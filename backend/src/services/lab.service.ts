@@ -456,6 +456,142 @@ export const restoreLabTest = async (
 
   return { id: labId, restored: true };
 };
+// ─────────────────────────────────────────────────────────────
+// Lab technician queue — all `Ordered` lab tests across patients
+// ─────────────────────────────────────────────────────────────
+export const getPendingLabRequests = async (
+  page: number = 1,
+  limit: number = 100,
+) => {
+  const where = { status: 'Ordered' as const, deletedAt: null };
+  const skip = (page - 1) * limit;
+
+  const [items, total] = await Promise.all([
+    prisma.laboratoryTest.findMany({
+      where,
+      orderBy: [{ priority: 'desc' }, { dateOrdered: 'asc' }],
+      skip,
+      take: limit,
+      include: {
+        patient: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            hospitalPatientId: true,
+          },
+        },
+        orderedByStaff: { select: { id: true, name: true, role: true } },
+      },
+    }),
+    prisma.laboratoryTest.count({ where }),
+  ]);
+
+  return {
+    items: items.map((l) => ({
+      id: l.id,
+      patientId: l.patient.id,
+      patientName: `${l.patient.firstName} ${l.patient.lastName}`,
+      patientDisplayId: l.patient.hospitalPatientId,
+
+      testName: l.testName,
+      category: l.category,
+      specimenType: l.specimenType,
+      specimenSite: l.specimenSite,
+      clinicalHistory: l.clinicalHistory,
+
+      requestingClinician: l.orderedByStaff.name,
+      requestedById: l.orderedByStaff.id,
+
+      priority: l.priority,
+      dateRequested: l.dateOrdered,
+      status: l.status,
+    })),
+    page,
+    limit,
+    total,
+  };
+};
+
+export const getLabRequestById = async (labId: string) => {
+  const lid = toId(labId, 'lab id');
+
+  const lab = await prisma.laboratoryTest.findUnique({
+    where: { id: lid },
+    include: {
+      patient: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          age: true,
+          sex: true,
+          hospitalPatientId: true,
+        },
+      },
+      orderedByStaff: { select: { id: true, name: true, role: true } },
+    },
+  });
+
+  if (!lab) throw new ApiError(404, 'Lab request not found');
+
+  return {
+    id: lab.id,
+    patientId: lab.patient.id,
+    patientName: `${lab.patient.firstName} ${lab.patient.lastName}`,
+    patientDisplayId: lab.patient.hospitalPatientId,
+    age: lab.patient.age,
+    sex: lab.patient.sex,
+
+    testName: lab.testName,
+    category: lab.category,
+    specimenType: lab.specimenType,
+    specimenSite: lab.specimenSite,
+    clinicalHistory: lab.clinicalHistory,
+
+    requestingClinician: lab.orderedByStaff.name,
+    dateRequested: lab.dateOrdered,
+
+    priority: lab.priority,
+    status: lab.status,
+    result: lab.result,
+    datePerformed: lab.datePerformed,
+    performedBy: lab.performedBy,
+  };
+};
+
+export const enterLabResultFromQueue = async (
+  labId: string,
+  data: { result: string; datePerformed?: string; performedBy?: string },
+  staffId: string | number,
+) => {
+  const lid = toId(labId, 'lab id');
+  const sid = toId(staffId, 'staff id');
+
+  const lab = await prisma.laboratoryTest.findUnique({ where: { id: lid } });
+  if (!lab) throw new ApiError(404, 'Lab request not found');
+  if (lab.status === 'Cancelled') {
+    throw new ApiError(400, 'Cannot enter a result for a cancelled lab test');
+  }
+
+  const updated = await prisma.laboratoryTest.update({
+    where: { id: lid },
+    data: {
+      status: 'Completed',
+      result: data.result,
+      datePerformed: data.datePerformed ? new Date(data.datePerformed) : new Date(),
+      performedBy: data.performedBy ?? null,
+      updatedBy: sid,
+    },
+  });
+
+  return {
+    id: updated.id,
+    status: updated.status,
+    result: updated.result,
+    datePerformed: updated.datePerformed,
+  };
+};
 
 export default {
   orderLabTest,
@@ -465,4 +601,7 @@ export default {
   cancelLabTest,
   deleteLabTest,
   restoreLabTest,
+  getPendingLabRequests,
+  getLabRequestById,
+  enterLabResultFromQueue
 };

@@ -1,8 +1,12 @@
+// ─────────────────────────────────────────────────────────────
+// Staff dashboard
+// ─────────────────────────────────────────────────────────────
 export interface StaffDashboardStats {
   todayVisits: number;
   totalPatients: number;
   activePatients: number;
   pendingTasks: number;
+
   recentVisits: Array<{
     id: string;
     patientName: string;
@@ -10,6 +14,7 @@ export interface StaffDashboardStats {
     visitDate: string;
     outcome: string;
   }>;
+
   assignedPatients: Array<{
     id: string;
     patientDisplayId: string;
@@ -22,6 +27,7 @@ export interface StaffDashboardStats {
     primaryDiagnosis: string;
     lastVisitDate?: string;
   }>;
+
   upcomingVisits: Array<{
     id: string;
     patientId: string;
@@ -29,6 +35,7 @@ export interface StaffDashboardStats {
     scheduledDate: string;
     visitType: string;
   }>;
+
   alerts: Array<{
     id: string;
     type: 'RedFlag' | 'ReferralPending' | 'MedicationDue' | 'VisitOverdue';
@@ -39,12 +46,21 @@ export interface StaffDashboardStats {
   }>;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Staff member (admin view)
+// ─────────────────────────────────────────────────────────────
 export interface StaffMember {
   id: string;
   name: string;
   email: string;
   phone: string;
-  role: 'TeamLeader' | 'Physician' | 'Nurse' | 'Pharmacist' | 'LabTechnician' | 'Radiologist';
+  role:
+    | 'TeamLeader'
+    | 'Physician'
+    | 'Nurse'
+    | 'Pharmacist'
+    | 'Radiologist'
+    | 'LaboratoryTechnician';
   status: 'Pending' | 'Active' | 'Rejected';
   isEmailVerified: boolean;
   assignedPatientsCount: number;

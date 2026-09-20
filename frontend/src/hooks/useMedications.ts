@@ -6,9 +6,11 @@ import type {
   MedicationStatus,
 } from '@/types/medication.types';
 import { useToast } from '@/context/ToastContext';
+import api from '@/api/client';
+import { QUERY_KEYS } from '@/constants';
 
 // ─────────────────────────────────────────────────────────────
-// Queries
+// Queries — patient-scoped
 // ─────────────────────────────────────────────────────────────
 
 export function usePatientMedications(
@@ -38,7 +40,42 @@ export function useMedicationDetail(
 }
 
 // ─────────────────────────────────────────────────────────────
-// Mutations
+// Pharmacist queue — top-level pending orders
+//
+// Used by the pharmacist's work queue page AND the sidebar badge.
+// Pass `{ enabled: false }` to disable when the current user isn't
+// a pharmacist.
+// ─────────────────────────────────────────────────────────────
+
+export interface PendingMedicationOrder {
+  id: number;
+  patientId: number;
+  patientName: string;
+  medicationName: string;
+  dose: string;
+  frequency: string;
+  prescribingClinician: string;
+  dateOrdered: string;
+  status: 'Ordered' | 'Given';
+}
+
+export function useMedicationOrders(opts?: { enabled?: boolean }) {
+  const enabled = opts?.enabled !== false;
+
+  return useQuery({
+    queryKey: QUERY_KEYS.MEDICATION_ORDERS,
+    queryFn: async (): Promise<PendingMedicationOrder[]> => {
+      const response = await api.get('/medications/pending-orders');
+      return response.data.medications ?? [];
+    },
+    enabled,
+    refetchInterval: enabled ? 30000 : false,
+    staleTime: 30 * 1000,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Mutations — patient-scoped
 // ─────────────────────────────────────────────────────────────
 
 export function useOrderMedication(patientId: string) {
@@ -54,6 +91,9 @@ export function useOrderMedication(patientId: string) {
       });
       queryClient.invalidateQueries({
         queryKey: ['patients', patientId, 'summary'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.MEDICATION_ORDERS,
       });
       toast.success('Medication ordered successfully.');
     },
@@ -84,6 +124,9 @@ export function useUpdateMedicationStatus(patientId: string) {
       });
       queryClient.invalidateQueries({
         queryKey: ['patients', patientId, 'summary'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.MEDICATION_ORDERS,
       });
       toast.success('Medication status updated.');
     },

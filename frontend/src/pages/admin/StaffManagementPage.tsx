@@ -1,11 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   UserCheck,
   UserX,
   Trash2,
   RotateCcw,
-  UserPlus,
   Search,
   Pencil,
   TrendingUp,
@@ -18,7 +17,6 @@ import {
   useDeleteStaff,
   useRestoreStaff,
 } from '@/hooks/useAdmin';
-import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -40,13 +38,10 @@ import type {
   ApprovableStaffRole,
 } from '@/types/admin.types';
 
-// ─────────────────────────────────────────────────────────────
-// Tabs
-// ─────────────────────────────────────────────────────────────
 type Tab = 'active' | 'pending' | 'performance';
 
 // ─────────────────────────────────────────────────────────────
-// Delete confirmation modal
+// Delete modal
 // ─────────────────────────────────────────────────────────────
 interface DeleteModalProps {
   staff: StaffListItem | null;
@@ -62,7 +57,6 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({
   isPending,
 }) => {
   const [reason, setReason] = useState('');
-
   if (!staff) return null;
 
   return (
@@ -75,9 +69,8 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({
           Delete Staff Member
         </h2>
         <p className="text-sm text-text-secondary mb-4">
-          Are you sure you want to delete{' '}
-          <strong>{staff.name}</strong>? The account will be
-          hidden from the list but their clinical records remain intact.
+          Are you sure you want to delete <strong>{staff.name}</strong>? The account
+          will be hidden from the list but their clinical records remain intact.
           You can restore them later from the Deleted filter.
         </p>
 
@@ -100,7 +93,7 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="e.g. Left the organization, reason recorded for audit trail…"
+          placeholder="Reason recorded for audit trail…"
           rows={3}
           maxLength={500}
           className="block w-full rounded-lg border border-border-base bg-surface-lowest px-3 py-2 text-sm text-on-surface placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary mb-5 resize-y"
@@ -139,11 +132,9 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({
 // ─────────────────────────────────────────────────────────────
 const StaffManagementPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-
   const [tab, setTab] = useState<Tab>('active');
 
-  // ── Pending staff ──
+  // ── Pending ──
   const {
     data: pendingStaff,
     isLoading: pendingLoading,
@@ -152,9 +143,9 @@ const StaffManagementPage: React.FC = () => {
   } = usePendingStaff();
   const approveStaffMutation = useApproveStaff();
   const rejectStaffMutation = useRejectStaff();
-  const [roleSelections, setRoleSelections] = useState<Record<string, string>>({});
+  const [roleSelections, setRoleSelections] = useState<Record<number, string>>({});
 
-  // ── Active staff ──
+  // ── Active ──
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<StaffRole | ''>('');
   const [statusFilter, setStatusFilter] = useState<StaffListFilterStatus>('Active');
@@ -189,15 +180,13 @@ const StaffManagementPage: React.FC = () => {
     );
   };
 
-  const handleRestore = (staffId: string) => {
+  const handleRestore = (staffId: number) => {
     restoreMutation.mutate(staffId);
   };
 
-  // ── Derived: counts for tab labels ──
   const pendingCount = pendingStaff?.length ?? 0;
   const activeCount = staffListData?.total ?? 0;
 
-  // ── Role badge variant ──
   const getRoleBadgeVariant = (role: string | null) => {
     switch (role) {
       case 'TeamLeader':
@@ -211,21 +200,16 @@ const StaffManagementPage: React.FC = () => {
     }
   };
 
-  // ── Reset page when filters change ──
-  const handleFilterChange = (
-    setter: (v: any) => void,
-    value: any,
-  ) => {
+  const handleFilterChange = (setter: (v: any) => void, value: any) => {
     setter(value);
     setPage(1);
   };
 
-  // ── Tab label component ──
-  const TabButton: React.FC<{
-    id: Tab;
-    label: string;
-    count: number;
-  }> = ({ id, label, count }) => (
+  const TabButton: React.FC<{ id: Tab; label: string; count: number }> = ({
+    id,
+    label,
+    count,
+  }) => (
     <button
       type="button"
       onClick={() => setTab(id)}
@@ -252,17 +236,13 @@ const StaffManagementPage: React.FC = () => {
     </button>
   );
 
-  // ─────────────────────────────────────────────────────────
-  // Loading / error at the page level — only block on the
-  // tab that's actually shown.
-  // ─────────────────────────────────────────────────────────
   if (tab === 'pending' && pendingLoading) return <PageLoader />;
   if (tab === 'pending' && pendingError)
     return <ErrorState onRetry={refetchPending} />;
 
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <BackButton to="/admin" label="Dashboard" />
@@ -278,7 +258,7 @@ const StaffManagementPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Tabs ── */}
+      {/* Tabs */}
       <div className="flex border-b border-border-base">
         <TabButton id="active" label="Active Staff" count={activeCount} />
         <TabButton id="pending" label="Pending Approvals" count={pendingCount} />
@@ -298,7 +278,7 @@ const StaffManagementPage: React.FC = () => {
       </div>
 
       {/* ══════════════════════════════════════════════════════ */}
-      {/* Active Staff tab                                      */}
+      {/* Active staff tab                                     */}
       {/* ══════════════════════════════════════════════════════ */}
       {tab === 'active' && (
         <Card padding="none">
@@ -317,16 +297,18 @@ const StaffManagementPage: React.FC = () => {
                 { value: 'TeamLeader', label: 'Team Leader' },
                 { value: 'Physician', label: 'Physician' },
                 { value: 'Nurse', label: 'Nurse' },
+                { value: 'Pharmacist', label: 'Pharmacist' },
+                { value: 'LaboratoryTechnician', label: 'Laboratory Technician' },
+                { value: 'Radiologist', label: 'Radiologist' },
               ]}
               value={roleFilter}
               onChange={(e) =>
                 handleFilterChange(setRoleFilter, e.target.value as StaffRole | '')
               }
-              className="w-40"
+              className="w-48"
             />
             <Select
               options={[
-                
                 { value: 'Active', label: 'Active' },
                 { value: 'All', label: 'All statuses' },
                 { value: 'Pending', label: 'Pending' },
@@ -369,22 +351,16 @@ const StaffManagementPage: React.FC = () => {
               <table className="w-full text-sm">
                 <thead className="bg-surface-low border-b border-border-base">
                   <tr>
-                    {[
-                      'Name',
-                      'Email',
-                      'Phone',
-                      'Role',
-                      'Status',
-                      'Joined',
-                      'Actions',
-                    ].map((h) => (
-                      <th
-                        key={h}
-                        className="px-5 py-3 text-left text-xs font-semibold text-on-surface-variant whitespace-nowrap"
-                      >
-                        {h}
-                      </th>
-                    ))}
+                    {['ID', 'Name', 'Email', 'Phone', 'Role', 'Status', 'Joined', 'Actions'].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          className="px-5 py-3 text-left text-xs font-semibold text-on-surface-variant whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ),
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-base">
@@ -400,22 +376,14 @@ const StaffManagementPage: React.FC = () => {
                             : 'hover:bg-surface-low/50')
                         }
                       >
+                        <td className="px-5 py-3.5 font-mono text-xs text-text-muted">
+                          #{staff.id}
+                        </td>
                         <td className="px-5 py-3.5">
-                          <div>
-                            <p className="font-medium text-on-surface">
-                              {staff.name}
-                            </p>
-                            <p className="text-xs text-text-muted font-mono">
-                              {staff.id.slice(-8)}
-                            </p>
-                          </div>
+                          <p className="font-medium text-on-surface">{staff.name}</p>
                         </td>
-                        <td className="px-5 py-3.5 text-text-secondary">
-                          {staff.email}
-                        </td>
-                        <td className="px-5 py-3.5 text-text-secondary">
-                          {staff.phone}
-                        </td>
+                        <td className="px-5 py-3.5 text-text-secondary">{staff.email}</td>
+                        <td className="px-5 py-3.5 text-text-secondary">{staff.phone}</td>
                         <td className="px-5 py-3.5">
                           {staff.role ? (
                             <Badge variant={getRoleBadgeVariant(staff.role)}>
@@ -483,7 +451,6 @@ const StaffManagementPage: React.FC = () => {
             </div>
           )}
 
-          {/* Pagination */}
           {staffListData && staffListData.total > limit && (
             <div className="px-5 py-4 border-t border-border-base">
               <Pagination
@@ -503,7 +470,7 @@ const StaffManagementPage: React.FC = () => {
       {tab === 'performance' && <StaffPerformanceTab />}
 
       {/* ══════════════════════════════════════════════════════ */}
-      {/* Pending Approvals tab                                 */}
+      {/* Pending approvals tab                                 */}
       {/* ══════════════════════════════════════════════════════ */}
       {tab === 'pending' && (
         <Card padding="none">
@@ -522,21 +489,16 @@ const StaffManagementPage: React.FC = () => {
               <table className="w-full text-sm">
                 <thead className="bg-surface-low border-b border-border-base">
                   <tr>
-                    {[
-                      'Name',
-                      'Email',
-                      'Phone',
-                      'Registered',
-                      'Assign Role',
-                      'Actions',
-                    ].map((h) => (
-                      <th
-                        key={h}
-                        className="px-5 py-3 text-left text-xs font-semibold text-on-surface-variant"
-                      >
-                        {h}
-                      </th>
-                    ))}
+                    {['Name', 'Email', 'Phone', 'Registered', 'Assign Role', 'Actions'].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          className="px-5 py-3 text-left text-xs font-semibold text-on-surface-variant"
+                        >
+                          {h}
+                        </th>
+                      ),
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-base">
@@ -547,9 +509,7 @@ const StaffManagementPage: React.FC = () => {
                     >
                       <td className="px-5 py-4">
                         <div>
-                          <p className="font-medium text-on-surface">
-                            {staff.name}
-                          </p>
+                          <p className="font-medium text-on-surface">{staff.name}</p>
                           <p className="text-xs text-text-muted">
                             {staff.isEmailVerified
                               ? 'Email verified'
@@ -557,24 +517,19 @@ const StaffManagementPage: React.FC = () => {
                           </p>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-text-secondary">
-                        {staff.email}
-                      </td>
-                      <td className="px-5 py-4 text-text-secondary">
-                        {staff.phone}
-                      </td>
+                      <td className="px-5 py-4 text-text-secondary">{staff.email}</td>
+                      <td className="px-5 py-4 text-text-secondary">{staff.phone}</td>
                       <td className="px-5 py-4 text-text-muted text-xs">
                         {formatRelativeTime(staff.createdAt)}
                       </td>
                       <td className="px-5 py-4">
                         <Select
                           options={[
-                            { value: 'TeamLeader',    label: 'Team Leader' },
-                            { value: 'Physician',     label: 'Physician' },
-                            { value: 'Nurse',         label: 'Nurse' },
-                            { value: 'Pharmacist',    label: 'Pharmacist' },
-                            { value: 'LabTechnician', label: 'Lab Technician' },
-                            { value: 'Radiologist',   label: 'Radiologist' },
+                            { value: 'Physician', label: 'Physician' },
+                            { value: 'Nurse', label: 'Nurse' },
+                            { value: 'Pharmacist', label: 'Pharmacist' },
+                            { value: 'LaboratoryTechnician', label: 'Lab Technician' },
+                            { value: 'Radiologist', label: 'Radiologist' },
                           ]}
                           placeholder="Select role…"
                           value={roleSelections[staff.id] || ''}
@@ -584,7 +539,7 @@ const StaffManagementPage: React.FC = () => {
                               [staff.id]: e.target.value,
                             }))
                           }
-                          className="w-36 text-xs"
+                          className="w-44 text-xs"
                         />
                       </td>
                       <td className="px-5 py-4">
@@ -627,7 +582,7 @@ const StaffManagementPage: React.FC = () => {
         </Card>
       )}
 
-      {/* ── Edit Modal ── */}
+      {/* Edit modal */}
       {editTarget && (
         <StaffEditModal
           staff={{
@@ -646,7 +601,7 @@ const StaffManagementPage: React.FC = () => {
         />
       )}
 
-      {/* ── Delete Modal ── */}
+      {/* Delete modal */}
       {deleteTarget && (
         <DeleteConfirmationModal
           staff={deleteTarget}

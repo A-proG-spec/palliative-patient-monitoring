@@ -1,43 +1,68 @@
+// ─────────────────────────────────────────────────────────────
+// Shared enums — mirror backend Visit enums
+// ─────────────────────────────────────────────────────────────
 export type VisitType =
-  | 'Routine' | 'Emergency' | 'FirstAssessment' | 'PostDischarge'
-  | 'EndOfLife' | 'Bereavement';
+  | 'Routine'
+  | 'Emergency'
+  | 'FirstAssessment'
+  | 'PostDischarge'
+  | 'EndOfLife'
+  | 'Bereavement';
 
 export type OverallStatus = 'Stable' | 'Deteriorating' | 'Critical' | 'BedBound';
 export type MobilityStatus = 'Ambulatory' | 'RequiresAssistance' | 'Bedridden';
 export type AdlLevel = 'Independent' | 'NeedsAssistance' | 'FullyDependent';
-export type VisitOutcome =
-  | 'Stable' | 'SymptomsImproved' | 'SymptomsUnchanged'
-  | 'SymptomsWorsened' | 'ReferredToFacility' | 'Deceased';
 
+export type VisitOutcome =
+  | 'Stable'
+  | 'SymptomsImproved'
+  | 'SymptomsUnchanged'
+  | 'SymptomsWorsened'
+  | 'ReferredToFacility'
+  | 'Deceased';
+
+export type VisitTeamRole = 'TeamLeader' | 'Physician' | 'Nurse';
+
+// ─────────────────────────────────────────────────────────────
+// Signature
+// ─────────────────────────────────────────────────────────────
 export interface VisitSignature {
   staffId: string;
   name: string;
-  role: 'TeamLeader' | 'Physician' | 'Nurse';
+  role: VisitTeamRole;
+  isTeamLeader?: boolean;
   signedAt: string;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Home Visit document — mirrors backend HomeVisit model
+// ─────────────────────────────────────────────────────────────
 export interface HomeVisit {
   id: string;
   patientId: string;
 
+  // Section 2 — Visit details
   visitDate: string;
   timeStarted: string;
   timeEnded: string;
   visitType: VisitType;
-
   teamMembers: Array<{ staffId?: string; role: string; name: string }>;
 
+  // Section 3 — General condition
   overallStatus: OverallStatus;
   mobility: MobilityStatus;
 
+  // Section 4 — Vitals
   vitals?: {
-    temperature?: number;
-    pulse?: number;
-    bp?: string;
-    respiration?: number;
-    spo2?: number;
+    temperature?: string | number;
+    pulse?: string | number;
+    bloodPressure?: string;
+    bp?: string; // legacy alias
+    respiration?: string | number;
+    spO2?: string | number;
   };
 
+  // Section 5 — Pain
   painPresent?: boolean;
   painScore: number;
   painLocation: string[];
@@ -47,9 +72,11 @@ export interface HomeVisit {
   painMedicationEffective: boolean;
   painManagementIneffectiveReason?: string;
 
+  // Section 6 — Symptoms
   symptoms: string[];
   symptomsOther?: string;
 
+  // Section 7 — ADL
   adl: {
     feeding: AdlLevel;
     bathing: AdlLevel;
@@ -60,27 +87,36 @@ export interface HomeVisit {
   ppsScore: number;
   kpsScore: number;
 
+  // Section 8 — Nutrition
   appetite: 'Good' | 'Fair' | 'Poor' | 'UnableToEat';
   oralIntake: 'Adequate' | 'Reduced' | 'Minimal';
   hydrationStatus: 'Adequate' | 'MildDehydration' | 'SevereDehydration';
   nutritionComments?: string;
 
-  emotionalStatus: 'Stable' | 'Anxious' | 'Depressed' | 'Fearful' | 'Distressed';
+  // Section 9 — Psychosocial
+  emotionalStatus:
+    | 'Stable'
+    | 'Anxious'
+    | 'Depressed'
+    | 'Fearful'
+    | 'Distressed';
   emotionalComments?: string;
   familySupport: 'Excellent' | 'Good' | 'Limited' | 'None';
   financialDifficulty: boolean;
   financialComments?: string;
 
+  // Section 10 — Spiritual
   spiritualNeeds: boolean;
   spiritualNeedsDescription?: string;
   religiousSupportRequested: boolean;
   religiousSupportSpecify?: string;
 
+  // Section 11 — Medication review
   medicationAvailable: boolean;
   medicationCorrectlyTaken: boolean;
   medicationSideEffects: boolean;
   medicationRefillNeeded: boolean;
-  morphineAvailable: boolean | null;
+  morphineAvailable?: boolean | null;
   adherenceLevel: 'Good' | 'Partial' | 'Poor';
   currentMedications: Array<{
     name: string;
@@ -90,78 +126,90 @@ export interface HomeVisit {
   }>;
   medicationIssues?: string;
 
+  // Section 12 — Caregiver
   primaryCaregiver?: string;
   caregiverBurden: 'Low' | 'Moderate' | 'High';
   caregiverUnderstanding: 'Good' | 'Fair' | 'Poor';
   caregivingCapacity: 'Strong' | 'Moderate' | 'Weak';
   familyEmotionalStatus: 'Stable' | 'Stressed' | 'Overwhelmed';
 
+  // Section 13 — Education
   educationProvided: string[];
   educationProvidedOther?: string;
   trainingNeeds: string[];
   additionalSupportNeeded?: boolean;
   additionalSupportSpecify?: string;
 
+  // Section 14 — Home environment
   homeCondition: 'Clean' | 'Fair' | 'Poor';
   homeObservations: string[];
   homeEnvironmentDetails?: string;
 
+  // Section 15 — Nursing care
   nursingCareGiven: string[];
   nursingCareOther?: string;
 
+  // Section 16 — Red flags
   redFlags: string[];
   redFlagActions?: string;
 
+  // Section 17 — Referrals made
   referralsMade: string[];
 
+  // Section 18 — Key issues
   keyIssues?: string;
 
+  // Section 19 — Action plan
   immediateActions?: string;
   followUpPlan?: string;
   nextVisitDate?: string;
 
+  // Section 20 — Outcome
   outcome: VisitOutcome;
   dateOfDeath?: string;
 
-  // ── Section 21: Signatures ──
+  // Section 21 — Signatures
   teamLeaderId: string;
   signatures: VisitSignature[];
   allSigned: boolean;
 
-  // ── Meta ──
+  // Meta
   createdAt: string;
   updatedAt?: string | null;
   deletedAt?: string | null;
   updatedBy?: string | null;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Requests
+// ─────────────────────────────────────────────────────────────
 export interface CreateVisitRequest {
-  // ─── Section 2: Visit details ────────────────────────────────
+  // Section 2
   visitDate: string;
   timeStarted: string;
   timeEnded: string;
   visitType: VisitType;
-  teamMembers: { role: string; name: string }[];
+  teamMembers: Array<{
+    staffId?: string;
+    role: VisitTeamRole;
+    name: string;
+    isTeamLeader?: boolean;
+  }>;
 
-  // ─── Section 3: General condition ───────────────────────────
+  // Section 3
   overallStatus: OverallStatus;
   mobility: MobilityStatus;
 
-  // ─── Section 4: Vital signs (confirmed backend fields) ──────
+  // Section 4
   vitals?: {
-    temperature?: number;
-    pulse?: number;
-    bp?: string;
-    respiration?: number;
-    spo2?: number;
-    // ── Pending backend contract — collected by form but not yet
-    //    confirmed in the backend visit schema. The backend must
-    //    add these fields before they are persisted. ──────────
-    weight?: number;
-    height?: number;
+    temperature?: string;
+    pulse?: string;
+    bloodPressure?: string;
+    respiration?: string;
+    spO2?: string;
   };
 
-  // ─── Section 5: Pain assessment ─────────────────────────────
+  // Section 5
   painPresent?: boolean;
   painScore: number;
   painLocation?: string[];
@@ -171,11 +219,11 @@ export interface CreateVisitRequest {
   painMedicationEffective: boolean;
   painManagementIneffectiveReason?: string;
 
-  // ─── Section 6: Symptoms ────────────────────────────────────
+  // Section 6
   symptoms?: string[];
   symptomsOther?: string;
 
-  // ─── Section 7: Functional status ───────────────────────────
+  // Section 7
   adl: {
     feeding: AdlLevel;
     bathing: AdlLevel;
@@ -186,177 +234,98 @@ export interface CreateVisitRequest {
   ppsScore: number;
   kpsScore: number;
 
-  // ─── Section 8: Nutrition & hydration ───────────────────────
+  // Section 8
   appetite: 'Good' | 'Fair' | 'Poor' | 'UnableToEat';
   oralIntake: 'Adequate' | 'Reduced' | 'Minimal';
   hydrationStatus: 'Adequate' | 'MildDehydration' | 'SevereDehydration';
   nutritionComments?: string;
 
-  // ─── Section 9: Psychosocial ────────────────────────────────
-  emotionalStatus: 'Stable' | 'Anxious' | 'Depressed' | 'Fearful' | 'Distressed';
+  // Section 9
+  emotionalStatus:
+    | 'Stable'
+    | 'Anxious'
+    | 'Depressed'
+    | 'Fearful'
+    | 'Distressed';
   emotionalComments?: string;
   familySupport: 'Excellent' | 'Good' | 'Limited' | 'None';
   financialDifficulty: boolean;
   financialComments?: string;
 
-  // ─── Section 10: Spiritual ──────────────────────────────────
+  // Section 10
   spiritualNeeds: boolean;
   spiritualNeedsDescription?: string;
   religiousSupportRequested: boolean;
   religiousSupportSpecify?: string;
 
-  // ─── Section 11: Medication review ──────────────────────────
+  // Section 11
   medicationAvailable: boolean;
   medicationCorrectlyTaken: boolean;
   medicationSideEffects: boolean;
   medicationRefillNeeded: boolean;
   morphineAvailable?: boolean | null;
   adherenceLevel: 'Good' | 'Partial' | 'Poor';
-  currentMedications?: { name: string; dosage: string; frequency: string; route: string }[];
+  currentMedications?: Array<{
+    name: string;
+    dosage: string;
+    frequency: string;
+    route: string;
+  }>;
   medicationIssues?: string;
 
-  // ─── Section 12: Caregiver assessment ───────────────────────
+  // Section 12
   primaryCaregiver?: string;
   caregiverBurden: 'Low' | 'Moderate' | 'High';
   caregiverUnderstanding: 'Good' | 'Fair' | 'Poor';
   caregivingCapacity: 'Strong' | 'Moderate' | 'Weak';
   familyEmotionalStatus: 'Stable' | 'Stressed' | 'Overwhelmed';
 
-  // ─── Section 13: Education provided ─────────────────────────
+  // Section 13
   educationProvided?: string[];
   educationProvidedOther?: string;
   trainingNeeds?: string[];
   additionalSupportNeeded?: boolean;
   additionalSupportSpecify?: string;
 
-  // ─── Section 14: Home environment ───────────────────────────
+  // Section 14
   homeCondition: 'Clean' | 'Fair' | 'Poor';
   homeObservations?: string[];
   homeEnvironmentDetails?: string;
 
-  // ─── Section 15: Nursing care provided ──────────────────────
+  // Section 15
   nursingCareGiven?: string[];
   nursingCareOther?: string;
 
-  // ─── Section 16: Red flags ───────────────────────────────────
+  // Section 16
   redFlags?: string[];
   redFlagActions?: string;
 
-  // ─── Section 17: Referrals made ─────────────────────────────
+  // Section 17
   referralsMade?: string[];
 
-  // ─── Section 18–19: Key issues / action plan ────────────────
+  // Section 18–19
   keyIssues?: string;
   immediateActions?: string;
   followUpPlan?: string;
   nextVisitDate?: string;
 
-  // ─── Section 20: Outcome ────────────────────────────────────
+  // Section 20
   outcome: VisitOutcome;
   dateOfDeath?: string;
 
-  // ─── Section 21: Team leader ────────────────────────────────
-  teamLeaderId: string;
+  // Section 21
+  teamLeaderId?: string;
+}
 
-  // ════════════════════════════════════════════════════════════
-  // EXTENDED CLINICAL FIELDS — PENDING BACKEND CONTRACT
-  //
-  // These fields are collected by the visit form and validated
-  // by the Zod schema (visit.schema.ts). They are NOT yet
-  // confirmed in the backend visit model / createVisitSchema.
-  //
-  // The form already sends them as part of the payload so they
-  // are defined here for internal type consistency. Once the
-  // backend team confirms which fields will be persisted, the
-  // corresponding backend schema and model should be updated,
-  // and the comments below can be removed.
-  // ════════════════════════════════════════════════════════════
-
-  /** Section A: General observation — pending backend contract */
-  generalObservation?: {
-    levelOfConsciousness?: string;
-    orientation?: string[];
-    generalAppearance?: string[];
-  };
-
-  /** Section 5 extra: Pain relief measures — pending backend contract */
-  painReliefMeasures?: string[];
-  painReliefMeasuresOther?: string;
-
-  /** Section 8 extra: GI assessment — pending backend contract */
-  nausea?: string;
-  vomiting?: boolean;
-  vomitingFrequency?: string;
-  bowelFunction?: string;
-  lastBowelMovement?: string;
-
-  /** Section 9 extra: Cognitive / communication — pending backend contract */
-  communicationAbility?: string;
-  cognitiveStatus?: string;
-
-  /** Section 10 extra: Religious / cultural — pending backend contract */
-  religiousAffiliation?: string;
-  religiousAffiliationOther?: string;
-  culturalConsiderations?: string;
-
-  /** Section 12 extra: Caregiver contact — pending backend contract */
-  caregiverRelationship?: string;
-  caregiverPhone?: string;
-
-  /** Section B1: Respiratory assessment — pending backend contract */
-  respiratory?: {
-    breathingPattern?: string;
-    dyspnea?: string;
-    oxygenTherapy?: boolean;
-    oxygenFlowRate?: string;
-    cough?: string;
-    sputum?: string;
-  };
-
-  /** Section B2: Cardiovascular assessment — pending backend contract */
-  cardiovascular?: {
-    pulseRhythm?: string;
-    peripheralEdema?: string;
-    peripheralEdemaLocation?: string;
-    skinColor?: string;
-  };
-
-  /** Section C1: Genitourinary assessment — pending backend contract */
-  genitourinary?: {
-    urinaryFunction?: string;
-    urineAppearance?: string;
-  };
-
-  /** Section C2: Skin assessment — pending backend contract */
-  skin?: {
-    skinIntegrity?: string;
-    pressureInjuryRisk?: string;
-    pressureUlcerPresent?: boolean;
-    pressureUlcerLocation?: string;
-    pressureUlcerStage?: string;
-  };
-
-  /** Section C3: Mobility assessment — pending backend contract */
-  mobilityAssessment?: {
-    mobilityStatus?: string;
-    fallRisk?: string;
-    assistiveDevices?: string[];
-    assistiveDevicesOther?: string;
-  };
-
-  /** Nursing diagnoses — pending backend contract */
-  nursingDiagnoses?: string[];
-  nursingDiagnosesOther?: string;
-
-  /** Nursing care plan — pending backend contract */
-  nursingCarePlan?: {
-    problemsIdentified?: string;
-    plannedInterventions?: string;
-    expectedOutcomes?: string;
-  };
-
-  /** Nurse's overall summary — pending backend contract */
-  nursesSummary?: string;
+export interface UpdateVisitRequest {
+  visitDate?: string;
+  timeStarted?: string;
+  timeEnded?: string;
+  overallStatus?: OverallStatus;
+  painScore?: number;
+  ppsScore?: number;
+  kpsScore?: number;
+  outcome?: VisitOutcome;
 }
 
 export interface VisitListResponse {

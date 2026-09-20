@@ -347,8 +347,8 @@ export const updateImagingStatus = async (
 export const deleteImagingOrder = async (
   patientId: string,
   imagingId: string,
-  adminId: string|number,
-  reason?: string ,
+  adminId: string | number,
+  reason?: string,
 ) => {
   const pid = toId(patientId, 'patient id');
   const oid = toId(imagingId, 'imaging id');
@@ -407,6 +407,165 @@ export const restoreImagingOrder = async (
   return { id: imagingId, restored: true };
 };
 
+// ═════════════════════════════════════════════════════════════
+// RADIOLOGIST QUEUE
+//
+// These functions power the /imaging/pending-orders and
+// /imaging/queue/:id endpoints. They are NOT patient-scoped —
+// they operate across all patients so the radiologist can see
+// their work queue.
+// ═════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────
+// Pending orders — flat list across all patients
+// ─────────────────────────────────────────────────────────────
+export const getPendingImagingOrders = async (
+  page: number = 1,
+  limit: number = 100,
+) => {
+  const where = { status: 'Ordered' as const, deletedAt: null };
+  const skip = (page - 1) * limit;
+
+  const [items, total] = await Promise.all([
+    prisma.imagingOrder.findMany({
+      where,
+      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+      skip,
+      take: limit,
+      include: {
+        patient: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            hospitalPatientId: true,
+          },
+        },
+        orderedByStaff: { select: { id: true, name: true, role: true } },
+      },
+    }),
+    prisma.imagingOrder.count({ where }),
+  ]);
+
+  return {
+    items: items.map((o) => ({
+      id: o.id,
+      patientId: o.patient.id,
+      patientName: `${o.patient.firstName} ${o.patient.lastName}`,
+      patientDisplayId: o.patient.hospitalPatientId,
+
+      modality: o.modality,
+      bodyRegion: o.bodyRegion,
+      specificSite: o.specificSite,
+      provisionalDiagnosis: o.provisionalDiagnosis,
+      specialClinicalQuestion: o.specialClinicalQuestion,
+
+      requestingClinician: o.orderedByStaff.name,
+      orderedById: o.orderedByStaff.id,
+
+      priority: o.priority,
+      dateOrdered: o.createdAt,
+      status: o.status,
+    })),
+    page,
+    limit,
+    total,
+  };
+};
+
+// ─────────────────────────────────────────────────────────────
+// Order detail — NOT patient-scoped (used by the queue detail page)
+// ─────────────────────────────────────────────────────────────
+export const getImagingOrderDetailForQueue = async (imagingId: string) => {
+  const oid = toId(imagingId, 'imaging id');
+
+  const order = await prisma.imagingOrder.findUnique({
+    where: { id: oid },
+    include: {
+      patient: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          age: true,
+          sex: true,
+          hospitalPatientId: true,
+        },
+      },
+      orderedByStaff: { select: { id: true, name: true, role: true } },
+    },
+  });
+
+  if (!order) throw new ApiError(404, 'Imaging order not found');
+
+  return {
+    id: order.id,
+    patientId: order.patient.id,
+    patientName: `${order.patient.firstName} ${order.patient.lastName}`,
+    patientDisplayId: order.patient.hospitalPatientId,
+    age: order.patient.age,
+    sex: order.patient.sex,
+
+    modality: order.modality,
+    bodyRegion: order.bodyRegion,
+    specificSite: order.specificSite,
+    laterality: order.laterality,
+    provisionalDiagnosis: order.provisionalDiagnosis,
+    presentingSymptoms: order.presentingSymptoms,
+    specialClinicalQuestion: order.specialClinicalQuestion,
+
+    requestingClinician: order.orderedByStaff.name,
+    dateOrdered: order.createdAt,
+
+    priority: order.priority,
+    status: order.status,
+
+    findings: order.findings,
+    impression: order.impression,
+    recommendation: order.recommendation,
+    reportDate: order.reportDate,
+  };
+};
+
+// ─────────────────────────────────────────────────────────────
+// Submit report — NOT patient-scoped (used by the queue detail page)
+// ─────────────────────────────────────────────────────────────
+export const submitImagingReportFromQueue = async (
+  imagingId: string,
+  data: { findings: string; impression: string; recommendation?: string },
+  staffId: string | number,
+) => {
+  const oid = toId(imagingId, 'imaging id');
+  const sid = toId(staffId, 'staff id');
+
+  const order = await prisma.imagingOrder.findUnique({ where: { id: oid } });
+  if (!order) throw new ApiError(404, 'Imaging order not found');
+  if (order.status === 'Cancelled') {
+    throw new ApiError(400, 'Cannot submit a report for a cancelled order');
+  }
+
+  const updated = await prisma.imagingOrder.update({
+    where: { id: oid },
+    data: {
+      findings: data.findings,
+      impression: data.impression,
+      recommendation: data.recommendation ?? null,
+      reportDate: new Date(),
+      status: 'Completed',
+      updatedBy: sid,
+    },
+  });
+
+  return {
+    id: updated.id,
+    status: updated.status,
+    findings: updated.findings,
+    impression: updated.impression,
+    recommendation: updated.recommendation,
+    reportDate: updated.reportDate,
+  };
+};
+
 export default {
   orderImaging,
   getImagingOrders,
@@ -416,4 +575,8 @@ export default {
   updateImagingStatus,
   deleteImagingOrder,
   restoreImagingOrder,
+  // Radiologist queue
+  getPendingImagingOrders,
+  getImagingOrderDetailForQueue,
+  submitImagingReportFromQueue,
 };

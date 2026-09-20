@@ -258,6 +258,142 @@ export const restoreMedication = async (
 
   return { id: medicationId, restored: true };
 };
+// ─────────────────────────────────────────────────────────────
+// Pharmacist queue — all `Ordered` medications across patients
+// ─────────────────────────────────────────────────────────────
+export const getPendingMedicationOrders = async (
+  page: number = 1,
+  limit: number = 100,
+) => {
+  const where = { status: 'Ordered' as const, deletedAt: null };
+  const skip = (page - 1) * limit;
+
+  const [items, total] = await Promise.all([
+    prisma.medication.findMany({
+      where,
+      orderBy: { createdAt: 'asc' },
+      skip,
+      take: limit,
+      include: {
+        patient: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            hospitalPatientId: true,
+            currentLocation: true,
+          },
+        },
+        prescribedByStaff: { select: { id: true, name: true, role: true } },
+      },
+    }),
+    prisma.medication.count({ where }),
+  ]);
+
+  return {
+    items: items.map((m) => ({
+      id: m.id,
+      patientId: m.patient.id,
+      patientName: `${m.patient.firstName} ${m.patient.lastName}`,
+      patientDisplayId: m.patient.hospitalPatientId,
+      currentLocation: m.patient.currentLocation,
+
+      medicationName: m.name,
+      dose: m.dosage,
+      frequency: m.frequency,
+      route: m.route,
+      administeredAt: m.administeredAt,
+
+      prescribingClinician: m.prescribedByStaff.name,
+      prescribedById: m.prescribedByStaff.id,
+
+      dateOrdered: m.createdAt,
+      status: m.status,
+    })),
+    page,
+    limit,
+    total,
+  };
+};
+
+// ─────────────────────────────────────────────────────────────
+// Pharmacist queue — single order detail
+// ─────────────────────────────────────────────────────────────
+export const getMedicationOrderById = async (medicationId: string) => {
+  const id = toId(medicationId, 'medication id');
+
+  const med = await prisma.medication.findUnique({
+    where: { id },
+    include: {
+      patient: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          age: true,
+          sex: true,
+          hospitalPatientId: true,
+          currentLocation: true,
+        },
+      },
+      prescribedByStaff: { select: { id: true, name: true, role: true } },
+    },
+  });
+
+  if (!med) throw new ApiError(404, 'Medication order not found');
+
+  return {
+    id: med.id,
+    patientId: med.patient.id,
+    patientName: `${med.patient.firstName} ${med.patient.lastName}`,
+    patientDisplayId: med.patient.hospitalPatientId,
+    age: med.patient.age,
+    sex: med.patient.sex,
+    currentLocation: med.patient.currentLocation,
+
+    medicationName: med.name,
+    dose: med.dosage,
+    frequency: med.frequency,
+    route: med.route,
+    administeredAt: med.administeredAt,
+
+    prescribingClinician: med.prescribedByStaff.name,
+    prescribedById: med.prescribedByStaff.id,
+
+    dateOrdered: med.createdAt,
+    status: med.status,
+  };
+};
+
+// ─────────────────────────────────────────────────────────────
+// Pharmacist queue — mark as Given
+//
+// Reuses the patient-scoped updater but skips the patient guard
+// because the pharmacist already sees the order in their queue.
+// ─────────────────────────────────────────────────────────────
+export const markMedicationGivenByQueue = async (
+  medicationId: string,
+  pharmacistId: string | number,
+) => {
+  const mid = toId(medicationId, 'medication id');
+  const aid = toId(pharmacistId, 'pharmacist id');
+
+  const existing = await prisma.medication.findUnique({
+    where: { id: mid },
+    select: { id: true, status: true },
+  });
+  if (!existing) throw new ApiError(404, 'Medication order not found');
+  if (existing.status === 'Given') {
+    throw new ApiError(400, 'Medication is already marked as given');
+  }
+
+  const updated = await prisma.medication.update({
+    where: { id: mid },
+    data: { status: 'Given', updatedBy: aid },
+  });
+
+  return { id: updated.id, status: updated.status, updatedAt: updated.updatedAt };
+};
 
 export default {
   orderMedication,
@@ -266,4 +402,7 @@ export default {
   updateMedicationStatus,
   deleteMedication,
   restoreMedication,
+  getPendingMedicationOrders,
+  getMedicationOrderById,
+  markMedicationGivenByQueue,
 };

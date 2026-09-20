@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '@utils/asyncHandler.js';
 import { SuccessResponse } from '@utils/ApiResponse.js';
 import * as authService from '@services/auth.service.js';
+import {ApiError} from '@utils/ApiError.js';
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const { name, email, phone, password, role } = req.body;
@@ -32,11 +33,17 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getMe = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new ApiError(401, 'Unauthorized');
+  }
   const result = await authService.getCurrentUser(req.user.id);
   return SuccessResponse(200, 'OK', result);
 });
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user || !req.token) {
+    throw new ApiError(401, 'Unauthorized');
+  }
   await authService.logoutUser(req.token);
   return SuccessResponse(200, 'Logged out successfully', {});
 });

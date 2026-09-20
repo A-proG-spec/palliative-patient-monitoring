@@ -1,34 +1,54 @@
+// ─────────────────────────────────────────────────────────────
+// Patient — mirrors backend Patient model
+// ─────────────────────────────────────────────────────────────
+export type PatientSex = 'Male' | 'Female';
+export type PatientStatus = 'Active' | 'Discharged';
+export type PatientCurrentLocation = 'Home' | 'ReferredHospital';
+export type DiseaseStage = 'Early' | 'Advanced' | 'EndStage';
+export type Prognosis = 'Days' | 'Weeks' | 'Months' | 'Uncertain';
+
 export interface Patient {
   id: string;
   patientDisplayId?: string;
+  hospitalPatientId?: string | null;
+
   firstName: string;
   lastName: string;
   age: number;
-  sex: 'Male' | 'Female';
+  sex: PatientSex;
   dateOfBirth: string;
+
   address: string;
   phone: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
+
   caregiverName: string;
   caregiverPhone: string;
+  caregiverRelation?: string | null;
+
   primaryDiagnosis: string;
   secondaryDiagnoses: string[];
-  diseaseStage: 'Early' | 'Advanced' | 'EndStage';
+  diseaseStage: DiseaseStage;
   comorbidities: string[];
-  estimatedPrognosis: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
-  status: 'Active' | 'Discharged';
-  currentLocation: 'Home' | 'ReferredHospital';
+  estimatedPrognosis: Prognosis;
+
+  status: PatientStatus;
+  currentLocation: PatientCurrentLocation;
+
   registeredBy: string;
   createdAt: string;
   updatedAt?: string;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Requests
+// ─────────────────────────────────────────────────────────────
 export interface CreatePatientRequest {
   firstName: string;
   lastName: string;
   age: number;
-  sex: 'Male' | 'Female';
+  sex: PatientSex;
   dateOfBirth: string;
   address: string;
   phone: string;
@@ -36,13 +56,33 @@ export interface CreatePatientRequest {
   emergencyContactPhone: string;
   caregiverName: string;
   caregiverPhone: string;
+  caregiverRelation?: string;
   primaryDiagnosis: string;
   secondaryDiagnoses?: string[];
-  diseaseStage: 'Early' | 'Advanced' | 'EndStage';
+  diseaseStage: DiseaseStage;
   comorbidities?: string[];
-  estimatedPrognosis: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
+  estimatedPrognosis: Prognosis;
 }
 
+export interface UpdatePatientRequest {
+  firstName?: string;
+  lastName?: string;
+  age?: number;
+  sex?: PatientSex;
+  dateOfBirth?: string;
+  address?: string;
+  phone?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  caregiverName?: string;
+  caregiverPhone?: string;
+  caregiverRelation?: string;
+  hospitalPatientId?: string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// List / summary / progress
+// ─────────────────────────────────────────────────────────────
 export interface PatientListResponse {
   items: Patient[];
   page: number;

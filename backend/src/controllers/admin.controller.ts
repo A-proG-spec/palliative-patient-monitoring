@@ -3,6 +3,7 @@ import { asyncHandler } from '@utils/asyncHandler.js';
 import { SuccessResponse } from '@utils/ApiResponse.js';
 import * as adminService from '@services/admin.service.js';
 import * as visitService from '@services/visit.service.js';
+import { toId } from '@utils/prisma.js';
 import type { StaffRole } from '@prisma/client';
 
 // ─────────────────────────────────────────────────────────────
@@ -138,7 +139,12 @@ export const getStaffList = asyncHandler(async (req: Request, res: Response) => 
   const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
   const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
   const status = req.query.status as
-    | 'Active' | 'Pending' | 'Rejected' | 'Deleted' | 'All' | undefined;
+    | 'Active'
+    | 'Pending'
+    | 'Rejected'
+    | 'Deleted'
+    | 'All'
+    | undefined;
   const role = req.query.role as StaffRole | undefined;
   const search = req.query.search as string | undefined;
 
@@ -175,26 +181,84 @@ export const restoreStaff = asyncHandler(async (req: Request, res: Response) => 
   return SuccessResponse(200, 'Staff member restored', result);
 });
 
+// ─────────────────────────────────────────────────────────────
+// Staff Performance
+// ─────────────────────────────────────────────────────────────
+
+export const getStaffPerformanceList = asyncHandler(async (req: Request, res: Response) => {
+  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+  const search = req.query.search as string | undefined;
+  const role = req.query.role as string | undefined;
+
+  const result = await adminService.getStaffPerformanceList(
+    page,
+    limit,
+    search,
+    role,
+  );
+  return SuccessResponse(200, 'OK', result);
+});
+
+export const getStaffPerformanceDetail = asyncHandler(
+  async (req: Request, res: Response) => {
+    const staffId = req.params.staffId as string;
+    const result = await adminService.getStaffPerformanceDetail(staffId);
+    return SuccessResponse(200, 'OK', result);
+  },
+);
+
+export const getStaffActivity = asyncHandler(async (req: Request, res: Response) => {
+  const staffId = req.params.staffId as string;
+  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+
+  const result = await adminService.getStaffActivity(
+    toId(staffId, 'staff id'),
+    page,
+    limit,
+  );
+  return SuccessResponse(200, 'OK', result);
+});
+
 export default {
+  // Staff approvals
   getPendingStaff,
   approveStaff,
   rejectStaff,
+
+  // Dashboard
   getDashboardStats,
   getNotifications,
   markNotificationRead,
+
+  // Patients
   getPatients,
   getPatientDetail,
   closeCase,
+
+  // Referrals
   getPendingReferrals,
   approveReferral,
   declineReferral,
+
+  // Reports
   getReports,
+
+  // Visits
   updateVisit,
   deleteVisit,
   restoreVisit,
+
+  // Staff management
   getStaffList,
   getStaffById,
   updateStaff,
   deleteStaff,
   restoreStaff,
+
+  // Staff performance
+  getStaffPerformanceList,
+  getStaffPerformanceDetail,
+  getStaffActivity,
 };

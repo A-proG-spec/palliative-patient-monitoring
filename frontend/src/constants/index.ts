@@ -24,19 +24,24 @@ export const ROUTES = {
   PATIENT_PROGRESS: (id: string) => `/patients/${id}/progress`,
 
   PATIENT_VISITS: (id: string) => `/patients/${id}/visits`,
-  PATIENT_VISIT_DETAIL: (patientId: string, visitId: string) => `/patients/${patientId}/visits/${visitId}`,
+  PATIENT_VISIT_DETAIL: (patientId: string, visitId: string) =>
+    `/patients/${patientId}/visits/${visitId}`,
 
   PATIENT_MEDICATIONS: (id: string) => `/patients/${id}/medications`,
-  PATIENT_MEDICATION_DETAIL: (patientId: string, medId: string) => `/patients/${patientId}/medications/${medId}`,
+  PATIENT_MEDICATION_DETAIL: (patientId: string, medId: string) =>
+    `/patients/${patientId}/medications/${medId}`,
 
   PATIENT_LABS: (id: string) => `/patients/${id}/labs`,
-  PATIENT_LAB_DETAIL: (patientId: string, labId: string) => `/patients/${patientId}/labs/${labId}`,
+  PATIENT_LAB_DETAIL: (patientId: string, labId: string) =>
+    `/patients/${patientId}/labs/${labId}`,
 
   PATIENT_REFERRALS: (id: string) => `/patients/${id}/referrals`,
-  PATIENT_REFERRAL_DETAIL: (patientId: string, refId: string) => `/patients/${patientId}/referrals/${refId}`,
+  PATIENT_REFERRAL_DETAIL: (patientId: string, refId: string) =>
+    `/patients/${patientId}/referrals/${refId}`,
 
   PATIENT_ADMISSIONS: (id: string) => `/patients/${id}/admissions`,
-  PATIENT_ADMISSION_DETAIL: (patientId: string, admId: string) => `/patients/${patientId}/admissions/${admId}`,
+  PATIENT_ADMISSION_DETAIL: (patientId: string, admId: string) =>
+    `/patients/${patientId}/admissions/${admId}`,
 
   // Role-specific queues
   MEDICATION_ORDERS: '/medication-orders',
@@ -63,15 +68,40 @@ export const QUERY_KEYS = {
   PATIENT_SUMMARY: (id: string) => ['patients', id, 'summary'],
   PATIENT_PROGRESS: (id: string) => ['patients', id, 'progress'],
   PATIENT_VISITS: (id: string) => ['patients', id, 'visits'],
-  PATIENT_VISIT: (patientId: string, visitId: string) => ['patients', patientId, 'visits', visitId],
+  PATIENT_VISIT: (patientId: string, visitId: string) => [
+    'patients',
+    patientId,
+    'visits',
+    visitId,
+  ],
   PATIENT_MEDICATIONS: (id: string) => ['patients', id, 'medications'],
-  PATIENT_MEDICATION: (patientId: string, medId: string) => ['patients', patientId, 'medications', medId],
+  PATIENT_MEDICATION: (patientId: string, medId: string) => [
+    'patients',
+    patientId,
+    'medications',
+    medId,
+  ],
   PATIENT_LABS: (id: string) => ['patients', id, 'labs'],
-  PATIENT_LAB: (patientId: string, labId: string) => ['patients', patientId, 'labs', labId],
+  PATIENT_LAB: (patientId: string, labId: string) => [
+    'patients',
+    patientId,
+    'labs',
+    labId,
+  ],
   PATIENT_REFERRALS: (id: string) => ['patients', id, 'referrals'],
-  PATIENT_REFERRAL: (patientId: string, refId: string) => ['patients', patientId, 'referrals', refId],
+  PATIENT_REFERRAL: (patientId: string, refId: string) => [
+    'patients',
+    patientId,
+    'referrals',
+    refId,
+  ],
   PATIENT_ADMISSIONS: (id: string) => ['patients', id, 'admissions'],
-  PATIENT_ADMISSION: (patientId: string, admId: string) => ['patients', patientId, 'admissions', admId],
+  PATIENT_ADMISSION: (patientId: string, admId: string) => [
+    'patients',
+    patientId,
+    'admissions',
+    admId,
+  ],
   MEDICATION_ORDERS: ['medication-orders'],
   LAB_REQUESTS: ['lab-requests'],
   IMAGING_ORDERS: ['imaging-orders'],
@@ -110,12 +140,14 @@ export const OUTCOME_LABELS: Record<string, string> = {
   Deceased: 'Patient Deceased',
 };
 
+// ── FIX: keys must match the backend StaffRole enum (long form) ──
+// `LaboratoryTechnician`, not `LabTechnician`.
 export const ROLE_LABELS: Record<string, string> = {
   TeamLeader: 'Team Leader',
   Physician: 'Physician',
   Nurse: 'Nurse',
   Pharmacist: 'Pharmacist',
-  LabTechnician: 'Laboratory Technician',
+  LaboratoryTechnician: 'Laboratory Technician',
   Radiologist: 'Radiologist',
   admin: 'Administrator',
 };

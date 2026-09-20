@@ -1,13 +1,19 @@
 // ─────────────────────────────────────────────────────────────
-// Profile — the union of what GET /profile can return
+// Profile union — GET /profile
 // ─────────────────────────────────────────────────────────────
-
 export interface StaffProfile {
   id: string;
   name: string;
   email: string;
   phone: string;
-  role: 'TeamLeader' | 'Physician' | 'Nurse' | null;
+  role:
+    | 'TeamLeader'
+    | 'Physician'
+    | 'Nurse'
+    | 'Pharmacist'
+    | 'Radiologist'
+    | 'LaboratoryTechnician'
+    | null;
   type: 'staff';
   status: 'Pending' | 'Active' | 'Rejected';
   isEmailVerified: boolean;
@@ -29,31 +35,16 @@ export type Profile = StaffProfile | AdminProfile;
 // ─────────────────────────────────────────────────────────────
 // Update profile
 // ─────────────────────────────────────────────────────────────
-// Editable fields:
-//   - staff: name, phone
-//   - admin: name only (admin has no phone on the model)
-// Email, role, status, isEmailVerified are never client-editable.
-// ─────────────────────────────────────────────────────────────
-
 export interface UpdateProfileRequest {
   name?: string;
   phone?: string;
 }
 
-/**
- * The backend returns the same shape it returns from GET /profile —
- * i.e. an updated Profile. Not a hybrid type.
- */
 export type UpdateProfileResponse = Profile;
 
 // ─────────────────────────────────────────────────────────────
 // Change password
 // ─────────────────────────────────────────────────────────────
-// confirmPassword is sent by the frontend but ignored server-side;
-// password matching is a client concern. Kept optional so future
-// callers that omit it still typecheck.
-// ─────────────────────────────────────────────────────────────
-
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
@@ -66,9 +57,8 @@ export interface ChangePasswordResponse {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Activity stats — two different shapes based on user type
+// Activity stats — depends on user type
 // ─────────────────────────────────────────────────────────────
-
 export interface StaffActivityStats {
   totalVisits: number;
   totalPatients: number;

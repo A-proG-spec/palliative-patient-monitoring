@@ -1,2 +1,2 @@
-// Admin components are implemented inline in their page files for this project
-export { };
+export { default as AdminDeleteButton } from './AdminDeleteButton';
+export { default as AdminRestoreButton } from './AdminRestoreButton';
