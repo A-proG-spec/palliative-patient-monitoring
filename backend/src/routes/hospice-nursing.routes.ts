@@ -9,6 +9,7 @@ import {
   getHospiceNursingParamsSchema,
   getHospiceNursingPatientParamsSchema,
   getHospiceNursingQuerySchema,
+  getAllHospiceNursingQuerySchema,
 } from '@schemas/hospice-nursing.schema.js';
 
 const router = Router();
@@ -28,7 +29,13 @@ router.get(
   validate(getHospiceNursingQuerySchema),
   ctrl.getHospiceNursingAssessments,
 );
-
+router.get(
+  '/patients/:patientId/all',
+  authMiddleware,
+  validate(getHospiceNursingPatientParamsSchema),
+  validate(getAllHospiceNursingQuerySchema),
+  ctrl.getAllHospiceNursingAssessments,
+);
 router.get(
   '/patients/:patientId/hospice-nursing/:assessmentId',
   authMiddleware,

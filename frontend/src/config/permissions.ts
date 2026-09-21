@@ -74,7 +74,7 @@ const PERMISSIONS: Record<string, StaffRole[]> = {
 
   // Hospice Nursing (Nurse-only)
   canRecordHospiceNursing: ['Nurse'],
-  canViewHospiceNursing: ['Nurse'],
+  canViewHospiceNursing: ['Nurse','Physician'],
 };
 
 /**

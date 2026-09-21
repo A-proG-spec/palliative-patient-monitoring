@@ -148,7 +148,15 @@ export const getHospiceNursingQuerySchema = z.object({
     limit: z.coerce.number().int().positive().max(100).optional().default(20),
   }),
 });
-
+export const getAllHospiceNursingQuerySchema = z.object({
+  query: z.object({
+    includeDeleted: z
+      .union([z.literal('true'), z.literal('false'), z.boolean()])
+      .optional(),
+    page: z.coerce.number().int().positive().optional().default(1),
+    limit: z.coerce.number().int().positive().max(100).optional().default(20),
+  }),
+});
 // ─────────────────────────────────────────────────────────────
 // Params
 //

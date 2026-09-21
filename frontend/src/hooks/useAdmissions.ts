@@ -15,13 +15,19 @@ export function usePatientAdmissions(
   patientId: string,
   params?: {
     status?: AdmissionStatus;
+    includeDeleted?: boolean;
     page?: number;
     limit?: number;
   },
 ) {
+  const includeDeleted = params?.includeDeleted === true;
+
   return useQuery({
     queryKey: ['patients', patientId, 'admissions', params],
-    queryFn: () => admissionApi.getByPatient(patientId, params),
+    queryFn: () =>
+      includeDeleted
+        ? admissionApi.getAllForPatient(patientId, params)
+        : admissionApi.getByPatient(patientId, params),
     enabled: !!patientId,
   });
 }
@@ -49,25 +55,18 @@ export function useRecordAdmission(patientId: string) {
     mutationFn: (data: CreateAdmissionRequest) =>
       admissionApi.create(patientId, data),
     onSuccess: () => {
-      // Sub-resource list
       queryClient.invalidateQueries({
         queryKey: ['patients', patientId, 'admissions'],
       });
-      // Patient summary
       queryClient.invalidateQueries({
         queryKey: ['patients', patientId, 'summary'],
       });
-      // Patient itself — backend flips currentLocation → 'ReferredHospital'
       queryClient.invalidateQueries({
         queryKey: ['patients', patientId],
       });
-      // Patient list — row's location badge changes
       queryClient.invalidateQueries({ queryKey: ['patients'] });
-      // Admin aggregates
       queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] });
-      // Referrals — if the admission was linked to one, its status
-      // flips to 'Admitted'
       queryClient.invalidateQueries({
         queryKey: ['patients', patientId, 'referrals'],
       });

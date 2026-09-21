@@ -15,6 +15,7 @@ import { usePatientReferrals } from '@/hooks/useReferrals';
 import { usePatientAdmissions } from '@/hooks/useAdmissions';
 import type { HospitalAdmission } from '@/types/admission.types';
 import { useProgressNotes } from '@/hooks/useProgressNotes';
+import { usePatientHospiceAssessments } from '@/hooks/useHospiceNursing';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -35,12 +36,13 @@ import {
 } from '@/config/permissions';
 
 // ═════════════════════════════════════════════════════════════
-// Module-level constants (do NOT reference `patient` here)
+// Module-level constants
 // ═════════════════════════════════════════════════════════════
 
 const ALL_TABS = [
   'Visits',
   'Progress Notes',
+  'Hospice Nursing',
   'Medications',
   'Labs',
   'Imaging',
@@ -162,7 +164,6 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
 }) => {
   const allTypes = [getVisitRecordType(currentLocation), ...STATIC_RECORD_TYPES];
 
-  // Filter record types based on user permissions
   const allowedTypes = allTypes.filter((r) => {
     switch (r.key) {
       case 'visit':
@@ -352,6 +353,7 @@ const PatientDetailPage: React.FC = () => {
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
 
   const userRole = (user?.role ?? '') as StaffRole;
+  const isNurse = userRole === 'Nurse';
 
   // ── Primary patient data ──
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
@@ -359,6 +361,9 @@ const PatientDetailPage: React.FC = () => {
   // ── Sub-record data ──
   const { data: visitsData } = usePatientVisits(id!);
   const { data: progressNotesData } = useProgressNotes(id!);
+  const { data: hospiceData } = usePatientHospiceAssessments(id!, {
+    limit: 100,
+  });
   const { data: medsData } = usePatientMedications(id!);
   const { data: labsData } = usePatientLabs(id!);
   const { data: imagingData } = usePatientImaging(id!);
@@ -366,22 +371,32 @@ const PatientDetailPage: React.FC = () => {
   const { data: admsData } = usePatientAdmissions(id!);
 
   const progressNotes = progressNotesData?.items ?? [];
+  const hospiceAssessments = hospiceData?.items ?? [];
   const labOrders = labsData?.items ?? [];
   const imagingOrders = imagingData?.items ?? [];
 
-  // ── Location-driven tab list ──
-  // Home patients: Home Visits + everything else
-  // Hospitalised patients: Progress Notes instead of Visits
+  // ── Location- and role-driven tab list ──
+  //
+  // Rules:
+  //   - Home patients: show Visits, hide Progress Notes
+  //   - Hospitalised patients: show Progress Notes, hide Visits
+  //   - Hospice Nursing tab: only visible to Nurses
+  const canViewHospice = hasPermission(userRole, 'canViewHospiceNursing');
+  const canWriteHospice = hasPermission(userRole, 'canRecordHospiceNursing');
+
+
   const tabs = useMemo<Tab[]>(() => {
     const currentLocation = patient?.currentLocation ?? 'Home';
+
     return ALL_TABS.filter((t) => {
       if (t === 'Progress Notes') return currentLocation === 'ReferredHospital';
+      if (t === 'Visits') return currentLocation === 'Home';
+      if (t === 'Hospice Nursing') return canViewHospice;
       return true;
     });
-  }, [patient?.currentLocation]);
+  }, [patient?.currentLocation, isNurse]);
 
-  // If the current active tab is no longer visible (patient moved
-  // home ↔ hospital), reset to the first visible tab.
+  // If the current active tab is no longer visible, reset.
   useEffect(() => {
     if (!tabs.includes(activeTab)) {
       setActiveTab(tabs[0]);
@@ -392,10 +407,19 @@ const PatientDetailPage: React.FC = () => {
   // Progress Notes tab — but only if it's actually visible.
   const locationState = location.state as {
     savedProgressNote?: boolean;
+    savedHospiceAssessment?: boolean;
   } | null;
+
   useEffect(() => {
     if (locationState?.savedProgressNote && tabs.includes('Progress Notes')) {
       setActiveTab('Progress Notes');
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+    if (
+      locationState?.savedHospiceAssessment &&
+      tabs.includes('Hospice Nursing')
+    ) {
+      setActiveTab('Hospice Nursing');
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -410,6 +434,7 @@ const PatientDetailPage: React.FC = () => {
   const tabCounts: Record<Tab, number> = {
     Visits: visitsData?.total ?? 0,
     'Progress Notes': progressNotes.length,
+    'Hospice Nursing': hospiceAssessments.length,
     Medications: medsData?.total ?? 0,
     Labs: labOrders.length,
     Imaging: imagingOrders.length,
@@ -513,11 +538,11 @@ const PatientDetailPage: React.FC = () => {
               value={formatDate(patient.dateOfBirth)}
             />
             <div className="flex items-center gap-2">
-              <MapPin size={12} className="text-text-muted" />
+              <MapPin size={12} className="text-text-muted flex-shrink-0" />
               <span className="text-text-secondary">{patient.address}</span>
             </div>
             <div className="flex items-center gap-2">
-              <Phone size={12} className="text-text-muted" />
+              <Phone size={12} className="text-text-muted flex-shrink-0" />
               <span className="text-text-secondary">{patient.phone}</span>
             </div>
             <InfoRow
@@ -568,13 +593,14 @@ const PatientDetailPage: React.FC = () => {
 
       {/* ── Tabs ── */}
       <Card padding="none">
+        {/* Tab strip — scrolls horizontally on narrow screens */}
         <div className="flex border-b border-border-base overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={cn(
-                'flex items-center gap-2 px-5 py-3.5 text-sm font-medium whitespace-nowrap transition-all border-b-2',
+                'flex items-center gap-2 px-5 py-3.5 text-sm font-medium whitespace-nowrap transition-all border-b-2 flex-shrink-0',
                 activeTab === tab
                   ? 'border-primary text-primary'
                   : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-low',
@@ -594,42 +620,46 @@ const PatientDetailPage: React.FC = () => {
           {/* ── Visits Tab ── */}
           {activeTab === 'Visits' &&
             (visitsData?.items?.length ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-text-muted">
-                    {['Date', 'Type', 'Status', 'Outcome', ''].map((h) => (
-                      <th key={h} className="pb-3 pr-4 font-medium">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-base">
-                  {visitsData.items.map((v) => (
-                    <tr
-                      key={v.id}
-                      className="hover:bg-surface-low cursor-pointer"
-                      onClick={() => navigate(`/patients/${id}/visits/${v.id}`)}
-                    >
-                      <td className="py-3 pr-4">{formatDate(v.visitDate)}</td>
-                      <td className="py-3 pr-4">
-                        <Badge variant="secondary">
-                          {VISIT_TYPE_LABELS[v.visitType] || v.visitType}
-                        </Badge>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <StatusBadge status={v.overallStatus} />
-                      </td>
-                      <td className="py-3 pr-4">
-                        <StatusBadge status={v.outcome} type="visit" />
-                      </td>
-                      <td className="py-3 text-text-muted text-xs">
-                        PPS {v.ppsScore}% · KPS {v.kpsScore}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[640px]">
+                  <thead>
+                    <tr className="text-left text-xs text-text-muted">
+                      {['Date', 'Type', 'Status', 'Outcome', 'Scores'].map((h) => (
+                        <th key={h} className="pb-3 pr-4 font-medium whitespace-nowrap">
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border-base">
+                    {visitsData.items.map((v) => (
+                      <tr
+                        key={v.id}
+                        className="hover:bg-surface-low cursor-pointer"
+                        onClick={() => navigate(`/patients/${id}/visits/${v.id}`)}
+                      >
+                        <td className="py-3 pr-4 whitespace-nowrap">
+                          {formatDate(v.visitDate)}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <Badge variant="secondary">
+                            {VISIT_TYPE_LABELS[v.visitType] || v.visitType}
+                          </Badge>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <StatusBadge status={v.overallStatus} />
+                        </td>
+                        <td className="py-3 pr-4">
+                          <StatusBadge status={v.outcome} type="visit" />
+                        </td>
+                        <td className="py-3 text-text-muted text-xs whitespace-nowrap">
+                          PPS {v.ppsScore}% · KPS {v.kpsScore}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState
                 title="No visits recorded"
@@ -659,12 +689,12 @@ const PatientDetailPage: React.FC = () => {
                     tabIndex={0}
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium text-on-surface">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="text-sm font-medium text-on-surface whitespace-nowrap">
                           {formatDate(note.createdAt)}
                         </span>
                         <span className="text-xs text-text-muted">·</span>
-                        <span className="text-xs text-text-secondary">
+                        <span className="text-xs text-text-secondary truncate">
                           {note.attendingClinician || '—'}
                         </span>
                         {note.allSigned && (
@@ -703,59 +733,183 @@ const PatientDetailPage: React.FC = () => {
               />
             ))}
 
+          {/* ── Hospice Nursing Tab ── */}
+          {activeTab === 'Hospice Nursing' && canViewHospice && (
+            <div className="space-y-4">
+              {hospiceAssessments.length === 0 ? (
+                /* Empty state — CTA only for nurses, neutral message otherwise */
+                canWriteHospice ? (
+                  <EmptyState
+                    icon={<Heart size={28} />}
+                    title="No hospice nursing assessments"
+                    description="Record the first hospice nursing assessment for this patient."
+                    actionLabel="Add Assessment"
+                    onAction={() => navigate(`/patients/${id}/hospice-nursing`)}
+                  />
+                ) : (
+                  <EmptyState
+                    icon={<Heart size={28} />}
+                    title="No hospice nursing assessments"
+                    description="No hospice nursing assessments have been recorded for this patient yet."
+                  />
+                )
+              ) : (
+                <>
+                  {/* Header — no Add button when records exist; nurses add via the empty state */}
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                    </div>
+                  </div>
+
+                  {/* Responsive table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[760px]">
+                      <thead>
+                        <tr className="text-left text-xs text-text-muted">
+                          {[
+                            'Assessment Date',
+                            'Assessed By',
+                            'Consciousness',
+                            'Pain',
+                            'Mobility',
+                            'Emotional',
+                            '',
+                          ].map((h) => (
+                            <th
+                              key={h}
+                              className="pb-3 pr-4 font-medium whitespace-nowrap"
+                            >
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border-base">
+                        {hospiceAssessments.map((a) => (
+                          <tr
+                            key={a.id}
+                            className="hover:bg-surface-low cursor-pointer"
+                            onClick={() =>
+                              navigate(`/patients/${id}/hospice-nursing/${a.id}`)
+                            }
+                          >
+                            <td className="py-3 pr-4 whitespace-nowrap">
+                              {formatDate(a.assessmentDate)}
+                            </td>
+                            <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                              {a.assessedBy?.name ?? '—'}
+                            </td>
+                            <td className="py-3 pr-4">
+                              {a.levelOfConsciousness ? (
+                                <Badge variant="secondary">
+                                  {a.levelOfConsciousness}
+                                </Badge>
+                              ) : (
+                                <span className="text-text-muted text-xs">—</span>
+                              )}
+                            </td>
+                            <td className="py-3 pr-4">
+                              {a.painScore !== null && a.painScore !== undefined ? (
+                                <Badge
+                                  variant={
+                                    a.painScore >= 7
+                                      ? 'error'
+                                      : a.painScore >= 4
+                                        ? 'warning'
+                                        : 'success'
+                                  }
+                                >
+                                  {a.painScore}/10
+                                </Badge>
+                              ) : (
+                                <span className="text-text-muted text-xs">—</span>
+                              )}
+                            </td>
+                            <td className="py-3 pr-4 text-text-secondary text-xs whitespace-nowrap">
+                              {a.mobilityStatus ?? '—'}
+                            </td>
+                            <td className="py-3 pr-4 text-text-secondary text-xs whitespace-nowrap">
+                              {a.emotionalStatus ?? '—'}
+                            </td>
+                            <td className="py-3 text-right">
+                              <ChevronRightIcon
+                                size={16}
+                                className="text-outline-variant inline-block"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* ── Medications Tab ── */}
           {activeTab === 'Medications' &&
             (medsData?.items?.length ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-text-muted">
-                    {[
-                      'Medication',
-                      'Dosage',
-                      'Frequency',
-                      'Route',
-                      'Admin At',
-                      'Status',
-                      '',
-                    ].map((h) => (
-                      <th key={h} className="pb-3 pr-4 font-medium">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-base">
-                  {medsData.items.map((m) => (
-                    <tr
-                      key={m.id}
-                      className="hover:bg-surface-low cursor-pointer"
-                      onClick={() =>
-                        navigate(`/patients/${id}/medications/${m.id}`)
-                      }
-                    >
-                      <td className="py-3 pr-4 font-medium">{m.name}</td>
-                      <td className="py-3 pr-4 text-text-secondary">
-                        {m.dosage}
-                      </td>
-                      <td className="py-3 pr-4 text-text-secondary">
-                        {m.frequency}
-                      </td>
-                      <td className="py-3 pr-4 text-text-secondary">
-                        {m.route}
-                      </td>
-                      <td className="py-3 pr-4 text-text-secondary">
-                        {m.administeredAt}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <StatusBadge status={m.status} type="medication" />
-                      </td>
-                      <td className="py-3 text-text-muted text-xs">
-                        {formatDate(m.createdAt)}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[720px]">
+                  <thead>
+                    <tr className="text-left text-xs text-text-muted">
+                      {[
+                        'Medication',
+                        'Dosage',
+                        'Frequency',
+                        'Route',
+                        'Admin At',
+                        'Status',
+                        'Ordered',
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="pb-3 pr-4 font-medium whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border-base">
+                    {medsData.items.map((m) => (
+                      <tr
+                        key={m.id}
+                        className="hover:bg-surface-low cursor-pointer"
+                        onClick={() =>
+                          navigate(`/patients/${id}/medications/${m.id}`)
+                        }
+                      >
+                        <td className="py-3 pr-4 font-medium whitespace-nowrap">
+                          {m.name}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                          {m.dosage}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                          {m.frequency}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                          {m.route}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                          {m.administeredAt}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <StatusBadge
+                            status={m.status}
+                            type="medication"
+                          />
+                        </td>
+                        <td className="py-3 text-text-muted text-xs whitespace-nowrap">
+                          {formatDate(m.createdAt)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState
                 title="No medications ordered"
@@ -769,50 +923,59 @@ const PatientDetailPage: React.FC = () => {
           {/* ── Labs Tab ── */}
           {activeTab === 'Labs' &&
             (labOrders.length ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-text-muted">
-                    {[
-                      'Test',
-                      'Ordered',
-                      'Performed',
-                      'Location',
-                      'Status',
-                      'Result',
-                    ].map((h) => (
-                      <th key={h} className="pb-3 pr-4 font-medium">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-base">
-                  {labOrders.map((l) => (
-                    <tr
-                      key={l.id}
-                      className="hover:bg-surface-low cursor-pointer"
-                      onClick={() => navigate(`/patients/${id}/labs/${l.id}`)}
-                    >
-                      <td className="py-3 pr-4 font-medium">{l.testName}</td>
-                      <td className="py-3 pr-4 text-text-secondary">
-                        {formatDate(l.dateOrdered)}
-                      </td>
-                      <td className="py-3 pr-4 text-text-secondary">
-                        {l.datePerformed ? formatDate(l.datePerformed) : '—'}
-                      </td>
-                      <td className="py-3 pr-4 text-text-secondary">
-                        {l.location}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <StatusBadge status={l.status} type="lab" />
-                      </td>
-                      <td className="py-3 text-text-muted text-xs max-w-[150px] truncate">
-                        {l.result || '—'}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[720px]">
+                  <thead>
+                    <tr className="text-left text-xs text-text-muted">
+                      {[
+                        'Test',
+                        'Ordered',
+                        'Performed',
+                        'Location',
+                        'Status',
+                        'Result',
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="pb-3 pr-4 font-medium whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border-base">
+                    {labOrders.map((l) => (
+                      <tr
+                        key={l.id}
+                        className="hover:bg-surface-low cursor-pointer"
+                        onClick={() => navigate(`/patients/${id}/labs/${l.id}`)}
+                      >
+                        <td className="py-3 pr-4 font-medium whitespace-nowrap">
+                          {l.testName}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                          {formatDate(l.dateOrdered)}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                          {l.datePerformed
+                            ? formatDate(l.datePerformed)
+                            : '—'}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                          {l.location}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <StatusBadge status={l.status} type="lab" />
+                        </td>
+                        <td className="py-3 text-text-muted text-xs max-w-[180px] truncate">
+                          {l.result || '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState
                 title="No lab tests ordered"
@@ -826,59 +989,68 @@ const PatientDetailPage: React.FC = () => {
           {/* ── Imaging Tab ── */}
           {activeTab === 'Imaging' &&
             (imagingOrders.length ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-text-muted">
-                    {[
-                      'Modality',
-                      'Body Region',
-                      'Ordered',
-                      'Performed',
-                      'Status',
-                      'Report',
-                    ].map((h) => (
-                      <th key={h} className="pb-3 pr-4 font-medium">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-base">
-                  {imagingOrders.map((img) => {
-                    const hasReport = !!(img.report && img.report.findings);
-                    return (
-                      <tr
-                        key={img.id}
-                        className="hover:bg-surface-low cursor-pointer"
-                        onClick={() =>
-                          navigate(`/patients/${id}/imaging/${img.id}`)
-                        }
-                      >
-                        <td className="py-3 pr-4">
-                          <Badge variant="primary">{img.modality}</Badge>
-                        </td>
-                        <td className="py-3 pr-4 text-text-secondary">
-                          {img.bodyRegion || '—'}
-                        </td>
-                        <td className="py-3 pr-4 text-text-secondary">
-                          {img.dateOrdered
-                            ? formatDate(img.dateOrdered)
-                            : formatDate(img.createdAt)}
-                        </td>
-                        <td className="py-3 pr-4 text-text-secondary">
-                          {img.performedAt ? formatDate(img.performedAt) : '—'}
-                        </td>
-                        <td className="py-3 pr-4">
-                          <StatusBadge status={img.status} type="lab" />
-                        </td>
-                        <td className="py-3 text-text-muted text-xs">
-                          {hasReport ? 'Available' : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[780px]">
+                  <thead>
+                    <tr className="text-left text-xs text-text-muted">
+                      {[
+                        'Modality',
+                        'Body Region',
+                        'Ordered',
+                        'Performed',
+                        'Status',
+                        'Report',
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="pb-3 pr-4 font-medium whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-base">
+                    {imagingOrders.map((img) => {
+                      const hasReport = !!(
+                        img.report && img.report.findings
+                      );
+                      return (
+                        <tr
+                          key={img.id}
+                          className="hover:bg-surface-low cursor-pointer"
+                          onClick={() =>
+                            navigate(`/patients/${id}/imaging/${img.id}`)
+                          }
+                        >
+                          <td className="py-3 pr-4 whitespace-nowrap">
+                            <Badge variant="primary">{img.modality}</Badge>
+                          </td>
+                          <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                            {img.bodyRegion || '—'}
+                          </td>
+                          <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                            {img.dateOrdered
+                              ? formatDate(img.dateOrdered)
+                              : formatDate(img.createdAt)}
+                          </td>
+                          <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                            {img.performedAt
+                              ? formatDate(img.performedAt)
+                              : '—'}
+                          </td>
+                          <td className="py-3 pr-4">
+                            <StatusBadge status={img.status} type="lab" />
+                          </td>
+                          <td className="py-3 text-text-muted text-xs whitespace-nowrap">
+                            {hasReport ? 'Available' : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState
                 title="No imaging orders"
@@ -892,44 +1064,55 @@ const PatientDetailPage: React.FC = () => {
           {/* ── Referrals Tab ── */}
           {activeTab === 'Referrals' &&
             (refsData?.items?.length ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-text-muted">
-                    {['Date', 'Type', 'Receiving Facility', 'Status', ''].map(
-                      (h) => (
-                        <th key={h} className="pb-3 pr-4 font-medium">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[720px]">
+                  <thead>
+                    <tr className="text-left text-xs text-text-muted">
+                      {[
+                        'Date',
+                        'Type',
+                        'Receiving Facility',
+                        'Status',
+                        'Created',
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="pb-3 pr-4 font-medium whitespace-nowrap"
+                        >
                           {h}
                         </th>
-                      ),
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-base">
-                  {refsData.items.map((r) => (
-                    <tr
-                      key={r.id}
-                      className="hover:bg-surface-low cursor-pointer"
-                      onClick={() =>
-                        navigate(`/patients/${id}/referrals/${r.id}`)
-                      }
-                    >
-                      <td className="py-3 pr-4">{formatDate(r.referralDate)}</td>
-                      <td className="py-3 pr-4 text-text-secondary">
-                        {r.referralType}
-                      </td>
-                      <td className="py-3 pr-4 text-text-secondary truncate max-w-[200px]">
-                        {r.receivingFacility}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <StatusBadge status={r.status} type="referral" />
-                      </td>
-                      <td className="py-3 text-xs text-text-muted">
-                        {formatDate(r.createdAt)}
-                      </td>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border-base">
+                    {refsData.items.map((r) => (
+                      <tr
+                        key={r.id}
+                        className="hover:bg-surface-low cursor-pointer"
+                        onClick={() =>
+                          navigate(`/patients/${id}/referrals/${r.id}`)
+                        }
+                      >
+                        <td className="py-3 pr-4 whitespace-nowrap">
+                          {formatDate(r.referralDate)}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                          {r.referralType}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary truncate max-w-[240px]">
+                          {r.receivingFacility}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <StatusBadge status={r.status} type="referral" />
+                        </td>
+                        <td className="py-3 text-xs text-text-muted whitespace-nowrap">
+                          {formatDate(r.createdAt)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState
                 title="No referrals requested"
@@ -943,56 +1126,61 @@ const PatientDetailPage: React.FC = () => {
           {/* ── Admissions Tab ── */}
           {activeTab === 'Admissions' &&
             (admsData?.items?.length ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-text-muted">
-                    {[
-                      'Admission Date',
-                      'Bed',
-                      'Ward',
-                      'Physician',
-                      'Status',
-                      '',
-                    ].map((h) => (
-                      <th key={h} className="pb-3 pr-4 font-medium">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-base">
-                  {admsData.items.map((a) => (
-                    <tr
-                      key={a.id}
-                      className="hover:bg-surface-low cursor-pointer"
-                      onClick={() =>
-                        navigate(`/patients/${id}/admissions/${a.id}`)
-                      }
-                    >
-                      <td className="py-3 pr-4">
-                        {formatDate(a.admissionDate)}
-                      </td>
-                      <td className="py-3 pr-4 text-text-secondary">
-                        {a.bedNumber}
-                      </td>
-                      <td className="py-3 pr-4 text-text-secondary">
-                        {a.ward}
-                      </td>
-                      <td className="py-3 pr-4 text-text-secondary">
-                        {a.admittingPhysician}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <StatusBadge status={a.status} type="admission" />
-                      </td>
-                      <td className="py-3 text-xs text-text-muted">
-                        {a.dischargeDate
-                          ? formatDate(a.dischargeDate)
-                          : 'Ongoing'}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[760px]">
+                  <thead>
+                    <tr className="text-left text-xs text-text-muted">
+                      {[
+                        'Admission Date',
+                        'Bed',
+                        'Ward',
+                        'Physician',
+                        'Status',
+                        'Discharge',
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="pb-3 pr-4 font-medium whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border-base">
+                    {admsData.items.map((a) => (
+                      <tr
+                        key={a.id}
+                        className="hover:bg-surface-low cursor-pointer"
+                        onClick={() =>
+                          navigate(`/patients/${id}/admissions/${a.id}`)
+                        }
+                      >
+                        <td className="py-3 pr-4 whitespace-nowrap">
+                          {formatDate(a.admissionDate)}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                          {a.bedNumber}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                          {a.ward}
+                        </td>
+                        <td className="py-3 pr-4 text-text-secondary whitespace-nowrap">
+                          {a.admittingPhysician}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <StatusBadge status={a.status} type="admission" />
+                        </td>
+                        <td className="py-3 text-xs text-text-muted whitespace-nowrap">
+                          {a.dischargeDate
+                            ? formatDate(a.dischargeDate)
+                            : 'Ongoing'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState
                 title="No admissions recorded"

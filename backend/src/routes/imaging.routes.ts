@@ -8,6 +8,7 @@ import {
   recordImagingPerformedSchema,
   updateImagingStatusSchema,
   getImagingQuerySchema,
+  getAllImagingQuerySchema,
 } from '@schemas/imaging.schema.js';
 import * as imagingController from '@controllers/imaging.controller.js';
 
@@ -21,6 +22,11 @@ router.post(
   '/',
   validate(createImagingSchema),
   imagingController.orderImaging
+);
+router.get(
+  '/all',
+  validate(getAllImagingQuerySchema),
+  imagingController.getAllImagingOrders,
 );
 
 // ── List ──

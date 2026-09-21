@@ -1,10 +1,3 @@
-/**
- * useProgressNotes
- * ────────────────
- * Hooks for Patient Progress Notes.
- * Field names on `ProgressNote` mirror the backend `PatientProgressNote` model.
- */
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { progressNotesApi } from '@/api/progress-notes';
 import { useToast } from '@/context/ToastContext';
@@ -236,6 +229,10 @@ export interface ProgressNoteListItem {
   createdBy: { id: string; name: string; role: string } | null;
   createdAt: string;
   updatedAt?: string | null;
+
+  /** Soft-delete metadata — populated by the `/all` endpoint */
+  deletedAt?: string | null;
+  deletionReason?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -244,11 +241,21 @@ export interface ProgressNoteListItem {
 
 export function useProgressNotes(
   patientId: string,
-  params?: { admissionId?: string; page?: number; limit?: number },
+  params?: {
+    admissionId?: string;
+    includeDeleted?: boolean;
+    page?: number;
+    limit?: number;
+  },
 ) {
+  const includeDeleted = params?.includeDeleted === true;
+
   return useQuery({
     queryKey: ['patients', patientId, 'progress-notes', params],
-    queryFn: () => progressNotesApi.getByPatient(patientId, params),
+    queryFn: () =>
+      includeDeleted
+        ? progressNotesApi.getAllForPatient(patientId, params)
+        : progressNotesApi.getByPatient(patientId, params),
     enabled: !!patientId,
   });
 }

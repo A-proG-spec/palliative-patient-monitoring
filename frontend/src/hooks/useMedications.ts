@@ -11,19 +11,31 @@ import { QUERY_KEYS } from '@/constants';
 
 // ─────────────────────────────────────────────────────────────
 // Queries — patient-scoped
+//
+// Pass `{ includeDeleted: true }` to fetch deleted rows via the
+// `/all` endpoint. The hook switches endpoints internally so
+// call-sites don't need to know about the route split.
 // ─────────────────────────────────────────────────────────────
 
 export function usePatientMedications(
   patientId: string,
   params?: {
     status?: MedicationStatus;
+    includeDeleted?: boolean;
     page?: number;
     limit?: number;
   },
 ) {
+  const includeDeleted = params?.includeDeleted === true;
+
   return useQuery({
+    // `params` includes includeDeleted, so toggling it changes the
+    // query key and React Query refetches against the right endpoint.
     queryKey: ['patients', patientId, 'medications', params],
-    queryFn: () => medicationApi.getByPatient(patientId, params),
+    queryFn: () =>
+      includeDeleted
+        ? medicationApi.getAllForPatient(patientId, params)
+        : medicationApi.getByPatient(patientId, params),
     enabled: !!patientId,
   });
 }
@@ -41,10 +53,6 @@ export function useMedicationDetail(
 
 // ─────────────────────────────────────────────────────────────
 // Pharmacist queue — top-level pending orders
-//
-// Used by the pharmacist's work queue page AND the sidebar badge.
-// Pass `{ enabled: false }` to disable when the current user isn't
-// a pharmacist.
 // ─────────────────────────────────────────────────────────────
 
 export interface PendingMedicationOrder {

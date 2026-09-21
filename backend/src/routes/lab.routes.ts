@@ -8,6 +8,7 @@ import {
   cancelLabSchema,
   deleteLabSchema,
   getLabsQuerySchema,
+  getAllLabsQuerySchema,
 } from '@schemas/lab.schema.js';
 import * as labController from '@controllers/lab.controller.js';
 
@@ -29,7 +30,11 @@ router.get(
   validate(getLabsQuerySchema),
   labController.getLabTests,
 );
-
+router.get(
+  '/all',
+  validate(getAllLabsQuerySchema),
+  labController.getAllLabTests,
+);
 // ── Read one ──
 router.get('/:labId', labController.getLabTestById);
 

@@ -61,7 +61,7 @@ export const ADMISSION_SPIRITUAL_SUPPORT_VALUES = [
 export const createAdmissionSchema = z.object({
   // ── Section 1: Patient identification (snapshot — auto-filled) ──
   patientName: z.string().optional(),
-  hospitalPatientId: z.string().optional(),
+  hospitalPatientId: z.string(),
   age: z.coerce.number().min(0).max(150).optional(),
   sex: z.enum(['Male', 'Female']).optional(),
   dateOfBirth: dateString.optional(),

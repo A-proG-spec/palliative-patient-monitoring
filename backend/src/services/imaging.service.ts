@@ -1,10 +1,78 @@
-import { prisma } from '@db/prisma.js';
+import { prisma,prismaBase } from '@db/prisma.js';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 
+
 // ─────────────────────────────────────────────────────────────
-// Order imaging
+// GET ALL imaging orders for a patient
 // ─────────────────────────────────────────────────────────────
+export const getAllImagingOrders = async (
+  patientId: string,
+  filters: {
+    status?: string;
+    modality?: string;
+    priority?: string;
+    includeDeleted?: boolean;
+  } = {},
+  page: number = 1,
+  limit: number = 20,
+) => {
+  const pid = toId(patientId, 'patient id');
+  const client = filters.includeDeleted ? prismaBase : prisma;
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: pid },
+    select: { id: true },
+  });
+  if (!patient) throw new ApiError(404, 'Patient not found');
+
+  const where: any = { patientId: pid };
+  if (filters.status) where.status = filters.status;
+  if (filters.modality) where.modality = filters.modality;
+  if (filters.priority) where.priority = filters.priority;
+
+  const skip = (page - 1) * limit;
+
+  const [items, total] = await Promise.all([
+    client.imagingOrder.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        orderedByStaff: { select: { id: true, name: true, role: true } },
+      },
+    }),
+    client.imagingOrder.count({ where }),
+  ]);
+
+  return {
+    items: items.map((o) => ({
+      id: o.id,
+      patientId: o.patientId,
+      modality: o.modality,
+      bodyRegion: o.bodyRegion,
+      specificSite: o.specificSite,
+      laterality: o.laterality,
+      priority: o.priority,
+      contrastRequested: o.contrastRequested,
+      status: o.status,
+      hasReport: !!(o.findings || o.impression),
+      dateOrdered: o.createdAt,
+      performedAt: o.performedAt,
+      orderedBy: {
+        id: o.orderedByStaff.id,
+        name: o.orderedByStaff.name,
+      },
+      deletedAt: o.deletedAt ?? null,
+      deletionReason: o.deletionReason ?? null,
+    })),
+    page,
+    limit,
+    total,
+  };
+};
+
 export const orderImaging = async (
   patientId: string,
   data: any,
@@ -567,6 +635,7 @@ export const submitImagingReportFromQueue = async (
 };
 
 export default {
+  getAllImagingOrders,
   orderImaging,
   getImagingOrders,
   getImagingOrderById,

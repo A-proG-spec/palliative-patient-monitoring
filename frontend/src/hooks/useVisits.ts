@@ -3,10 +3,22 @@ import { visitApi } from '@/api/visits';
 import type { CreateVisitRequest } from '@/types/visit.types';
 import { useToast } from '@/context/ToastContext';
 
-export function usePatientVisits(patientId: string, params?: { page?: number; limit?: number }) {
+export function usePatientVisits(
+  patientId: string,
+  params?: {
+    includeDeleted?: boolean;
+    page?: number;
+    limit?: number;
+  },
+) {
+  const includeDeleted = params?.includeDeleted === true;
+
   return useQuery({
     queryKey: ['patients', patientId, 'visits', params],
-    queryFn: () => visitApi.getByPatient(patientId, params),
+    queryFn: () =>
+      includeDeleted
+        ? visitApi.getAllForPatient(patientId, params)
+        : visitApi.getByPatient(patientId, params),
     enabled: !!patientId,
   });
 }

@@ -6,13 +6,29 @@ import type {
 } from '@/types/hospice-nursing.types';
 import { useToast } from '@/context/ToastContext';
 
+/**
+ * List hospice nursing assessments for a patient.
+ *
+ * Pass `{ includeDeleted: true }` to hit the `/all` endpoint and
+ * return deleted-only rows — this is what powers the "Show deleted"
+ * toggle on the admin patient detail page.
+ */
 export function usePatientHospiceAssessments(
   patientId: string,
-  params?: { page?: number; limit?: number },
+  params?: {
+    includeDeleted?: boolean;
+    page?: number;
+    limit?: number;
+  },
 ) {
+  const includeDeleted = params?.includeDeleted === true;
+
   return useQuery({
     queryKey: ['patients', patientId, 'hospice-nursing', params],
-    queryFn: () => hospiceNursingApi.getByPatient(patientId, params),
+    queryFn: () =>
+      includeDeleted
+        ? hospiceNursingApi.getAllForPatient(patientId, params)
+        : hospiceNursingApi.getByPatient(patientId, params),
     enabled: !!patientId,
   });
 }

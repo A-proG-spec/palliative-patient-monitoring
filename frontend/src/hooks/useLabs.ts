@@ -1,6 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { labApi } from '@/api/labs';
-import type { CreateLabRequest, UpdateLabRequest } from '@/types/lab.types';
+import type {
+  CreateLabRequest,
+  UpdateLabRequest,
+  LabCategory,
+  LabPriority,
+  LabStatus,
+} from '@/types/lab.types';
 import { useToast } from '@/context/ToastContext';
 import api from '@/api/client';
 import { QUERY_KEYS } from '@/constants';
@@ -12,14 +18,22 @@ import { QUERY_KEYS } from '@/constants';
 export function usePatientLabs(
   patientId: string,
   params?: {
-    status?: 'Ordered' | 'Completed' | 'Cancelled';
+    status?: LabStatus;
+    category?: LabCategory;
+    priority?: LabPriority;
+    includeDeleted?: boolean;
     page?: number;
     limit?: number;
   },
 ) {
+  const includeDeleted = params?.includeDeleted === true;
+
   return useQuery({
     queryKey: ['patients', patientId, 'labs', params],
-    queryFn: () => labApi.getByPatient(patientId, params),
+    queryFn: () =>
+      includeDeleted
+        ? labApi.getAllForPatient(patientId, params)
+        : labApi.getByPatient(patientId, params),
     enabled: !!patientId,
   });
 }

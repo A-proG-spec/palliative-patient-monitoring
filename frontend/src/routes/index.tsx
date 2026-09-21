@@ -96,6 +96,9 @@ const RecordProgressNotePage = lazy(
 const HospiceNursingPage = lazy(
   () => import('@/pages/clinical/HospiceNursingPage'),
 );
+const HospiceNursingDetailPage = lazy(
+  () => import('@/pages/clinical/HospiceNursingDetailPage'),
+);
 
 // ── Physician-only ──
 const PatientRegistrationPage = lazy(
@@ -331,6 +334,11 @@ const AppRoutes: React.FC = () => (
     ═══════════════════════════════════════════════════════════ */}
     <Route element={<ProtectedRoute role="staff" />}>
       <Route element={<RoleGuard />}>
+
+        {/* ═══════════════════════════════════════════════════
+            Everything below lives inside DashboardLayout so the
+            sidebar + header render on every staff page.
+        ═══════════════════════════════════════════════════ */}
         <Route element={<DashboardLayout />}>
 
           {/* ───────────────────────────────────────────────
@@ -527,6 +535,14 @@ const AppRoutes: React.FC = () => (
               element={
                 <S>
                   <HospiceNursingPage />
+                </S>
+              }
+            />
+            <Route
+              path="/patients/:id/hospice-nursing/:assessmentId"
+              element={
+                <S>
+                  <HospiceNursingDetailPage />
                 </S>
               }
             />

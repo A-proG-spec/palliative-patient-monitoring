@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Heart, Plus, ChevronRight, ClipboardList } from 'lucide-react';
 import { usePatient } from '@/hooks/usePatients';
+import { useAuthStore } from '@/store/auth.store';
 import {
   usePatientHospiceAssessments,
   useCreateHospiceAssessment,
@@ -196,6 +197,7 @@ const HospiceNursingPage: React.FC = () => {
   const { data: patient, isLoading: patientLoading } = usePatient(id!);
   const { data, isLoading, error, refetch } = usePatientHospiceAssessments(id!);
   const createMutation = useCreateHospiceAssessment(id!);
+  const user = useAuthStore((s) => s.user);
 
   const {
     register,
@@ -208,6 +210,7 @@ const HospiceNursingPage: React.FC = () => {
     resolver: zodResolver(createHospiceNursingAssessmentSchema),
     defaultValues: {
       assessmentDate: new Date().toISOString().split('T')[0],
+      assessedByStaffId: user?.id ? String(user.id) : undefined,
       orientation: [],
       generalAppearance: [],
       painLocation: [],

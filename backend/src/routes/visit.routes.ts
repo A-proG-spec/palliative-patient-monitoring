@@ -7,6 +7,7 @@ import {
   signVisitSchema,
   updateVisitSchema,
   getVisitsQuerySchema,
+  getAllVisitsQuerySchema,
 } from '@schemas/visit.schema.js';
 import * as visitController from '@controllers/visit.controller.js';
 
@@ -28,7 +29,11 @@ router.get(
   validate(getVisitsQuerySchema),
   visitController.getVisits
 );
-
+router.get(
+  '/all',
+  validate(getAllVisitsQuerySchema),
+  visitController.getAllVisits,
+);
 // ── Read one ──
 router.get('/:visitId', visitController.getVisitById);
 

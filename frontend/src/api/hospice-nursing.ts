@@ -19,6 +19,9 @@ export const hospiceNursingApi = {
       .then((r) => r.data);
   },
 
+  /**
+   * Active-only list.
+   */
   getByPatient: (
     patientId: string,
     params?: { page?: number; limit?: number },
@@ -28,6 +31,33 @@ export const hospiceNursingApi = {
         `/hospice/patients/${patientId}/hospice-nursing`,
         { params },
       )
+      .then((r) => r.data);
+  },
+
+  /**
+   * Active + deleted list. Hits `/hospice/patients/:id/all`.
+   * Pass `{ includeDeleted: true }` to filter to deleted-only.
+   *
+   * NOTE: The hospice mount point differs from the other resources —
+   * it's `/hospice/patients/:id/all`, NOT
+   * `/patients/:id/hospice-nursing/all`.
+   */
+  getAllForPatient: (
+    patientId: string,
+    params?: {
+      includeDeleted?: boolean;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<HospiceNursingListResponse> => {
+    const { includeDeleted, ...rest } = params ?? {};
+    return apiClient
+      .get<HospiceNursingListResponse>(`/hospice/patients/${patientId}/all`, {
+        params: {
+          ...rest,
+          ...(includeDeleted ? { includeDeleted: 'true' } : {}),
+        },
+      })
       .then((r) => r.data);
   },
 

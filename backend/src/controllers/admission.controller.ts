@@ -9,6 +9,25 @@ export const recordAdmission = asyncHandler(async (req: Request, res: Response) 
   return SuccessResponse(201, 'Admission recorded successfully', result);
 });
 
+export const getAllAdmissions = asyncHandler(
+  async (req: Request, res: Response) => {
+    const patientId = req.params.patientId as string;
+    const status = req.query.status as string | undefined;
+    const page = req.query.page ? parseInt(req.query.page as string) : 1;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+    const includeDeleted = req.query.includeDeleted === 'true';
+
+    const result = await admissionService.getAllAdmissions(
+      patientId,
+      status,
+      page,
+      limit,
+      includeDeleted,
+    );
+    return SuccessResponse(200, 'OK', result);
+  },
+);
+
 export const getAdmissions = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const status = req.query.status as string | undefined;
@@ -64,6 +83,7 @@ export const restoreAdmission = asyncHandler(async (req: Request, res: Response)
 });
 
 export default {
+  getAllAdmissions,
   recordAdmission,
   getAdmissions,
   getAdmissionById,

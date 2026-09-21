@@ -20,7 +20,22 @@ export const getVisits = asyncHandler(async (req: Request, res: Response) => {
   const result = await visitService.getVisits(patientId, page, limit);
   return SuccessResponse(200, 'OK', result);
 });
+export const getAllVisits = asyncHandler(
+  async (req: Request, res: Response) => {
+    const patientId = req.params.patientId as string;
+    const page = req.query.page ? parseInt(req.query.page as string) : 1;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+    const includeDeleted = req.query.includeDeleted === 'true';
 
+    const result = await visitService.getAllVisits(
+      patientId,
+      page,
+      limit,
+      includeDeleted,
+    );
+    return SuccessResponse(200, 'OK', result);
+  },
+);
 export const getVisitById = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const visitId = req.params.visitId as string;
@@ -68,6 +83,7 @@ export const restoreVisit = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export default {
+  getAllVisits,
   recordVisit,
   getVisits,
   getVisitById,

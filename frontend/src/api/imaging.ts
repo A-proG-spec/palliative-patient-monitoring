@@ -32,14 +32,12 @@ export interface ImagingOrder {
   wardClinic?: string;
   contactNo?: string;
 
-  // §2 Clinical
   provisionalDiagnosis?: string;
   presentingSymptoms?: string;
   medicalHistory?: string;
   previousImaging: boolean;
   previousImagingDetails?: string;
 
-  // §3 Imaging examination
   modality: ImagingModality;
   modalityOtherText?: string;
   bodyRegion: string;
@@ -47,12 +45,10 @@ export interface ImagingOrder {
   laterality: Laterality;
   contrastRequested: ContrastDecision;
 
-  // §4 Exam details
   specificSite?: string;
   protocolViews?: string;
   specialClinicalQuestion?: string;
 
-  // §5 Contrast / medication
   previousContrastReaction: boolean;
   previousContrastReactionDetails?: string;
   knownAllergies?: string;
@@ -60,22 +56,18 @@ export interface ImagingOrder {
   egfr?: string;
   otherRelevantMedicationOrCondition?: string;
 
-  // §6 Safety screening
   pregnancyStatus: PregnancyStatus;
   implantedMedicalDevice: boolean;
   deviceImplantDetails?: string;
   metallicForeignBody: MetallicForeignBody;
   otherSafetyConsiderations?: string;
 
-  // §7 Preparation
   preparation: string[];
   preparationInstructions?: string;
 
-  // §8 Priority
   priority: ImagingPriority;
   reasonForUrgency?: string;
 
-  // §9 Referring clinician
   clinicianName?: string;
   clinicianDepartment?: string;
   clinicianLicenseNo?: string;
@@ -83,7 +75,6 @@ export interface ImagingOrder {
   clinicianSignature?: string;
   clinicianSignedAt?: string;
 
-  // §10 Department use
   examinationPerformed?: boolean;
   performedModality?: string;
   performedProtocol?: string;
@@ -93,7 +84,6 @@ export interface ImagingOrder {
   performedAt?: string;
   imageQuality?: ImageQuality;
 
-  // §11 Report
   report?: ImagingOrderReport;
 
   status: ImagingStatus;
@@ -101,17 +91,19 @@ export interface ImagingOrder {
   dateOrdered?: string;
   createdAt: string;
   updatedAt?: string;
+
+  /** Soft-delete metadata */
+  deletedAt?: string | null;
+  deletionReason?: string | null;
 }
 
 export interface CreateImagingRequest {
-  // §2
   provisionalDiagnosis?: string;
   presentingSymptoms?: string;
   medicalHistory?: string;
   previousImaging?: boolean;
   previousImagingDetails?: string;
 
-  // §3
   modality: ImagingModality;
   modalityOtherText?: string;
   bodyRegion: string;
@@ -119,12 +111,10 @@ export interface CreateImagingRequest {
   laterality: Laterality;
   contrastRequested: ContrastDecision;
 
-  // §4
   specificSite?: string;
   protocolViews?: string;
   specialClinicalQuestion?: string;
 
-  // §5
   previousContrastReaction?: boolean;
   previousContrastReactionDetails?: string;
   knownAllergies?: string;
@@ -132,22 +122,18 @@ export interface CreateImagingRequest {
   egfr?: string;
   otherRelevantMedicationOrCondition?: string;
 
-  // §6
   pregnancyStatus: PregnancyStatus;
   implantedMedicalDevice?: boolean;
   deviceImplantDetails?: string;
   metallicForeignBody: MetallicForeignBody;
   otherSafetyConsiderations?: string;
 
-  // §7
   preparation?: string[];
   preparationInstructions?: string;
 
-  // §8
   priority: ImagingPriority;
   reasonForUrgency?: string;
 
-  // §9
   clinicianName?: string;
   clinicianDepartment?: string;
   clinicianLicenseNo?: string;
@@ -189,13 +175,47 @@ export const imagingApi = {
     return apiClient.post<ImagingOrder>(`/patients/${patientId}/imaging`, data).then((r) => r.data);
   },
 
+  /**
+   * Active-only list.
+   */
   getByPatient: (
     patientId: string,
-    params?: { status?: ImagingStatus; modality?: ImagingModality; priority?: ImagingPriority; page?: number; limit?: number },
+    params?: {
+      status?: ImagingStatus;
+      modality?: ImagingModality;
+      priority?: ImagingPriority;
+      page?: number;
+      limit?: number;
+    },
   ): Promise<ImagingListResponse> => {
     if (USE_MOCK) return mockImagingApi.getByPatient(patientId, params as any) as any;
     return apiClient
       .get<ImagingListResponse>(`/patients/${patientId}/imaging`, { params })
+      .then((r) => r.data);
+  },
+
+  /**
+   * Active + deleted list. Hits `/patients/:id/imaging/all`.
+   */
+  getAllForPatient: (
+    patientId: string,
+    params?: {
+      status?: ImagingStatus;
+      modality?: ImagingModality;
+      priority?: ImagingPriority;
+      includeDeleted?: boolean;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<ImagingListResponse> => {
+    const { includeDeleted, ...rest } = params ?? {};
+    return apiClient
+      .get<ImagingListResponse>(`/patients/${patientId}/imaging/all`, {
+        params: {
+          ...rest,
+          ...(includeDeleted ? { includeDeleted: 'true' } : {}),
+        },
+      })
       .then((r) => r.data);
   },
 
@@ -237,9 +257,6 @@ export const imagingApi = {
       .then((r) => r.data);
   },
 
-  /**
-   * Admin-only soft delete.
-   */
   delete: (patientId: string, imagingId: string, reason?: string): Promise<{ id: string; success: boolean }> => {
     if (USE_MOCK) return mockImagingApi.delete(patientId, imagingId);
     return apiClient
@@ -249,9 +266,6 @@ export const imagingApi = {
       .then((r) => r.data);
   },
 
-  /**
-   * Admin-only restore.
-   */
   restore: (patientId: string, imagingId: string): Promise<{ id: string; restored: boolean }> => {
     if (USE_MOCK) return Promise.resolve({ id: imagingId, restored: true });
     return apiClient

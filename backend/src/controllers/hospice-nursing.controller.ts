@@ -52,6 +52,22 @@ export const getHospiceNursingAssessmentById = asyncHandler(
     },
 );
 
+export const getAllHospiceNursingAssessments = asyncHandler(
+  async (req: Request, res: Response) => {
+    const patientId = req.params.patientId as string;
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+    const includeDeleted = req.query.includeDeleted === 'true';
+
+    const result = await hospiceService.getAllHospiceNursingAssessments(
+      patientId,
+      page,
+      limit,
+      includeDeleted,
+    );
+    return SuccessResponse(200, 'OK', result);
+  },
+);
 // ═════════════════════════════════════════════════════════════
 // UPDATE — admin only (whitelisted fields)
 // ═════════════════════════════════════════════════════════════
@@ -123,6 +139,7 @@ export const getDeletedHospiceNursingAssessments = asyncHandler(
 );
 
 export default {
+    getAllHospiceNursingAssessments,
     createHospiceNursingAssessment,
     getHospiceNursingAssessments,
     getHospiceNursingAssessmentById,
