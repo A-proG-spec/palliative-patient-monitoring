@@ -11,7 +11,12 @@ export type StaffRole =
   | 'Nurse'
   | 'Pharmacist'
   | 'Radiologist'
-  | 'LaboratoryTechnician';
+  | 'LaboratoryTechnician'
+  | 'Physiologist'
+  | 'Psychiatrist'
+  | 'Psychologist'
+  | 'SocialWorker'
+  | 'SpiritualPerson';
 
 export type VisitTeamRole = 'Physician' | 'Nurse';
 
@@ -187,12 +192,12 @@ export interface CreateVisitRequest {
   timeStarted: string;
   timeEnded: string;
   visitType:
-    | 'Routine'
-    | 'Emergency'
-    | 'FirstAssessment'
-    | 'PostDischarge'
-    | 'EndOfLife'
-    | 'Bereavement';
+  | 'Routine'
+  | 'Emergency'
+  | 'FirstAssessment'
+  | 'PostDischarge'
+  | 'EndOfLife'
+  | 'Bereavement';
   teamMembers: Array<{
     role: VisitTeamRole;
     name: string;
@@ -274,12 +279,12 @@ export interface CreateVisitRequest {
   immediateActions?: string;
   followUpPlan?: string;
   outcome:
-    | 'Stable'
-    | 'SymptomsImproved'
-    | 'SymptomsUnchanged'
-    | 'SymptomsWorsened'
-    | 'ReferredToFacility'
-    | 'Deceased';
+  | 'Stable'
+  | 'SymptomsImproved'
+  | 'SymptomsUnchanged'
+  | 'SymptomsWorsened'
+  | 'ReferredToFacility'
+  | 'Deceased';
   dateOfDeath?: string;
   nextVisitDate?: string;
   createdBy: number;
@@ -617,11 +622,11 @@ export interface CreateHospiceNursingAssessmentRequest {
 
   // General observation
   levelOfConsciousness?:
-    | 'Alert'
-    | 'Drowsy'
-    | 'Confused'
-    | 'Unresponsive'
-    | 'Comatose';
+  | 'Alert'
+  | 'Drowsy'
+  | 'Confused'
+  | 'Unresponsive'
+  | 'Comatose';
   orientation?: string[];
   generalAppearance?: string[];
 

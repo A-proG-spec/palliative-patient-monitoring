@@ -56,6 +56,11 @@ export const approveStaff = async (
     'Pharmacist',
     'Radiologist',
     'LaboratoryTechnician',
+    'Physiologist',
+    'Psychiatrist',
+    'Psychologist',
+    'SocialWorker',
+    'SpiritualPerson',
   ];
   if (!validRoles.includes(role)) {
     throw new ApiError(400, 'Invalid role specified');

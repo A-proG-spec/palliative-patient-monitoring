@@ -150,6 +150,12 @@ export const ROLE_LABELS: Record<string, string> = {
   LaboratoryTechnician: 'Laboratory Technician',
   Radiologist: 'Radiologist',
   admin: 'Administrator',
+  Physiologist: 'Physiologist',
+  Psychiatrist: 'Psychiatrist',
+  Psychologist: 'Psychologist',
+  SocialWorker: 'SocialWorker',
+  SpiritualPerson: 'SpiritualPerson',
+
 };
 
 export const REFERRAL_REASON_LABELS: Record<string, string> = {

@@ -7,7 +7,7 @@ export const registerSchema = z.object({
     phone: z.string().min(10, 'Phone number must be at least 10 characters'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     role: z.enum(
-      [ 'Physician',  'Nurse',  'Pharmacist',  'Radiologist',  'LaboratoryTechnician',  'Physiologist',  'Psychiatrist',  'Psychologist',  'SocialWorker'],
+      [ 'Physician',  'Nurse',  'Pharmacist',  'Radiologist',  'LaboratoryTechnician',  'Physiologist',  'Psychiatrist',  'Psychologist',  'SocialWorker', 'SpiritualPerson'],
       { message: 'Please select a valid role' },
     ),
   }),

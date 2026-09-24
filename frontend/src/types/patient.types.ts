@@ -36,7 +36,7 @@ export interface Patient {
   status: PatientStatus;
   currentLocation: PatientCurrentLocation;
 
-  registeredBy: string;
+  registeredBy: { id: string | number; name: string } | string;
   createdAt: string;
   updatedAt?: string;
 }

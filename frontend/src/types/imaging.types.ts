@@ -1,349 +1,357 @@
-// ─────────────────────────────────────────────────────────────
-// Enums — mirror backend hospice nursing enums
-// ─────────────────────────────────────────────────────────────
-export type HospiceConsciousness =
-  | 'Alert'
-  | 'Drowsy'
-  | 'Confused'
-  | 'Unresponsive'
-  | 'Comatose';
+// ═════════════════════════════════════════════════════════════
+// ENUMS — mirror backend Prisma enums exactly
+// ═════════════════════════════════════════════════════════════
 
-export type HospiceBreathingPattern =
-  | 'Normal'
-  | 'Labored'
-  | 'Shallow'
-  | 'Rapid'
-  | 'Slow';
+export type ImagingModality =
+  | 'XRay'
+  | 'Ultrasound'
+  | 'CT'
+  | 'MRI'
+  | 'Mammography'
+  | 'Fluoroscopy'
+  | 'Interventional'
+  | 'NuclearMedicine'
+  | 'Other';
 
-export type HospiceDyspneaSeverity = 'None' | 'Mild' | 'Moderate' | 'Severe';
-export type HospiceCoughType = 'None' | 'Dry' | 'Productive';
-export type HospiceSputumColor = 'None' | 'Clear' | 'Yellow' | 'Green' | 'Bloody';
-export type HospicePulseRhythm = 'Regular' | 'Irregular';
-export type HospiceEdemaSeverity = 'None' | 'Mild' | 'Moderate' | 'Severe';
-export type HospiceSkinColor = 'Normal' | 'Pale' | 'Cyanotic' | 'Jaundiced';
-export type HospiceAppetite = 'Good' | 'Fair' | 'Poor' | 'UnableToEat';
-export type HospiceNauseaSeverity = 'None' | 'Mild' | 'Moderate' | 'Severe';
-export type HospiceBowelFunction =
-  | 'Normal'
-  | 'Constipation'
-  | 'Diarrhea'
-  | 'Incontinence';
-export type HospiceUrinaryFunction =
-  | 'Normal'
-  | 'Frequency'
-  | 'Retention'
-  | 'Incontinence'
-  | 'Catheterized';
-export type HospiceUrineAppearance = 'Clear' | 'Cloudy' | 'Bloody' | 'Dark';
-export type HospiceSkinIntegrity =
-  | 'Intact'
-  | 'Dry'
-  | 'Fragile'
-  | 'WoundPresent'
-  | 'PressureUlcer';
-export type HospicePressureInjuryRisk = 'Low' | 'Moderate' | 'High';
-export type HospicePressureUlcerStage = 'I' | 'II' | 'III' | 'IV';
-export type HospiceMobilityStatus =
-  | 'Independent'
-  | 'RequiresAssistance'
-  | 'WheelchairDependent'
-  | 'Bedridden';
-export type HospiceFallRisk = 'Low' | 'Moderate' | 'High';
-export type HospiceAssistiveDevice =
+export type ImagingContrastDecision =
+  | 'No'
+  | 'Yes'
+  | 'ToBeDetermined'
+  | 'NotApplicable';
+
+export type ImagingPregnancyStatus =
+  | 'NotPregnant'
+  | 'Pregnant'
+  | 'PossiblyPregnant'
+  | 'NotApplicable';
+
+export type ImagingMetallicForeignBody =
+  | 'No'
+  | 'Yes'
+  | 'Unknown';
+
+export type ImagingPriority =
+  | 'Routine'
+  | 'Urgent'
+  | 'Emergency';
+
+export type ImagingLaterality =
+  | 'Right'
+  | 'Left'
+  | 'Bilateral'
+  | 'NotApplicable';
+
+export type ImagingImageQuality =
+  | 'Diagnostic'
+  | 'Limited'
+  | 'NonDiagnostic'
+  | 'RepeatRequired';
+
+export type ImagingPreparation =
   | 'None'
-  | 'Cane'
-  | 'Walker'
-  | 'Wheelchair'
-  | 'Other';
-export type HospiceADL = 'Independent' | 'NeedAssistance' | 'Dependent';
-export type HospiceEmotionalStatus =
-  | 'Stable'
-  | 'Anxious'
-  | 'Depressed'
-  | 'Fearful'
-  | 'Agitated'
-  | 'Grieving';
-export type HospiceCommunicationAbility = 'Normal' | 'Impaired' | 'NonVerbal';
-export type HospiceCognitiveStatus =
-  | 'Intact'
-  | 'MildImpairment'
-  | 'SevereImpairment';
-export type HospiceFamilySupport = 'Strong' | 'Moderate' | 'Limited' | 'None';
-export type HospiceCaregiverStress = 'Low' | 'Moderate' | 'High';
-export type HospiceReligiousAffiliation =
-  | 'Orthodox'
-  | 'Muslim'
-  | 'Protestant'
-  | 'Catholic'
-  | 'Other';
-export type HospiceNursingDiagnosis =
-  | 'AcutePain'
-  | 'ChronicPain'
-  | 'ImpairedMobility'
-  | 'RiskForFalls'
-  | 'ImpairedSkinIntegrity'
-  | 'ImbalancedNutrition'
-  | 'Anxiety'
-  | 'CaregiverStrain'
-  | 'IneffectiveBreathingPattern'
+  | 'Fasting'
+  | 'FullBladder'
+  | 'EmptyBladder'
+  | 'SpecialMedicationPreparation'
   | 'Other';
 
-// ─────────────────────────────────────────────────────────────
-// Main document — GET /hospice/patients/:id/hospice-nursing/:assessmentId
-// ─────────────────────────────────────────────────────────────
-export interface HospiceNursingAssessment {
-  id: number;
-  patientId: number;
-  hospitalAdmissionId?: number | null;
+export type ImagingPerformedContrast =
+  | 'None'
+  | 'Administered'
+  | 'NotAdministered';
 
-  assessmentDate: string;
+export type ImagingStatus =
+  | 'Ordered'
+  | 'Completed'
+  | 'Cancelled';
 
-  // ── Assessor ──
-  assessedByStaffId?: number | null;
-  assessedBy?: { id: number; name: string; role?: string } | null;
+// ═════════════════════════════════════════════════════════════
+// REPORT — embedded on the ImagingOrder row (flat columns)
+// ═════════════════════════════════════════════════════════════
 
-  // ── General observation ──
-  levelOfConsciousness?: HospiceConsciousness | null;
-  orientation: string[];
-  generalAppearance: string[];
+export interface ImagingOrderReport {
+  findings: string;
+  impression: string;
+  recommendation?: string | null;
+  reportDate?: string | null;
+}
 
-  // ── Vitals ──
-  bloodPressure?: string | null;
-  pulseRate?: number | null;
-  respiratoryRate?: number | null;
-  temperature?: number | null;
-  oxygenSaturation?: number | null;
-  weightKg?: number | null;
-  heightCm?: number | null;
+// ═════════════════════════════════════════════════════════════
+// MAIN DOCUMENT — full shape returned by GET one
+// ═════════════════════════════════════════════════════════════
 
-  // ── Pain ──
-  painPresent?: boolean | null;
-  painScore?: number | null;
-  painLocation: string[];
-  painLocationOther?: string | null;
-  painCharacteristics: string[];
-  painReliefMeasures: string[];
-  painReliefOther?: string | null;
+export interface ImagingOrder {
+  id: string;
+  patientId: string;
 
-  // ── Respiratory ──
-  breathingPattern?: HospiceBreathingPattern | null;
-  dyspneaSeverity?: HospiceDyspneaSeverity | null;
-  oxygenTherapy?: boolean | null;
-  oxygenFlowRate?: string | null;
-  cough?: HospiceCoughType | null;
-  sputumColor?: HospiceSputumColor | null;
-  respiratoryNotes?: string | null;
+  // Patient snapshot
+  patientName?: string | null;
+  medicalRecordNo?: string | null;
+  age?: number | null;
+  sex?: 'Male' | 'Female' | null;
+  dateOfBirth?: string | null;
 
-  // ── Cardiovascular ──
-  pulseRhythm?: HospicePulseRhythm | null;
-  peripheralEdema?: HospiceEdemaSeverity | null;
-  edemaLocation?: string | null;
-  skinColor?: HospiceSkinColor | null;
+  // Header
+  hospital?: string | null;
+  department?: string | null;
+  wardClinic?: string | null;
+  contactNo?: string | null;
 
-  // ── GI ──
-  appetite?: HospiceAppetite | null;
-  nausea?: HospiceNauseaSeverity | null;
-  vomiting?: boolean | null;
-  vomitingFrequency?: string | null;
-  bowelFunction?: HospiceBowelFunction | null;
-  lastBowelMovement?: string | null;
+  // §2 Clinical Information
+  provisionalDiagnosis?: string | null;
+  presentingSymptoms?: string | null;
+  medicalHistory?: string | null;
+  previousImaging: boolean;
+  previousImagingDetails?: string | null;
 
-  // ── GU ──
-  urinaryFunction?: HospiceUrinaryFunction | null;
-  urineAppearance?: HospiceUrineAppearance | null;
+  // §3 Imaging Examination Requested
+  modality: ImagingModality;
+  modalityOtherText?: string | null;
+  bodyRegion: string;
+  bodyRegionOtherText?: string | null;
+  laterality: ImagingLaterality;
+  contrastRequested: ImagingContrastDecision;
 
-  // ── Skin ──
-  skinIntegrity?: HospiceSkinIntegrity | null;
-  pressureInjuryRisk?: HospicePressureInjuryRisk | null;
-  pressureUlcerPresent?: boolean | null;
-  pressureUlcerLocation?: string | null;
-  pressureUlcerStage?: HospicePressureUlcerStage | null;
+  // §4 Examination Details
+  specificSite?: string | null;
+  protocolViews?: string | null;
+  specialClinicalQuestion?: string | null;
 
-  // ── Mobility ──
-  mobilityStatus?: HospiceMobilityStatus | null;
-  fallRisk?: HospiceFallRisk | null;
-  assistiveDevices: HospiceAssistiveDevice[];
-  assistiveDevicesOther?: string | null;
+  // §5 Contrast / Medication
+  previousContrastReaction: boolean;
+  previousContrastReactionDetails?: string | null;
+  knownAllergies?: string | null;
+  creatinine?: string | null;
+  egfr?: string | null;
+  otherRelevantMedicationOrCondition?: string | null;
 
-  // ── ADL ──
-  feeding?: HospiceADL | null;
-  bathing?: HospiceADL | null;
-  dressing?: HospiceADL | null;
-  toileting?: HospiceADL | null;
-  mobility?: HospiceADL | null;
+  // §6 Safety Screening
+  pregnancyStatus: ImagingPregnancyStatus;
+  implantedMedicalDevice: boolean;
+  deviceImplantDetails?: string | null;
+  metallicForeignBody: ImagingMetallicForeignBody;
+  otherSafetyConsiderations?: string | null;
 
-  // ── Psychological ──
-  emotionalStatus?: HospiceEmotionalStatus | null;
-  communicationAbility?: HospiceCommunicationAbility | null;
-  cognitiveStatus?: HospiceCognitiveStatus | null;
+  // §7 Patient Preparation
+  preparation: ImagingPreparation[];
+  preparationInstructions?: string | null;
 
-  // ── Family / caregiver ──
-  primaryCaregiverName?: string | null;
-  primaryCaregiverRelationship?: string | null;
-  primaryCaregiverPhone?: string | null;
-  familySupport?: HospiceFamilySupport | null;
-  caregiverStressLevel?: HospiceCaregiverStress | null;
+  // §8 Priority
+  priority: ImagingPriority;
+  reasonForUrgency?: string | null;
 
-  // ── Spiritual ──
-  spiritualSupportRequested?: boolean | null;
-  religiousAffiliation?: HospiceReligiousAffiliation | null;
-  religiousAffiliationOther?: string | null;
-  culturalConsiderations?: string | null;
+  // §9 Referring Clinician
+  clinicianName?: string | null;
+  clinicianDepartment?: string | null;
+  clinicianLicenseNo?: string | null;
+  clinicianContact?: string | null;
 
-  // ── Nursing diagnoses ──
-  nursingDiagnoses: HospiceNursingDiagnosis[];
-  nursingDiagnosesOther?: string | null;
+  // §10 Imaging Department Use
+  examinationPerformed: boolean;
+  performedModality?: string | null;
+  performedProtocol?: string | null;
+  performedContrast: ImagingPerformedContrast;
+  technologistName?: string | null;
+  radiologistName?: string | null;
+  performedAt?: string | null;
+  imageQuality?: ImagingImageQuality | null;
 
-  // ── Summary ──
-  nurseSummary?: string | null;
+  // Report (flat columns)
+  findings?: string | null;
+  impression?: string | null;
+  recommendation?: string | null;
+  reportDate?: string | null;
 
-  // ── Audit ──
-  createdBy?: number;
-  createdByStaff?: { id: number; name: string } | null;
-  updatedBy?: number | null;
-  updatedByAdmin?: { id: number; name: string } | null;
+  // Status
+  status: ImagingStatus;
 
-  // ── Soft delete ──
+  // Meta
+  orderedBy?: {
+    id: string;
+    name: string;
+    role?: string;
+    email?: string;
+  } | null;
+
+  createdAt: string;
+  updatedAt?: string | null;
+
+  // Soft delete
   deletedAt?: string | null;
-  deletedBy?: number | null;
   deletionReason?: string | null;
-
-  createdAt: string;
-  updatedAt: string;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Requests
-// ─────────────────────────────────────────────────────────────
-export interface CreateHospiceNursingAssessmentRequest {
-  hospitalAdmissionId?: string;
-  assessmentDate?: string;
-  assessedByStaffId?: string;
+// ═════════════════════════════════════════════════════════════
+// LIST DTO — lighter shape returned by list endpoints
+// ═════════════════════════════════════════════════════════════
 
-  levelOfConsciousness?: HospiceConsciousness;
-  orientation?: string[];
-  generalAppearance?: string[];
-
-  bloodPressure?: string;
-  pulseRate?: number;
-  respiratoryRate?: number;
-  temperature?: number;
-  oxygenSaturation?: number;
-  weightKg?: number;
-  heightCm?: number;
-
-  painPresent?: boolean;
-  painScore?: number;
-  painLocation?: string[];
-  painLocationOther?: string;
-  painCharacteristics?: string[];
-  painReliefMeasures?: string[];
-  painReliefOther?: string;
-
-  breathingPattern?: HospiceBreathingPattern;
-  dyspneaSeverity?: HospiceDyspneaSeverity;
-  oxygenTherapy?: boolean;
-  oxygenFlowRate?: string;
-  cough?: HospiceCoughType;
-  sputumColor?: HospiceSputumColor;
-  respiratoryNotes?: string;
-
-  pulseRhythm?: HospicePulseRhythm;
-  peripheralEdema?: HospiceEdemaSeverity;
-  edemaLocation?: string;
-  skinColor?: HospiceSkinColor;
-
-  appetite?: HospiceAppetite;
-  nausea?: HospiceNauseaSeverity;
-  vomiting?: boolean;
-  vomitingFrequency?: string;
-  bowelFunction?: HospiceBowelFunction;
-  lastBowelMovement?: string;
-
-  urinaryFunction?: HospiceUrinaryFunction;
-  urineAppearance?: HospiceUrineAppearance;
-
-  skinIntegrity?: HospiceSkinIntegrity;
-  pressureInjuryRisk?: HospicePressureInjuryRisk;
-  pressureUlcerPresent?: boolean;
-  pressureUlcerLocation?: string;
-  pressureUlcerStage?: HospicePressureUlcerStage;
-
-  mobilityStatus?: HospiceMobilityStatus;
-  fallRisk?: HospiceFallRisk;
-  assistiveDevices?: HospiceAssistiveDevice[];
-  assistiveDevicesOther?: string;
-
-  feeding?: HospiceADL;
-  bathing?: HospiceADL;
-  dressing?: HospiceADL;
-  toileting?: HospiceADL;
-  mobility?: HospiceADL;
-
-  emotionalStatus?: HospiceEmotionalStatus;
-  communicationAbility?: HospiceCommunicationAbility;
-  cognitiveStatus?: HospiceCognitiveStatus;
-
-  primaryCaregiverName?: string;
-  primaryCaregiverRelationship?: string;
-  primaryCaregiverPhone?: string;
-  familySupport?: HospiceFamilySupport;
-  caregiverStressLevel?: HospiceCaregiverStress;
-
-  spiritualSupportRequested?: boolean;
-  religiousAffiliation?: HospiceReligiousAffiliation;
-  religiousAffiliationOther?: string;
-  culturalConsiderations?: string;
-
-  nursingDiagnoses?: HospiceNursingDiagnosis[];
-  nursingDiagnosesOther?: string;
-  nurseSummary?: string;
-}
-
-export type UpdateHospiceNursingAssessmentRequest =
-  Partial<CreateHospiceNursingAssessmentRequest>;
-
-// ─────────────────────────────────────────────────────────────
-// List DTO — lighter shape returned by the list endpoint
-// ─────────────────────────────────────────────────────────────
-export interface HospiceNursingAssessmentListItem {
-  id: number;
-  patientId: number;
-  assessmentDate: string;
-  assessedBy: { id: number; name: string; role?: string } | null;
-  levelOfConsciousness?: HospiceConsciousness | null;
-  painScore?: number | null;
-  mobilityStatus?: HospiceMobilityStatus | null;
-  emotionalStatus?: HospiceEmotionalStatus | null;
-  nurseSummary?: string | null;
-  createdAt: string;
-  updatedAt: string;
+export interface ImagingOrderListItem {
+  id: string;
+  patientId: string;
+  modality: ImagingModality;
+  bodyRegion: string;
+  specificSite?: string | null;
+  laterality: ImagingLaterality;
+  priority: ImagingPriority;
+  status: ImagingStatus;
+  hasReport: boolean;
+  dateOrdered: string;
+  performedAt?: string | null;
+  orderedBy?: { id: string; name: string } | null;
   deletedAt?: string | null;
+  deletionReason?: string | null;
 }
 
-export interface HospiceNursingListResponse {
-  items: HospiceNursingAssessmentListItem[];
+// ═════════════════════════════════════════════════════════════
+// REQUEST PAYLOADS
+// ═════════════════════════════════════════════════════════════
+
+export interface CreateImagingRequest {
+  // §2 Clinical
+  provisionalDiagnosis?: string;
+  presentingSymptoms?: string;
+  medicalHistory?: string;
+  previousImaging?: boolean;
+  previousImagingDetails?: string;
+
+  // §3 Examination requested
+  modality: ImagingModality;
+  modalityOtherText?: string;
+  bodyRegion: string;
+  bodyRegionOtherText?: string;
+  laterality?: ImagingLaterality;
+  contrastRequested?: ImagingContrastDecision;
+
+  // §4 Details
+  specificSite?: string;
+  protocolViews?: string;
+  specialClinicalQuestion?: string;
+
+  // §5 Contrast / meds
+  previousContrastReaction?: boolean;
+  previousContrastReactionDetails?: string;
+  knownAllergies?: string;
+  creatinine?: string;
+  egfr?: string;
+  otherRelevantMedicationOrCondition?: string;
+
+  // §6 Safety
+  pregnancyStatus?: ImagingPregnancyStatus;
+  implantedMedicalDevice?: boolean;
+  deviceImplantDetails?: string;
+  metallicForeignBody?: ImagingMetallicForeignBody;
+  otherSafetyConsiderations?: string;
+
+  // §7 Preparation
+  preparation?: ImagingPreparation[];
+  preparationInstructions?: string;
+
+  // §8 Priority
+  priority?: ImagingPriority;
+  reasonForUrgency?: string;
+
+  // §9 Clinician
+  clinicianName?: string;
+  clinicianDepartment?: string;
+  clinicianLicenseNo?: string;
+  clinicianContact?: string;
+
+  // Optional patient snapshot (server fills from Patient when omitted)
+  patientName?: string;
+  medicalRecordNo?: string;
+  wardClinic?: string;
+  contactNo?: string;
+}
+
+export interface UpdateImagingReportRequest {
+  findings: string;
+  impression: string;
+  recommendation?: string;
+  reportDate?: string;
+}
+
+export interface RecordImagingPerformedRequest {
+  performedModality?: string;
+  performedProtocol?: string;
+  performedContrast?: ImagingPerformedContrast;
+  technologistName?: string;
+  radiologistName?: string;
+  performedAt?: string;
+  imageQuality?: ImagingImageQuality;
+}
+
+export interface UpdateImagingStatusRequest {
+  status: ImagingStatus;
+}
+
+// ═════════════════════════════════════════════════════════════
+// LIST ENVELOPE
+// ═════════════════════════════════════════════════════════════
+
+export interface ImagingListResponse {
+  items: ImagingOrderListItem[];
   page: number;
   limit: number;
   total: number;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Deleted list DTO — admin "list all deleted" endpoint
-// ─────────────────────────────────────────────────────────────
-export interface DeletedHospiceNursingAssessment {
+// ═════════════════════════════════════════════════════════════
+// RADIOLOGIST QUEUE DTOs
+//
+// These come from the top-level `/imaging/*` endpoints — they are
+// NOT patient-scoped, so the shapes are slightly different from
+// the patient-scoped list above.
+// ═════════════════════════════════════════════════════════════
+
+export interface PendingImagingOrder {
   id: number;
   patientId: number;
   patientName: string;
-  assessmentDate: string;
-  deletedAt: string;
-  deletedBy: { id: number; name: string } | null;
-  deletionReason?: string | null;
+  patientDisplayId?: string | null;
+
+  modality: string;
+  bodyRegion: string;
+  specificSite?: string | null;
+  provisionalDiagnosis?: string | null;
+  specialClinicalQuestion?: string | null;
+
+  requestingClinician: string;
+  orderedById: number;
+
+  priority: ImagingPriority;
+  dateOrdered: string;
+  status: ImagingStatus;
 }
 
-export interface DeletedHospiceNursingListResponse {
-  items: DeletedHospiceNursingAssessment[];
+export interface ImagingOrderDetail extends PendingImagingOrder {
+  age?: number;
+  sex?: string;
+  laterality?: string;
+  presentingSymptoms?: string | null;
+  findings?: string | null;
+  impression?: string | null;
+  recommendation?: string | null;
+  reportDate?: string | null;
+}
+
+export interface ImagingQueueListResponse {
+  items: PendingImagingOrder[];
   page: number;
   limit: number;
   total: number;
+}
+
+export interface SubmitImagingReportRequest {
+  findings: string;
+  impression: string;
+  recommendation?: string;
+}
+
+export interface SubmitImagingReportResponse {
+  id: number;
+  status: 'Completed';
+  findings: string;
+  impression: string;
+  recommendation?: string | null;
+  reportDate: string;
 }

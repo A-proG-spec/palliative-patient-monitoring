@@ -73,6 +73,7 @@ enum StaffRole {
   Psychiatrist
   Psychologist
   SocialWorker
+  SpiritualPerson
 }
 
 enum StaffStatus {

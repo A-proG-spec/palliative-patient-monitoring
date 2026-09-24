@@ -19,7 +19,13 @@ export type StaffRole =
   | 'Nurse'
   | 'Pharmacist'
   | 'LaboratoryTechnician'
-  | 'Radiologist';
+  | 'Radiologist'
+  | 'Physiologist'
+  | 'Psychiatrist'
+  | 'Psychologist'
+  | 'SocialWorker'
+  | 'SpiritualPerson'
+  | 'Nutritionist';
 
 export interface NavItem {
   label: string;
@@ -36,6 +42,7 @@ const PERMISSIONS: Record<string, StaffRole[]> = {
   canEditPatient: ['Physician'],
   canViewPatients: ['Physician', 'Nurse', 'TeamLeader'],
   canViewPatientDetail: ['Physician', 'Nurse', 'TeamLeader'],
+  canViewAllAssessments: ['Physician', 'Nurse'],
 
   // Visits
   canRecordVisit: ['Physician', 'Nurse', 'TeamLeader'],

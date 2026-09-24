@@ -7,14 +7,26 @@ export type StaffRole =
   | 'Nurse'
   | 'Pharmacist'
   | 'Radiologist'
-  | 'LaboratoryTechnician';
+  | 'LaboratoryTechnician'
+  | 'Physiologist'
+  | 'Psychiatrist'
+  | 'Psychologist'
+  | 'SocialWorker'
+  | 'SpiritualPerson'
+  | 'Nutritionist';
 
 export type RegisterableStaffRole =
   | 'Physician'
   | 'Nurse'
   | 'Pharmacist'
   | 'Radiologist'
-  | 'LaboratoryTechnician';
+  | 'LaboratoryTechnician'
+  | 'Physiologist'
+  | 'Psychiatrist'
+  | 'Psychologist'
+  | 'SocialWorker'
+  | 'SpiritualPerson'
+  | 'Nutritionist';
 
 // ─────────────────────────────────────────────────────────────
 // User (returned from /auth/me and /auth/login)

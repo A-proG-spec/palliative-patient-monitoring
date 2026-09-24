@@ -30,3 +30,12 @@ export type {
   ImagingQueueListResponse,
   SubmitImagingReportRequest,
 } from './imaging-queue';
+export { hospiceNursingApi } from './hospice-nursing';
+export { pharmacistAssessmentApi } from './pharmacist-assessment';
+export { physiotherapyAssessmentApi } from './physiotherapy-assessment';
+export { familyAssessmentApi } from './family-assessment';
+export { nutritionalAssessmentApi } from './nutritional-assessment';
+export { painAssessmentApi } from './pain-assessment';
+export { socialAssessmentApi } from './social-assessment';
+export { spiritualAssessmentApi } from './spiritual-assessment';
+export { psychiatryAssessmentApi } from './psychiatry-assessment';
