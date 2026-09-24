@@ -186,7 +186,18 @@ const S = ({ children }: { children: React.ReactNode }) => (
 // page renders with the sidebar. Mounted under /patients/:id.
 // ═════════════════════════════════════════════════════════════
 
-const AssessmentRoutes: React.FC = () => (
+// ═════════════════════════════════════════════════════════════
+// Shared assessment route block
+//
+// Registered inside the DashboardLayout so every assessment
+// page renders with the sidebar. Mounted under /patients/:id.
+//
+// Must be a Fragment (or Route elements), NOT a custom component.
+// React Router only accepts <Route> / <React.Fragment> as children
+// of <Routes> / nested <Route>.
+// ═════════════════════════════════════════════════════════════
+
+const assessmentRoutes = (
   <>
     {/* ── Pain ── */}
     <Route
@@ -519,7 +530,7 @@ const AppRoutes: React.FC = () => (
               NEW: All 8 assessment routes
               (form + list + detail + edit per assessment)
           ═══════════════════════════════════════════════════ */}
-          <AssessmentRoutes />
+          {assessmentRoutes}
 
           {/* ── Physician-only ── */}
           <Route element={<PhysicianOnlyRoute />}>
