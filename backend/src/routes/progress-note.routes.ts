@@ -7,6 +7,7 @@ import {
   updateProgressNoteSchema,
   signProgressNoteSchema,
   getProgressNotesQuerySchema,
+  getAllProgressNotesQuerySchema,
 } from '@schemas/progress-note.schema.js';
 import * as progressNoteController from '@controllers/progress-note.controller.js';
 
@@ -29,6 +30,11 @@ router.get(
   progressNoteController.getProgressNotes
 );
 
+router.get(
+  '/all',
+  validate(getAllProgressNotesQuerySchema),
+  progressNoteController.getAllProgressNotes,
+);
 // ── Read one ──
 router.get('/:noteId', progressNoteController.getProgressNoteById);
 

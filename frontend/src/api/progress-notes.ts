@@ -51,6 +51,11 @@ export interface ProgressNoteSignaturesResponse {
   totalSignatures: number;
 }
 
+export interface ProgressNoteListResponse {
+  items: ProgressNoteListItem[];
+  total: number;
+}
+
 // ─────────────────────────────────────────────────────────────
 // API
 // ─────────────────────────────────────────────────────────────
@@ -65,14 +70,43 @@ export const progressNotesApi = {
       .then((r) => r.data);
   },
 
+  /**
+   * Active-only list.
+   */
   getByPatient: (
     patientId: string,
     params?: { admissionId?: string; page?: number; limit?: number },
-  ): Promise<{ items: ProgressNoteListItem[]; total: number }> => {
+  ): Promise<ProgressNoteListResponse> => {
     return apiClient
-      .get<{ items: ProgressNoteListItem[]; total: number }>(
+      .get<ProgressNoteListResponse>(
         `/patients/${patientId}/progress-notes`,
         { params },
+      )
+      .then((r) => r.data);
+  },
+
+  /**
+   * Active + deleted list. Hits `/patients/:id/progress-notes/all`.
+   */
+  getAllForPatient: (
+    patientId: string,
+    params?: {
+      admissionId?: string;
+      includeDeleted?: boolean;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<ProgressNoteListResponse> => {
+    const { includeDeleted, ...rest } = params ?? {};
+    return apiClient
+      .get<ProgressNoteListResponse>(
+        `/patients/${patientId}/progress-notes/all`,
+        {
+          params: {
+            ...rest,
+            ...(includeDeleted ? { includeDeleted: 'true' } : {}),
+          },
+        },
       )
       .then((r) => r.data);
   },

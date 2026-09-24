@@ -49,6 +49,10 @@
   --scrollbar-thumb: #C2C6D6;
   --scrollbar-thumb-hover: #8290A7;
   --scrollbar-track: #F1F4F9;
+
+  /* Native form controls + scrollbars follow the app theme,
+     not the OS preference. Toggled via the `.dark` class. */
+  color-scheme: light;
 }
 
 /* ─── DARK MODE CSS Custom Properties ───────────────────────── */
@@ -98,18 +102,12 @@
   --scrollbar-thumb: #3A3F54;
   --scrollbar-thumb-hover: #555C74;
   --scrollbar-track: #1E2230;
+
+  /* Native form controls + scrollbars render dark */
+  color-scheme: dark;
 }
 
 /* ─── SYSTEM THEME — infographic-inspired calm clinical palette ─ */
-/*
- * Drawn from the Palliative Care Service Model infographic:
- *   - Soft blue (Medical Care bubble)       #D6E8F5 / #4A90C4
- *   - Soft green (Emotional Support bubble) #D6EFE4 / #4AAD7A
- *   - Soft purple (Social Support bubble)   #E8DCF5 / #7B5EA7
- *   - Warm yellow (Spiritual Care bubble)   #FFF3CC / #D4A017
- *   - Background: a warm off-white with a hint of blue-green
- * Restrained — only a few accent touches. Remains calm + professional.
- */
 .system {
   --color-primary: #2B6CB0;
   --color-primary-hover: #1E5490;
@@ -133,11 +131,9 @@
   --color-outline: #7A99AD;
   --color-outline-variant: #A8C4D6;
 
-  /* Green accent — from Emotional Support / success bubbles */
   --color-success: #4AAD7A;
   --color-success-bg: #D6EFE4;
 
-  /* Warm yellow — from Spiritual Care bubble */
   --color-warning: #C49A17;
   --color-warning-bg: #FFF3CC;
 
@@ -158,6 +154,8 @@
   --scrollbar-thumb: #A8C4D6;
   --scrollbar-thumb-hover: #7A96AD;
   --scrollbar-track: #EDF4F9;
+
+  color-scheme: light;
 }
 
 /* ─── Tailwind dark overrides via CSS vars ─────────────────── */
@@ -184,7 +182,6 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   scroll-behavior: smooth;
-  /* Ensure html element scrolls, not just body */
   height: 100%;
   overflow-y: scroll;
 }
@@ -212,8 +209,7 @@ body {
   border-radius: 4px;
 }
 
-/* ─── Scrollbar Styling — clearly visible ─────────────────── */
-/* Main window scrollbar */
+/* ─── Scrollbar Styling ───────────────────────────────────── */
 html::-webkit-scrollbar {
   width: 8px;
 }
@@ -229,7 +225,6 @@ html::-webkit-scrollbar-thumb:hover {
   background-color: var(--scrollbar-thumb-hover);
 }
 
-/* In-component scrollbars (overflow-y-auto elements) */
 ::-webkit-scrollbar {
   width: 7px;
   height: 7px;
@@ -246,7 +241,6 @@ html::-webkit-scrollbar-thumb:hover {
   background-color: var(--scrollbar-thumb-hover);
 }
 
-/* Firefox scrollbar */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
@@ -259,17 +253,14 @@ html::-webkit-scrollbar-thumb:hover {
   background-size: cover;
 }
 
-/* Dark mode swaps to the alternate hero image */
 .dark .landing-hero-bg {
   background-image: url('/images/hero-dark.jpg');
 }
 
-/* Left-side vignette overlay: solid on left, fades right */
 .landing-hero-overlay {
   background: linear-gradient(90deg, rgba(15,23,42,0.88) 0%, rgba(15,23,42,0.45) 65%, transparent 100%);
 }
 
-/* On tablet/mobile the overlay covers full width */
 @media (max-width: 1023px) {
   .landing-hero-overlay {
     width: 100%;
@@ -377,7 +368,6 @@ html::-webkit-scrollbar-thumb:hover {
     color: #181C20 !important;
     overflow-y: visible !important;
   }
-  /* Force light mode for print regardless of OS/user preference */
   html.dark {
     --color-background: #FFFFFF;
     --color-surface-lowest: #FFFFFF;
@@ -387,4 +377,83 @@ html::-webkit-scrollbar-thumb:hover {
     --color-border: #E6EBF4;
     --color-primary: #002395;
   }
+}
+
+/* ════════════════════════════════════════════════════════════
+   DARK MODE CONTRAST FIXES
+   ─────────────────────────────────────────────────────────
+   Applied AFTER the token overrides so they win on specificity.
+   These fix three reported issues:
+     1. Navbar text invisible when scrolled in dark mode
+     2. Admin dashboard table header rows nearly invisible
+     3. Progress-note sidebar — active item dark-on-dark
+   ════════════════════════════════════════════════════════════ */
+
+/* ── 1. Navbar — solid surface, no translucency ───────────── */
+.dark header.shadow-nav {
+  background-color: var(--color-surface-lowest) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* Navbar links in dark mode — always readable */
+.dark header.shadow-nav .text-on-surface,
+.dark header.shadow-nav nav button,
+.dark header.shadow-nav nav a {
+  color: var(--color-on-surface) !important;
+}
+
+.dark header.shadow-nav nav button:hover,
+.dark header.shadow-nav nav a:hover {
+  color: var(--color-primary) !important;
+}
+
+/* ── 2. Table header rows inside cards ─────────────────────
+      In dark mode, `bg-surface-low` on a `bg-surface-lowest`
+      card is nearly invisible. Bump the thead to one step
+      brighter + force the header cell text to the correct
+      on-surface variant. */
+.dark thead.bg-surface-low {
+  background-color: var(--color-surface-container) !important;
+}
+
+.dark thead.bg-surface-low th {
+  color: var(--color-on-surface-variant) !important;
+}
+
+/* ── 3. Progress-note sidebar ─────────────────────────────
+      The active nav item used `bg-primary-light text-primary`,
+      which in dark mode is dark-on-dark. Swap to a lighter
+      primary tint + a brighter text hue. */
+.dark aside[aria-label="Progress note sections"] {
+  background-color: var(--color-surface-low) !important;
+}
+
+.dark aside[aria-label="Progress note sections"] button[aria-current="step"] {
+  background-color: rgba(77, 115, 217, 0.22) !important;
+  color: #A8BFFF !important;
+}
+
+.dark aside[aria-label="Progress note sections"] button:hover:not([aria-current="step"]) {
+  background-color: var(--color-surface-container) !important;
+  color: var(--color-on-surface) !important;
+}
+
+/* ── 4. Force translucent surface utilities to render solid
+      in dark mode. Tailwind's `/40` and `/95` opacity modifiers
+      silently drop the alpha when the underlying token is a
+      hex string, so these were washing out to near-transparent
+      and colliding with the page background. */
+.dark .bg-surface-lowest\/95,
+.dark .bg-surface-lowest\/98 {
+  background-color: var(--color-surface-lowest) !important;
+}
+
+.dark .bg-surface-low\/30,
+.dark .bg-surface-low\/40,
+.dark .bg-surface-low\/50 {
+  background-color: var(--color-surface-low) !important;
+}
+
+.dark .bg-primary-light\/40 {
+  background-color: var(--color-surface-low) !important;
 }

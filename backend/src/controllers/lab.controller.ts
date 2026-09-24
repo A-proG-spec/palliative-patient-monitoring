@@ -12,7 +12,30 @@ export const orderLabTest = asyncHandler(async (req: Request, res: Response) => 
   const result = await labService.orderLabTest(patientId, req.body, req.user.id);
   return SuccessResponse(201, 'Lab test ordered successfully', result);
 });
+export const getAllLabTests = asyncHandler(
+  async (req: Request, res: Response) => {
+    const patientId = req.params.patientId as string;
+    const status = req.query.status as string | undefined;
+    const category = req.query.category as LabCategory | undefined;
+    const priority = req.query.priority as
+      | 'Routine'
+      | 'Urgent'
+      | 'Emergency'
+      | undefined;
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+    const includeDeleted = req.query.includeDeleted === 'true';
 
+    const result = await labService.getAllLabTests(
+      patientId,
+      status,
+      page,
+      limit,
+      { category, priority, includeDeleted },
+    );
+    return SuccessResponse(200, 'OK', result);
+  },
+);
 // ─────────────────────────────────────────────────────────────
 // List lab tests for a patient
 // ─────────────────────────────────────────────────────────────
@@ -127,6 +150,7 @@ export const enterResult = asyncHandler(
 );
 
 export default {
+  getAllLabTests,
   orderLabTest,
   getLabTests,
   getLabTestById,

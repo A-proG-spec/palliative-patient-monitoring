@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Heart, Plus, ChevronRight, ClipboardList } from 'lucide-react';
 import { usePatient } from '@/hooks/usePatients';
+import { useAuthStore } from '@/store/auth.store';
 import {
   usePatientHospiceAssessments,
   useCreateHospiceAssessment,
@@ -71,14 +72,25 @@ const RadioGroup: React.FC<{
   </div>
 );
 
+/**
+ * CheckboxGroup
+ *
+ * `options` holds the raw enum values that must match the backend
+ * Prisma enum exactly (e.g. `OrientedToPlace`, not `"Oriented to Place"`).
+ * `labels` maps those enum values to human-readable strings for display.
+ * When `labels` is omitted, the raw option string is shown.
+ */
 const CheckboxGroup: React.FC<{
   label: string;
   values: string[];
   options: string[];
+  labels?: Record<string, string>;
   onChange: (v: string[]) => void;
-}> = ({ label, values, options, onChange }) => {
+}> = ({ label, values, options, labels, onChange }) => {
   const toggle = (v: string) =>
-    onChange(values.includes(v) ? values.filter((x) => x !== v) : [...values, v]);
+    onChange(
+      values.includes(v) ? values.filter((x) => x !== v) : [...values, v],
+    );
 
   return (
     <div className="space-y-1.5">
@@ -95,12 +107,82 @@ const CheckboxGroup: React.FC<{
               onChange={() => toggle(o)}
               className="h-3.5 w-3.5 rounded text-primary"
             />
-            {o}
+            {labels?.[o] ?? o}
           </label>
         ))}
       </div>
     </div>
   );
+};
+
+// ═════════════════════════════════════════════════════════════
+// Enum label maps
+//
+// Values MUST match the Prisma enums in `schema.prisma`:
+//   HospiceOrientation, HospiceGeneralAppearance,
+//   HospiceNursingDiagnosis
+// ═════════════════════════════════════════════════════════════
+
+const ORIENTATION_OPTIONS = [
+  'OrientedToPerson',
+  'OrientedToPlace',
+  'OrientedToTime',
+  'Disoriented',
+] as const;
+
+const ORIENTATION_LABELS: Record<string, string> = {
+  OrientedToPerson: 'Oriented to Person',
+  OrientedToPlace: 'Oriented to Place',
+  OrientedToTime: 'Oriented to Time',
+  Disoriented: 'Disoriented',
+};
+
+const GENERAL_APPEARANCE_OPTIONS = [
+  'Comfortable',
+  'MildDistress',
+  'ModerateDistress',
+  'SevereDistress',
+  'Cachectic',
+  'Bedridden',
+  'WellGroomed',
+  'PoorHygiene',
+] as const;
+
+const GENERAL_APPEARANCE_LABELS: Record<string, string> = {
+  Comfortable: 'Comfortable',
+  MildDistress: 'Mild Distress',
+  ModerateDistress: 'Moderate Distress',
+  SevereDistress: 'Severe Distress',
+  Cachectic: 'Cachectic',
+  Bedridden: 'Bedridden',
+  WellGroomed: 'Well Groomed',
+  PoorHygiene: 'Poor Hygiene',
+};
+
+const NURSING_DIAGNOSIS_OPTIONS = [
+  'AcutePain',
+  'ChronicPain',
+  'ImpairedMobility',
+  'RiskForFalls',
+  'ImpairedSkinIntegrity',
+  'ImbalancedNutrition',
+  'Anxiety',
+  'CaregiverStrain',
+  'IneffectiveBreathingPattern',
+  'Other',
+] as const;
+
+const NURSING_DIAGNOSIS_LABELS: Record<string, string> = {
+  AcutePain: 'Acute Pain',
+  ChronicPain: 'Chronic Pain',
+  ImpairedMobility: 'Impaired Mobility',
+  RiskForFalls: 'Risk for Falls',
+  ImpairedSkinIntegrity: 'Impaired Skin Integrity',
+  ImbalancedNutrition: 'Imbalanced Nutrition',
+  Anxiety: 'Anxiety',
+  CaregiverStrain: 'Caregiver Strain',
+  IneffectiveBreathingPattern: 'Ineffective Breathing Pattern',
+  Other: 'Other',
 };
 
 // ═════════════════════════════════════════════════════════════
@@ -115,6 +197,7 @@ const HospiceNursingPage: React.FC = () => {
   const { data: patient, isLoading: patientLoading } = usePatient(id!);
   const { data, isLoading, error, refetch } = usePatientHospiceAssessments(id!);
   const createMutation = useCreateHospiceAssessment(id!);
+  const user = useAuthStore((s) => s.user);
 
   const {
     register,
@@ -127,6 +210,7 @@ const HospiceNursingPage: React.FC = () => {
     resolver: zodResolver(createHospiceNursingAssessmentSchema),
     defaultValues: {
       assessmentDate: new Date().toISOString().split('T')[0],
+      assessedByStaffId: user?.id ? String(user.id) : undefined,
       orientation: [],
       generalAppearance: [],
       painLocation: [],
@@ -267,27 +351,15 @@ const HospiceNursingPage: React.FC = () => {
             <CheckboxGroup
               label="Orientation"
               values={watch('orientation') ?? []}
-              options={[
-                'Oriented to Person',
-                'Oriented to Place',
-                'Oriented to Time',
-                'Disoriented',
-              ]}
+              options={[...ORIENTATION_OPTIONS]}
+              labels={ORIENTATION_LABELS}
               onChange={(v) => setValue('orientation', v)}
             />
             <CheckboxGroup
               label="General Appearance"
               values={watch('generalAppearance') ?? []}
-              options={[
-                'Comfortable',
-                'Mild Distress',
-                'Moderate Distress',
-                'Severe Distress',
-                'Cachectic',
-                'Bedridden',
-                'Well Groomed',
-                'Poor Hygiene',
-              ]}
+              options={[...GENERAL_APPEARANCE_OPTIONS]}
+              labels={GENERAL_APPEARANCE_LABELS}
               onChange={(v) => setValue('generalAppearance', v)}
             />
           </Section>
@@ -802,18 +874,8 @@ const HospiceNursingPage: React.FC = () => {
             <CheckboxGroup
               label="Nursing Diagnoses"
               values={watch('nursingDiagnoses') ?? []}
-              options={[
-                'Acute Pain',
-                'Chronic Pain',
-                'Impaired Mobility',
-                'Risk for Falls',
-                'Impaired Skin Integrity',
-                'Imbalanced Nutrition',
-                'Anxiety',
-                'Caregiver Strain',
-                'Ineffective Breathing Pattern',
-                'Other',
-              ]}
+              options={[...NURSING_DIAGNOSIS_OPTIONS]}
+              labels={NURSING_DIAGNOSIS_LABELS}
               onChange={(v) => setValue('nursingDiagnoses', v)}
             />
             <Input

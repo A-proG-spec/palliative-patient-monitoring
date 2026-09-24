@@ -154,6 +154,15 @@ export const createVisitSchema = z.object({
     dateOfDeath: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').optional(),
   }),
 });
+export const getAllVisitsQuerySchema = z.object({
+  query: z.object({
+    includeDeleted: z
+      .union([z.literal('true'), z.literal('false'), z.boolean()])
+      .optional(),
+    page: z.coerce.number().int().positive().optional().default(1),
+    limit: z.coerce.number().int().positive().max(100).optional().default(20),
+  }),
+});
 
 // ─────────────────────────────────────────────────────────────
 // Sign Visit — re-auth via email + password

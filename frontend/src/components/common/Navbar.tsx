@@ -5,8 +5,6 @@ import { Button } from '@/components/ui/Button';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { APP_NAME } from '@/lib/config';
 
-// Optional prop: refs to landing page sections for smooth-scroll links.
-// Only provided when Navbar is rendered inside LandingPage.
 export interface LandingSections {
   about:    React.RefObject<HTMLElement>;
   purpose:  React.RefObject<HTMLElement>;
@@ -27,19 +25,30 @@ const NAV_LINKS = [
   { label: 'Statistics',       key: 'stats'    },
 ] as const;
 
+// ─────────────────────────────────────────────────────────────
+// Text colors:
+//   text-on-surface         → black in light, near-white in dark
+//   dark:text-white         → pure white in dark mode
+//
+// The `!` prefix on the Button's classes is required because the
+// Button component applies its own variant classes AFTER the
+// caller's `className`, so equal-specificity utilities would be
+// overridden by the ghost variant's `text-on-surface-variant`.
+// ─────────────────────────────────────────────────────────────
+const NAV_TEXT = 'text-on-surface dark:text-white';
+const NAV_TEXT_HOVER = 'hover:text-primary dark:hover:text-primary';
+
 export const Navbar: React.FC<NavbarProps> = ({ landingSections }) => {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
-  // Elevate navbar background once user scrolls past the hero
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Close mobile menu on resize to desktop
   useEffect(() => {
     const onResize = () => { if (window.innerWidth >= 768) setMenuOpen(false); };
     window.addEventListener('resize', onResize);
@@ -60,9 +69,9 @@ export const Navbar: React.FC<NavbarProps> = ({ landingSections }) => {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 nav-scrolled ${
         scrolled
-          ? 'bg-surface-lowest/95 backdrop-blur-md border-b border-border-base shadow-nav'
+          ? 'bg-surface-lowest border-b border-border-base shadow-nav'
           : 'bg-transparent border-b border-transparent'
       }`}
     >
@@ -73,25 +82,19 @@ export const Navbar: React.FC<NavbarProps> = ({ landingSections }) => {
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-sm group-hover:shadow-md transition-shadow">
             <Heart size={18} className="text-white" />
           </div>
-          <span
-            className={`text-base font-bold transition-colors ${
-              scrolled ? 'text-on-surface' : 'text-white'
-            }`}
-          >
+          <span className={`text-base font-bold transition-colors ${NAV_TEXT}`}>
             {APP_NAME}
           </span>
         </Link>
 
-        {/* ── Desktop section links (landing page only) ── */}
+        {/* ── Desktop section links ── */}
         {showSectionLinks && (
           <nav className="hidden md:flex items-center gap-6" aria-label="Page sections">
             {NAV_LINKS.map(({ label, key }) => (
               <button
                 key={key}
                 onClick={() => scrollToSection(key)}
-                className={`text-sm font-medium transition-colors hover:text-primary ${
-                  scrolled ? 'text-on-surface' : 'text-white/90 hover:text-white'
-                }`}
+                className={`text-sm font-medium transition-colors ${NAV_TEXT} ${NAV_TEXT_HOVER}`}
               >
                 {label}
               </button>
@@ -102,14 +105,18 @@ export const Navbar: React.FC<NavbarProps> = ({ landingSections }) => {
         {/* ── Desktop actions ── */}
         <nav className="hidden md:flex items-center gap-2 flex-shrink-0" aria-label="Account actions">
           <ThemeToggle variant="dropdown" />
+
+          {/* Sign In — `!` prefixes force these utilities to win over
+              the ghost variant's own text/hover colors */}
           <Button
             variant="ghost"
             size="sm"
             onClick={() => navigate('/login')}
-            className={!scrolled ? 'text-white hover:bg-white/10' : ''}
+            className="!text-on-surface dark:!text-white !bg-transparent hover:!bg-black/5 dark:hover:!bg-white/10"
           >
             Sign In
           </Button>
+
           <Button size="sm" onClick={() => navigate('/register')}>
             Register as Staff
           </Button>
@@ -122,11 +129,7 @@ export const Navbar: React.FC<NavbarProps> = ({ landingSections }) => {
             onClick={() => setMenuOpen((o) => !o)}
             aria-label={menuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={menuOpen}
-            className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
-              scrolled
-                ? 'text-on-surface hover:bg-surface-low'
-                : 'text-white hover:bg-white/10'
-            }`}
+            className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${NAV_TEXT} hover:bg-black/5 dark:hover:bg-white/10`}
           >
             {menuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -136,12 +139,11 @@ export const Navbar: React.FC<NavbarProps> = ({ landingSections }) => {
       {/* ── Mobile dropdown menu ── */}
       {menuOpen && (
         <div
-          className="md:hidden border-t border-border-base bg-surface-lowest/98 backdrop-blur-md"
+          className="md:hidden border-t border-border-base bg-surface-lowest"
           role="dialog"
           aria-label="Mobile navigation"
         >
           <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col gap-1">
-            {/* Section links — only on landing page */}
             {showSectionLinks && (
               <>
                 {NAV_LINKS.map(({ label, key }) => (
@@ -157,7 +159,6 @@ export const Navbar: React.FC<NavbarProps> = ({ landingSections }) => {
               </>
             )}
 
-            {/* Auth actions */}
             <button
               onClick={() => { setMenuOpen(false); navigate('/login'); }}
               className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-on-surface hover:bg-surface-low transition-colors"

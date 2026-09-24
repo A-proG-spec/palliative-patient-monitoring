@@ -1,10 +1,11 @@
-import { prisma } from '@db/prisma.js';
+import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 
 const VALID_STATUSES = ['Ordered', 'Completed', 'Cancelled'] as const;
 const VALID_PRIORITIES = ['Routine', 'Urgent', 'Emergency'] as const;
-
+const prismaBase = new PrismaClient();
+export const prisma = prismaBase;
 // ─────────────────────────────────────────────────────────────
 // DTO mappers
 // ─────────────────────────────────────────────────────────────
@@ -75,6 +76,67 @@ const toLabDto = (lab: any) => ({
 // ─────────────────────────────────────────────────────────────
 // Order lab test
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// GET ALL lab tests for a patient
+// ─────────────────────────────────────────────────────────────
+export const getAllLabTests = async (
+  patientId: string,
+  status?: string,
+  page: number = 1,
+  limit: number = 20,
+  extras?: {
+    category?: string;
+    priority?: string;
+    includeDeleted?: boolean;
+  },
+) => {
+  const pid = toId(patientId, 'patient id');
+  const includeDeleted = extras?.includeDeleted === true;
+  const client = includeDeleted ? prismaBase : prisma;
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: pid },
+    select: { id: true },
+  });
+  if (!patient) throw new ApiError(404, 'Patient not found');
+
+  const where: any = { patientId: pid };
+  if (status) where.status = status;
+  if (extras?.category) where.category = extras.category;
+  if (extras?.priority) where.priority = extras.priority;
+
+  const skip = (page - 1) * limit;
+
+  const [items, total] = await Promise.all([
+    client.laboratoryTest.findMany({
+      where,
+      orderBy: [{ priority: 'desc' }, { dateOrdered: 'desc' }],
+      skip,
+      take: limit,
+      include: {
+        patient: {
+          select: {
+            id: true, firstName: true, lastName: true, age: true, sex: true,
+            dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
+          },
+        },
+        orderedByStaff: { select: { id: true, name: true, role: true } },
+      },
+    }),
+    client.laboratoryTest.count({ where }),
+  ]);
+
+  return {
+    items: items.map((lab) => ({
+      ...toLabListDto(lab),
+      deletedAt: lab.deletedAt ?? null,
+      deletionReason: lab.deletionReason ?? null,
+    })),
+    page,
+    limit,
+    total,
+  };
+};
 export const orderLabTest = async (
   patientId: string,
   data: any,
@@ -594,6 +656,7 @@ export const enterLabResultFromQueue = async (
 };
 
 export default {
+  getAllLabTests,
   orderLabTest,
   getLabTests,
   getLabTestById,

@@ -6,6 +6,7 @@ import {
   createAdmissionSchema,
   updateAdmissionSchema,
   getAdmissionsQuerySchema,
+  getAllAdmissionsQuerySchema,
 } from '@schemas/admission.schema.js';
 import * as admissionController from '@controllers/admission.controller.js';
 
@@ -26,6 +27,11 @@ router.get(
   '/',
   validate(getAdmissionsQuerySchema),
   admissionController.getAdmissions
+);
+router.get(
+  '/all',
+  validate(getAllAdmissionsQuerySchema),
+  admissionController.getAllAdmissions,
 );
 
 // ── Read one ──

@@ -13,6 +13,27 @@ export const orderImaging = asyncHandler(async (req: Request, res: Response) => 
   return SuccessResponse(201, 'Imaging order submitted successfully', result);
 });
 
+export const getAllImagingOrders = asyncHandler(
+  async (req: Request, res: Response) => {
+    const patientId = req.params.patientId as string;
+    const page = req.query.page ? parseInt(req.query.page as string) : 1;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+    const filters = {
+      status: req.query.status as string | undefined,
+      modality: req.query.modality as string | undefined,
+      priority: req.query.priority as string | undefined,
+      includeDeleted: req.query.includeDeleted === 'true',
+    };
+    const result = await imagingService.getAllImagingOrders(
+      patientId,
+      filters,
+      page,
+      limit,
+    );
+    return SuccessResponse(200, 'OK', result);
+  },
+);
+
 export const getImagingOrders = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const page = req.query.page ? parseInt(req.query.page as string) : 1;
@@ -139,6 +160,7 @@ export const submitReport = asyncHandler(
 );
 
 export default {
+  getAllImagingOrders,
   // Patient-scoped
   orderImaging,
   getImagingOrders,

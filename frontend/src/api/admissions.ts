@@ -8,11 +8,6 @@ import type {
 } from '@/types/admission.types';
 
 export const admissionApi = {
-  // ─────────────────────────────────────────────────────────────
-  // Create
-  // Backend also flips Patient.currentLocation → 'ReferredHospital'
-  // and Referral.status → 'Admitted' (when referralId is provided).
-  // ─────────────────────────────────────────────────────────────
   create: (
     patientId: string,
     data: CreateAdmissionRequest,
@@ -22,9 +17,9 @@ export const admissionApi = {
       .then((r) => r.data);
   },
 
-  // ─────────────────────────────────────────────────────────────
-  // List
-  // ─────────────────────────────────────────────────────────────
+  /**
+   * Active-only list.
+   */
   getByPatient: (
     patientId: string,
     params?: {
@@ -39,7 +34,31 @@ export const admissionApi = {
       })
       .then((r) => r.data);
   },
-getById: (
+
+  /**
+   * Active + deleted list. Hits `/patients/:id/admissions/all`.
+   */
+  getAllForPatient: (
+    patientId: string,
+    params?: {
+      status?: AdmissionStatus;
+      includeDeleted?: boolean;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<AdmissionListResponse> => {
+    const { includeDeleted, ...rest } = params ?? {};
+    return apiClient
+      .get<AdmissionListResponse>(`/patients/${patientId}/admissions/all`, {
+        params: {
+          ...rest,
+          ...(includeDeleted ? { includeDeleted: 'true' } : {}),
+        },
+      })
+      .then((r) => r.data);
+  },
+
+  getById: (
     patientId: string,
     admissionId: string,
   ): Promise<HospitalAdmission> => {
@@ -50,7 +69,7 @@ getById: (
       .then((r) => r.data);
   },
 
-   update: (
+  update: (
     patientId: string,
     admissionId: string,
     data: UpdateAdmissionRequest,

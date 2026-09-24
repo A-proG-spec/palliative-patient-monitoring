@@ -1,10 +1,65 @@
-import { prisma } from '@db/prisma.js';
+import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 
+
+const prismaBase = new PrismaClient();
+export const prisma = prismaBase;
 // ─────────────────────────────────────────────────────────────
 // Record admission
 // ─────────────────────────────────────────────────────────────
+export const getAllAdmissions = async (
+  patientId: string,
+  status?: string,
+  page: number = 1,
+  limit: number = 20,
+  includeDeleted: boolean = false,
+) => {
+  const pid = toId(patientId, 'patient id');
+  const client = includeDeleted ? prismaBase : prisma;
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: pid },
+    select: { id: true },
+  });
+  if (!patient) throw new ApiError(404, 'Patient not found');
+
+  const where: any = { patientId: pid };
+  if (status) where.status = status;
+
+  const skip = (page - 1) * limit;
+
+  const [items, total] = await Promise.all([
+    client.hospitalAdmission.findMany({
+      where,
+      orderBy: { admissionDate: 'desc' },
+      skip,
+      take: limit,
+    }),
+    client.hospitalAdmission.count({ where }),
+  ]);
+
+  return {
+    items: items.map((a) => ({
+      id: a.id,
+      admissionDate: a.admissionDate,
+      dischargeDate: a.dischargeDate,
+      bedNumber: a.bedNumber,
+      ward: a.ward,
+      admittingPhysician: a.admittingPhysician,
+      careTeam: a.careTeam,
+      status: a.status,
+      dischargeReason: a.dischargeReason,
+      createdAt: a.createdAt,
+      deletedAt: a.deletedAt ?? null,
+      deletionReason: a.deletionReason ?? null,
+    })),
+    page,
+    limit,
+    total,
+  };
+};
+
 export const recordAdmission = async (
   patientId: string,
   data: any,
@@ -418,6 +473,7 @@ export const getActiveAdmissionForPatient = async (patientId: string) => {
 };
 
 export default {
+  getAllAdmissions,
   recordAdmission,
   getAdmissions,
   getAdmissionById,

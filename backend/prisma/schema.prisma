@@ -69,6 +69,11 @@ enum StaffRole {
   Pharmacist
   Radiologist
   LaboratoryTechnician
+  Physiologist
+  Psychiatrist
+  Psychologist
+  SocialWorker
+  SpiritualPerson
 }
 
 enum StaffStatus {
@@ -1704,7 +1709,7 @@ model HomeVisit {
   mobility      VisitMobility
 
   // Section 4 — vitals
-  temperature    String?
+  temperature   String?
   pulse         String?
   bloodPressure String?
   respiration   String?
@@ -2091,7 +2096,7 @@ model PatientProgressNote {
   changesSincePreviousReview String?                       @default("")
 
   // Section 2 — vitals
-  temperature                String?
+  temperature               String?
   pulse                     String?
   respiratoryRate           String?
   bloodPressure             String?

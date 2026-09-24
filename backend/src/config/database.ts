@@ -1,4 +1,4 @@
-import { prisma } from '@db/prisma.js';
+import { prisma } from '../lib/prisma.js';
 import { logger } from '@config/logger.js';
 
 // ─────────────────────────────────────────────────────────────

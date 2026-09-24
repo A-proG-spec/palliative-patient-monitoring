@@ -18,6 +18,10 @@ export const medicationApi = {
       .then((r) => r.data);
   },
 
+  /**
+   * Active-only list. Backend hits the standard endpoint which
+   * auto-filters `deletedAt = null`.
+   */
   getByPatient: (
     patientId: string,
     params?: {
@@ -29,6 +33,37 @@ export const medicationApi = {
     return apiClient
       .get<MedicationListResponse>(`/patients/${patientId}/medications`, {
         params,
+      })
+      .then((r) => r.data);
+  },
+
+  /**
+   * Active + deleted list. Hits the `/all` route which uses the
+   * unextended Prisma client. Pass `{ includeDeleted: true }` to
+   * filter down to deleted-only rows (the backend does this when
+   * the query string contains `includeDeleted=true`).
+   *
+   * ⚠️ The backend `/all` route MUST be declared before the
+   *   `/:medicationId` route, otherwise this hits the param route
+   *   and returns 400.
+   */
+  getAllForPatient: (
+    patientId: string,
+    params?: {
+      status?: MedicationStatus;
+      includeDeleted?: boolean;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<MedicationListResponse> => {
+    const { includeDeleted, ...rest } = params ?? {};
+    return apiClient
+      .get<MedicationListResponse>(`/patients/${patientId}/medications/all`, {
+        params: {
+          ...rest,
+          // Backend checks `req.query.includeDeleted === 'true'` (string compare)
+          ...(includeDeleted ? { includeDeleted: 'true' } : {}),
+        },
       })
       .then((r) => r.data);
   },
@@ -55,9 +90,6 @@ export const medicationApi = {
       .then((r) => r.data);
   },
 
-  /**
-   * Admin-only soft delete.
-   */
   delete: (
     patientId: string,
     medicationId: string,
@@ -71,10 +103,6 @@ export const medicationApi = {
       .then((r) => r.data);
   },
 
-  /**
-   * Admin-only restore of a soft-deleted medication.
-   * Note: the backend uses POST for medication restore.
-   */
   restore: (
     patientId: string,
     medicationId: string,

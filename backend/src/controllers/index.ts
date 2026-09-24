@@ -14,3 +14,11 @@ export { default as dischargeController } from './discharge.controller.js';
 export { default as profileController } from './profile.controller.js';
 export {default as hospiceNursingController} from './hospice-nursing.controller.js'
 export { default as staffContributionController } from './staff-contribution.controller.js';
+export { default as pharmacistAssessmentController } from './pharmacist-assessment.controller.js';
+export { default as physiotherapyAssessmentController } from './physiotherapy-assessment.controller.js';
+export { default as familyAssessmentController } from './family-assessment.controller.js';
+export { default as nutritionalAssessmentController } from './nutritional-assessment.controller.js';
+export { default as painAssessmentController } from './pain-assessment.controller.js';
+export { default as socialAssessmentController } from './social-assessment.controller.js';
+export { default as spiritualAssessmentController } from './spiritual-assessment.controller.js';
+export { default as psychiatryAssessmentController } from './psychiatry-assessment.controller.js';

@@ -97,6 +97,22 @@ export const updateImagingStatusSchema = z.object({
   }),
 });
 
+export const getAllImagingQuerySchema = z.object({
+  query: z.object({
+    status: z.enum(['Ordered', 'Completed', 'Cancelled']).optional(),
+    modality: z.enum([
+      'XRay', 'Ultrasound', 'CT', 'MRI',
+      'Mammography', 'Fluoroscopy', 'Interventional', 'NuclearMedicine', 'Other',
+    ]).optional(),
+    priority: z.enum(['Routine', 'Urgent', 'Emergency']).optional(),
+    includeDeleted: z
+      .union([z.literal('true'), z.literal('false'), z.boolean()])
+      .optional(),
+    page: z.coerce.number().int().positive().optional().default(1),
+    limit: z.coerce.number().int().positive().max(100).optional().default(20),
+  }),
+});
+
 export const getImagingQuerySchema = z.object({
   query: z.object({
     status: z.enum(['Ordered', 'Completed', 'Cancelled']).optional(),

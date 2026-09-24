@@ -232,11 +232,6 @@ const OrderLabPage: React.FC = () => {
               disabled
             />
             <Input
-              label="Patient ID"
-              value={patient?.patientDisplayId || '—'}
-              disabled
-            />
-            <Input
               label="Age"
               value={patient?.age ? `${patient.age} years` : '—'}
               disabled
@@ -272,12 +267,6 @@ const OrderLabPage: React.FC = () => {
                   : '—'
               }
               disabled
-            />
-            <Input
-              label="Medical Record No."
-              value={patient?.patientDisplayId || '—'}
-              disabled
-              className="sm:col-span-2"
             />
           </div>
         </FormSection>

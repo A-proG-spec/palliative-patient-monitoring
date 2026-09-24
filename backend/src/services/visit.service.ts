@@ -1,8 +1,11 @@
 import bcrypt from 'bcrypt';
-import { prisma } from '@db/prisma.js';
+import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 
+
+const prismaBase = new PrismaClient();
+export const prisma = prismaBase;
 // ─────────────────────────────────────────────────────────────
 // DTO helpers
 // ─────────────────────────────────────────────────────────────
@@ -20,6 +23,60 @@ const isAllSigned = (signatures: any[]): boolean => {
   return roles.has('Physician') && roles.has('Nurse');
 };
 
+
+
+// ─────────────────────────────────────────────────────────────
+// GET ALL home visits for a patient
+// ─────────────────────────────────────────────────────────────
+export const getAllVisits = async (
+  patientId: string,
+  page: number = 1,
+  limit: number = 20,
+  includeDeleted: boolean = false,
+) => {
+  const pid = toId(patientId, 'patient id');
+  const client = includeDeleted ? prismaBase : prisma;
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: pid },
+    select: { id: true },
+  });
+  if (!patient) throw new ApiError(404, 'Patient not found');
+
+  const skip = (page - 1) * limit;
+
+  const [items, total] = await Promise.all([
+    client.homeVisit.findMany({
+      where: { patientId: pid },
+      orderBy: { visitDate: 'desc' },
+      skip,
+      take: limit,
+      include: { signatures: true },
+    }),
+    client.homeVisit.count({ where: { patientId: pid } }),
+  ]);
+
+  return {
+    items: items.map((visit) => ({
+      id: visit.id,
+      visitDate: visit.visitDate,
+      visitType: visit.visitType,
+      overallStatus: visit.overallStatus,
+      outcome: visit.outcome,
+      ppsScore: visit.ppsScore,
+      kpsScore: visit.kpsScore,
+      createdBy: visit.createdBy,
+      signatures: formatSignatures(visit.signatures),
+      allSigned: isAllSigned(visit.signatures),
+      createdAt: visit.createdAt,
+      deletedAt: visit.deletedAt ?? null,
+      deletionReason: visit.deletionReason ?? null,
+    })),
+    page,
+    limit,
+    total,
+  };
+};
 // ═════════════════════════════════════════════════════════════
 // Record visit
 //
@@ -74,8 +131,7 @@ export const recordVisit = async (
       overallStatus: data.overallStatus,
       mobility: data.mobility,
 
-      // vitals (schema uses `temprature` — keep the field name as-is)
-      temprature: data.vitals?.temperature ?? null,
+      temperature: data.vitals?.temperature ?? null,
       pulse: data.vitals?.pulse ?? null,
       bloodPressure: data.vitals?.bloodPressure ?? null,
       respiration: data.vitals?.respiration ?? null,
@@ -544,6 +600,7 @@ export const restoreVisit = async (visitId: string, adminId: string | number) =>
 
 export default {
   recordVisit,
+  getAllVisits,
   getVisits,
   getVisitById,
   signVisit,

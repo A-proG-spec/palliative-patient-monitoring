@@ -1,10 +1,71 @@
-import { prisma } from '@db/prisma.js';
+import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 
+
+
+
+const prismaBase = new PrismaClient();
+export const prisma = prismaBase;
 // ─────────────────────────────────────────────────────────────
 // Order medication
 // ─────────────────────────────────────────────────────────────
+export const getAllMedications = async (
+  patientId: string,
+  status?: string,
+  page: number = 1,
+  limit: number = 20,
+  includeDeleted: boolean = false,
+) => {
+  const pid = toId(patientId, 'patient id');
+  const client = includeDeleted ? prismaBase : prisma;
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: pid },
+    select: { id: true },
+  });
+  if (!patient) throw new ApiError(404, 'Patient not found');
+
+  const where: any = { patientId: pid };
+  if (status) where.status = status;
+
+  const skip = (page - 1) * limit;
+
+  const [items, total] = await Promise.all([
+    client.medication.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        prescribedByStaff: { select: { id: true, name: true } },
+      },
+    }),
+    client.medication.count({ where }),
+  ]);
+
+  return {
+    items: items.map((m) => ({
+      id: m.id,
+      name: m.name,
+      dosage: m.dosage,
+      frequency: m.frequency,
+      route: m.route,
+      administeredAt: m.administeredAt,
+      status: m.status,
+      prescribedBy: {
+        id: m.prescribedByStaff.id,
+        name: m.prescribedByStaff.name,
+      },
+      createdAt: m.createdAt,
+      deletedAt: m.deletedAt ?? null,
+      deletionReason: m.deletionReason ?? null,
+    })),
+    page,
+    limit,
+    total,
+  };
+};
 export const orderMedication = async (
   patientId: string,
   data: any,
@@ -396,6 +457,7 @@ export const markMedicationGivenByQueue = async (
 };
 
 export default {
+  getAllMedications,
   orderMedication,
   getMedications,
   getMedicationById,

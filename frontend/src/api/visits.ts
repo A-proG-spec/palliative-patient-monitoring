@@ -9,6 +9,9 @@ export const visitApi = {
     return apiClient.post<HomeVisit>(`/patients/${patientId}/visits`, data).then((r) => r.data);
   },
 
+  /**
+   * Active-only list.
+   */
   getByPatient: (
     patientId: string,
     params?: { page?: number; limit?: number },
@@ -19,6 +22,28 @@ export const visitApi = {
       .then((r) => r.data);
   },
 
+  /**
+   * Active + deleted list. Hits `/patients/:id/visits/all`.
+   */
+  getAllForPatient: (
+    patientId: string,
+    params?: {
+      includeDeleted?: boolean;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<VisitListResponse> => {
+    const { includeDeleted, ...rest } = params ?? {};
+    return apiClient
+      .get<VisitListResponse>(`/patients/${patientId}/visits/all`, {
+        params: {
+          ...rest,
+          ...(includeDeleted ? { includeDeleted: 'true' } : {}),
+        },
+      })
+      .then((r) => r.data);
+  },
+
   getById: (patientId: string, visitId: string): Promise<HomeVisit> => {
     if (USE_MOCK) return mockVisitApi.getById(patientId, visitId);
     return apiClient
@@ -26,10 +51,6 @@ export const visitApi = {
       .then((r) => r.data);
   },
 
-  /**
-   * Admin-only. Partial update of a visit — the backend whitelists
-   * a small set of fields (see `updateVisitSchema`).
-   */
   update: (patientId: string, visitId: string, data: Record<string, unknown>): Promise<HomeVisit> => {
     if (USE_MOCK) return mockVisitApi.getById(patientId, visitId);
     return apiClient
@@ -37,9 +58,6 @@ export const visitApi = {
       .then((r) => r.data);
   },
 
-  /**
-   * Admin-only soft delete.
-   */
   delete: (patientId: string, visitId: string, reason?: string): Promise<{ id: string; success: boolean }> => {
     if (USE_MOCK) return Promise.resolve({ id: visitId, success: true });
     return apiClient
@@ -49,9 +67,6 @@ export const visitApi = {
       .then((r) => r.data);
   },
 
-  /**
-   * Admin-only restore of a soft-deleted visit.
-   */
   restore: (patientId: string, visitId: string): Promise<{ id: string; restored: boolean }> => {
     if (USE_MOCK) return Promise.resolve({ id: visitId, restored: true });
     return apiClient

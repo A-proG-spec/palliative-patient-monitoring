@@ -19,6 +19,9 @@ export const labApi = {
       .then((r) => r.data);
   },
 
+  /**
+   * Active-only list.
+   */
   getByPatient: (
     patientId: string,
     params?: {
@@ -31,6 +34,32 @@ export const labApi = {
   ): Promise<LabListResponse> => {
     return apiClient
       .get<LabListResponse>(`/patients/${patientId}/labs`, { params })
+      .then((r) => r.data);
+  },
+
+  /**
+   * Active + deleted list. Hits `/patients/:id/labs/all`.
+   * Pass `{ includeDeleted: true }` to filter to deleted-only.
+   */
+  getAllForPatient: (
+    patientId: string,
+    params?: {
+      status?: LabStatus;
+      category?: LabCategory;
+      priority?: LabPriority;
+      includeDeleted?: boolean;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<LabListResponse> => {
+    const { includeDeleted, ...rest } = params ?? {};
+    return apiClient
+      .get<LabListResponse>(`/patients/${patientId}/labs/all`, {
+        params: {
+          ...rest,
+          ...(includeDeleted ? { includeDeleted: 'true' } : {}),
+        },
+      })
       .then((r) => r.data);
   },
 
@@ -53,9 +82,6 @@ export const labApi = {
       .then((r) => r.data);
   },
 
-  /**
-   * Cancel a pending lab test (status → Cancelled).
-   */
   cancel: (
     patientId: string,
     labId: string,
@@ -68,9 +94,6 @@ export const labApi = {
       .then((r) => r.data);
   },
 
-  /**
-   * Admin-only soft delete.
-   */
   delete: (
     patientId: string,
     labId: string,
@@ -85,8 +108,7 @@ export const labApi = {
   },
 
   /**
-   * Admin-only restore of a soft-deleted lab test.
-   * Note: the backend uses PUT for the lab restore route.
+   * Admin-only restore. Backend uses PUT for labs.
    */
   restore: (
     patientId: string,

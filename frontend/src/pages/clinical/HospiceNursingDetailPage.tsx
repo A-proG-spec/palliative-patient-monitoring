@@ -34,7 +34,7 @@ const HospiceNursingDetailPage: React.FC = () => {
         <div>
           <h1 className="text-xl font-bold text-on-surface">Hospice Nursing Assessment</h1>
           <p className="text-sm text-text-muted mt-0.5">
-            {formatDate(a.assessmentDate)} · Assessed by {a.assessedBy?.name ?? '—'}
+            {formatDate(a.assessmentDate)} · Assessed by {a.assessedByStaff?.name ?? '—'}
           </p>
         </div>
       </div>

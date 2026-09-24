@@ -85,3 +85,75 @@ export {
   useImagingOrderDetail,
   useSubmitImagingReport,
 } from './useImagingQueue';
+
+export {
+  usePatientPharmacistAssessments,
+  usePharmacistAssessment,
+  useCreatePharmacistAssessment,
+  useUpdatePharmacistAssessment,
+  useDeletePharmacistAssessment,
+  useRestorePharmacistAssessment,
+} from './usePharmacistAssessments';
+
+export {
+  usePatientPhysiotherapyAssessments,
+  usePhysiotherapyAssessment,
+  useCreatePhysiotherapyAssessment,
+  useUpdatePhysiotherapyAssessment,
+  useDeletePhysiotherapyAssessment,
+  useRestorePhysiotherapyAssessment,
+} from './usePhysiotherapyAssessments';
+
+export {
+  usePatientFamilyAssessments,
+  useFamilyAssessment,
+  useCreateFamilyAssessment,
+  useUpdateFamilyAssessment,
+  useDeleteFamilyAssessment,
+  useRestoreFamilyAssessment,
+} from './useFamilyAssessments';
+
+export {
+  usePatientNutritionalAssessments,
+  useNutritionalAssessment,
+  useCreateNutritionalAssessment,
+  useUpdateNutritionalAssessment,
+  useDeleteNutritionalAssessment,
+  useRestoreNutritionalAssessment,
+} from './useNutritionalAssessments';
+
+export {
+  usePatientPainAssessments,
+  usePainAssessment,
+  useCreatePainAssessment,
+  useUpdatePainAssessment,
+  useDeletePainAssessment,
+  useRestorePainAssessment,
+} from './usePainAssessments';
+
+export {
+  usePatientSocialAssessments,
+  useSocialAssessment,
+  useCreateSocialAssessment,
+  useUpdateSocialAssessment,
+  useDeleteSocialAssessment,
+  useRestoreSocialAssessment,
+} from './useSocialAssessments';
+
+export {
+  usePatientSpiritualAssessments,
+  useSpiritualAssessment,
+  useCreateSpiritualAssessment,
+  useUpdateSpiritualAssessment,
+  useDeleteSpiritualAssessment,
+  useRestoreSpiritualAssessment,
+} from './useSpiritualAssessments';
+
+export {
+  usePatientPsychiatryAssessments,
+  usePsychiatryAssessment,
+  useCreatePsychiatryAssessment,
+  useUpdatePsychiatryAssessment,
+  useDeletePsychiatryAssessment,
+  useRestorePsychiatryAssessment,
+} from './usePsychiatryAssessments';

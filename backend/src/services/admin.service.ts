@@ -1,7 +1,10 @@
-import { prisma, prismaBase } from '@db/prisma.js';
+import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 
+
+const prismaBase = new PrismaClient();
+export const prisma = prismaBase;
 // ═════════════════════════════════════════════════════════════
 // HELPERS
 // ═════════════════════════════════════════════════════════════
@@ -53,6 +56,11 @@ export const approveStaff = async (
     'Pharmacist',
     'Radiologist',
     'LaboratoryTechnician',
+    'Physiologist',
+    'Psychiatrist',
+    'Psychologist',
+    'SocialWorker',
+    'SpiritualPerson',
   ];
   if (!validRoles.includes(role)) {
     throw new ApiError(400, 'Invalid role specified');

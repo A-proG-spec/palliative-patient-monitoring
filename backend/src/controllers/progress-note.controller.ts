@@ -18,6 +18,26 @@ export const getProgressNotes = asyncHandler(async (req: Request, res: Response)
   return SuccessResponse(200, 'OK', result);
 });
 
+export const getAllProgressNotes = asyncHandler(
+  async (req: Request, res: Response) => {
+    const patientId = req.params.patientId as string;
+    const page = req.query.page ? parseInt(req.query.page as string) : 1;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+    const filters = {
+      admissionId: req.query.admissionId as string | undefined,
+      includeDeleted: req.query.includeDeleted === 'true',
+    };
+
+    const result = await progressNoteService.getAllProgressNotes(
+      patientId,
+      filters,
+      page,
+      limit,
+    );
+    return SuccessResponse(200, 'OK', result);
+  },
+);
+
 export const getProgressNoteById = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const noteId = req.params.noteId as string;
@@ -78,6 +98,7 @@ export const restoreProgressNote = asyncHandler(async (req: Request, res: Respon
 });
 
 export default {
+  getAllProgressNotes,
   createProgressNote,
   getProgressNotes,
   getProgressNoteById,

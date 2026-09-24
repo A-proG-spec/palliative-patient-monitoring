@@ -1,8 +1,11 @@
 import bcrypt from 'bcrypt';
-import { prisma } from '@db/prisma.js';
+import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 
+
+const prismaBase = new PrismaClient();
+export const prisma = prismaBase;
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
@@ -80,7 +83,7 @@ export const createProgressNote = async (
       changesSincePreviousReview: data.changesSincePreviousReview ?? '',
 
       // Vitals (schema field names)
-      temprature: data.temperature ?? null,
+      temperature: data.temperature ?? null,
       pulse: data.pulse ?? null,
       respiratoryRate: data.respiratoryRate ?? null,
       bloodPressure: data.bloodPressure ?? null,
@@ -278,6 +281,83 @@ export const createProgressNote = async (
   };
 };
 
+// ─────────────────────────────────────────────────────────────
+// GET ALL progress notes for a patient
+// ─────────────────────────────────────────────────────────────
+export const getAllProgressNotes = async (
+  patientId: string,
+  filters: { admissionId?: string; includeDeleted?: boolean } = {},
+  page: number = 1,
+  limit: number = 20,
+) => {
+  const pid = toId(patientId, 'patient id');
+  const client = filters.includeDeleted ? prismaBase : prisma;
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: pid },
+    select: { id: true },
+  });
+  if (!patient) throw new ApiError(404, 'Patient not found');
+
+  const where: any = { patientId: pid };
+  if (filters.admissionId) {
+    where.admissionId = toId(filters.admissionId, 'admission id');
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [items, total] = await Promise.all([
+    client.patientProgressNote.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        createdByStaff: { select: { id: true, name: true, role: true } },
+        responsibleClinician: { select: { id: true, name: true, role: true } },
+        admission: {
+          select: { id: true, admissionDate: true, ward: true, bedNumber: true },
+        },
+        signatures: true,
+      },
+    }),
+    client.patientProgressNote.count({ where }),
+  ]);
+
+  return {
+    items: items.map((n) => ({
+      id: n.id,
+      admissionId: n.admissionId,
+      ward: n.admission?.ward,
+      bedNumber: n.admission?.bedNumber,
+      attendingClinician: n.attendingClinician,
+      palliativeCareUnit: n.palliativeCareUnit,
+      generalCondition: n.generalCondition,
+      levelOfConsciousness: n.levelOfConsciousness,
+      overallAssessment: n.overallAssessment,
+      soapSubjective: n.soapSubjective,
+      responsibleClinician: {
+        staffId: n.responsibleClinician.id,
+        name: n.responsibleClinician.name,
+        role: n.responsibleClinician.role,
+      },
+      signatures: formatSignatures(n.signatures),
+      allSigned: isAllSigned(n.signatures),
+      createdBy: {
+        id: n.createdByStaff.id,
+        name: n.createdByStaff.name,
+        role: n.createdByStaff.role,
+      },
+      createdAt: n.createdAt,
+      updatedAt: n.updatedAt,
+      deletedAt: n.deletedAt ?? null,
+      deletionReason: n.deletionReason ?? null,
+    })),
+    page,
+    limit,
+    total,
+  };
+};
 // ═════════════════════════════════════════════════════════════
 // List progress notes for a patient
 // ═════════════════════════════════════════════════════════════
@@ -418,7 +498,7 @@ export const getProgressNoteById = async (
 export const signProgressNote = async (
   patientId: string,
   noteId: string,
-  data: { email: string; password: string; role: 'Physician' | 'Nurse' | 'Reviewer' },
+  data: { email: string; password: string; role: 'Physician' | 'Nurse' },
 ) => {
   const pid = toId(patientId, 'patient id');
   const nid = toId(noteId, 'note id');
@@ -443,9 +523,6 @@ export const signProgressNote = async (
   const passwordOk = await bcrypt.compare(data.password, staff.password);
   if (!passwordOk) throw new ApiError(401, 'Invalid credentials');
 
-  if (data.role !== 'Reviewer' && staff.role !== data.role) {
-    throw new ApiError(403, `You are not registered as a ${data.role}`);
-  }
 
   if (staff.id === note.responsibleClinicianId) {
     throw new ApiError(400, 'You are auto-signed as the responsible clinician');
@@ -629,6 +706,7 @@ export const countProgressNotesByAdmission = async (admissionId: string) => {
 };
 
 export default {
+  getAllProgressNotes,
   createProgressNote,
   getProgressNotes,
   getProgressNoteById,

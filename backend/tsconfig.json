@@ -19,7 +19,6 @@
       "@/*":              ["./src/*"],
       "@config/*":        ["./src/config/*"],
       "@controllers/*":   ["./src/controllers/*"],
-      "@db/*":            ["./src/db/*"],
       "@models/*":        ["./src/models/*"],
       "@routes/*":        ["./src/routes/*"],
       "@schemas/*":       ["./src/schemas/*"],

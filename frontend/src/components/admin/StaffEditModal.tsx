@@ -29,7 +29,19 @@ const editStaffSchema = z
       .optional()
       .or(z.literal('')),
     role: z
-      .enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'])
+      .enum([
+        'Physician',
+        'Nurse',
+        'Pharmacist',
+        'Radiologist',
+        'LaboratoryTechnician',
+        'Physiologist',
+        'Psychiatrist',
+        'Psychologist',
+        'SocialWorker',
+        'SpiritualPerson',
+        'Nutritionist',
+      ])
       .optional(),
   })
   .refine(
@@ -60,7 +72,7 @@ const StaffEditModal: React.FC<StaffEditModalProps> = ({ staff, onClose }) => {
     defaultValues: {
       name: staff.name,
       phone: staff.phone,
-      role: staff.role ?? undefined,
+      role: (staff.role ?? undefined) as EditStaffFormData['role'],
     },
   });
 
@@ -141,6 +153,12 @@ const StaffEditModal: React.FC<StaffEditModalProps> = ({ staff, onClose }) => {
               { value: 'Pharmacist', label: 'Pharmacist' },
               { value: 'Radiologist', label: 'Radiologist' },
               { value: 'LaboratoryTechnician', label: 'Laboratory Technician' },
+              { value: 'Physiologist', label: 'Physiologist' },
+              { value: 'Psychiatrist', label: 'Psychiatrist' },
+              { value: 'Psychologist', label: 'Psychologist' },
+              { value: 'SocialWorker', label: 'Social Worker' },
+              { value: 'SpiritualPerson', label: 'Spiritual Person' },
+              { value: 'Nutritionist', label: 'Nutritionist' },
             ]}
             placeholder="Select role…"
             value={currentRole ?? ''}

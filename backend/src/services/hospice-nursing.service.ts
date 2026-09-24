@@ -1,7 +1,10 @@
-import { prisma, prismaBase } from '@db/prisma.js';
+import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 
+
+const prismaBase = new PrismaClient();
+export const prisma = prismaBase;
 // ─────────────────────────────────────────────────────────────
 // DTO mapper — one place to shape the response
 // ─────────────────────────────────────────────────────────────
@@ -258,6 +261,65 @@ export const createHospiceNursingAssessment = async (
     });
 
     return toHospiceDto(assessment);
+};
+
+export const getAllHospiceNursingAssessments = async (
+  patientId: string,
+  page: number = 1,
+  limit: number = 20,
+  includeDeleted: boolean = false,
+) => {
+  const pid = toId(patientId, 'patient id');
+  const client = includeDeleted ? prismaBase : prisma;
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: pid },
+    select: { id: true },
+  });
+  if (!patient) throw new ApiError(404, 'Patient not found');
+
+  const skip = (page - 1) * limit;
+
+  const [items, total] = await Promise.all([
+    client.hospiceNursingAssessment.findMany({
+      where: { patientId: pid },
+      orderBy: { assessmentDate: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        assessedByStaff: { select: { id: true, name: true, role: true } },
+      },
+    }),
+    client.hospiceNursingAssessment.count({ where: { patientId: pid } }),
+  ]);
+
+  return {
+    items: items.map((a) => ({
+      id: a.id,
+      patientId: a.patientId,
+      assessmentDate: a.assessmentDate,
+      assessedBy: a.assessedByStaff
+        ? {
+            id: a.assessedByStaff.id,
+            name: a.assessedByStaff.name,
+            role: a.assessedByStaff.role,
+          }
+        : null,
+      levelOfConsciousness: a.levelOfConsciousness,
+      painScore: a.painScore,
+      mobilityStatus: a.mobilityStatus,
+      emotionalStatus: a.emotionalStatus,
+      nurseSummary: a.nurseSummary,
+      createdAt: a.createdAt,
+      updatedAt: a.updatedAt,
+      // Soft-delete metadata
+      deletedAt: a.deletedAt ?? null,
+      deletionReason: a.deletionReason ?? null,
+    })),
+    page,
+    limit,
+    total,
+  };
 };
 
 // ═════════════════════════════════════════════════════════════
@@ -551,6 +613,7 @@ export const getDeletedHospiceNursingAssessments = async (
 };
 
 export default {
+    getAllHospiceNursingAssessments,
     createHospiceNursingAssessment,
     getHospiceNursingAssessments,
     getHospiceNursingAssessmentById,

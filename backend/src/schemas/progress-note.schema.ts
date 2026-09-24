@@ -205,7 +205,16 @@ export const signProgressNoteSchema = z.object({
     role: z.enum(['Physician', 'Nurse', 'Reviewer']),
   }),
 });
-
+export const getAllProgressNotesQuerySchema = z.object({
+  query: z.object({
+    admissionId: z.string().optional(),
+    includeDeleted: z
+      .union([z.literal('true'), z.literal('false'), z.boolean()])
+      .optional(),
+    page: z.coerce.number().int().positive().optional().default(1),
+    limit: z.coerce.number().int().positive().max(100).optional().default(20),
+  }),
+});
 export const getProgressNotesQuerySchema = z.object({
   query: z.object({
     admissionId: z.string().optional(),

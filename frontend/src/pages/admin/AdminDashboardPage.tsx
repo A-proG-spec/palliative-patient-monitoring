@@ -18,7 +18,7 @@ import { ErrorState, EmptyState } from '@/components/common/EmptyState';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { formatRelativeTime, formatDate } from '@/lib/utils';
 
-// ── Admin stat card — uses distinct admin palette ────────────────
+// ── Admin stat card ──────────────────────────────────────────────
 const AdminStatCard: React.FC<{
   icon: React.ReactNode;
   label: string;
@@ -33,8 +33,8 @@ const AdminStatCard: React.FC<{
       ${onClick ? 'cursor-pointer hover:shadow-card-hover hover:-translate-y-0.5' : ''}
     `}
   >
-    {/* Decorative accent stripe */}
-    <div className={`absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-primary to-primary/40 opacity-70`} />
+    {/* Decorative accent stripe — solid primary so it stays visible in dark mode */}
+    <div className="absolute top-0 left-0 h-1 w-full bg-primary opacity-70" />
     <div className="flex items-center gap-4 pt-1">
       <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-primary-light ${accent}`}>
         {icon}
@@ -58,8 +58,8 @@ const AdminSection: React.FC<{
   noPadding?: boolean;
 }> = ({ icon, title, badge, badgeVariant = 'primary', action, children, noPadding }) => (
   <div className="rounded-2xl border border-border-base bg-surface-lowest shadow-card overflow-hidden">
-    {/* Section header — uses a subtle admin-identity gradient */}
-    <div className="flex items-center justify-between px-5 py-4 border-b border-border-base bg-gradient-to-r from-surface-low to-surface-lowest">
+    {/* Section header — flat surface so it reads on both themes */}
+    <div className="flex items-center justify-between px-5 py-4 border-b border-border-base bg-surface-low">
       <div className="flex items-center gap-2.5">
         <span className="text-primary">{icon}</span>
         <h2 className="text-sm font-semibold text-on-surface">{title}</h2>
@@ -77,7 +77,7 @@ const AdminSection: React.FC<{
 
 // ── Notification type icon ───────────────────────────────────────
 const notifTypeIcon = (type: string) => {
-  if (type === 'StaffApproval')   return <UserCheck size={15} className="text-primary" />;
+  if (type === 'StaffApproval')    return <UserCheck size={15} className="text-primary" />;
   if (type === 'ReferralApproval') return <GitBranch size={15} className="text-warning" />;
   return <CheckCircle2 size={15} className="text-success" />;
 };
@@ -125,12 +125,12 @@ const AdminDashboardPage: React.FC = () => {
 
       {/* ── Stats strip ── */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <AdminStatCard icon={<Users size={20} />}       label="Total Patients"    value={stats?.totalPatients ?? 0}      onClick={() => navigate('/admin/patients')} />
-        <AdminStatCard icon={<CheckCircle2 size={20} />} label="Active Patients"  value={stats?.activePatients ?? 0}     accent="text-success" onClick={() => navigate('/admin/patients')} />
-        <AdminStatCard icon={<Hospital size={20} />}    label="Hospitalized"      value={stats?.hospitalizedPatients ?? 0} accent="text-warning" />
-        <AdminStatCard icon={<UserX size={20} />}       label="Discharged"        value={stats?.dischargedPatients ?? 0}  accent="text-text-muted" />
-        <AdminStatCard icon={<GitBranch size={20} />}   label="Pending Referrals" value={stats?.pendingReferrals ?? 0}   accent="text-warning" onClick={() => navigate('/admin/referrals')} />
-        <AdminStatCard icon={<UserCheck size={20} />}   label="Pending Staff"     value={stats?.pendingStaff ?? 0}       accent="text-primary" onClick={() => navigate('/admin/staff')} />
+        <AdminStatCard icon={<Users size={20} />}        label="Total Patients"    value={stats?.totalPatients ?? 0}       onClick={() => navigate('/admin/patients')} />
+        <AdminStatCard icon={<CheckCircle2 size={20} />} label="Active Patients"   value={stats?.activePatients ?? 0}      accent="text-success" onClick={() => navigate('/admin/patients')} />
+        <AdminStatCard icon={<Hospital size={20} />}     label="Hospitalized"      value={stats?.hospitalizedPatients ?? 0} accent="text-warning" />
+        <AdminStatCard icon={<UserX size={20} />}        label="Discharged"        value={stats?.dischargedPatients ?? 0}  accent="text-text-muted" />
+        <AdminStatCard icon={<GitBranch size={20} />}    label="Pending Referrals" value={stats?.pendingReferrals ?? 0}    accent="text-warning" onClick={() => navigate('/admin/referrals')} />
+        <AdminStatCard icon={<UserCheck size={20} />}    label="Pending Staff"     value={stats?.pendingStaff ?? 0}        accent="text-primary" onClick={() => navigate('/admin/staff')} />
       </div>
 
       {/* ── 2-col: Notifications + Recent Referrals ── */}
@@ -152,7 +152,7 @@ const AdminDashboardPage: React.FC = () => {
                 <div
                   key={n.id}
                   className={`flex items-start gap-3 px-5 py-3.5 transition-colors ${
-                    !n.read ? 'bg-primary-light/25 dark:bg-primary-light/10' : 'hover:bg-surface-low'
+                    !n.read ? 'bg-primary-light' : 'hover:bg-surface-low'
                   }`}
                 >
                   <div className="mt-0.5">{notifTypeIcon(n.type)}</div>
@@ -227,7 +227,7 @@ const AdminDashboardPage: React.FC = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-surface-low">
+              <thead className="bg-surface-container">
                 <tr>
                   {['Name', 'Email', 'Phone', 'Requested', 'Role', 'Actions'].map((h) => (
                     <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-on-surface-variant">{h}</th>
@@ -236,7 +236,7 @@ const AdminDashboardPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-border-base">
                 {pendingStaff.map((staff) => (
-                  <tr key={staff.id} className="hover:bg-surface-low/50 transition-colors">
+                  <tr key={staff.id} className="hover:bg-surface-low transition-colors">
                     <td className="px-5 py-3.5 font-medium text-on-surface">{staff.name}</td>
                     <td className="px-5 py-3.5 text-text-secondary">{staff.email}</td>
                     <td className="px-5 py-3.5 text-text-secondary">{staff.phone}</td>
@@ -244,12 +244,12 @@ const AdminDashboardPage: React.FC = () => {
                     <td className="px-5 py-3.5">
                       <Select
                         options={[
-                          { value: 'TeamLeader',   label: 'Team Leader' },
-                          { value: 'Physician',    label: 'Physician' },
-                          { value: 'Nurse',        label: 'Nurse' },
-                          { value: 'Pharmacist',   label: 'Pharmacist' },
+                          { value: 'TeamLeader',    label: 'Team Leader' },
+                          { value: 'Physician',     label: 'Physician' },
+                          { value: 'Nurse',         label: 'Nurse' },
+                          { value: 'Pharmacist',    label: 'Pharmacist' },
                           { value: 'LabTechnician', label: 'Lab Technician' },
-                          { value: 'Radiologist',  label: 'Radiologist' },
+                          { value: 'Radiologist',   label: 'Radiologist' },
                         ]}
                         placeholder="Select role…"
                         value={roleSelections[staff.id] || ''}
@@ -306,7 +306,7 @@ const AdminDashboardPage: React.FC = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-surface-low">
+              <thead className="bg-surface-container">
                 <tr>
                   {['Patient', 'Diagnosis', 'Receiving Facility', 'Date', 'Actions'].map((h) => (
                     <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-on-surface-variant">{h}</th>
@@ -315,7 +315,7 @@ const AdminDashboardPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-border-base">
                 {pendingReferrals.map((ref) => (
-                  <tr key={ref.id} className="hover:bg-surface-low/50 transition-colors">
+                  <tr key={ref.id} className="hover:bg-surface-low transition-colors">
                     <td className="px-5 py-3.5 font-medium text-on-surface">{ref.patientId}</td>
                     <td className="px-5 py-3.5 text-text-secondary">{ref.primaryDiagnosis}</td>
                     <td className="px-5 py-3.5 text-text-secondary truncate max-w-xs">{ref.receivingFacility}</td>

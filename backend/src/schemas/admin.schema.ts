@@ -7,7 +7,7 @@ import { z } from 'zod';
 export const approveStaffSchema = z.object({
   body: z.object({
     role: z.enum(
-      ['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'],
+      [ 'Physician',  'Nurse',  'Pharmacist',  'Radiologist',  'LaboratoryTechnician',  'Physiologist',  'Psychiatrist',  'Psychologist',  'SocialWorker', 'SpiritualPerson'],
       {
         message:
           'Invalid role. Must be Physician, Nurse, Pharmacist, Radiologist, or LaboratoryTechnician',

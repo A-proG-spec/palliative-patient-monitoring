@@ -29,7 +29,18 @@ export const getMedicationParamsSchema = z.object({
     medicationId: z.string().min(1, 'Medication ID is required'),
   }),
 });
+export const getAllMedicationsQuerySchema = z.object({
+  query: z.object({
+    status: z.enum(['Ordered', 'Given']).optional(),
+    includeDeleted: z
+      .union([z.literal('true'), z.literal('false'), z.boolean()])
+      .optional(),
+    page: z.coerce.number().int().positive().optional().default(1),
+    limit: z.coerce.number().int().positive().max(100).optional().default(20),
+  }),
+});
 
 export type CreateMedicationSchema = z.infer<typeof createMedicationSchema>;
 export type UpdateMedicationStatusSchema = z.infer<typeof updateMedicationStatusSchema>;
 export type GetMedicationsQuerySchema = z.infer<typeof getMedicationsQuerySchema>;
+export type GetAllMedicaitonQuerySchema = z.infer<typeof getAllMedicationsQuerySchema>;

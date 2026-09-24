@@ -8,7 +8,24 @@ export const orderMedication = asyncHandler(async (req: Request, res: Response) 
   const result = await medicationService.orderMedication(patientId, req.body, req.user.id);
   return SuccessResponse(201, 'Medication ordered successfully', result);
 });
+export const getAllMedications = asyncHandler(
+  async (req: Request, res: Response) => {
+    const patientId = req.params.patientId as string;
+    const status = req.query.status as string | undefined;
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+    const includeDeleted = req.query.includeDeleted === 'true';
 
+    const result = await medicationService.getAllMedications(
+      patientId,
+      status,
+      page,
+      limit,
+      includeDeleted,
+    );
+    return SuccessResponse(200, 'OK', result);
+  },
+);
 export const getMedications = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const status = req.query.status as string | undefined;
@@ -101,6 +118,7 @@ export const markOrderGiven = asyncHandler(
 );
 
 export default {
+  getAllMedications,
   orderMedication,
   getMedications,
   getMedicationById,

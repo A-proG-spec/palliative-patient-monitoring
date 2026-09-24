@@ -6,6 +6,7 @@ import {
   createAdmissionSchema,
   type CreateAdmissionFormData,
 } from '@/schemas/admission.schema';
+import { useAuthStore } from '@/store/auth.store';
 import { useRecordAdmission } from '@/hooks/useAdmissions';
 import { usePatient } from '@/hooks/usePatients';
 import { usePatientReferrals } from '@/hooks/useReferrals';
@@ -34,12 +35,14 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({
     <CardContent className="space-y-4">{children}</CardContent>
   </Card>
 );
+
 const toDateOnly = (value?: string | Date | null): string | undefined => {
   if (!value) return undefined;
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return undefined;
   return d.toISOString().slice(0, 10);
 };
+
 // ── Checkbox group ───────────────────────────────────────────────
 const CheckboxGroup: React.FC<{
   options: { value: string; label: string }[];
@@ -83,9 +86,12 @@ const RecordAdmissionPage: React.FC = () => {
   const { data: patient, isLoading: pLoading } = usePatient(id!);
   const { data: refData } = usePatientReferrals(id!, { status: 'Accepted' });
   const { data: visitsData } = usePatientVisits(id!, { limit: 1 });
+  const user = useAuthStore((s) => s.user);
   const mutation = useRecordAdmission(id!);
 
   const latestVisit = visitsData?.items?.[0];
+  const acceptedReferrals = refData?.items ?? [];
+  const hasPriorVisit = !!latestVisit;
 
   const {
     register,
@@ -116,12 +122,14 @@ const RecordAdmissionPage: React.FC = () => {
 
   const spiritualConcerns = watch('spiritualConcerns');
   const symptomsPresent = watch('symptomsPresent') ?? [];
+  const selectedReferralId = watch('referralId');
 
   // ── Auto-fill patient snapshot ──
   useEffect(() => {
     if (!patient) return;
     setValue('patientName', `${patient.firstName} ${patient.lastName}`);
-    setValue('hospitalPatientId', patient.patientDisplayId ?? '');
+    // NOTE: hospitalPatientId is intentionally NOT auto-filled —
+    // the admitting physician enters the MRN manually.
     setValue('age', patient.age);
     setValue('sex', patient.sex);
     setValue('dateOfBirth', toDateOnly(patient.dateOfBirth));
@@ -138,6 +146,36 @@ const RecordAdmissionPage: React.FC = () => {
     setValue('kpsScore', latestVisit.kpsScore);
   }, [latestVisit, setValue]);
 
+  // ── Auto-fill Admitting Physician from the logged-in user ──
+  useEffect(() => {
+    if (!user?.name) return;
+    setValue('admittingPhysician', user.name);
+  }, [user, setValue]);
+
+  // ── Auto-fill Referring Clinician from the selected referral ──
+  //
+  // NOTE: The `referralId` from the HTML <select> is always a STRING,
+  // but the backend returns each referral's `id` as a NUMBER.
+  // Compare with String() on both sides — otherwise `"3" === 3` is false
+  // and the autofill silently does nothing.
+  useEffect(() => {
+    if (!selectedReferralId) {
+      setValue('referringClinician', '');
+      return;
+    }
+
+    const selectedReferral = acceptedReferrals.find(
+      (r) => String(r.id) === String(selectedReferralId),
+    );
+
+    if (selectedReferral?.requestedBy?.name) {
+      setValue('referringClinician', selectedReferral.requestedBy.name, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [selectedReferralId, acceptedReferrals, setValue]);
+
   const onSubmit = (data: CreateAdmissionFormData) => {
     // Strip empty optional fields
     const cleaned: Record<string, unknown> = {};
@@ -153,9 +191,6 @@ const RecordAdmissionPage: React.FC = () => {
   };
 
   if (pLoading) return <PageLoader />;
-
-  const acceptedReferrals = refData?.items ?? [];
-  const hasPriorVisit = !!latestVisit;
 
   return (
     <div className="max-w-3xl space-y-5">
@@ -186,8 +221,7 @@ const RecordAdmissionPage: React.FC = () => {
         noValidate
       >
         {/* ═══════════════════════════════════════════════════════════
-            Section 1: Patient Identification (display only — snapshot
-            values are populated via setValue in useEffect above)
+            Section 1: Patient Identification
         ═══════════════════════════════════════════════════════════ */}
         <Section title="1. Patient Identification">
           <div className="grid sm:grid-cols-2 gap-4">
@@ -199,9 +233,10 @@ const RecordAdmissionPage: React.FC = () => {
               disabled
             />
             <Input
-              label="Hospital ID / MRN"
-              value={patient?.patientDisplayId || '—'}
-              disabled
+              label="Hospital ID / MRN *"
+              placeholder="e.g. Y12-12345"
+              error={errors.hospitalPatientId?.message}
+              {...register('hospitalPatientId')}
             />
             <Input
               label="Age"
@@ -245,7 +280,8 @@ const RecordAdmissionPage: React.FC = () => {
           <Select
             label="Linked Referral *"
             options={acceptedReferrals.map((r) => ({
-              value: r.id,
+              // Normalize to string so RHF's string value matches.
+              value: String(r.id),
               label: `${r.referralType} · ${r.receivingFacility} · ${new Date(
                 r.referralDate,
               ).toLocaleDateString()}`,
@@ -282,6 +318,11 @@ const RecordAdmissionPage: React.FC = () => {
             <Input
               label="Referring Clinician"
               placeholder="Full name"
+              hint={
+                selectedReferralId
+                  ? 'Auto-filled from the selected referral'
+                  : 'Select a referral to auto-fill'
+              }
               error={errors.referringClinician?.message}
               {...register('referringClinician')}
             />
@@ -347,6 +388,7 @@ const RecordAdmissionPage: React.FC = () => {
             <Input
               label="Admitting Physician *"
               placeholder="Full name"
+              hint="Auto-filled from your account"
               error={errors.admittingPhysician?.message}
               {...register('admittingPhysician')}
             />
@@ -414,7 +456,6 @@ const RecordAdmissionPage: React.FC = () => {
 
         {/* ═══════════════════════════════════════════════════════════
             Section 4: Palliative Care Eligibility
-            PPS/KPS are inferred from the latest home visit.
         ═══════════════════════════════════════════════════════════ */}
         <Section title="4. Palliative Care Eligibility">
           {hasPriorVisit && (

@@ -105,7 +105,16 @@ export const getAdmissionsQuerySchema = z.object({
     limit: z.coerce.number().int().positive().max(100).optional().default(20),
   }),
 });
-
+export const getAllAdmissionsQuerySchema = z.object({
+  query: z.object({
+    status: z.enum(['Active', 'Discharged']).optional(),
+    includeDeleted: z
+      .union([z.literal('true'), z.literal('false'), z.boolean()])
+      .optional(),
+    page: z.coerce.number().int().positive().optional().default(1),
+    limit: z.coerce.number().int().positive().max(100).optional().default(20),
+  }),
+});
 export const getAdmissionParamsSchema = z.object({
   params: z.object({
     admissionId: z.string().min(1, 'Admission ID is required'),

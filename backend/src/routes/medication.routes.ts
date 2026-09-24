@@ -6,6 +6,7 @@ import {
   createMedicationSchema,
   updateMedicationStatusSchema,
   getMedicationsQuerySchema,
+  getAllMedicationsQuerySchema,
 } from '@schemas/medication.schema.js';
 import * as medicationController from '@controllers/medication.controller.js';
 
@@ -27,7 +28,11 @@ router.get(
   validate(getMedicationsQuerySchema),
   medicationController.getMedications
 );
-
+router.get(
+  '/all',
+  validate(getAllMedicationsQuerySchema),
+  medicationController.getAllMedications,
+);
 // ── Read one ──
 router.get('/:medicationId', medicationController.getMedicationById);
 
@@ -51,5 +56,6 @@ router.post(
   roleMiddleware(['admin']),
   medicationController.restoreMedication
 );
+
 
 export default router;

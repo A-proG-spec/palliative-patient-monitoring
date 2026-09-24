@@ -428,16 +428,27 @@ export function useStaffActivity(
 // ═══════════════════════════════════════════════════════════
 // Admin soft delete / restore — sub-resources
 //
-// Each hook takes the parent (patientId) plus the resource id,
-// invalidates the correct query keys, and toasts on success/failure.
+// Every hook invalidates the resource's list key AND the patient
+// summary so both the tab and the summary card refresh.
+//
+// The list key uses a prefix match (`['patients', pid, 'medications']`)
+// so it also catches the `includeDeleted: true` variant — React Query
+// treats a shorter key as a prefix of longer keys.
 // ═══════════════════════════════════════════════════════════
 
-function makeDeleteHook(
-  mutationFn: (args: {
-    patientId: number | string;
-    resourceId: number | string;
-    reason?: string;
-  }) => Promise<unknown>,
+interface DeleteArgs {
+  patientId: number | string;
+  resourceId: number | string;
+  reason?: string;
+}
+
+interface RestoreArgs {
+  patientId: number | string;
+  resourceId: number | string;
+}
+
+function makeDeleteHook<TArgs extends DeleteArgs>(
+  mutationFn: (args: TArgs) => Promise<unknown>,
   invalidateKeys: (patientId: number | string) => unknown[][],
   resourceLabel: string,
 ) {
@@ -463,11 +474,8 @@ function makeDeleteHook(
   };
 }
 
-function makeRestoreHook(
-  mutationFn: (args: {
-    patientId: number | string;
-    resourceId: number | string;
-  }) => Promise<unknown>,
+function makeRestoreHook<TArgs extends RestoreArgs>(
+  mutationFn: (args: TArgs) => Promise<unknown>,
   invalidateKeys: (patientId: number | string) => unknown[][],
   resourceLabel: string,
 ) {
@@ -495,14 +503,14 @@ function makeRestoreHook(
 
 // ── Medication ──
 export const useDeleteMedication = makeDeleteHook(
-  ({ patientId, resourceId, reason }) =>
+  ({ patientId, resourceId, reason }: DeleteArgs) =>
     adminApi.deleteMedication(patientId, resourceId, reason),
   (pid) => [['patients', pid, 'medications'], ['patients', pid, 'summary']],
   'Medication',
 );
 
 export const useRestoreMedication = makeRestoreHook(
-  ({ patientId, resourceId }) =>
+  ({ patientId, resourceId }: RestoreArgs) =>
     adminApi.restoreMedication(patientId, resourceId),
   (pid) => [['patients', pid, 'medications'], ['patients', pid, 'summary']],
   'Medication',
@@ -510,14 +518,14 @@ export const useRestoreMedication = makeRestoreHook(
 
 // ── Lab Test ──
 export const useDeleteLabTest = makeDeleteHook(
-  ({ patientId, resourceId, reason }) =>
+  ({ patientId, resourceId, reason }: DeleteArgs) =>
     adminApi.deleteLabTest(patientId, resourceId, reason),
   (pid) => [['patients', pid, 'labs'], ['patients', pid, 'summary']],
   'Lab test',
 );
 
 export const useRestoreLabTest = makeRestoreHook(
-  ({ patientId, resourceId }) =>
+  ({ patientId, resourceId }: RestoreArgs) =>
     adminApi.restoreLabTest(patientId, resourceId),
   (pid) => [['patients', pid, 'labs'], ['patients', pid, 'summary']],
   'Lab test',
@@ -525,14 +533,14 @@ export const useRestoreLabTest = makeRestoreHook(
 
 // ── Imaging ──
 export const useDeleteImaging = makeDeleteHook(
-  ({ patientId, resourceId, reason }) =>
+  ({ patientId, resourceId, reason }: DeleteArgs) =>
     adminApi.deleteImaging(patientId, resourceId, reason),
   (pid) => [['patients', pid, 'imaging'], ['patients', pid, 'summary']],
   'Imaging order',
 );
 
 export const useRestoreImaging = makeRestoreHook(
-  ({ patientId, resourceId }) =>
+  ({ patientId, resourceId }: RestoreArgs) =>
     adminApi.restoreImaging(patientId, resourceId),
   (pid) => [['patients', pid, 'imaging'], ['patients', pid, 'summary']],
   'Imaging order',
@@ -540,14 +548,14 @@ export const useRestoreImaging = makeRestoreHook(
 
 // ── Admission ──
 export const useDeleteAdmission = makeDeleteHook(
-  ({ patientId, resourceId, reason }) =>
+  ({ patientId, resourceId, reason }: DeleteArgs) =>
     adminApi.deleteAdmission(patientId, resourceId, reason),
   (pid) => [['patients', pid, 'admissions'], ['patients', pid, 'summary']],
   'Admission',
 );
 
 export const useRestoreAdmission = makeRestoreHook(
-  ({ patientId, resourceId }) =>
+  ({ patientId, resourceId }: RestoreArgs) =>
     adminApi.restoreAdmission(patientId, resourceId),
   (pid) => [['patients', pid, 'admissions'], ['patients', pid, 'summary']],
   'Admission',
@@ -555,14 +563,14 @@ export const useRestoreAdmission = makeRestoreHook(
 
 // ── Progress Note ──
 export const useDeleteProgressNote = makeDeleteHook(
-  ({ patientId, resourceId, reason }) =>
+  ({ patientId, resourceId, reason }: DeleteArgs) =>
     adminApi.deleteProgressNote(patientId, resourceId, reason),
   (pid) => [['patients', pid, 'progress-notes'], ['patients', pid, 'summary']],
   'Progress note',
 );
 
 export const useRestoreProgressNote = makeRestoreHook(
-  ({ patientId, resourceId }) =>
+  ({ patientId, resourceId }: RestoreArgs) =>
     adminApi.restoreProgressNote(patientId, resourceId),
   (pid) => [['patients', pid, 'progress-notes'], ['patients', pid, 'summary']],
   'Progress note',
@@ -570,7 +578,7 @@ export const useRestoreProgressNote = makeRestoreHook(
 
 // ── Hospice Nursing ──
 export const useDeleteHospiceNursing = makeDeleteHook(
-  ({ patientId, resourceId, reason }) =>
+  ({ patientId, resourceId, reason }: DeleteArgs) =>
     adminApi.deleteHospiceNursing(patientId, resourceId, reason),
   (pid) => [
     ['patients', pid, 'hospice-nursing'],
@@ -580,7 +588,7 @@ export const useDeleteHospiceNursing = makeDeleteHook(
 );
 
 export const useRestoreHospiceNursing = makeRestoreHook(
-  ({ patientId, resourceId }) =>
+  ({ patientId, resourceId }: RestoreArgs) =>
     adminApi.restoreHospiceNursing(patientId, resourceId),
   (pid) => [
     ['patients', pid, 'hospice-nursing'],

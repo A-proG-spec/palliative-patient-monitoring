@@ -19,7 +19,6 @@ import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { formatDate, formatDateTime } from '@/lib/utils';
-import ImagingResultEntry from '@/components/imaging/ImagingResultEntry';
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -342,8 +341,8 @@ const ImagingDetailPage: React.FC = () => {
         </Card>
       )}
 
-      {/* §11 — Imaging Report */}
-      {hasReport && order.report ? (
+      {/* §11 — Imaging Report (only when a report exists) */}
+      {hasReport && order.report && (
         <Card padding="lg" className="border-l-4 border-l-success">
           <SectionHeader number="11" title="Imaging Report" icon={<FileText size={16} />} />
           <div className="space-y-4">
@@ -399,22 +398,22 @@ const ImagingDetailPage: React.FC = () => {
             )}
           </div>
         </Card>
-      ) : (
-        <div className="space-y-3">
-          <div className="rounded-xl border border-warning/30 bg-warning-bg/20 px-4 py-3 flex items-start gap-2 text-sm text-on-surface">
-            <AlertTriangle size={16} className="text-warning flex-shrink-0 mt-0.5" />
-            <span>
-              No report yet. Enter the imaging findings below to complete this
-              order.
-            </span>
+      )}
+
+      {/* Pending-report banner (replaces the inline result entry form) */}
+      {!hasReport && order.status !== 'Cancelled' && (
+        <div className="rounded-xl border border-warning/30 bg-warning-bg px-4 py-3.5 flex items-start gap-2.5">
+          <AlertTriangle size={16} className="text-warning flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-on-surface">
+              Report pending
+            </p>
+            <p className="text-xs text-text-secondary mt-0.5">
+              No imaging report has been recorded yet for this order. Once the
+              examination is performed, the radiologist can submit the report
+              from the imaging queue.
+            </p>
           </div>
-          <ImagingResultEntry
-            imagingId={imagingId!}
-            patientId={id!}
-            onResultSaved={() => {
-              refetch();
-            }}
-          />
         </div>
       )}
 

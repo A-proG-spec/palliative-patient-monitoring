@@ -215,6 +215,19 @@ export const getLabParamsSchema = z.object({
   }),
 });
 
+export const getAllLabsQuerySchema = z.object({
+  query: z.object({
+    status: z.enum(['Ordered', 'Completed', 'Cancelled']).optional(),
+    category: labCategoryEnum.optional(),
+    priority: labPriorityEnum.optional(),
+    includeDeleted: z
+      .union([z.literal('true'), z.literal('false'), z.boolean()])
+      .optional(),
+    page: z.coerce.number().int().positive().optional().default(1),
+    limit: z.coerce.number().int().positive().max(100).optional().default(20),
+  }),
+});
+
 // ─────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────

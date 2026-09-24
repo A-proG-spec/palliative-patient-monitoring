@@ -4,6 +4,9 @@ import {
   CreateImagingRequest,
   UpdateImagingReportRequest,
   ImagingOrder,
+  ImagingStatus,
+  ImagingModality,
+  ImagingPriority,
 } from '@/api/imaging';
 import { useToast } from '@/context/ToastContext';
 import api from '@/api/client';
@@ -15,11 +18,23 @@ import { QUERY_KEYS } from '@/constants';
 
 export function usePatientImaging(
   patientId: string,
-  params?: { status?: 'Ordered' | 'Completed'; page?: number; limit?: number },
+  params?: {
+    status?: ImagingStatus;
+    modality?: ImagingModality;
+    priority?: ImagingPriority;
+    includeDeleted?: boolean;
+    page?: number;
+    limit?: number;
+  },
 ) {
+  const includeDeleted = params?.includeDeleted === true;
+
   return useQuery({
     queryKey: ['patients', patientId, 'imaging', params],
-    queryFn: () => imagingApi.getByPatient(patientId, params),
+    queryFn: () =>
+      includeDeleted
+        ? imagingApi.getAllForPatient(patientId, params)
+        : imagingApi.getByPatient(patientId, params),
     enabled: !!patientId,
   });
 }
