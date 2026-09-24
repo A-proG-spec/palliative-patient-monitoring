@@ -21,8 +21,15 @@ export const REFERRAL_REASON_VALUES = [
 
 // ─────────────────────────────────────────────────────────────
 // Create — matches backend `createReferralSchema.body`
+//
+// The snapshot fields (patientId, patientName, hospitalPatientId,
+// wardClinic, contactNo) are NOT part of the backend contract —
+// they're purely for autofill display and are stripped before
+// submission. They're declared here so RHF can hold them and the
+// form can read them back via `getValues()`.
 // ─────────────────────────────────────────────────────────────
 export const createReferralSchema = z.object({
+  // ── Core (sent to backend) ──
   referralType: z.enum(['Incoming', 'Outgoing']),
   referralDate: dateString,
   primaryDiagnosis: z.string().min(1, 'Primary diagnosis is required'),
@@ -44,6 +51,14 @@ export const createReferralSchema = z.object({
   receivingFacility: z.string().min(1, 'Receiving facility is required'),
   contactPerson: z.string().min(1, 'Contact person is required'),
   contactNumber: z.string().min(1, 'Contact number is required'),
+
+  // ── Snapshot / autofill (display-only, not sent) ──
+  patientId: z.string().optional(),
+  patientName: z.string().optional(),
+  hospitalPatientId: z.string().optional(),
+  wardClinic: z.string().optional(),
+  contactNo: z.string().optional(),
+  requestedBy: z.string().optional(),
 });
 
 // ─────────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AlertCircle,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -114,8 +115,8 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
 
         <div className="flex items-center gap-2 flex-wrap">
           {requiredMissing.length > 0 && (
-            <span className="flex items-center gap-1.5 text-xs text-warning bg-warning-bg/50 border border-warning/20 px-2.5 py-1 rounded-full">
-              <AlertTriangle size={11} />
+            <span className="flex items-center gap-1.5 text-xs font-medium text-warning bg-warning-bg border border-warning/30 px-2.5 py-1 rounded-full">
+              <AlertCircle size={11} />
               {requiredMissing.length} required field
               {requiredMissing.length === 1 ? '' : 's'} remaining
             </span>

@@ -26,11 +26,11 @@ export const DischargeSectionNav: React.FC<DischargeSectionNavProps> = ({
 
   return (
     <aside
-      className="hidden lg:flex flex-col w-64 flex-shrink-0 border-r border-border-base bg-surface-low/40"
+      className="hidden lg:flex flex-col w-64 flex-shrink-0 border-r border-border-base bg-surface-low min-h-0"
       aria-label="Discharge form sections"
     >
-      {/* Progress summary */}
-      <div className="px-4 pt-5 pb-4 border-b border-border-base">
+      {/* Progress summary — fixed at the top of the sidebar */}
+      <div className="flex-shrink-0 px-4 pt-5 pb-4 border-b border-border-base">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">
           Progress
         </p>
@@ -48,8 +48,8 @@ export const DischargeSectionNav: React.FC<DischargeSectionNavProps> = ({
         </div>
       </div>
 
-      {/* Nav list */}
-      <nav className="flex-1 overflow-y-auto py-2">
+      {/* Nav list — scrolls internally when the sidebar has a bounded height */}
+      <nav className="flex-1 min-h-0 overflow-y-auto py-2">
         {sections.map((section) => {
           const state = states[section.key];
           const isActive = activeKey === section.key;
@@ -67,12 +67,10 @@ export const DischargeSectionNav: React.FC<DischargeSectionNavProps> = ({
                   : 'text-on-surface-variant hover:bg-surface-low hover:text-on-surface',
               )}
             >
-              {/* Status icon */}
               <span className="flex-shrink-0 mt-0.5">
                 <StatusIcon state={state} isActive={isActive} />
               </span>
 
-              {/* Text */}
               <span className="flex-1 min-w-0">
                 <span className="flex items-center gap-2">
                   <span
@@ -99,7 +97,6 @@ export const DischargeSectionNav: React.FC<DischargeSectionNavProps> = ({
                 </span>
               </span>
 
-              {/* Chevron on hover/active */}
               <ChevronRight
                 size={14}
                 className={cn(
@@ -141,10 +138,7 @@ const StatusIcon: React.FC<{ state: SectionState; isActive: boolean }> = ({
       <span className="relative flex h-5 w-5 items-center justify-center">
         <Circle
           size={16}
-          className={cn(
-            'text-warning',
-            isActive ? 'opacity-100' : 'opacity-80',
-          )}
+          className={cn('text-warning', isActive ? 'opacity-100' : 'opacity-80')}
           strokeWidth={2}
         />
         <Circle
@@ -156,7 +150,6 @@ const StatusIcon: React.FC<{ state: SectionState; isActive: boolean }> = ({
       </span>
     );
   }
-  // empty
   return (
     <span className="flex h-5 w-5 items-center justify-center">
       <Circle

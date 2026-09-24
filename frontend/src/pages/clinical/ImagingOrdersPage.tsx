@@ -10,19 +10,30 @@ import { formatDate } from '@/lib/utils';
 import { QUERY_KEYS, ROUTES } from '@/constants';
 import api from '@/api/client';
 
+// ─────────────────────────────────────────────────────────────
+// Row shape — mirrors the backend `PendingImagingOrder` DTO
+// returned by `imaging.service.getPendingImagingOrders`.
+// ─────────────────────────────────────────────────────────────
 interface ImagingOrder {
-  id: string;
-  patientId: string;
+  id: number;
+  patientId: number;
   patientName: string;
-  modalityRequested: string;
+  /** Medical Record No. — the system-generated patient ID (e.g. PAT-0001).
+   *  Null when the patient has no `hospitalPatientId` on record. */
+  patientDisplayId: string | null;
+
+  modality: string;
+  bodyRegion: string;
+  specificQuestion?: string | null;
+
   requestingClinician: string;
-  dateRequested: string;
-  priority: 'Routine' | 'Urgent' | 'STAT';
-  status: 'Pending' | 'Completed';
+  orderedById: number;
+
+  priority: 'Routine' | 'Urgent' | 'Emergency';
+  dateOrdered: string;
+  status: 'Ordered' | 'Completed' | 'Cancelled';
 }
 
-// TODO: Backend endpoint GET /api/imaging/pending-orders
-// Expected response: { imagingOrders: ImagingOrder[] }
 const fetchImagingOrders = async (): Promise<ImagingOrder[]> => {
   const response = await api.get('/imaging/pending-orders');
   return response.data.imagingOrders ?? [];
@@ -74,10 +85,23 @@ const ImagingOrdersPage: React.FC = () => {
 
   const getPriorityVariant = (priority: string) => {
     switch (priority) {
-      case 'STAT':
+      case 'Emergency':
         return 'error';
       case 'Urgent':
         return 'warning';
+      default:
+        return 'default';
+    }
+  };
+
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case 'Ordered':
+        return 'warning';
+      case 'Completed':
+        return 'success';
+      case 'Cancelled':
+        return 'error';
       default:
         return 'default';
     }
@@ -97,10 +121,13 @@ const ImagingOrdersPage: React.FC = () => {
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="border-b border-border-base bg-surface-low">
+            <thead className="border-b border-border-base bg-surface-container">
               <tr>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   Patient
+                </th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                  Medical Record No.
                 </th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   Modality
@@ -123,20 +150,23 @@ const ImagingOrdersPage: React.FC = () => {
               {pendingOrders.map((order) => (
                 <tr
                   key={order.id}
-                  onClick={() => navigate(ROUTES.IMAGING_ORDER_DETAIL(order.id))}
+                  onClick={() => navigate(ROUTES.IMAGING_ORDER_DETAIL(String(order.id)))}
                   className="hover:bg-surface-low cursor-pointer transition-colors"
                 >
                   <td className="px-5 py-3.5 text-sm font-medium text-on-surface">
                     {order.patientName}
                   </td>
+                  <td className="px-5 py-3.5 text-sm font-mono text-text-secondary">
+                    {order.patientDisplayId ?? '—'}
+                  </td>
                   <td className="px-5 py-3.5 text-sm text-text-secondary">
-                    {order.modalityRequested}
+                    {order.modality}
                   </td>
                   <td className="px-5 py-3.5 text-sm text-text-secondary">
                     {order.requestingClinician}
                   </td>
                   <td className="px-5 py-3.5 text-sm text-text-secondary">
-                    {formatDate(order.dateRequested)}
+                    {formatDate(order.dateOrdered)}
                   </td>
                   <td className="px-5 py-3.5">
                     <Badge variant={getPriorityVariant(order.priority)}>
@@ -144,7 +174,7 @@ const ImagingOrdersPage: React.FC = () => {
                     </Badge>
                   </td>
                   <td className="px-5 py-3.5">
-                    <Badge variant={order.status === 'Pending' ? 'warning' : 'success'}>
+                    <Badge variant={getStatusVariant(order.status)}>
                       {order.status}
                     </Badge>
                   </td>

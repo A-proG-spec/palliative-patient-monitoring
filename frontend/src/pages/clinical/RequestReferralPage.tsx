@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,10 +9,12 @@ import {
 import { useRequestReferral } from '@/hooks/useReferrals';
 import { usePatient } from '@/hooks/usePatients';
 import { usePatientVisits } from '@/hooks/useVisits';
+import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { cn, formatDate } from '@/lib/utils';
@@ -59,15 +61,38 @@ const CheckboxGroup: React.FC<{
   </div>
 );
 
+// ── Display helpers ─────────────────────────────────────────────
+
+/**
+ * Derive a stable, human-readable patient display ID.
+ *
+ * Backend returns:
+ *   id: number                  — internal PK
+ *   hospitalPatientId: string | null — real hospital MRN (only when admitted)
+ */
+function getPatientDisplayId(patient: {
+  id: number;
+  hospitalPatientId?: string | null;
+}): string {
+  return (
+    patient.hospitalPatientId ??
+    `PAT-${String(patient.id).padStart(4, '0')}`
+  );
+}
+
 const RequestReferralPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: patient, isLoading: pLoading } = usePatient(id!);
+  const {
+    data: patient,
+    isLoading: pLoading,
+    isSuccess,
+  } = usePatient(id!);
   const { data: visitsData } = usePatientVisits(id!, { limit: 1 });
   const latestVisit = visitsData?.items?.[0];
   const mutation = useRequestReferral(id!);
+  const user = useAuthStore((s) => s.user);
 
-  // Latest PPS/KPS from the most recent home visit, if any.
   const latestPPS = latestVisit?.ppsScore ?? 0;
   const latestKPS = latestVisit?.kpsScore ?? 0;
 
@@ -75,7 +100,9 @@ const RequestReferralPage: React.FC = () => {
     register,
     handleSubmit,
     formState: { errors },
-    reset,
+    setValue,
+    getValues,
+    watch,
   } = useForm<CreateReferralFormData>({
     resolver: zodResolver(createReferralSchema),
     defaultValues: {
@@ -96,21 +123,99 @@ const RequestReferralPage: React.FC = () => {
       receivingFacility: '',
       contactPerson: '',
       contactNumber: '',
+      // Snapshot defaults — overwritten below once the patient loads
+      patientId: '',
+      patientName: '',
+      hospitalPatientId: '',
+      wardClinic: '',
+      contactNo: '',
+      requestedBy: '',
     },
   });
 
-  // Once the latest visit loads, push the values into the form so
-  // they submit correctly (readOnly fields still submit).
+  // ═══════════════════════════════════════════════════════════════
+  // AUTO-FILL
+  //
+  // Runs once, after the patient query settles. Gate on `isSuccess`
+  // (fires exactly once) with a `hasHydrated` ref guard to avoid
+  // re-firing against a still-loading query.
+  // ═══════════════════════════════════════════════════════════════
+  const hasHydrated = useRef(false);
+
   useEffect(() => {
-    reset((prev) => ({
-      ...prev,
-      ppsScore: latestPPS,
-      kpsScore: latestKPS,
-    }));
-  }, [latestPPS, latestKPS, reset]);
+    if (!isSuccess || !patient || hasHydrated.current) return;
+    hasHydrated.current = true;
+
+    const fullName = `${patient.firstName} ${patient.lastName}`;
+    const mrn =
+      patient.hospitalPatientId ??
+      getPatientDisplayId({
+        id: patient.id,
+        hospitalPatientId: patient.hospitalPatientId,
+      });
+    const ward =
+      patient.currentLocation === 'ReferredHospital'
+        ? 'Palliative Care Ward'
+        : 'Home Care Unit';
+    const contact = patient.phone ?? '';
+
+    setValue('patientId', String(patient.id), {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
+    setValue('patientName', fullName, {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
+    setValue('hospitalPatientId', mrn, {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
+    setValue('wardClinic', ward, {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
+    setValue('contactNo', contact, {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
+    if (user?.name) {
+      setValue('requestedBy', user.name, {
+        shouldDirty: false,
+        shouldValidate: false,
+      });
+    }
+
+    // Latest visit values (PPS/KPS) also flow through setValue so the
+    // submission carries them even when the inputs are read-only.
+    setValue('ppsScore', latestPPS, {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
+    setValue('kpsScore', latestKPS, {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
+  }, [isSuccess, patient, user?.name, latestPPS, latestKPS, setValue]);
 
   const onSubmit = (data: CreateReferralFormData) => {
-    mutation.mutate(data, {
+    // Merge in any autofilled snapshot values that weren't in the
+    // rendered form (safe for disabled/read-only fields).
+    const merged = { ...data, ...getValues() };
+
+    // The backend `createReferralSchema` only accepts these keys.
+    // Strip everything else so validation never surprises us.
+    const {
+      patientId: _pid,
+      patientName: _pn,
+      hospitalPatientId: _hpid,
+      wardClinic: _wc,
+      contactNo: _cn,
+      requestedBy: _rb,
+      ...payload
+    } = merged;
+
+    mutation.mutate(payload as CreateReferralFormData, {
       onSuccess: () => navigate(`/patients/${id}`),
     });
   };
@@ -118,6 +223,20 @@ const RequestReferralPage: React.FC = () => {
   if (pLoading) return <PageLoader />;
 
   const isSubmitting = mutation.isPending;
+
+  // Live reads so the read-only snapshot inputs stay in sync
+  const patientNameValue = watch('patientName');
+  const hospitalIdValue = watch('hospitalPatientId');
+  const wardValue = watch('wardClinic');
+  const contactValue = watch('contactNo');
+
+  const displayId = patient
+    ? getPatientDisplayId({
+        id: patient.id,
+        hospitalPatientId: patient.hospitalPatientId,
+      })
+    : '—';
+  const hospitalId = patient?.hospitalPatientId ?? null;
 
   // Symptom score options (0-10)
   const symptomOptions = Array.from({ length: 11 }, (_, i) => ({
@@ -139,7 +258,7 @@ const RequestReferralPage: React.FC = () => {
           </p>
           {patient && (
             <p className="text-sm text-text-muted mt-1">
-              {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
+              {patient.firstName} {patient.lastName} · {displayId}
             </p>
           )}
         </div>
@@ -183,26 +302,25 @@ const RequestReferralPage: React.FC = () => {
           </div>
         </FormSection>
 
-        {/* ── Patient Information (read-only snapshot) ── */}
+        {/* ── Patient Information (auto-filled, read-only) ── */}
         <FormSection title="Patient Information">
           <div className="grid sm:grid-cols-2 gap-4">
             <Input
-              label="Patient ID"
-              value={patient?.patientDisplayId || '—'}
-              disabled
-            />
-            <Input
               label="Full Name"
-              value={
-                patient ? `${patient.firstName} ${patient.lastName}` : '—'
-              }
+              value={patientNameValue || '—'}
               disabled
+              readOnly
             />
+
+            {/* Patient ID — display ID derived from id / hospitalPatientId */}
             <Input
-              label="Age"
-              value={patient?.age ? `${patient.age} years` : '—'}
+              label="Patient ID"
+              value={displayId}
               disabled
+              readOnly
+              hint={!hospitalId ? 'System-generated ID' : undefined}
             />
+
             <div>
               <p className="text-sm font-medium text-on-surface mb-2">Sex</p>
               <div className="flex gap-4">
@@ -226,23 +344,106 @@ const RequestReferralPage: React.FC = () => {
                 </label>
               </div>
             </div>
+
+            <Input
+              label="Age"
+              value={patient?.age ? `${patient.age} years` : '—'}
+              disabled
+              readOnly
+            />
+
+            {/* Medical Record No. — always present, MRN when set */}
+            <div className="sm:col-span-2 space-y-1">
+              <Input
+                label="Medical Record No."
+                value={hospitalIdValue || '—'}
+                disabled
+                readOnly
+              />
+              <div className="flex items-center gap-1.5 pl-1">
+                <Badge
+                  variant={hospitalId ? 'primary' : 'secondary'}
+                  className="text-[10px] px-1.5 py-0.5 leading-none"
+                >
+                  {hospitalId ? 'Hospital MRN' : 'System ID'}
+                </Badge>
+                {!hospitalId && (
+                  <span className="text-[11px] text-text-muted">
+                    No hospital MRN on file — using system ID
+                  </span>
+                )}
+                {patient?.currentLocation === 'ReferredHospital' && (
+                  <Badge
+                    variant="warning"
+                    className="text-[10px] px-1.5 py-0.5 leading-none"
+                  >
+                    Hospitalised
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Explicit Hospital ID row — only when set */}
+            {hospitalId && (
+              <Input
+                label="Hospital ID / MRN"
+                value={hospitalId}
+                disabled
+                readOnly
+                className="sm:col-span-2"
+              />
+            )}
+
+            <Input
+              label="Ward / Clinic"
+              value={wardValue || '—'}
+              disabled
+              readOnly
+              hint={
+                patient?.currentLocation === 'ReferredHospital'
+                  ? 'Patient is in the hospital'
+                  : 'Patient is at home'
+              }
+            />
+
+            <Input
+              label="Contact No."
+              value={contactValue || '—'}
+              disabled
+              readOnly
+            />
+
             <Input
               label="Address"
               value={patient?.address || '—'}
               disabled
+              readOnly
               className="sm:col-span-2"
             />
-            <Input label="Phone" value={patient?.phone || '—'} disabled />
+
             <Input
               label="Caregiver Name"
               value={patient?.caregiverName || '—'}
               disabled
+              readOnly
             />
+
             <Input
               label="Caregiver Phone"
               value={patient?.caregiverPhone || '—'}
               disabled
+              readOnly
             />
+
+            {patient?.caregiverRelation && (
+              <Input
+                label="Caregiver Relationship"
+                value={patient.caregiverRelation}
+                disabled
+                readOnly
+                className="sm:col-span-2"
+              />
+            )}
           </div>
         </FormSection>
 

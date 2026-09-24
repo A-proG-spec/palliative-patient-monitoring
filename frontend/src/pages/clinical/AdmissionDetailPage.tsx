@@ -10,9 +10,7 @@ import {
   Stethoscope,
   Pill,
   Heart,
-  Activity,
   AlertCircle,
-  Users,
   Briefcase,
   Church,
   Phone,
@@ -183,7 +181,7 @@ const AdmissionDetailPage: React.FC = () => {
         <div className="mt-2 text-sm text-text-muted">
           <span>Date: {formatDate(adm.admissionDate)}</span>
           <span className="mx-2">|</span>
-          <span>Admission ID: {adm.id.slice(-8)}</span>
+          <span>Admission ID: {adm.id}</span>
         </div>
       </div>
 
@@ -215,16 +213,6 @@ const AdmissionDetailPage: React.FC = () => {
                 ? 'Finalized'
                 : 'Draft'}
             </Badge>
-          )}
-          {adm.status === 'Active' && (
-            <Button
-              variant="destructive"
-              size="sm"
-              leftIcon={<LogOut size={13} />}
-              onClick={() => setShowDischargeModal(true)}
-            >
-              Discharge
-            </Button>
           )}
         </div>
       </div>
@@ -313,7 +301,7 @@ const AdmissionDetailPage: React.FC = () => {
           />
           <Row
             label="Referral ID"
-            value={adm.referralId ? adm.referralId.slice(-8) : undefined}
+            value={adm.referralId ? adm.referralId : undefined}
           />
           <Row label="Status" value={adm.status} />
         </div>
@@ -583,64 +571,6 @@ const AdmissionDetailPage: React.FC = () => {
             View Progress Notes
           </Button>
         </Card>
-      )}
-
-      {/* ── Discharge Modal ── */}
-      {showDischargeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/30 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-md" padding="lg">
-            <CardHeader>
-              <CardTitle>Discharge Patient</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-text-secondary mb-5">
-                This will mark the admission as{' '}
-                <strong className="text-on-surface">Discharged</strong>.
-                Consider completing the full Discharge Summary form for a
-                comprehensive record.
-              </p>
-              <form
-                onSubmit={handleSubmit(onDischarge)}
-                className="space-y-4"
-                noValidate
-              >
-                <Input
-                  label="Discharge Date *"
-                  type="date"
-                  error={errors.dischargeDate?.message}
-                  {...register('dischargeDate')}
-                />
-                <Select
-                  label="Discharge Reason *"
-                  options={[
-                    { value: 'Improved', label: 'Improved' },
-                    { value: 'Deceased', label: 'Deceased' },
-                  ]}
-                  placeholder="Select…"
-                  error={errors.dischargeReason?.message}
-                  {...register('dischargeReason')}
-                />
-                <div className="flex gap-3 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setShowDischargeModal(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="flex-1"
-                    loading={updateMutation.isPending}
-                  >
-                    Confirm Discharge
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
       )}
     </div>
   );

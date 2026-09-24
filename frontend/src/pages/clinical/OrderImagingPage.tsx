@@ -220,15 +220,8 @@ const OrderImagingPage: React.FC = () => {
               value={patient ? `${patient.firstName} ${patient.lastName}` : '—'}
               disabled
             />
-            <Input label="Patient ID" value={patient?.patientDisplayId || '—'} disabled />
             <Input label="Age" value={patient?.age ? `${patient.age} years` : '—'} disabled />
             <Input label="Sex" value={patient?.sex || '—'} disabled />
-            <Input
-              label="Medical Record No."
-              value={patient?.patientDisplayId || '—'}
-              disabled
-              className="sm:col-span-2"
-            />
           </div>
         </FormSection>
 

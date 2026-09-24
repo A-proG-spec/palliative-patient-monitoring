@@ -4,7 +4,7 @@ import {
   ClipboardList, Pill, FlaskConical, GitBranch, Building2,
   BarChart2, FileText, Home, Hospital, Phone, MapPin,
   Plus, ChevronRight as ChevronRightIcon, Printer,
-  Camera, NotebookPen, Heart,
+  Camera, NotebookPen, Heart, IdCard, UserCircle2,
 } from 'lucide-react';
 import { usePatient } from '@/hooks/usePatients';
 import { usePatientVisits } from '@/hooks/useVisits';
@@ -51,6 +51,29 @@ const ALL_TABS = [
 ] as const;
 
 type Tab = typeof ALL_TABS[number];
+
+// ═════════════════════════════════════════════════════════════
+// Display helpers
+//
+// Backend returns `id` (numeric PK) and `hospitalPatientId`
+// (string | null). We derive a stable, human-readable label:
+//
+//   hospitalPatientId  → "PAT-0001" style when set (real hospital MRN)
+//   fallback           → "PAT-XXXX" derived from the numeric id
+//
+// This mirrors the backend's `patientDisplayId` helper so the
+// frontend never shows a blank header.
+// ═════════════════════════════════════════════════════════════
+
+function getPatientDisplayId(patient: {
+  id: number;
+  hospitalPatientId?: string | null;
+}): string {
+  return (
+    patient.hospitalPatientId ??
+    `PAT-${String(patient.id).padStart(4, '0')}`
+  );
+}
 
 // ── Record Type Definitions ──────────────────────────────────
 interface RecordType {
@@ -376,14 +399,8 @@ const PatientDetailPage: React.FC = () => {
   const imagingOrders = imagingData?.items ?? [];
 
   // ── Location- and role-driven tab list ──
-  //
-  // Rules:
-  //   - Home patients: show Visits, hide Progress Notes
-  //   - Hospitalised patients: show Progress Notes, hide Visits
-  //   - Hospice Nursing tab: only visible to Nurses
   const canViewHospice = hasPermission(userRole, 'canViewHospiceNursing');
   const canWriteHospice = hasPermission(userRole, 'canRecordHospiceNursing');
-
 
   const tabs = useMemo<Tab[]>(() => {
     const currentLocation = patient?.currentLocation ?? 'Home';
@@ -394,7 +411,7 @@ const PatientDetailPage: React.FC = () => {
       if (t === 'Hospice Nursing') return canViewHospice;
       return true;
     });
-  }, [patient?.currentLocation, isNurse]);
+  }, [patient?.currentLocation, canViewHospice]);
 
   // If the current active tab is no longer visible, reset.
   useEffect(() => {
@@ -403,8 +420,6 @@ const PatientDetailPage: React.FC = () => {
     }
   }, [tabs, activeTab]);
 
-  // If returning from the progress note form with a saved note, show
-  // Progress Notes tab — but only if it's actually visible.
   const locationState = location.state as {
     savedProgressNote?: boolean;
     savedHospiceAssessment?: boolean;
@@ -442,6 +457,21 @@ const PatientDetailPage: React.FC = () => {
     Admissions: admsData?.total ?? 0,
   };
 
+  // ── Derived display values ──
+  //
+  // Backend returns:
+  //   id: number                  — internal PK
+  //   hospitalPatientId: string | null — real hospital MRN (only when admitted)
+  //
+  // We show:
+  //   displayId  → always present, falls back to PAT-XXXX
+  //   hospitalId → only when hospitalPatientId is set
+  const displayId = getPatientDisplayId({
+    id: patient.id,
+    hospitalPatientId: patient.hospitalPatientId,
+  });
+  const hasHospitalId = Boolean(patient.hospitalPatientId);
+
   const handlePrint = () => {
     setIsPrinting(true);
     setTimeout(() => {
@@ -474,9 +504,17 @@ const PatientDetailPage: React.FC = () => {
         <div className="flex items-center gap-3">
           <BackButton to="/patients" label="Patients" />
           <div>
-            <p className="text-xs text-text-muted font-mono">
-              {patient.patientDisplayId}
-            </p>
+            {/* ID row — display ID + hospital MRN (when set) */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-text-muted font-mono">
+                {displayId}
+              </span>
+              {hasHospitalId && (
+                <span className="text-[10px] font-mono text-text-muted bg-surface-low border border-border-base rounded px-1.5 py-0.5">
+                  MRN: {patient.hospitalPatientId}
+                </span>
+              )}
+            </div>
             <h1 className="text-xl font-bold text-on-surface">
               {patient.firstName} {patient.lastName}
             </h1>
@@ -524,11 +562,51 @@ const PatientDetailPage: React.FC = () => {
 
       {/* ── Demographics ── */}
       <div className="grid md:grid-cols-2 gap-5">
+        {/* ── Patient Information ── */}
         <Card padding="md">
           <div className="space-y-2 text-sm">
             <h3 className="font-semibold text-on-surface mb-3">
               Patient Information
             </h3>
+
+            {/* ID block — display ID, hospital MRN, and registered-by */}
+            <div className="rounded-lg bg-surface-low/50 border border-border-base px-3 py-2.5 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <IdCard size={13} className="text-text-muted flex-shrink-0" />
+                <span className="text-xs text-text-muted">Patient ID:</span>
+                <span className="text-xs font-mono font-medium text-on-surface">
+                  {displayId}
+                </span>
+              </div>
+
+              {hasHospitalId && (
+                <div className="flex items-center gap-2">
+                  <Hospital size={13} className="text-text-muted flex-shrink-0" />
+                  <span className="text-xs text-text-muted">
+                    Hospital MRN:
+                  </span>
+                  <span className="text-xs font-mono font-medium text-on-surface">
+                    {patient.hospitalPatientId}
+                  </span>
+                </div>
+              )}
+
+              {patient.registeredBy && (
+                <div className="flex items-center gap-2">
+                  <UserCircle2
+                    size={13}
+                    className="text-text-muted flex-shrink-0"
+                  />
+                  <span className="text-xs text-text-muted">
+                    Registered by:
+                  </span>
+                  <span className="text-xs font-medium text-on-surface">
+                    {patient.registeredBy.name}
+                  </span>
+                </div>
+              )}
+            </div>
+
             <InfoRow
               label="Age / Sex"
               value={`${patient.age} years · ${patient.sex}`}
@@ -549,12 +627,38 @@ const PatientDetailPage: React.FC = () => {
               label="Emergency Contact"
               value={`${patient.emergencyContactName} · ${patient.emergencyContactPhone}`}
             />
-            <InfoRow
-              label="Caregiver"
-              value={`${patient.caregiverName} · ${patient.caregiverPhone}`}
-            />
+
+            {/* Caregiver block — now includes the relationship */}
+            <div className="rounded-lg bg-surface-low/50 border border-border-base px-3 py-2.5 space-y-1">
+              <div className="flex items-start gap-2">
+                <span className="text-xs text-text-muted min-w-[100px]">
+                  Caregiver:
+                </span>
+                <span className="text-xs font-medium text-on-surface flex-1">
+                  {patient.caregiverName || '—'}
+                </span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-xs text-text-muted min-w-[100px]">
+                  Relationship:
+                </span>
+                <span className="text-xs text-on-surface flex-1">
+                  {patient.caregiverRelation || '—'}
+                </span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-xs text-text-muted min-w-[100px]">
+                  Phone:
+                </span>
+                <span className="text-xs text-on-surface flex-1">
+                  {patient.caregiverPhone || '—'}
+                </span>
+              </div>
+            </div>
           </div>
         </Card>
+
+        {/* ── Medical Information ── */}
         <Card padding="md">
           <div className="space-y-2 text-sm">
             <h3 className="font-semibold text-on-surface mb-3">
@@ -587,13 +691,18 @@ const PatientDetailPage: React.FC = () => {
                 value={patient.comorbidities.join(', ')}
               />
             )}
+            {patient.createdAt && (
+              <InfoRow
+                label="Registered"
+                value={formatDate(patient.createdAt)}
+              />
+            )}
           </div>
         </Card>
       </div>
 
       {/* ── Tabs ── */}
       <Card padding="none">
-        {/* Tab strip — scrolls horizontally on narrow screens */}
         <div className="flex border-b border-border-base overflow-x-auto">
           {tabs.map((tab) => (
             <button
@@ -737,7 +846,6 @@ const PatientDetailPage: React.FC = () => {
           {activeTab === 'Hospice Nursing' && canViewHospice && (
             <div className="space-y-4">
               {hospiceAssessments.length === 0 ? (
-                /* Empty state — CTA only for nurses, neutral message otherwise */
                 canWriteHospice ? (
                   <EmptyState
                     icon={<Heart size={28} />}
@@ -755,13 +863,10 @@ const PatientDetailPage: React.FC = () => {
                 )
               ) : (
                 <>
-                  {/* Header — no Add button when records exist; nurses add via the empty state */}
                   <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div>
-                    </div>
+                    <div></div>
                   </div>
 
-                  {/* Responsive table */}
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[760px]">
                       <thead>

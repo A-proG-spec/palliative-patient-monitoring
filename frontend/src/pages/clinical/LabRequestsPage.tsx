@@ -10,19 +10,35 @@ import { formatDate } from '@/lib/utils';
 import { QUERY_KEYS, ROUTES } from '@/constants';
 import api from '@/api/client';
 
+// ─────────────────────────────────────────────────────────────
+// Row shape — mirrors the backend `PendingLabRequest` DTO
+//
+// Two distinct patient identifiers:
+//   patientDisplayId  → system-generated, e.g. "PAT-0001" — always present
+//   patientHospitalId → real hospital MRN — only present once admitted
+// ─────────────────────────────────────────────────────────────
 interface LabRequest {
-  id: string;
-  patientId: string;
+  id: number;
+  patientId: number;
   patientName: string;
+
+  patientHospitalId: string | null;
+  patientDisplayId: string | null;
+
   testName: string;
+  category: string;
+  specimenType?: string | null;
+  specimenSite?: string | null;
+  clinicalHistory?: string | null;
+
   requestingClinician: string;
+  requestedById: number;
+
+  priority: 'Routine' | 'Urgent' | 'Emergency';
   dateRequested: string;
-  priority: 'Routine' | 'Urgent' | 'STAT';
-  status: 'Pending' | 'Completed';
+  status: 'Ordered' | 'Completed' | 'Cancelled';
 }
 
-// TODO: Backend endpoint GET /api/labs/pending-requests
-// Expected response: { labs: LabRequest[] }
 const fetchLabRequests = async (): Promise<LabRequest[]> => {
   const response = await api.get('/labs/pending-requests');
   return response.data.labs ?? [];
@@ -40,7 +56,7 @@ const LabRequestsPage: React.FC = () => {
   } = useQuery({
     queryKey: QUERY_KEYS.LAB_REQUESTS,
     queryFn: fetchLabRequests,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
   if (isLoading) {
@@ -74,10 +90,23 @@ const LabRequestsPage: React.FC = () => {
 
   const getPriorityVariant = (priority: string) => {
     switch (priority) {
-      case 'STAT':
+      case 'Emergency':
         return 'error';
       case 'Urgent':
         return 'warning';
+      default:
+        return 'default';
+    }
+  };
+
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case 'Ordered':
+        return 'warning';
+      case 'Completed':
+        return 'success';
+      case 'Cancelled':
+        return 'error';
       default:
         return 'default';
     }
@@ -89,7 +118,8 @@ const LabRequestsPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-on-surface">Lab Requests</h1>
           <p className="text-sm text-text-muted mt-1">
-            {pendingRequests.length} pending {pendingRequests.length === 1 ? 'request' : 'requests'}
+            {pendingRequests.length} pending{' '}
+            {pendingRequests.length === 1 ? 'request' : 'requests'}
           </p>
         </div>
       </div>
@@ -97,10 +127,16 @@ const LabRequestsPage: React.FC = () => {
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="border-b border-border-base bg-surface-low">
+            <thead className="border-b border-border-base bg-surface-container">
               <tr>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   Patient
+                </th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                  System ID
+                </th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                  Hospital MRN
                 </th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   Test
@@ -123,11 +159,19 @@ const LabRequestsPage: React.FC = () => {
               {pendingRequests.map((request) => (
                 <tr
                   key={request.id}
-                  onClick={() => navigate(ROUTES.LAB_REQUEST_DETAIL(request.id))}
+                  onClick={() =>
+                    navigate(ROUTES.LAB_REQUEST_DETAIL(String(request.id)))
+                  }
                   className="hover:bg-surface-low cursor-pointer transition-colors"
                 >
                   <td className="px-5 py-3.5 text-sm font-medium text-on-surface">
                     {request.patientName}
+                  </td>
+                  <td className="px-5 py-3.5 text-sm font-mono text-text-secondary">
+                    {request.patientDisplayId ?? '—'}
+                  </td>
+                  <td className="px-5 py-3.5 text-sm font-mono text-text-secondary">
+                    {request.patientHospitalId ?? '—'}
                   </td>
                   <td className="px-5 py-3.5 text-sm text-text-secondary">
                     {request.testName}
@@ -144,7 +188,7 @@ const LabRequestsPage: React.FC = () => {
                     </Badge>
                   </td>
                   <td className="px-5 py-3.5">
-                    <Badge variant={request.status === 'Pending' ? 'warning' : 'success'}>
+                    <Badge variant={getStatusVariant(request.status)}>
                       {request.status}
                     </Badge>
                   </td>

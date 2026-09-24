@@ -189,13 +189,7 @@ const LabDetailPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <Button
-            size="sm"
-            leftIcon={<Edit3 size={14} />}
-            onClick={() => setShowResultEntry(true)}
-          >
-            Record Result
-          </Button>
+
         </div>
       )}
 
@@ -317,93 +311,6 @@ const LabDetailPage: React.FC = () => {
           <InfoRow label="Received Time" value={lab.receivedTime} />
         </div>
       </Card>
-
-      {/* ── Section 5: Result (when completed) ── */}
-      {isCompleted && (
-        <Card padding="lg" className="border-l-4 border-l-success">
-          <SectionHeader
-            number="5"
-            title="Result"
-            icon={<CheckCircle2 size={16} />}
-          />
-
-          <div className="grid md:grid-cols-2 gap-x-6 mb-4">
-            <InfoRow
-              label="Date Performed"
-              value={
-                lab.datePerformed
-                  ? formatDate(lab.datePerformed)
-                  : undefined
-              }
-            />
-            <InfoRow label="Performed By" value={lab.performedBy} />
-            <InfoRow label="Reference Range" value={lab.referenceRange} />
-            <InfoRow
-              label="Abnormal Flag"
-              value={
-                lab.abnormalFlag ? (
-                  <Badge variant={abnormalFlagVariant(lab.abnormalFlag)}>
-                    {lab.abnormalFlag}
-                  </Badge>
-                ) : undefined
-              }
-            />
-          </div>
-
-          <div className="mb-4">
-            <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-1.5">
-              Result / Findings
-            </p>
-            <div className="bg-surface-low rounded-lg px-4 py-3 text-sm text-on-surface whitespace-pre-wrap">
-              {lab.result || '—'}
-            </div>
-          </div>
-
-          {lab.resultNotes && (
-            <div>
-              <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-1.5">
-                Additional Notes
-              </p>
-              <div className="bg-surface-low rounded-lg px-4 py-3 text-sm text-on-surface whitespace-pre-wrap">
-                {lab.resultNotes}
-              </div>
-            </div>
-          )}
-
-          {lab.updatedBy && (
-            <p className="text-xs text-text-muted mt-3">
-              Last updated by {lab.updatedBy.name}
-              {lab.updatedAt
-                ? ` · ${formatDateTime(lab.updatedAt)}`
-                : ''}
-            </p>
-          )}
-        </Card>
-      )}
-
-      {/* ── Section 5 (alt): Result entry form ── */}
-      {isOrdered && showResultEntry && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-primary uppercase tracking-wide">
-              5. Enter Result
-            </h3>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowResultEntry(false)}
-            >
-              Cancel
-            </Button>
-          </div>
-          <LabResultEntry
-            labId={labId!}
-            patientId={id!}
-            category={lab.category}
-            onResultSaved={handleResultSaved}
-          />
-        </div>
-      )}
 
       {/* ── Footer action ── */}
       <div className="flex justify-end pb-6">
