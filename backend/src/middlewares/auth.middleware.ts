@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '@utils/jwt.js';
-import { prisma } from '@db/prisma.js';
+import { prisma } from '../lib/prisma.js';
 import { ApiError } from '@utils/ApiError.js';
 import { User } from '../types/index.js';
 

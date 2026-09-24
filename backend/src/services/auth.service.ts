@@ -1,10 +1,12 @@
-import { prisma, prismaBase } from '@db/prisma.js';
-import { ApiError } from '@utils/ApiError.js';
+import { PrismaClient } from '@prisma/client';import { ApiError } from '@utils/ApiError.js';
 import { hashPassword, comparePassword } from '@utils/password.js';
 import { generateToken } from '@utils/jwt.js';
 import { generateOtp, hashOtp, compareOtpHash } from '@utils/token.js';
 import { sendVerificationEmail,sendAdminRegistrationNoticeEmail } from '@utils/email.js';
 
+
+const prismaBase = new PrismaClient();
+export const prisma = prismaBase;
 // ─────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────

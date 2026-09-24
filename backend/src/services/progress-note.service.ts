@@ -1,8 +1,11 @@
 import bcrypt from 'bcrypt';
-import { prisma, prismaBase } from '@db/prisma.js';
+import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 
+
+const prismaBase = new PrismaClient();
+export const prisma = prismaBase;
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
@@ -495,7 +498,7 @@ export const getProgressNoteById = async (
 export const signProgressNote = async (
   patientId: string,
   noteId: string,
-  data: { email: string; password: string; role: 'Physician' | 'Nurse' | 'Reviewer' },
+  data: { email: string; password: string; role: 'Physician' | 'Nurse' },
 ) => {
   const pid = toId(patientId, 'patient id');
   const nid = toId(noteId, 'note id');
@@ -520,9 +523,6 @@ export const signProgressNote = async (
   const passwordOk = await bcrypt.compare(data.password, staff.password);
   if (!passwordOk) throw new ApiError(401, 'Invalid credentials');
 
-  if (data.role !== 'Reviewer' && staff.role !== data.role) {
-    throw new ApiError(403, `You are not registered as a ${data.role}`);
-  }
 
   if (staff.id === note.responsibleClinicianId) {
     throw new ApiError(400, 'You are auto-signed as the responsible clinician');

@@ -1,10 +1,11 @@
-import { prisma, prismaBase} from '@db/prisma.js';
+import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 
 const VALID_STATUSES = ['Ordered', 'Completed', 'Cancelled'] as const;
 const VALID_PRIORITIES = ['Routine', 'Urgent', 'Emergency'] as const;
-
+const prismaBase = new PrismaClient();
+export const prisma = prismaBase;
 // ─────────────────────────────────────────────────────────────
 // DTO mappers
 // ─────────────────────────────────────────────────────────────
