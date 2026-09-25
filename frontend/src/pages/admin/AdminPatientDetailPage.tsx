@@ -4,6 +4,7 @@ import {
   XCircle, Phone, MapPin, User, Calendar, FileText, Printer,
   AlertTriangle, NotebookPen, Trash2, Heart,
 } from 'lucide-react';
+
 import {
   useAdminPatientDetail,
   useDeleteMedication,
@@ -19,6 +20,27 @@ import {
   useDeleteHospiceNursing,
   useRestoreHospiceNursing,
 } from '@/hooks/useAdmin';
+
+import {
+  usePatientPainAssessments,
+  usePatientPharmacistAssessments,
+  usePatientPhysiotherapyAssessments,
+  usePatientFamilyAssessments,
+  usePatientNutritionalAssessments,
+  usePatientSocialAssessments,
+  usePatientSpiritualAssessments,
+  usePatientPsychiatryAssessments,
+} from '@/hooks';
+
+import { useDeletePainAssessment, useRestorePainAssessment } from '@/hooks/usePainAssessments';
+import { useDeletePharmacistAssessment, useRestorePharmacistAssessment } from '@/hooks/usePharmacistAssessments';
+import { useDeletePhysiotherapyAssessment, useRestorePhysiotherapyAssessment } from '@/hooks/usePhysiotherapyAssessments';
+import { useDeleteFamilyAssessment, useRestoreFamilyAssessment } from '@/hooks/useFamilyAssessments';
+import { useDeleteNutritionalAssessment, useRestoreNutritionalAssessment } from '@/hooks/useNutritionalAssessments';
+import { useDeleteSocialAssessment, useRestoreSocialAssessment } from '@/hooks/useSocialAssessments';
+import { useDeleteSpiritualAssessment, useRestoreSpiritualAssessment } from '@/hooks/useSpiritualAssessments';
+import { useDeletePsychiatryAssessment, useRestorePsychiatryAssessment } from '@/hooks/usePsychiatryAssessments';
+
 import { useDischargeSummary } from '@/hooks/useDischarge';
 import { usePatientVisits } from '@/hooks/useVisits';
 import { usePatientMedications } from '@/hooks/useMedications';
@@ -28,6 +50,7 @@ import { usePatientReferrals } from '@/hooks/useReferrals';
 import { usePatientAdmissions } from '@/hooks/useAdmissions';
 import { useProgressNotes } from '@/hooks/useProgressNotes';
 import { usePatientHospiceAssessments } from '@/hooks/useHospiceNursing';
+
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -37,14 +60,22 @@ import { PageLoader } from '@/components/common/LoadingSpinner';
 import { EmptyState, ErrorState } from '@/components/common/EmptyState';
 import { AdminDeleteButton } from '@/components/admin/AdminDeleteButton';
 import { AdminRestoreButton } from '@/components/admin/AdminRestoreButton';
+import {
+  AssessmentTabPanel,
+  DeletedBadge,
+  dateColumn,
+  typeColumn,
+  adaptDeleteMutation,
+  adaptRestoreMutation,
+} from '@/components/admin/AssessmentTabPanel';
+
 import { formatDate, cn } from '@/lib/utils';
 import { DISEASE_STAGE_LABELS as DSL, VISIT_TYPE_LABELS } from '@/constants';
 import type { DischargeSummary } from '@/components/admin/DischargePatientModal';
 import { printDischargeSummary } from '@/lib/printDischargeSummary';
 
 // ═══════════════════════════════════════════════════════════
-// RowActions — flips between Delete and Restore based on
-// whether the row has been soft-deleted.
+// RowActions — used by the non-assessment tabs
 // ═══════════════════════════════════════════════════════════
 
 interface RowActionsProps {
@@ -184,6 +215,14 @@ const tabs = [
   'Imaging',
   'Referrals',
   'Admissions',
+  'Pain Assessments',
+  'Pharmacist Assessments',
+  'Physiotherapy Assessments',
+  'Family Assessments',
+  'Nutritional Assessments',
+  'Social Assessments',
+  'Spiritual Assessments',
+  'Psychiatry Assessments',
 ] as const;
 type Tab = typeof tabs[number];
 
@@ -210,18 +249,33 @@ const AdminPatientDetailPage: React.FC = () => {
   const { data: patient, isLoading, error, refetch } = useAdminPatientDetail(patientId!);
 
   // ── Sub-record data ──
-  // Every list hook receives `includeDeleted: showDeleted` so toggling
-  // the checkbox switches between the default endpoint (active-only)
-  // and the `/all` endpoint (deleted-only when the flag is set).
-  const { data: visitsData }        = usePatientVisits(patientId!, { includeDeleted: showDeleted });
-  const { data: medsData }          = usePatientMedications(patientId!, { includeDeleted: showDeleted });
-  const { data: labsData }          = usePatientLabs(patientId!, { includeDeleted: showDeleted });
-  const { data: imagingData }       = usePatientImaging(patientId!, { includeDeleted: showDeleted });
-  const { data: refsData }          = usePatientReferrals(patientId!); // no soft delete on referrals
-  const { data: admsData }          = usePatientAdmissions(patientId!, { includeDeleted: showDeleted });
+  const { data: visitsData } = usePatientVisits(patientId!, { includeDeleted: showDeleted });
+  const { data: medsData } = usePatientMedications(patientId!, { includeDeleted: showDeleted });
+  const { data: labsData } = usePatientLabs(patientId!, { includeDeleted: showDeleted });
+  const { data: imagingData } = usePatientImaging(patientId!, { includeDeleted: showDeleted });
+  const { data: refsData } = usePatientReferrals(patientId!);
+  const { data: admsData } = usePatientAdmissions(patientId!, { includeDeleted: showDeleted });
   const { data: progressNotesData } = useProgressNotes(patientId!, { includeDeleted: showDeleted });
-  const { data: hospiceData }       = usePatientHospiceAssessments(patientId!, { includeDeleted: showDeleted });
+  const { data: hospiceData } = usePatientHospiceAssessments(patientId!, { includeDeleted: showDeleted });
 
+  // ── Assessment data ──
+  const { data: painData } = usePatientPainAssessments(patientId!, { includeDeleted: showDeleted });
+  const { data: pharmacistData } = usePatientPharmacistAssessments(patientId!, { includeDeleted: showDeleted });
+  const { data: physioData } = usePatientPhysiotherapyAssessments(patientId!, { includeDeleted: showDeleted });
+  const { data: familyData } = usePatientFamilyAssessments(patientId!, { includeDeleted: showDeleted });
+  const { data: nutritionData } = usePatientNutritionalAssessments(patientId!, { includeDeleted: showDeleted });
+  const { data: socialData } = usePatientSocialAssessments(patientId!, { includeDeleted: showDeleted });
+  const { data: spiritualData } = usePatientSpiritualAssessments(patientId!, { includeDeleted: showDeleted });
+  const { data: psychiatryData } = usePatientPsychiatryAssessments(patientId!, { includeDeleted: showDeleted });
+
+  const painAssessments = painData?.items ?? [];
+  const pharmacistAssessments = pharmacistData?.items ?? [];
+  const physioAssessments = physioData?.items ?? [];
+  const familyAssessments = familyData?.items ?? [];
+  const nutritionAssessments = nutritionData?.items ?? [];
+  const socialAssessments = socialData?.items ?? [];
+  const spiritualAssessments = spiritualData?.items ?? [];
+  const psychiatryAssessments = psychiatryData?.items ?? [];
   const progressNotes = progressNotesData?.items ?? [];
   const hospiceAssessments = hospiceData?.items ?? [];
   const labOrders = labsData?.items ?? [];
@@ -241,18 +295,52 @@ const AdminPatientDetailPage: React.FC = () => {
   const deleteHospice = useDeleteHospiceNursing();
   const restoreHospice = useRestoreHospiceNursing();
 
+  // ── Assessment delete/restore mutations ──
+  const deletePain = useDeletePainAssessment(patientId!);
+  const restorePain = useRestorePainAssessment(patientId!);
+
+  const deletePharmacist = useDeletePharmacistAssessment(patientId!);
+  const restorePharmacist = useRestorePharmacistAssessment(patientId!);
+
+  const deletePhysio = useDeletePhysiotherapyAssessment(patientId!);
+  const restorePhysio = useRestorePhysiotherapyAssessment(patientId!);
+
+  const deleteFamily = useDeleteFamilyAssessment(patientId!);
+  const restoreFamily = useRestoreFamilyAssessment(patientId!);
+
+  const deleteNutrition = useDeleteNutritionalAssessment(patientId!);
+  const restoreNutrition = useRestoreNutritionalAssessment(patientId!);
+
+  const deleteSocial = useDeleteSocialAssessment(patientId!);
+  const restoreSocial = useRestoreSocialAssessment(patientId!);
+
+  const deleteSpiritual = useDeleteSpiritualAssessment(patientId!);
+  const restoreSpiritual = useRestoreSpiritualAssessment(patientId!);
+
+  const deletePsychiatry = useDeletePsychiatryAssessment(patientId!);
+  const restorePsychiatry = useRestorePsychiatryAssessment(patientId!);
+
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
   const tabCounts: Record<Tab, number> = {
-    Visits: visitsData?.total ?? 0,
+    'Visits': visitsData?.total ?? 0,
     'Progress Notes': progressNotes.length,
     'Hospice Nursing': hospiceAssessments.length,
-    Medications: medsData?.total ?? 0,
-    Labs: labOrders.length,
-    Imaging: imagingOrders.length,
-    Referrals: refsData?.total ?? 0,
-    Admissions: admsData?.total ?? 0,
+    'Medications': medsData?.total ?? 0,
+    'Labs': labOrders.length,
+    'Imaging': imagingOrders.length,
+    'Referrals': refsData?.total ?? 0,
+    'Admissions': admsData?.total ?? 0,
+
+    'Pain Assessments': painAssessments.length,
+    'Pharmacist Assessments': pharmacistAssessments.length,
+    'Physiotherapy Assessments': physioAssessments.length,
+    'Family Assessments': familyAssessments.length,
+    'Nutritional Assessments': nutritionAssessments.length,
+    'Social Assessments': socialAssessments.length,
+    'Spiritual Assessments': spiritualAssessments.length,
+    'Psychiatry Assessments': psychiatryAssessments.length,
   };
 
   const handlePrintDischargeSummary = () => {
@@ -314,13 +402,13 @@ const AdminPatientDetailPage: React.FC = () => {
         <Card>
           <CardHeader><CardTitle>Patient Information</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <Row icon={<User size={14} />}     label="Name"              value={`${patient.firstName} ${patient.lastName}`} />
-            <Row icon={<Calendar size={14} />} label="Date of Birth"     value={formatDate(patient.dateOfBirth)} />
-            <Row                               label="Age / Sex"         value={`${patient.age} years · ${patient.sex}`} />
-            <Row icon={<MapPin size={14} />}   label="Address"           value={patient.address} />
-            <Row icon={<Phone size={14} />}    label="Phone"             value={patient.phone} />
-            <Row                               label="Emergency Contact" value={`${patient.emergencyContactName} · ${patient.emergencyContactPhone}`} />
-            <Row                               label="Caregiver"         value={`${patient.caregiverName} · ${patient.caregiverPhone}`} />
+            <Row icon={<User size={14} />} label="Name" value={`${patient.firstName} ${patient.lastName}`} />
+            <Row icon={<Calendar size={14} />} label="Date of Birth" value={formatDate(patient.dateOfBirth)} />
+            <Row label="Age / Sex" value={`${patient.age} years · ${patient.sex}`} />
+            <Row icon={<MapPin size={14} />} label="Address" value={patient.address} />
+            <Row icon={<Phone size={14} />} label="Phone" value={patient.phone} />
+            <Row label="Emergency Contact" value={`${patient.emergencyContactName} · ${patient.emergencyContactPhone}`} />
+            <Row label="Caregiver" value={`${patient.caregiverName} · ${patient.caregiverPhone}`} />
           </CardContent>
         </Card>
 
@@ -995,6 +1083,366 @@ const AdminPatientDetailPage: React.FC = () => {
                 }
               />
             )
+          )}
+
+          {/* ═══════════════════════════════════════════════════════
+              Pain Assessments
+          ═══════════════════════════════════════════════════════ */}
+          {activeTab === 'Pain Assessments' && (
+            <AssessmentTabPanel
+              items={painAssessments}
+              patientId={patientId!}
+              resourceLabel="Pain assessment"
+              detailRoute="pain"
+              showDeleted={showDeleted}
+              deleteMutation={adaptDeleteMutation(deletePain as any)}
+              restoreMutation={adaptRestoreMutation(restorePain as any)}
+              getRowId={(r: any) => r.id}
+              getRowDate={(r: any) => r.createdAt}
+              columns={[
+                dateColumn(),
+                typeColumn(),
+                {
+                  header: 'Pain Score',
+                  render: (a: any) =>
+                    a.currentPainScore !== null && a.currentPainScore !== undefined ? (
+                      <Badge
+                        variant={
+                          a.currentPainScore >= 7
+                            ? 'error'
+                            : a.currentPainScore >= 4
+                              ? 'warning'
+                              : 'success'
+                        }
+                      >
+                        {a.currentPainScore}/10
+                      </Badge>
+                    ) : (
+                      <span className="text-text-muted text-xs">—</span>
+                    ),
+                },
+                {
+                  header: 'Diagnosis',
+                  className: 'text-text-secondary text-xs max-w-[200px] truncate',
+                  render: (a: any) => a.diagnosis?.join(', ') || '—',
+                },
+                { header: '', render: () => null },
+              ]}
+            />
+          )}
+
+          {/* ═══════════════════════════════════════════════════════
+              Pharmacist Assessments
+          ═══════════════════════════════════════════════════════ */}
+          {activeTab === 'Pharmacist Assessments' && (
+            <AssessmentTabPanel
+              items={pharmacistAssessments}
+              patientId={patientId!}
+              resourceLabel="Pharmacist assessment"
+              detailRoute="pharmacist-assessment"
+              showDeleted={showDeleted}
+              deleteMutation={adaptDeleteMutation(deletePharmacist as any)}
+              restoreMutation={adaptRestoreMutation(restorePharmacist as any)}
+              getRowId={(r: any) => r.id}
+              getRowDate={(r: any) => r.createdAt}
+              columns={[
+                dateColumn(),
+                typeColumn(),
+                {
+                  header: 'Pain Control',
+                  render: (a: any) =>
+                    a.painControl ? (
+                      <Badge
+                        variant={
+                          a.painControl === 'WellControlled'
+                            ? 'success'
+                            : a.painControl === 'PartiallyControlled'
+                              ? 'warning'
+                              : 'error'
+                        }
+                      >
+                        {a.painControl.replace(/([A-Z])/g, ' $1').trim()}
+                      </Badge>
+                    ) : (
+                      <span className="text-text-muted text-xs">—</span>
+                    ),
+                },
+                {
+                  header: 'Summary',
+                  className: 'text-text-secondary text-xs max-w-[240px] truncate',
+                  render: (a: any) => a.pharmacistSummary ?? '—',
+                },
+                { header: '', render: () => null },
+              ]}
+            />
+          )}
+
+          {/* ═══════════════════════════════════════════════════════
+              Physiotherapy Assessments
+          ═══════════════════════════════════════════════════════ */}
+          {activeTab === 'Physiotherapy Assessments' && (
+            <AssessmentTabPanel
+              items={physioAssessments}
+              patientId={patientId!}
+              resourceLabel="Physiotherapy assessment"
+              detailRoute="physiotherapy-assessment"
+              showDeleted={showDeleted}
+              deleteMutation={adaptDeleteMutation(deletePhysio as any)}
+              restoreMutation={adaptRestoreMutation(restorePhysio as any)}
+              getRowId={(r: any) => r.id}
+              getRowDate={(r: any) => r.createdAt}
+              columns={[
+                dateColumn(),
+                typeColumn(),
+                {
+                  header: 'Mobility',
+                  className: 'text-text-secondary text-xs',
+                  render: (a: any) => a.mobilityStatus ?? '—',
+                },
+                {
+                  header: 'Fall Risk',
+                  render: (a: any) =>
+                    a.fallRiskLevel ? (
+                      <Badge
+                        variant={
+                          a.fallRiskLevel === 'High'
+                            ? 'error'
+                            : a.fallRiskLevel === 'Moderate'
+                              ? 'warning'
+                              : 'success'
+                        }
+                      >
+                        {a.fallRiskLevel}
+                      </Badge>
+                    ) : (
+                      <span className="text-text-muted text-xs">—</span>
+                    ),
+                },
+                { header: '', render: () => null },
+              ]}
+            />
+          )}
+
+          {/* ═══════════════════════════════════════════════════════
+              Family Assessments
+          ═══════════════════════════════════════════════════════ */}
+          {activeTab === 'Family Assessments' && (
+            <AssessmentTabPanel
+              items={familyAssessments}
+              patientId={patientId!}
+              resourceLabel="Family assessment"
+              detailRoute="family-assessment"
+              showDeleted={showDeleted}
+              deleteMutation={adaptDeleteMutation(deleteFamily as any)}
+              restoreMutation={adaptRestoreMutation(restoreFamily as any)}
+              getRowId={(r: any) => r.id}
+              getRowDate={(r: any) => r.createdAt}
+              columns={[
+                dateColumn(),
+                typeColumn(),
+                {
+                  header: 'Burden',
+                  render: (a: any) =>
+                    a.burdenLevel ? (
+                      <Badge variant="secondary">{a.burdenLevel}</Badge>
+                    ) : (
+                      <span className="text-text-muted text-xs">—</span>
+                    ),
+                },
+                {
+                  header: 'Assessor',
+                  className: 'text-text-secondary text-xs',
+                  render: (a: any) => a.assessorName ?? '—',
+                },
+                { header: '', render: () => null },
+              ]}
+            />
+          )}
+
+          {/* ═══════════════════════════════════════════════════════
+              Nutritional Assessments
+          ═══════════════════════════════════════════════════════ */}
+          {activeTab === 'Nutritional Assessments' && (
+            <AssessmentTabPanel
+              items={nutritionAssessments}
+              patientId={patientId!}
+              resourceLabel="Nutritional assessment"
+              detailRoute="nutritional-assessment"
+              showDeleted={showDeleted}
+              deleteMutation={adaptDeleteMutation(deleteNutrition as any)}
+              restoreMutation={adaptRestoreMutation(restoreNutrition as any)}
+              getRowId={(r: any) => r.id}
+              getRowDate={(r: any) => r.createdAt}
+              columns={[
+                dateColumn(),
+                typeColumn(),
+                {
+                  header: 'BMI',
+                  className: 'text-text-secondary',
+                  render: (a: any) => a.bmi ?? '—',
+                },
+                {
+                  header: 'Risk',
+                  render: (a: any) =>
+                    a.overallNutritionalRisk ? (
+                      <Badge
+                        variant={
+                          a.overallNutritionalRisk === 'Critical' ||
+                          a.overallNutritionalRisk === 'High'
+                            ? 'error'
+                            : a.overallNutritionalRisk === 'Moderate'
+                              ? 'warning'
+                              : 'success'
+                        }
+                      >
+                        {a.overallNutritionalRisk}
+                      </Badge>
+                    ) : (
+                      <span className="text-text-muted text-xs">—</span>
+                    ),
+                },
+                { header: '', render: () => null },
+              ]}
+            />
+          )}
+
+          {/* ═══════════════════════════════════════════════════════
+              Social Assessments
+          ═══════════════════════════════════════════════════════ */}
+          {activeTab === 'Social Assessments' && (
+            <AssessmentTabPanel
+              items={socialAssessments}
+              patientId={patientId!}
+              resourceLabel="Social assessment"
+              detailRoute="social-assessment"
+              showDeleted={showDeleted}
+              deleteMutation={adaptDeleteMutation(deleteSocial as any)}
+              restoreMutation={adaptRestoreMutation(restoreSocial as any)}
+              getRowId={(r: any) => r.id}
+              getRowDate={(r: any) => r.createdAt}
+              columns={[
+                dateColumn(),
+                typeColumn(),
+                {
+                  header: 'Living Arrangement',
+                  className: 'text-text-secondary text-xs',
+                  render: (a: any) => a.livingArrangement ?? '—',
+                },
+                {
+                  header: 'Bereavement Risk',
+                  render: (a: any) =>
+                    a.bereavementRisk ? (
+                      <Badge
+                        variant={
+                          a.bereavementRisk === 'High'
+                            ? 'error'
+                            : a.bereavementRisk === 'Moderate'
+                              ? 'warning'
+                              : 'success'
+                        }
+                      >
+                        {a.bereavementRisk}
+                      </Badge>
+                    ) : (
+                      <span className="text-text-muted text-xs">—</span>
+                    ),
+                },
+                { header: '', render: () => null },
+              ]}
+            />
+          )}
+
+          {/* ═══════════════════════════════════════════════════════
+              Spiritual Assessments
+          ═══════════════════════════════════════════════════════ */}
+          {activeTab === 'Spiritual Assessments' && (
+            <AssessmentTabPanel
+              items={spiritualAssessments}
+              patientId={patientId!}
+              resourceLabel="Spiritual assessment"
+              detailRoute="spiritual-assessment"
+              showDeleted={showDeleted}
+              deleteMutation={adaptDeleteMutation(deleteSpiritual as any)}
+              restoreMutation={adaptRestoreMutation(restoreSpiritual as any)}
+              getRowId={(r: any) => r.id}
+              getRowDate={(r: any) => r.createdAt}
+              columns={[
+                dateColumn(),
+                typeColumn(),
+                {
+                  header: 'Affiliation',
+                  className: 'text-text-secondary text-xs',
+                  render: (a: any) => a.religiousAffiliation ?? '—',
+                },
+                {
+                  header: 'Distress Level',
+                  render: (a: any) =>
+                    a.spiritualDistressLevel ? (
+                      <Badge
+                        variant={
+                          a.spiritualDistressLevel === 'Severe' ||
+                          a.spiritualDistressLevel === 'Moderate'
+                            ? 'error'
+                            : a.spiritualDistressLevel === 'Mild'
+                              ? 'warning'
+                              : 'success'
+                        }
+                      >
+                        {a.spiritualDistressLevel}
+                      </Badge>
+                    ) : (
+                      <span className="text-text-muted text-xs">—</span>
+                    ),
+                },
+                { header: '', render: () => null },
+              ]}
+            />
+          )}
+
+          {/* ═══════════════════════════════════════════════════════
+              Psychiatry Assessments
+          ═══════════════════════════════════════════════════════ */}
+          {activeTab === 'Psychiatry Assessments' && (
+            <AssessmentTabPanel
+              items={psychiatryAssessments}
+              patientId={patientId!}
+              resourceLabel="Psychiatry assessment"
+              detailRoute="psychiatry-assessment"
+              showDeleted={showDeleted}
+              deleteMutation={adaptDeleteMutation(deletePsychiatry as any)}
+              restoreMutation={adaptRestoreMutation(restorePsychiatry as any)}
+              getRowId={(r: any) => r.id}
+              getRowDate={(r: any) => r.createdAt}
+              columns={[
+                dateColumn(),
+                typeColumn(),
+                {
+                  header: 'Suicide Risk',
+                  render: (a: any) =>
+                    a.suicideRiskLevel ? (
+                      <Badge
+                        variant={
+                          a.suicideRiskLevel === 'High'
+                            ? 'error'
+                            : a.suicideRiskLevel === 'Moderate'
+                              ? 'warning'
+                              : 'success'
+                        }
+                      >
+                        {a.suicideRiskLevel}
+                      </Badge>
+                    ) : (
+                      <span className="text-text-muted text-xs">—</span>
+                    ),
+                },
+                {
+                  header: 'Diagnoses',
+                  className: 'text-text-secondary text-xs max-w-[200px] truncate',
+                  render: (a: any) => a.diagnoses?.join(', ') || '—',
+                },
+                { header: '', render: () => null },
+              ]}
+            />
           )}
         </div>
       </Card>

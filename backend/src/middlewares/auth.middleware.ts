@@ -29,52 +29,26 @@ export const authMiddleware = async (
 
     const decoded = verifyToken(token);
 
-    // JWT stores id as string; convert to number for Prisma
     const userId = Number(decoded.id);
     if (!Number.isInteger(userId) || userId <= 0) {
       throw new ApiError(401, 'Unauthorized');
     }
 
-    // ── Try staff ──
-    const staff = await prisma.staff.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        role: true,
-        status: true,
-        isEmailVerified: true,
-        // NOTE: 'password' deliberately NOT selected
-      },
-    });
+    // ═══════════════════════════════════════════════════════════
+    // THE FIX: Use the `type` from the token to know exactly
+    // which table to query.
+    // ═══════════════════════════════════════════════════════════
 
-    if (staff) {
-      req.user = {
-        id: staff.id,
-        name: staff.name,
-        email: staff.email,
-        phone: staff.phone,
-        role: staff.role,
-        type: 'staff',
-        status: staff.status,
-        isEmailVerified: staff.isEmailVerified,
-      };
-      return next();
-    }
+    if (decoded.type === 'admin') {
+      const admin = await prisma.admin.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true },
+      });
 
-    // ── Try admin ──
-    const admin = await prisma.admin.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      },
-    });
+      if (!admin) {
+        throw new ApiError(401, 'Unauthorized');
+      }
 
-    if (admin) {
       req.user = {
         id: admin.id,
         name: admin.name,
@@ -84,7 +58,31 @@ export const authMiddleware = async (
       return next();
     }
 
-    throw new ApiError(401, 'Unauthorized');
+    // ── Default to staff ──
+    const staff = await prisma.staff.findUnique({
+      where: { id: userId },
+      select: {
+        id: true, name: true, email: true, phone: true, role: true,
+        status: true, isEmailVerified: true,
+      },
+    });
+
+    if (!staff) {
+      throw new ApiError(401, 'Unauthorized');
+    }
+
+    req.user = {
+      id: staff.id,
+      name: staff.name,
+      email: staff.email,
+      phone: staff.phone,
+      role: staff.role,
+      type: 'staff',
+      status: staff.status,
+      isEmailVerified: staff.isEmailVerified,
+    };
+    return next();
+
   } catch (error) {
     next(error);
   }

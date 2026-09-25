@@ -16,7 +16,8 @@ export type StaffRole =
   | 'Psychiatrist'
   | 'Psychologist'
   | 'SocialWorker'
-  | 'SpiritualPerson';
+  | 'SpiritualPerson'
+  | 'Nutritionist';
 
 export type VisitTeamRole = 'Physician' | 'Nurse';
 

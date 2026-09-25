@@ -437,7 +437,7 @@ export const markMedicationGivenByQueue = async (
   pharmacistId: string | number,
 ) => {
   const mid = toId(medicationId, 'medication id');
-  const aid = toId(pharmacistId, 'pharmacist id');
+  const sid = toId(pharmacistId, 'pharmacist id');
 
   const existing = await prisma.medication.findUnique({
     where: { id: mid },
@@ -450,12 +450,15 @@ export const markMedicationGivenByQueue = async (
 
   const updated = await prisma.medication.update({
     where: { id: mid },
-    data: { status: 'Given', updatedBy: aid },
+    data: {
+      status: 'Given',
+      updatedByStaffId: sid,   // ← route to the Staff FK
+      // updatedBy stays null — it's for admins
+    },
   });
 
   return { id: updated.id, status: updated.status, updatedAt: updated.updatedAt };
 };
-
 export default {
   getAllMedications,
   orderMedication,

@@ -8,6 +8,7 @@ import router from '@routes/index.js';
 import env from '@config/env.js';
 
 const app = express();
+app.set('etag', false);
 
 // Middleware
 app.use(helmet());
