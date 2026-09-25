@@ -1,12 +1,9 @@
-import { PrismaClient } from '@prisma/client';import { ApiError } from '@utils/ApiError.js';
+import { ApiError } from '@utils/ApiError.js';
 import { hashPassword, comparePassword } from '@utils/password.js';
 import { generateToken } from '@utils/jwt.js';
 import { generateOtp, hashOtp, compareOtpHash } from '@utils/token.js';
-import { sendVerificationEmail,sendAdminRegistrationNoticeEmail } from '@utils/email.js';
-
-
-const prismaBase = new PrismaClient();
-export const prisma = prismaBase;
+import { sendVerificationEmail, sendAdminRegistrationNoticeEmail } from '@utils/email.js';
+import { prisma } from '../lib/prisma.js';
 // ─────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────
@@ -194,9 +191,11 @@ export const resendVerificationEmail = async (email: string) => {
     throw new ApiError(400, 'Email already verified. Please login.');
   }
 
+  const RESEND_COOLDOWN_SECONDS = RESEND_COOLDOWN_MS / 1000;
+
   const secondsSinceUpdate = (Date.now() - staff.updatedAt.getTime()) / 1000;
-  if (secondsSinceUpdate < 60) {
-    const wait = Math.ceil(60 - secondsSinceUpdate);
+  if (secondsSinceUpdate < RESEND_COOLDOWN_SECONDS) {
+    const wait = Math.ceil(RESEND_COOLDOWN_SECONDS - secondsSinceUpdate);
     throw new ApiError(429, `Please wait ${wait} seconds before requesting a new code.`);
   }
 
@@ -224,87 +223,97 @@ export const resendVerificationEmail = async (email: string) => {
 export const loginUser = async (email: string, password: string) => {
   const normalizedEmail = email.toLowerCase().trim();
 
-  let userType: 'staff' | 'admin' = 'staff';
+  // ── Try Admin first ──
+  const admin = await prisma.admin.findUnique({
+    where: { email: normalizedEmail },
+  });
 
-  let user = await prisma.staff.findUnique({ where: { email: normalizedEmail } });
+  if (admin) {
+    const ok = await comparePassword(password, admin.password);
+    if (!ok) throw new ApiError(401, 'Invalid email or password');
 
-  if (!user) {
-    const admin = await prisma.admin.findUnique({ where: { email: normalizedEmail } });
-    if (admin) {
-      // Uniform shape for the rest of the function
-      user = {
-        ...admin,
-        phone: '',
-        role: null,
-        status: 'Active',
-        isEmailVerified: true,
-        emailVerificationOtp: null,
-        emailVerificationOtpExpires: null,
-        emailVerificationOtpAttempts: 0,
-        assignedBy: null,
-        deletedAt: null,
-        deletedBy: null,
-        deletionReason: null,
-        updatedBy: null,
-        // Admin has no `updatedAt` — Prisma returns it anyway because we @updatedAt on the model
-      } as any;
-      userType = 'admin';
-    }
+    const token = generateToken(String(admin.id), admin.email, 'admin');
+
+    return {
+      token,
+      user: {
+        id: admin.id,
+        name: admin.name,
+        email: admin.email,
+        type: 'admin' as const,
+        createdAt: admin.createdAt,
+      },
+    };
   }
 
-  if (!user) {
-    throw new ApiError(401, 'Invalid email or password');
+  // ── Then Staff ──
+  const staff = await prisma.staff.findUnique({
+    where: { email: normalizedEmail },
+  });
+  if (!staff) throw new ApiError(401, 'Invalid email or password');
+
+  const ok = await comparePassword(password, staff.password);
+  if (!ok) throw new ApiError(401, 'Invalid email or password');
+
+  if (!staff.isEmailVerified) {
+    throw new ApiError(401, 'Please verify your email before logging in');
+  }
+  if (staff.status === 'Pending') {
+    throw new ApiError(401, 'Account pending admin approval');
+  }
+  if (staff.status === 'Rejected') {
+    throw new ApiError(401, 'Account has been rejected');
+  }
+  if (staff.deletedAt) {
+    throw new ApiError(401, 'Account has been deactivated');
   }
 
-  const isPasswordValid = await comparePassword(password, user.password);
-  if (!isPasswordValid) {
-    throw new ApiError(401, 'Invalid email or password');
-  }
+  const token = generateToken(String(staff.id), staff.email, 'staff');
 
-  if (userType === 'staff') {
-    if (!user.isEmailVerified) {
-      throw new ApiError(401, 'Please verify your email before logging in');
-    }
-    if (user.status === 'Pending') {
-      throw new ApiError(401, 'Account pending admin approval');
-    }
-    if (user.status === 'Rejected') {
-      throw new ApiError(401, 'Account has been rejected');
-    }
-    if (user.deletedAt) {
-      throw new ApiError(401, 'Account has been deactivated');
-    }
-  }
-
-  const token = generateToken(String(user.id), user.email);
-
-  const userResponse: any = {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    type: userType,
-    createdAt: user.createdAt,
+  return {
+    token,
+    user: {
+      id: staff.id,
+      name: staff.name,
+      email: staff.email,
+      phone: staff.phone,
+      role: staff.role,
+      type: 'staff' as const,
+      status: staff.status,
+      isEmailVerified: staff.isEmailVerified,
+      createdAt: staff.createdAt,
+    },
   };
-
-  if (userType === 'staff') {
-    userResponse.phone = user.phone;
-    userResponse.role = user.role;
-    userResponse.status = user.status;
-    userResponse.isEmailVerified = user.isEmailVerified;
-  }
-
-  return { token, user: userResponse };
 };
 
 // ═════════════════════════════════════════════════════════════
 // Get current user
 // ═════════════════════════════════════════════════════════════
-export const getCurrentUser = async (userId: string | number) => {
+export const getCurrentUser = async (
+  userId: string | number,
+  userType: 'staff' | 'admin',
+) => {
   const id = Number(userId);
   if (!Number.isInteger(id) || id <= 0) {
     throw new ApiError(400, 'Invalid user id');
   }
 
+  if (userType === 'admin') {
+    const admin = await prisma.admin.findUnique({
+      where: { id },
+      select: { id: true, name: true, email: true, createdAt: true },
+    });
+    if (!admin) throw new ApiError(404, 'User not found');
+    return {
+      id: admin.id,
+      name: admin.name,
+      email: admin.email,
+      type: 'admin' as const,
+      createdAt: admin.createdAt,
+    };
+  }
+
+  // staff path
   const staff = await prisma.staff.findUnique({
     where: { id },
     select: {
@@ -312,28 +321,18 @@ export const getCurrentUser = async (userId: string | number) => {
       status: true, isEmailVerified: true, createdAt: true,
     },
   });
-
-  if (staff) {
-    return {
-      id: staff.id, name: staff.name, email: staff.email, phone: staff.phone,
-      role: staff.role, type: 'staff' as const, status: staff.status,
-      isEmailVerified: staff.isEmailVerified, createdAt: staff.createdAt,
-    };
-  }
-
-  const admin = await prisma.admin.findUnique({
-    where: { id },
-    select: { id: true, name: true, email: true, createdAt: true },
-  });
-
-  if (admin) {
-    return {
-      id: admin.id, name: admin.name, email: admin.email,
-      type: 'admin' as const, createdAt: admin.createdAt,
-    };
-  }
-
-  throw new ApiError(404, 'User not found');
+  if (!staff) throw new ApiError(404, 'User not found');
+  return {
+    id: staff.id,
+    name: staff.name,
+    email: staff.email,
+    phone: staff.phone,
+    role: staff.role,
+    type: 'staff' as const,
+    status: staff.status,
+    isEmailVerified: staff.isEmailVerified,
+    createdAt: staff.createdAt,
+  };
 };
 
 // ═════════════════════════════════════════════════════════════

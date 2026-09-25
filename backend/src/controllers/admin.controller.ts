@@ -145,7 +145,7 @@ export const getStaffList = asyncHandler(async (req: Request, res: Response) => 
     | 'Deleted'
     | 'All'
     | undefined;
-  const role = req.query.role as StaffRole | undefined;
+  const role = req.query.role as string | undefined;
   const search = req.query.search as string | undefined;
 
   const result = await adminService.getStaffList(page, limit, {

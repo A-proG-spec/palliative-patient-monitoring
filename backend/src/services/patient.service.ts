@@ -1,10 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
-
-
-const prismaBase = new PrismaClient();
-export const prisma = prismaBase;
+import { prisma, prismaBase } from '../lib/prisma.js';
 // ─────────────────────────────────────────────────────────────
 // Register patient
 // ─────────────────────────────────────────────────────────────
@@ -49,15 +45,41 @@ export const registerPatient = async (data: any, staffId: string|number) => {
 // List patients
 // ─────────────────────────────────────────────────────────────
 export const getPatients = async (
-  _staffId: string|number,
+  staffId: string | number,
   page: number = 1,
   limit: number = 20,
   status?: string,
   search?: string,
 ) => {
-  const where: any = {};
-  if (status) where.status = status;
+  const sid = toId(staffId, 'staff id');
 
+  // Collect patient ids the staff member is tied to.
+  const [registered, visited] = await Promise.all([
+    prisma.patient.findMany({
+      where: { registeredBy: sid },
+      select: { id: true },
+    }),
+    prisma.homeVisit.findMany({
+      where: {
+        OR: [
+          { createdBy: sid },
+          { signatures: { some: { staffId: sid } } },
+        ],
+      },
+      select: { patientId: true },
+      distinct: ['patientId'],
+    }),
+  ]);
+
+  const accessibleIds = Array.from(
+    new Set([
+      ...registered.map((p) => p.id),
+      ...visited.map((v) => v.patientId),
+    ]),
+  );
+
+  const where: any = { id: { in: accessibleIds } };
+  if (status) where.status = status;
   if (search) {
     where.OR = [
       { firstName: { contains: search, mode: 'insensitive' } },

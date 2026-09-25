@@ -19,13 +19,12 @@ export const prismaBase = new PrismaClient({
 // `deletedAt` column will implicitly add `deletedAt: null` unless
 // the caller explicitly overrides it.
 // ─────────────────────────────────────────────────────────────
-export const prisma = prismaBase.$extends({
+export const prisma = (prismaBase.$extends({
   query: {
     $allModels: {
       async $allOperations({ model, operation, args, query }) {
         const SOFT_DELETE_MODELS = [
           'Staff',
-          'Patient',
           'Medication',
           'LaboratoryTest',
           'ImagingOrder',
@@ -72,6 +71,6 @@ export const prisma = prismaBase.$extends({
       },
     },
   },
-});
+}) as unknown) as any;
 
 export default prisma;

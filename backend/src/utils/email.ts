@@ -1,4 +1,17 @@
 import emailTransporter, { emailConfig } from '@config/email.js';
+import { logger } from '@config/logger.js';
+
+/**
+ * Escape HTML special characters in user-supplied strings before
+ * interpolating them into an email HTML template.
+ */
+const escapeHtml = (value: unknown): string =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 export const sendVerificationEmail = async (
   to: string,
@@ -12,7 +25,7 @@ export const sendVerificationEmail = async (
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #002395;">Welcome to Palliative Care System!</h2>
-        <p>Dear <strong>${name}</strong>,</p>
+        <p>Dear <strong>${escapeHtml(name)}</strong>,</new_str>
         <p>Thank you for registering. Use the code below to verify your email address:</p>
 
         <div style="text-align: center; margin: 30px 0;">
@@ -36,9 +49,9 @@ export const sendVerificationEmail = async (
 
   try {
     await emailTransporter.sendMail(mailOptions);
-    console.log(`Verification OTP sent to ${to}`);
+    logger.info(`Verification OTP sent to ${to}`);
   } catch (error) {
-    console.error('Failed to send verification email:', error);
+    logger.error('Failed to send verification email:', error);
     throw new Error('Failed to send verification email');
   }
 };
@@ -64,19 +77,19 @@ export const sendAdminRegistrationNoticeEmail = async (
         <table style="border-collapse: collapse; margin-top: 16px; width: 100%;">
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Name</strong></td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee;">${candidate.name}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${escapeHtml(candidate.name)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Email</strong></td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee;">${candidate.email}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${escapeHtml(candidate.email)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Phone</strong></td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee;">${candidate.phone}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${escapeHtml(candidate.phone)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Requested role</strong></td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee; color: #002395;"><strong>${candidate.role}</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; color: #002395;"><strong>${escapeHtml(candidate.role)}</strong></td>
           </tr>
         </table>
 
@@ -96,9 +109,9 @@ export const sendAdminRegistrationNoticeEmail = async (
 
   try {
     await emailTransporter.sendMail(mailOptions);
-    console.log(`Registration notice sent to admin: ${adminEmail}`);
+    logger.info(`Registration notice sent to admin: ${adminEmail}`);
   } catch (error) {
-    console.error(`Failed to send admin notice to ${adminEmail}:`, error);
+    logger.error(`Failed to send admin notice to ${adminEmail}:`, error);
     // Deliberately do NOT rethrow — the staff registration should not
     // fail just because the admin notification email couldn't go out.
   }

@@ -1,11 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
-
-
-
-const prismaBase = new PrismaClient();
-export const prisma = prismaBase;
+import { prisma, prismaBase } from '../lib/prisma.js';
 // ─────────────────────────────────────────────────────────────
 // GET ALL imaging orders for a patient
 // ─────────────────────────────────────────────────────────────
@@ -322,7 +317,6 @@ export const updateImagingReport = async (
         ? new Date(reportData.reportDate)
         : new Date(),
       status: 'Completed',
-      updatedBy: aid,
     },
   });
 
@@ -369,7 +363,6 @@ export const recordImagingPerformed = async (
         ? new Date(departmentData.performedAt)
         : new Date(),
       imageQuality: departmentData.imageQuality,
-      updatedBy: aid,
     },
   });
 
@@ -402,7 +395,7 @@ export const updateImagingStatus = async (
 
   const updated = await prisma.imagingOrder.update({
     where: { id: oid },
-    data: { status, updatedBy: aid },
+    data: { status },
   });
 
   return {
@@ -494,7 +487,7 @@ export const getPendingImagingOrders = async (
   page: number = 1,
   limit: number = 100,
 ) => {
-  const where = { status: 'Ordered' as const, deletedAt: null };
+  const where = { status: 'Ordered' as const };
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
@@ -623,7 +616,6 @@ export const submitImagingReportFromQueue = async (
       recommendation: data.recommendation ?? null,
       reportDate: new Date(),
       status: 'Completed',
-      updatedBy: sid,
     },
   });
 

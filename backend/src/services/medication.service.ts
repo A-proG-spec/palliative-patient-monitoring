@@ -1,12 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
-
-
-
-
-const prismaBase = new PrismaClient();
-export const prisma = prismaBase;
+import { prisma, prismaBase } from '../lib/prisma.js';
 // ─────────────────────────────────────────────────────────────
 // Order medication
 // ─────────────────────────────────────────────────────────────
@@ -226,7 +220,7 @@ export const updateMedicationStatus = async (
 
   const updated = await prisma.medication.update({
     where: { id: mid },
-    data: { status, updatedBy: aid },
+  data: { status },
     include: {
       prescribedByStaff: { select: { id: true, name: true } },
     },
@@ -326,7 +320,7 @@ export const getPendingMedicationOrders = async (
   page: number = 1,
   limit: number = 100,
 ) => {
-  const where = { status: 'Ordered' as const, deletedAt: null };
+  const where = { status: 'Ordered' as const };
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
@@ -450,7 +444,7 @@ export const markMedicationGivenByQueue = async (
 
   const updated = await prisma.medication.update({
     where: { id: mid },
-    data: { status: 'Given', updatedBy: aid },
+    data: { status: 'Given', updatedByStaffId: aid },
   });
 
   return { id: updated.id, status: updated.status, updatedAt: updated.updatedAt };

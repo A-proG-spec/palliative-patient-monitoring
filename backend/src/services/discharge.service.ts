@@ -1,10 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
-
-
-const prismaBase = new PrismaClient();
-export const prisma = prismaBase;
+import { prisma, prismaBase } from '../lib/prisma.js';
 // ─────────────────────────────────────────────────────────────
 // Create discharge summary — finalizes discharge workflow
 // ─────────────────────────────────────────────────────────────
@@ -316,7 +312,7 @@ export const updateDischargeSummary = async (
 
   const updated = await prisma.dischargeSummary.update({
     where: { id: sid },
-    data: { ...data, updatedBy: uid },
+  data: { ...data },
   });
 
   return formatSummary(updated);

@@ -12,14 +12,18 @@ const JWT_EXPIRE = env.JWT_EXPIRE;
 export interface JwtPayload {
   id: string;      // string form of the numeric Prisma id
   email: string;
+  type?: 'staff' | 'admin';
 }
 
 export const generateToken = (
   userId: number | string,
   email: string,
+  userType?: 'staff' | 'admin',
 ): string => {
+  const payload: JwtPayload = { id: String(userId), email };
+  if (userType) payload.type = userType;
   return jwt.sign(
-    { id: String(userId), email },
+    payload,
     JWT_SECRET,
     { expiresIn: JWT_EXPIRE } as jwt.SignOptions,
   );

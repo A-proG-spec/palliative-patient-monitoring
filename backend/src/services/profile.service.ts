@@ -1,13 +1,8 @@
 import bcrypt from 'bcrypt';
-import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { hashPassword } from '@utils/password.js';
 import { toId } from '@utils/prisma.js';
-
-
-
-const prismaBase = new PrismaClient();
-export const prisma = prismaBase;
+import { prisma, prismaBase } from '../lib/prisma.js';
 // ═════════════════════════════════════════════════════════════
 // Lookup
 // ═════════════════════════════════════════════════════════════
@@ -17,21 +12,14 @@ type UserLookup =
 
 const findUser = async (
   userId: string | number,
+  userType: 'staff' | 'admin',
   withPassword = false,
 ): Promise<UserLookup> => {
   const id = toId(userId, 'user id');
 
-  const staff = await prisma.staff.findUnique({ where: { id } });
-  if (staff) {
-    if (!withPassword) {
-      const { password, ...rest } = staff;
-      return { type: 'staff', doc: rest };
-    }
-    return { type: 'staff', doc: staff };
-  }
-
-  const admin = await prisma.admin.findUnique({ where: { id } });
-  if (admin) {
+  if (userType === 'admin') {
+    const admin = await prisma.admin.findUnique({ where: { id } });
+    if (!admin) throw new ApiError(404, 'User not found');
     if (!withPassword) {
       const { password, ...rest } = admin;
       return { type: 'admin', doc: rest };
@@ -39,7 +27,13 @@ const findUser = async (
     return { type: 'admin', doc: admin };
   }
 
-  throw new ApiError(404, 'User not found');
+  const staff = await prisma.staff.findUnique({ where: { id } });
+  if (!staff) throw new ApiError(404, 'User not found');
+  if (!withPassword) {
+    const { password, ...rest } = staff;
+    return { type: 'staff', doc: rest };
+  }
+  return { type: 'staff', doc: staff };
 };
 
 // ═════════════════════════════════════════════════════════════
@@ -47,9 +41,9 @@ const findUser = async (
 // ═════════════════════════════════════════════════════════════
 export const getProfile = async (
   userId: string | number,
-  _userType: string,
+  userType: 'staff' | 'admin',
 ) => {
-  const { type, doc } = await findUser(userId);
+  const { type, doc } = await findUser(userId, userType);
 
   if (type === 'staff') {
     return {
@@ -81,10 +75,10 @@ export const getProfile = async (
 // ═════════════════════════════════════════════════════════════
 export const updateProfile = async (
   userId: string | number,
-  _userType: string,
+  userType: 'staff' | 'admin',
   data: { name?: string; phone?: string },
 ) => {
-  const { type, doc } = await findUser(userId, true);
+  const { type, doc } = await findUser(userId, userType, true);
 
   const hasName = typeof data.name === 'string' && data.name.trim().length > 0;
   const hasPhone = typeof data.phone === 'string' && data.phone.trim().length > 0;
@@ -106,7 +100,7 @@ export const updateProfile = async (
     await prisma.admin.update({ where: { id: doc.id }, data: updateData });
   }
 
-  return getProfile(userId, _userType);
+  return getProfile(userId, userType);
 };
 
 // ═════════════════════════════════════════════════════════════
@@ -114,7 +108,7 @@ export const updateProfile = async (
 // ═════════════════════════════════════════════════════════════
 export const changePassword = async (
   userId: string | number,
-  _userType: string,
+  userType: 'staff' | 'admin',
   currentPassword: string,
   newPassword: string,
 ) => {
@@ -122,7 +116,7 @@ export const changePassword = async (
     throw new ApiError(400, 'Current and new password are required');
   }
 
-  const { type, doc } = await findUser(userId, true);
+  const { type, doc } = await findUser(userId, userType, true);
 
   const ok = await bcrypt.compare(currentPassword, doc.password);
   if (!ok) throw new ApiError(401, 'Current password is incorrect');
@@ -147,9 +141,9 @@ export const changePassword = async (
 // ═════════════════════════════════════════════════════════════
 export const getActivityStats = async (
   userId: string | number,
-  _userType: string,
+  userType: 'staff' | 'admin',
 ) => {
-  const { type, doc } = await findUser(userId);
+  const { type, doc } = await findUser(userId, userType);
 
   if (type === 'staff') {
     const staffId = doc.id;

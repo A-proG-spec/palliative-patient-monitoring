@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import env from './env.js';
+import { logger } from './logger.js';
 
 const emailTransporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
@@ -14,9 +15,9 @@ const emailTransporter = nodemailer.createTransport({
 // Verify transporter connection
 emailTransporter.verify((error, success) => {
   if (error) {
-    console.error('❌ Email transporter verification failed:', error);
+    logger.error('Email transporter verification failed:', error);
   } else {
-    console.log('✅ Email transporter ready');
+    logger.info('Email transporter ready');
   }
 });
 

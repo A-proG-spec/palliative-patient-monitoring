@@ -36,7 +36,7 @@ export const getMe = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) {
     throw new ApiError(401, 'Unauthorized');
   }
-  const result = await authService.getCurrentUser(req.user.id);
+  const result = await authService.getCurrentUser(req.user.id, req.user.type);
   return SuccessResponse(200, 'OK', result);
 });
 
