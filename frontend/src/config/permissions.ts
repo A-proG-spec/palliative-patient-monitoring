@@ -40,35 +40,35 @@ const PERMISSIONS: Record<string, StaffRole[]> = {
   // Patient management
   canRegisterPatient: ['Physician'],
   canEditPatient: ['Physician'],
-  canViewPatients: ['Physician', 'Nurse', 'TeamLeader'],
-  canViewPatientDetail: ['Physician', 'Nurse', 'TeamLeader'],
+  canViewPatients: ['Physician', 'Nurse', 'Nutritionist'],
+  canViewPatientDetail: ['Physician', 'Nurse', 'Nutritionist'],
   canViewAllAssessments: ['Physician', 'Nurse'],
 
   // Visits
-  canRecordVisit: ['Physician', 'Nurse', 'TeamLeader'],
-  canViewVisits: ['Physician', 'Nurse', 'TeamLeader'],
+  canRecordVisit: ['Physician', 'Nurse'],
+  canViewVisits: ['Physician', 'Nurse'],
 
   // Medications
-  canOrderMedication: ['Physician', 'Nurse', 'TeamLeader'],
+  canOrderMedication: ['Physician', 'Nurse'],
   canMarkMedicationGiven: ['Pharmacist'],
-  canViewMedications: ['Physician', 'Nurse', 'TeamLeader', 'Pharmacist'],
+  canViewMedications: ['Physician', 'Nurse', 'Pharmacist'],
 
   // Labs
-  canOrderLab: ['Physician', 'Nurse', 'TeamLeader'],
+  canOrderLab: ['Physician', 'Nurse'],
   canEnterLabResult: ['LaboratoryTechnician'],
-  canViewLabs: ['Physician', 'Nurse', 'TeamLeader', 'LaboratoryTechnician'],
+  canViewLabs: ['Physician', 'Nurse', 'LaboratoryTechnician'],
 
   // Imaging
-  canOrderImaging: ['Physician', 'Nurse', 'TeamLeader'],
+  canOrderImaging: ['Physician', 'Nurse'],
   canEnterImagingReport: ['Radiologist'],
-  canViewImaging: ['Physician', 'Nurse', 'TeamLeader', 'Radiologist'],
+  canViewImaging: ['Physician', 'Nurse', 'Radiologist'],
 
   // Referrals
-  canRequestReferral: ['Physician', 'Nurse', 'TeamLeader'],
+  canRequestReferral: ['Physician', 'Nurse'],
   // NOTE: `canCreateReferral` is an alias used by PatientDetailPage's
   // AddRecordModal. Keep both so neither call-site breaks.
-  canCreateReferral: ['Physician', 'Nurse', 'TeamLeader'],
-  canViewReferrals: ['Physician', 'Nurse', 'TeamLeader'],
+  canCreateReferral: ['Physician', 'Nurse'],
+  canViewReferrals: ['Physician', 'Nurse'],
 
   // Progress Notes
   canViewProgressNotes: ['Physician'],
@@ -76,8 +76,8 @@ const PERMISSIONS: Record<string, StaffRole[]> = {
   canSignProgressNote: ['Physician'],
 
   // Admissions
-  canRecordAdmission: ['Physician', 'Nurse', 'TeamLeader'],
-  canViewAdmissions: ['Physician', 'Nurse', 'TeamLeader'],
+  canRecordAdmission: ['Physician', 'Nurse'],
+  canViewAdmissions: ['Physician', 'Nurse'],
 
   // Hospice Nursing (Nurse-only)
   canRecordHospiceNursing: ['Nurse'],
@@ -137,6 +137,7 @@ export function getSidebarItems(
           icon: Pill,
           badge: b.medicationPending,
         },
+        { label: 'Patients', href: '/patients', icon: Users },
         { label: 'Profile', href: '/profile', icon: User },
       ];
 

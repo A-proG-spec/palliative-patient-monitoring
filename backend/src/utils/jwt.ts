@@ -1,25 +1,23 @@
+// backend/src/utils/jwt.ts
 import jwt from 'jsonwebtoken';
 import env from '@config/env.js';
 
 const JWT_SECRET = env.JWT_SECRET as string;
 const JWT_EXPIRE = env.JWT_EXPIRE;
 
-// ─────────────────────────────────────────────────────────────
-// JWT payload
-// `id` is stored as a STRING because JWT payloads must be
-// JSON-safe scalars — but downstream it maps to a Postgres Int.
-// ─────────────────────────────────────────────────────────────
 export interface JwtPayload {
-  id: string;      // string form of the numeric Prisma id
+  id: string;
   email: string;
+  type: 'staff' | 'admin';  
 }
 
 export const generateToken = (
   userId: number | string,
   email: string,
+  type: 'staff' | 'admin',  
 ): string => {
   return jwt.sign(
-    { id: String(userId), email },
+    { id: String(userId), email, type },   // <-- INCLUDE type
     JWT_SECRET,
     { expiresIn: JWT_EXPIRE } as jwt.SignOptions,
   );

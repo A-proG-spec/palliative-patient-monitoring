@@ -1,7 +1,8 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Plus, Trash2 } from 'lucide-react';
 
 import { usePatient } from '@/hooks/usePatients';
 import { useCreateNutritionalAssessment } from '@/hooks/useNutritionalAssessments';
@@ -21,12 +22,42 @@ import {
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
+import { useToast } from '@/context/ToastContext';
+
+// ═════════════════════════════════════════════════════════════
+// Enum option lists — mirrors the backend Zod enums exactly.
+// Keep these in sync with `NUTRITION_LAB_TEST_VALUES` etc. in
+// `frontend/src/types/nutritional-assessment.types.ts`.
+// ═════════════════════════════════════════════════════════════
+
+const LAB_TEST_OPTIONS = [
+  { value: 'Hemoglobin', label: 'Hemoglobin' },
+  { value: 'Albumin', label: 'Albumin' },
+  { value: 'TotalProtein', label: 'Total Protein' },
+  { value: 'BloodGlucose', label: 'Blood Glucose' },
+  { value: 'Creatinine', label: 'Creatinine' },
+  { value: 'Other', label: 'Other (specify)' },
+] as const;
+
+const MEAL_TYPE_SUGGESTIONS = [
+  'Breakfast',
+  'Mid-Morning Snack',
+  'Lunch',
+  'Afternoon Snack',
+  'Dinner',
+  'Evening Snack',
+  'Other',
+];
+
+// ═════════════════════════════════════════════════════════════
 
 const NutritionalAssessmentFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
   const createMutation = useCreateNutritionalAssessment(id!);
@@ -36,6 +67,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
     handleSubmit,
     watch,
     setValue,
+    control,
     formState: { errors },
   } = useForm<CreateNutritionalAssessmentFormData>({
     resolver: zodResolver(createNutritionalAssessmentSchema),
@@ -53,10 +85,59 @@ const NutritionalAssessmentFormPage: React.FC = () => {
     },
   });
 
+  // ── Row-level field arrays ──
+  const dietaryRecallArray = useFieldArray({
+    control,
+    name: 'dietaryRecall',
+  });
+
+  const labResultsArray = useFieldArray({
+    control,
+    name: 'labResults',
+  });
+
+  // Live values so the UI re-renders on changes
+  const dietaryRecall = watch('dietaryRecall') ?? [];
+  const labResults = watch('labResults') ?? [];
+
+  // ═══════════════════════════════════════════════════════════
+  // Submit
+  // ═══════════════════════════════════════════════════════════
   const onSubmit = (data: CreateNutritionalAssessmentFormData) => {
     createMutation.mutate(data, {
       onSuccess: () => navigate(`/patients/${id}`),
     });
+  };
+
+  // ── onInvalid: surface ALL validation errors as a toast ──
+  const onInvalid = (formErrors: any) => {
+    const flat: string[] = [];
+
+    const walk = (obj: any, path = ''): void => {
+      if (!obj || typeof obj !== 'object') return;
+      if ('message' in obj && typeof obj.message === 'string') {
+        flat.push(`${path || 'form'}: ${obj.message}`);
+        return;
+      }
+      for (const [k, v] of Object.entries(obj)) {
+        const next = path ? `${path}.${k}` : k;
+        if (Array.isArray(v)) {
+          v.forEach((item, i) => walk(item, `${next}[${i}]`));
+        } else {
+          walk(v, next);
+        }
+      }
+    };
+
+    walk(formErrors);
+
+    if (flat.length > 0) {
+      const shown = flat.slice(0, 3).join(' • ');
+      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
+      toast.error(`Save failed — ${shown}${rest}`, 8000);
+    } else {
+      toast.error('Save failed — please review the form.');
+    }
   };
 
   if (isLoading) return <PageLoader />;
@@ -73,7 +154,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
       backTo={`/patients/${id}`}
       mode="create"
       isSubmitting={createMutation.isPending}
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
       onCancel={() => navigate(`/patients/${id}`)}
     >
       {/* ── 1. Assessment type ── */}
@@ -97,35 +178,41 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             label="Weight (kg)"
             type="number"
             step="0.1"
+            error={errors.weightKg?.message}
             {...register('weightKg')}
           />
           <Input
             label="Height (cm)"
             type="number"
             step="0.1"
+            error={errors.heightCm?.message}
             {...register('heightCm')}
           />
           <Input
             label="BMI"
             type="number"
             step="0.1"
+            error={errors.bmi?.message}
             {...register('bmi')}
           />
           <Input
             label="MUAC (cm)"
             type="number"
             step="0.1"
+            error={errors.muacCm?.message}
             {...register('muacCm')}
           />
           <Input
             label="Recent Weight Loss (kg)"
             type="number"
             step="0.1"
+            error={errors.recentWeightLossKg?.message}
             {...register('recentWeightLossKg')}
           />
           <Input
             label="Weight Loss Period"
             placeholder="e.g. 3 months"
+            error={errors.weightLossPeriod?.message}
             {...register('weightLossPeriod')}
           />
         </Grid>
@@ -138,6 +225,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             { value: 'SevereMalnutrition', label: 'Severe malnutrition' },
           ]}
           placeholder="Select…"
+          error={errors.nutritionalStatusClassification?.message}
           {...register('nutritionalStatusClassification')}
         />
       </Section>
@@ -149,24 +237,28 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             label="Weight 6 months ago (kg)"
             type="number"
             step="0.1"
+            error={errors.weightSixMonthsAgoKg?.message}
             {...register('weightSixMonthsAgoKg')}
           />
           <Input
             label="Weight 3 months ago (kg)"
             type="number"
             step="0.1"
+            error={errors.weightThreeMonthsAgoKg?.message}
             {...register('weightThreeMonthsAgoKg')}
           />
           <Input
             label="Current Weight (kg)"
             type="number"
             step="0.1"
+            error={errors.currentWeightKg?.message}
             {...register('currentWeightKg')}
           />
           <Input
             label="% Weight Loss"
             type="number"
             step="0.1"
+            error={errors.percentageWeightLoss?.message}
             {...register('percentageWeightLoss')}
           />
         </Grid>
@@ -178,6 +270,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             { value: 'YesOver10PercentIn6Months', label: 'Yes — >10% in 6 months' },
           ]}
           placeholder="Select…"
+          error={errors.significantWeightLoss?.message}
           {...register('significantWeightLoss')}
         />
       </Section>
@@ -195,6 +288,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'NoAppetite', label: 'No appetite' },
             ]}
             placeholder="Select…"
+            error={errors.currentAppetite?.message}
             {...register('currentAppetite')}
           />
           <Select
@@ -205,6 +299,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Decreased', label: 'Decreased' },
             ]}
             placeholder="Select…"
+            error={errors.appetiteTrend?.message}
             {...register('appetiteTrend')}
           />
         </Grid>
@@ -244,6 +339,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'MoreThanThree', label: 'More than three' },
             ]}
             placeholder="Select…"
+            error={errors.mealsPerDay?.message}
             {...register('mealsPerDay')}
           />
           <Select
@@ -255,6 +351,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Nil', label: 'Nil' },
             ]}
             placeholder="Select…"
+            error={errors.oralIntake?.message}
             {...register('oralIntake')}
           />
           <Select
@@ -266,6 +363,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Nil', label: 'Nil' },
             ]}
             placeholder="Select…"
+            error={errors.fluidIntake?.message}
             {...register('fluidIntake')}
           />
           <Select
@@ -275,6 +373,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Yes', label: 'Yes' },
             ]}
             placeholder="Select…"
+            error={errors.specialDiet?.message}
             {...register('specialDiet')}
           />
         </Grid>
@@ -298,6 +397,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Other', label: 'Other' },
             ]}
             placeholder="Select…"
+            error={errors.feedingMethod?.message}
             {...register('feedingMethod')}
           />
           <Select
@@ -308,6 +408,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'FullAssistance', label: 'Full assistance' },
             ]}
             placeholder="Select…"
+            error={errors.feedingAssistanceRequired?.message}
             {...register('feedingAssistanceRequired')}
           />
         </Grid>
@@ -338,33 +439,89 @@ const NutritionalAssessmentFormPage: React.FC = () => {
         )}
       </Section>
 
-      {/* ── 7. 24-hour dietary recall ── */}
+      {/* ═══════════════════════════════════════════════════════
+          7. 24-hour dietary recall — ROW EDITOR
+      ═══════════════════════════════════════════════════════ */}
       <Section title="7. 24-Hour Dietary Recall">
-        <p className="text-xs text-text-muted -mt-2">
-          Enter each meal on its own line as{' '}
-          <code className="bg-surface-low px-1 rounded">
-            Meal Type | Contents
-          </code>
-        </p>
-        <Textarea
-          label="Dietary Recall"
-          rows={5}
-          placeholder={'Breakfast | Porridge, tea\nLunch | Rice, vegetables\nDinner | Bread, soup'}
-          onChange={(e) => {
-            const rows = e.target.value
-              .split('\n')
-              .map((l) => l.trim())
-              .filter(Boolean)
-              .map((l) => {
-                const [mealType = '', contents = ''] = l.split('|');
-                return {
-                  mealType: mealType.trim(),
-                  contents: contents.trim(),
-                };
-              });
-            setValue('dietaryRecall', rows);
-          }}
-        />
+        {dietaryRecall.length === 0 ? (
+          <p className="text-xs text-text-muted -mt-2">
+            No meals recorded yet. Click <strong>Add Meal</strong> to begin.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {dietaryRecallArray.fields.map((field, i) => (
+              <div
+                key={field.id}
+                className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] gap-2 items-start"
+              >
+                <div>
+                  <label className="block text-xs font-medium text-text-muted mb-1">
+                    Meal Type
+                  </label>
+                  <input
+                    type="text"
+                    list="meal-type-suggestions"
+                    placeholder="e.g. Breakfast"
+                    className="block w-full rounded-lg border border-border-base bg-surface-lowest px-3 py-2 text-sm text-on-surface placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
+                    {...register(`dietaryRecall.${i}.mealType`)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-text-muted mb-1">
+                    Contents
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Porridge, tea"
+                    className="block w-full rounded-lg border border-border-base bg-surface-lowest px-3 py-2 text-sm text-on-surface placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
+                    {...register(`dietaryRecall.${i}.contents`)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-transparent mb-1">
+                    &nbsp;
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => dietaryRecallArray.remove(i)}
+                    className="flex h-[38px] w-10 items-center justify-center rounded-lg border border-border-base text-text-muted hover:text-error hover:bg-error-bg transition-all"
+                    aria-label="Remove meal"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Datalist for meal-type autocomplete suggestions */}
+        <datalist id="meal-type-suggestions">
+          {MEAL_TYPE_SUGGESTIONS.map((m) => (
+            <option key={m} value={m} />
+          ))}
+        </datalist>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          leftIcon={<Plus size={13} />}
+          onClick={() =>
+            dietaryRecallArray.append({ mealType: '', contents: '' })
+          }
+        >
+          Add Meal
+        </Button>
+
+        {Array.isArray(errors.dietaryRecall) &&
+          (errors.dietaryRecall as any).map((err: any, i: number) =>
+            err?.mealType?.message ? (
+              <p key={i} className="text-xs text-error">
+                Meal {i + 1}: {err.mealType.message}
+              </p>
+            ) : null,
+          )}
       </Section>
 
       {/* ── 8. GI symptoms ── */}
@@ -379,6 +536,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Severe', label: 'Severe' },
             ]}
             placeholder="Select…"
+            error={errors.nauseaSeverity?.message}
             {...register('nauseaSeverity')}
           />
           <Select
@@ -390,6 +548,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Severe', label: 'Severe' },
             ]}
             placeholder="Select…"
+            error={errors.vomitingSeverity?.message}
             {...register('vomitingSeverity')}
           />
           <Select
@@ -401,6 +560,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Severe', label: 'Severe' },
             ]}
             placeholder="Select…"
+            error={errors.constipationSeverity?.message}
             {...register('constipationSeverity')}
           />
           <Select
@@ -412,6 +572,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Severe', label: 'Severe' },
             ]}
             placeholder="Select…"
+            error={errors.diarrheaSeverity?.message}
             {...register('diarrheaSeverity')}
           />
           <Select
@@ -423,6 +584,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Severe', label: 'Severe' },
             ]}
             placeholder="Select…"
+            error={errors.abdominalPainSeverity?.message}
             {...register('abdominalPainSeverity')}
           />
           <Select
@@ -434,6 +596,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Severe', label: 'Severe' },
             ]}
             placeholder="Select…"
+            error={errors.bloatingSeverity?.message}
             {...register('bloatingSeverity')}
           />
           <Select
@@ -445,6 +608,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Severe', label: 'Severe' },
             ]}
             placeholder="Select…"
+            error={errors.mouthSoresSeverity?.message}
             {...register('mouthSoresSeverity')}
           />
         </Grid>
@@ -462,6 +626,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'SevereFatigue', label: 'Severe fatigue' },
             ]}
             placeholder="Select…"
+            error={errors.energyLevel?.message}
             {...register('energyLevel')}
           />
           <Select
@@ -472,6 +637,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Unable', label: 'Unable' },
             ]}
             placeholder="Select…"
+            error={errors.mealPreparation?.message}
             {...register('mealPreparation')}
           />
           <Select
@@ -482,42 +648,121 @@ const NutritionalAssessmentFormPage: React.FC = () => {
               { value: 'Dependent', label: 'Dependent' },
             ]}
             placeholder="Select…"
+            error={errors.feedingAbility?.message}
             {...register('feedingAbility')}
           />
         </Grid>
       </Section>
 
-      {/* ── 10. Lab results ── */}
+      {/* ═══════════════════════════════════════════════════════
+          10. Lab Results — ROW EDITOR
+          `test` is an enum → hard-constrained via <Select>.
+          `testOther` only appears when test === 'Other'.
+      ═══════════════════════════════════════════════════════ */}
       <Section title="10. Laboratory Results">
-        <p className="text-xs text-text-muted -mt-2">
-          Enter each test on its own line as{' '}
-          <code className="bg-surface-low px-1 rounded">
-            Test | Other | Result
-          </code>{' '}
-          (leave Other blank unless Test = Other)
-        </p>
-        <Textarea
-          label="Lab Results"
-          rows={4}
-          placeholder={
-            'Hemoglobin | | 9.5 g/dL\nAlbumin | | 28 g/L\nBloodGlucose | | 110 mg/dL'
+        {labResults.length === 0 ? (
+          <p className="text-xs text-text-muted -mt-2">
+            No lab results recorded yet. Click <strong>Add Lab Result</strong>{' '}
+            to begin.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {labResultsArray.fields.map((field, i) => {
+              const selectedTest = labResults[i]?.test;
+              return (
+                <div
+                  key={field.id}
+                  className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 items-start"
+                >
+                  <div>
+                    <label className="block text-xs font-medium text-text-muted mb-1">
+                      Test
+                    </label>
+                    <Select
+                      options={LAB_TEST_OPTIONS as unknown as { value: string; label: string }[]}
+                      placeholder="Select test…"
+                      {...register(`labResults.${i}.test`)}
+                    />
+                  </div>
+
+                  {selectedTest === 'Other' ? (
+                    <div>
+                      <label className="block text-xs font-medium text-text-muted mb-1">
+                        Specify test
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Folate"
+                        className="block w-full rounded-lg border border-border-base bg-surface-lowest px-3 py-2 text-sm text-on-surface placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
+                        {...register(`labResults.${i}.testOther`)}
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-medium text-text-muted mb-1">
+                        &nbsp;
+                      </label>
+                      <div className="h-[38px] rounded-lg border border-dashed border-border-base/50 bg-surface-low/30 flex items-center justify-center text-[11px] text-text-muted">
+                        n/a
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-medium text-text-muted mb-1">
+                      Result
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 9.5 g/dL"
+                      className="block w-full rounded-lg border border-border-base bg-surface-lowest px-3 py-2 text-sm text-on-surface placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
+                      {...register(`labResults.${i}.result`)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-transparent mb-1">
+                      &nbsp;
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => labResultsArray.remove(i)}
+                      className="flex h-[38px] w-10 items-center justify-center rounded-lg border border-border-base text-text-muted hover:text-error hover:bg-error-bg transition-all"
+                      aria-label="Remove lab result"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          leftIcon={<Plus size={13} />}
+          onClick={() =>
+            labResultsArray.append({
+              test: 'Hemoglobin',
+              testOther: '',
+              result: '',
+            })
           }
-          onChange={(e) => {
-            const rows = e.target.value
-              .split('\n')
-              .map((l) => l.trim())
-              .filter(Boolean)
-              .map((l) => {
-                const [test = '', testOther = '', result = ''] = l.split('|');
-                return {
-                  test: test.trim() as any,
-                  testOther: testOther.trim(),
-                  result: result.trim(),
-                };
-              });
-            setValue('labResults', rows);
-          }}
-        />
+        >
+          Add Lab Result
+        </Button>
+
+        {Array.isArray(errors.labResults) &&
+          (errors.labResults as any).map((err: any, i: number) =>
+            err?.test?.message ? (
+              <p key={i} className="text-xs text-error">
+                Lab row {i + 1}: {err.test.message}
+              </p>
+            ) : null,
+          )}
       </Section>
 
       {/* ── 11. Risk screening ── */}
@@ -547,6 +792,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             { value: 'Critical', label: 'Critical' },
           ]}
           placeholder="Select…"
+          error={errors.overallNutritionalRisk?.message}
           {...register('overallNutritionalRisk')}
         />
       </Section>
