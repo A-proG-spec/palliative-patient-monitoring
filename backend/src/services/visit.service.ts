@@ -1,11 +1,7 @@
 import bcrypt from 'bcrypt';
-import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
-
-
-const prismaBase = new PrismaClient();
-export const prisma = prismaBase;
+import { prisma, prismaBase } from '../lib/prisma.js';
 // ─────────────────────────────────────────────────────────────
 // DTO helpers
 // ─────────────────────────────────────────────────────────────
@@ -369,14 +365,17 @@ export const getVisitById = async (patientId: string, visitId: string) => {
 
   if (!visit) throw new ApiError(404, 'Visit not found');
 
+  const { createdByStaff, ...rest } = visit;
   return {
-    ...visit,
-    createdBy: {
-      id: visit.createdByStaff.id,
-      name: visit.createdByStaff.name,
-      role: visit.createdByStaff.role,
-    },
-    createdByStaff: undefined,
+    ...rest,
+    // numeric FK, unchanged — matches getVisits()
+    createdByStaff: createdByStaff
+      ? {
+          id: createdByStaff.id,
+          name: createdByStaff.name,
+          role: createdByStaff.role,
+        }
+      : null,
     signatures: formatSignatures(visit.signatures),
     allSigned: isAllSigned(visit.signatures),
     currentMedications: visit.currentMedications,

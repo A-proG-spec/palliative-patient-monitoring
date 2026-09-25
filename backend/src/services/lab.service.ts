@@ -1,11 +1,9 @@
-import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
+import { prisma, prismaBase } from '../lib/prisma.js';
 
 const VALID_STATUSES = ['Ordered', 'Completed', 'Cancelled'] as const;
 const VALID_PRIORITIES = ['Routine', 'Urgent', 'Emergency'] as const;
-const prismaBase = new PrismaClient();
-export const prisma = prismaBase;
 // ─────────────────────────────────────────────────────────────
 // DTO mappers
 // ─────────────────────────────────────────────────────────────
@@ -348,7 +346,6 @@ export const updateLabResult = async (
 
   // Result header fields on LaboratoryTest
   const headerUpdate: any = {
-    updatedBy: sid,
     status: 'Completed',
   };
   if (data.datePerformed) headerUpdate.datePerformed = new Date(data.datePerformed);
@@ -436,7 +433,7 @@ export const cancelLabTest = async (
 
   const updated = await prisma.laboratoryTest.update({
     where: { id: lid },
-    data: { status: 'Cancelled', updatedBy: sid },
+  data: { status: 'Cancelled' },
     include: {
       patient: {
         select: {
@@ -525,7 +522,7 @@ export const getPendingLabRequests = async (
   page: number = 1,
   limit: number = 100,
 ) => {
-  const where = { status: 'Ordered' as const, deletedAt: null };
+  const where = { status: 'Ordered' as const };
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
@@ -643,7 +640,6 @@ export const enterLabResultFromQueue = async (
       result: data.result,
       datePerformed: data.datePerformed ? new Date(data.datePerformed) : new Date(),
       performedBy: data.performedBy ?? null,
-      updatedBy: sid,
     },
   });
 

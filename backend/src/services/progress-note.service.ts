@@ -1,11 +1,7 @@
 import bcrypt from 'bcrypt';
-import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
-
-
-const prismaBase = new PrismaClient();
-export const prisma = prismaBase;
+import { prisma, prismaBase } from '../lib/prisma.js';
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
@@ -628,7 +624,7 @@ export const updateProgressNote = async (
 
   const updated = await prisma.patientProgressNote.update({
     where: { id: nid },
-    data: { ...cleanData, updatedBy: aid },
+  data: { ...cleanData },
   });
 
   return { id: updated.id, updatedAt: updated.updatedAt };

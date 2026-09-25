@@ -1,12 +1,7 @@
-import { PrismaClient } from '@prisma/client';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
+import { prisma, prismaBase } from '../lib/prisma.js';
 
-
-
-
-const prismaBase = new PrismaClient();
-export const prisma = prismaBase;
 // ─────────────────────────────────────────────────────────────
 // Order medication
 // ─────────────────────────────────────────────────────────────
@@ -66,6 +61,7 @@ export const getAllMedications = async (
     total,
   };
 };
+
 export const orderMedication = async (
   patientId: string,
   data: any,
@@ -319,6 +315,7 @@ export const restoreMedication = async (
 
   return { id: medicationId, restored: true };
 };
+
 // ─────────────────────────────────────────────────────────────
 // Pharmacist queue — all `Ordered` medications across patients
 // ─────────────────────────────────────────────────────────────
@@ -326,7 +323,7 @@ export const getPendingMedicationOrders = async (
   page: number = 1,
   limit: number = 100,
 ) => {
-  const where = { status: 'Ordered' as const, deletedAt: null };
+  const where = { status: 'Ordered' as const };
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
@@ -459,6 +456,7 @@ export const markMedicationGivenByQueue = async (
 
   return { id: updated.id, status: updated.status, updatedAt: updated.updatedAt };
 };
+
 export default {
   getAllMedications,
   orderMedication,
