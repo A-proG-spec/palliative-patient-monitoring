@@ -4,6 +4,7 @@ import { generateToken } from '@utils/jwt.js';
 import { generateOtp, hashOtp, compareOtpHash } from '@utils/token.js';
 import { sendVerificationEmail, sendAdminRegistrationNoticeEmail } from '@utils/email.js';
 import { prisma } from '../lib/prisma.js';
+
 // ─────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────
@@ -92,6 +93,7 @@ export const registerStaff = async (
 
   return staff;
 };
+
 // ═════════════════════════════════════════════════════════════
 // Verify email
 // ═════════════════════════════════════════════════════════════

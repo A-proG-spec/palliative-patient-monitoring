@@ -2,6 +2,7 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Textarea } from '../../../components/ui/Textarea';
 
 import { usePatient } from '@/hooks/usePatients';
 import { useCreatePhysiotherapyAssessment } from '@/hooks/usePhysiotherapyAssessments';

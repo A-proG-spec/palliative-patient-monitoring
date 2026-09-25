@@ -74,6 +74,7 @@ enum StaffRole {
   Psychologist
   SocialWorker
   SpiritualPerson
+  Nutritionist
 }
 
 enum StaffStatus {
@@ -1038,6 +1039,1573 @@ enum HospiceNursingDiagnosis {
 }
 
 // ═════════════════════════════════════════════════════════════
+// ── ENUMS: Clinical Pharmacist Assessment ──
+// ═════════════════════════════════════════════════════════════
+enum PharmacistAssessmentType {
+  Admission
+  FollowUp
+  MedicationReview
+}
+
+enum PharmacistWeightStatus {
+  Good
+  Fair
+  Poor
+  Unknown
+}
+
+enum PharmacistPainControl {
+  WellControlled
+  PartiallyControlled
+  PoorlyControlled
+}
+
+enum PharmacistBreakthroughPain {
+  None
+  Occasional
+  Frequent
+}
+
+enum PharmacistOpioidSideEffect {
+  Constipation
+  Nausea
+  Sedation
+  Confusion
+  RespiratoryDepression
+  None
+}
+
+enum PharmacistInteractionRisk {
+  None
+  Possible
+  Significant
+}
+
+enum PharmacistHighRiskMedication {
+  Opioids
+  Benzodiazepines
+  Anticoagulants
+  Steroids
+  Antiepileptics
+}
+
+enum PharmacistOrganFunction {
+  Normal
+  Impaired
+  Unknown
+}
+
+enum PharmacistEffectiveness {
+  Good
+  Fair
+  Poor
+}
+
+enum PharmacistAdrSeverity {
+  Mild
+  Moderate
+  Severe
+}
+
+enum PharmacistAdrAction {
+  DoseAdjustment
+  DrugDiscontinued
+  SymptomaticTreatment
+  ReportedToCommittee
+}
+
+enum PharmacistBowelFunction {
+  Normal
+  Constipated
+  SevereConstipation
+}
+
+enum PharmacistDoseAdjustmentReason {
+  RenalImpairment
+  HepaticImpairment
+  ElderlyDosing
+  WeightBasedAdjustment
+}
+
+enum PharmacistPatientUnderstanding {
+  Good
+  Moderate
+  Poor
+}
+
+enum PharmacistCounselingTopic {
+  PainMedications
+  OpioidSafety
+  SideEffects
+  Adherence
+  ConstipationPrevention
+  EndOfLifeMedications
+}
+
+enum PharmacistMedicationPlanAction {
+  OptimizeAnalgesicRegimen
+  StartAdjustLaxatives
+  ManageNauseaVomiting
+  ReviewPolypharmacy
+  ReduceUnnecessaryMedications
+  InitiateAdjuvantTherapy
+  MonitorSedationLevel
+  Other
+}
+
+enum PharmacistMedicationAvailability {
+  AllAvailable
+  PartiallyAvailable
+  NotAvailable
+}
+
+enum PharmacistSummaryFlag {
+  MedicationRegimenAppropriate
+  RequiresOptimization
+  RequiresUrgentIntervention
+  HighRiskMedicationProfile
+  DeprescribingRecommended
+  OngoingMonitoringRequired
+}
+
+enum PharmacistFinalRecommendation {
+  ContinueCurrentRegimen
+  ModifyAnalgesicPlan
+  InitiateSymptomControlMedications
+  DeprescribeNonEssentialMedications
+  EnhanceSafetyMonitoring
+  MultidisciplinaryReviewRequired
+}
+
+// ═════════════════════════════════════════════════════════════
+// ── ENUMS: Physiotherapy Assessment ──
+// ═════════════════════════════════════════════════════════════
+enum PhysiotherapyAssessmentType {
+  Admission
+  FollowUp
+  Reassessment
+}
+
+enum PhysiotherapyComorbidity {
+  Hypertension
+  DiabetesMellitus
+  Stroke
+  COPD
+  HeartFailure
+  Cancer
+  Other
+}
+
+enum PhysiotherapyGeneralCondition {
+  Stable
+  Deteriorating
+  Bedbound
+  TerminalPhase
+}
+
+enum PhysiotherapyPainType {
+  Musculoskeletal
+  Neuropathic
+  CancerRelated
+  Mixed
+  Other
+}
+
+enum PhysiotherapySymptom {
+  Fatigue
+  Dyspnea
+  Weakness
+  MuscleStiffness
+  BalanceProblems
+  Contractures
+}
+
+enum PhysiotherapyMobilityStatus {
+  Independent
+  RequiresAssistance
+  WheelchairBound
+  Bedridden
+}
+
+enum PhysiotherapyTransferAbility {
+  Independent
+  MinimalAssistance
+  ModerateAssistance
+  Dependent
+}
+
+enum PhysiotherapyWalkingAbility {
+  Normal
+  ReducedDistance
+  WithAid
+  UnableToWalk
+}
+
+enum PhysiotherapyAssistiveDevice {
+  None
+  Cane
+  Walker
+  Wheelchair
+  Other
+}
+
+enum PhysiotherapyRangeOfMotion {
+  Full
+  Reduced
+  SeverelyLimited
+}
+
+enum PhysiotherapyJointFinding {
+  None
+  Present
+}
+
+enum PhysiotherapyConsciousness {
+  Alert
+  Drowsy
+  Confused
+}
+
+enum PhysiotherapyCoordination {
+  Normal
+  Impaired
+}
+
+enum PhysiotherapySensoryDeficit {
+  None
+  Present
+}
+
+enum PhysiotherapyBalance {
+  Stable
+  Unstable
+  HighFallRisk
+}
+
+enum PhysiotherapyBreathingPattern {
+  Normal
+  Shallow
+  Labored
+}
+
+enum PhysiotherapyBreathlessnessLevel {
+  None
+  Mild
+  Moderate
+  Severe
+}
+
+enum PhysiotherapyChestExpansion {
+  Normal
+  Reduced
+}
+
+enum PhysiotherapyRespiratoryNeed {
+  BreathingExercises
+  ChestPhysiotherapy
+  PositioningSupport
+}
+
+enum PhysiotherapyPressureRisk {
+  Low
+  Moderate
+  High
+}
+
+enum PhysiotherapyPressureArea {
+  None
+  Sacrum
+  Heels
+  Hips
+  Other
+}
+
+enum PhysiotherapyPressurePrevention {
+  Repositioning
+  PressureMattress
+  SkinCareEducation
+  PassiveExercises
+}
+
+enum PhysiotherapyAdlActivity {
+  BedMobility
+  Feeding
+  Bathing
+  Dressing
+  Toileting
+}
+
+enum PhysiotherapyAdlLevel {
+  Independent
+  Assisted
+  Dependent
+}
+
+enum PhysiotherapyFallRiskLevel {
+  Low
+  Moderate
+  High
+}
+
+enum PhysiotherapyFallContributor {
+  Weakness
+  BalanceIssues
+  SedativeMedication
+  EnvironmentalHazards
+  PosturalHypotension
+}
+
+enum PhysiotherapyDiagnosis {
+  DecreasedMobility
+  MuscleWeakness
+  ImpairedBalance
+  ReducedEndurance
+  JointStiffness
+  RiskOfContractures
+  ReducedFunctionalIndependence
+}
+
+enum PhysiotherapyIntervention {
+  PassiveRangeOfMotionExercises
+  ActiveAssistedExercises
+  BreathingExercises
+  PositioningProgram
+  PainReductionTechniques
+  MobilityTraining
+  SittingBalanceTraining
+  WalkingAssistance
+  FamilyCaregiverTraining
+}
+
+enum PhysiotherapyFrequency {
+  Daily
+  ThreeToFiveTimesPerWeek
+  Weekly
+  AsTolerated
+}
+
+enum PhysiotherapyEquipment {
+  Wheelchair
+  WalkingFrame
+  Crutches
+  PressureMattress
+  BedRails
+  TransferBoard
+  None
+}
+
+enum PhysiotherapyCaregiverTraining {
+  PositioningTechniques
+  SafeTransfers
+  ExerciseAssistance
+  FallPrevention
+  PressureSorePrevention
+  MobilitySupport
+}
+
+enum PhysiotherapyOutcome {
+  FullyIndependent
+  RehabilitationNotRequired
+  RequiresSupportivePhysiotherapy
+  RequiresIntensiveMobilitySupport
+  HighRiskForFunctionalDecline
+  PalliativeComfortFocusedPhysiotherapyRequired
+}
+
+enum PhysiotherapyFinalRecommendation {
+  ComfortFocusedPhysiotherapy
+  MobilityMaintenanceExercises
+  PainReliefPositioningTherapy
+  BreathingExercises
+  CaregiverTraining
+  MultidisciplinaryHospiceCarePlan
+}
+
+// ═════════════════════════════════════════════════════════════
+// ── ENUMS: Family Assessment ──
+// ═════════════════════════════════════════════════════════════
+enum FamilyAssessmentType {
+  Admission
+  FollowUp
+  CrisisReview
+}
+
+enum FamilyDecisionMaker {
+  Patient
+  Spouse
+  Child
+  Parent
+  Other
+}
+
+enum FamilyCaregiverAvailability {
+  FullTime
+  PartTime
+  Occasional
+  NotAvailable
+}
+
+enum FamilyPhysicalAbility {
+  Strong
+  Moderate
+  Limited
+  Unable
+}
+
+enum FamilyEmotionalReadiness {
+  Ready
+  SomewhatReady
+  Overwhelmed
+  NotReady
+}
+
+enum FamilyKnowledgeLevel {
+  Good
+  Moderate
+  Poor
+  None
+}
+
+enum FamilyInternalSupport {
+  StrongFamilyUnity
+  ModerateSupport
+  ConflictPresent
+  NoSupport
+}
+
+enum FamilyExternalSupport {
+  Community
+  ReligiousInstitution
+  NgoSupport
+  None
+}
+
+enum FamilySocialIsolationRisk {
+  Low
+  Moderate
+  High
+}
+
+enum FamilyIncomeSource {
+  Employment
+  Farming
+  Pension
+  FamilySupport
+  NoStableIncome
+}
+
+enum FamilyIncomeLevel {
+  Low
+  Moderate
+  High
+  Unknown
+}
+
+enum FamilyFinancialBurden {
+  None
+  Mild
+  Moderate
+  Severe
+}
+
+enum FamilyFinancialChallenge {
+  MedicationCosts
+  Transportation
+  FoodInsecurity
+  LossOfIncome
+  CaregiverBurden
+}
+
+enum FamilyHousingType {
+  Owned
+  Rented
+  TemporaryShelter
+  Other
+}
+
+enum FamilyHomeEnvironment {
+  Safe
+  PartiallySafe
+  Unsafe
+}
+
+enum FamilyCopingAbility {
+  Strong
+  Moderate
+  Poor
+}
+
+enum FamilyEmotionalStatus {
+  Calm
+  Anxious
+  Distressed
+  Overwhelmed
+}
+
+enum FamilyAnticipatoryGrief {
+  None
+  Mild
+  Moderate
+  Severe
+}
+
+enum FamilyReligiousAffiliation {
+  Orthodox
+  Muslim
+  Protestant
+  Catholic
+  Other
+}
+
+enum FamilyPalliativeAcceptance {
+  FullyAccepting
+  PartiallyAccepting
+  Resistant
+  NotInformed
+}
+
+enum FamilyBurdenLevel {
+  Low
+  Moderate
+  High
+  Severe
+}
+
+enum FamilyBurdenFactor {
+  PhysicalExhaustion
+  EmotionalStress
+  FinancialStrain
+  LackOfSupport
+  LackOfKnowledge
+}
+
+enum FamilyNeed {
+  EducationOnDiseaseProcess
+  CaregiverTraining
+  FinancialAssistance
+  PsychologicalCounseling
+  SpiritualSupport
+  RespiteCare
+  BereavementPreparation
+}
+
+enum FamilyStrength {
+  StrongBonding
+  WillingCaregiver
+  ReligiousSupport
+  StableHousing
+  CommunitySupport
+  GoodCommunication
+}
+
+enum FamilySupportService {
+  SocialWork
+  PsychologyPsychiatry
+  SpiritualCare
+  FinancialAssistancePrograms
+  CommunityVolunteers
+}
+
+enum FamilyFollowUpPlan {
+  Daily
+  Weekly
+  Monthly
+  AsNeeded
+}
+
+enum FamilyAssessmentOutcome {
+  StrongFamilySupport
+  AdequateSupportWithInterventionNeeded
+  HighCaregiverBurden
+  AtRiskFamilySystem
+  RequiresIntensivePsychosocialSupport
+}
+
+enum FamilyFinalRecommendation {
+  ContinueFamilyInvolvement
+  ProvideCaregiverTraining
+  InitiateFinancialSocialSupport
+  PsychologicalCounselingRequired
+  BereavementPreparationNeeded
+  MultidisciplinaryFamilyIntervention
+}
+
+// ═════════════════════════════════════════════════════════════
+// ── ENUMS: Nutritional Assessment ──
+// ═════════════════════════════════════════════════════════════
+enum NutritionAssessmentType {
+  Admission
+  FollowUp
+  Reassessment
+}
+
+enum NutritionStatusClassification {
+  Normal
+  MildMalnutrition
+  ModerateMalnutrition
+  SevereMalnutrition
+}
+
+enum NutritionSignificantWeightLoss {
+  No
+  YesOver5PercentIn1Month
+  YesOver10PercentIn6Months
+}
+
+enum NutritionAppetite {
+  Good
+  Fair
+  Poor
+  VeryPoor
+  NoAppetite
+}
+
+enum NutritionAppetiteTrend {
+  Improved
+  Unchanged
+  Decreased
+}
+
+enum NutritionAppetiteCause {
+  Pain
+  Nausea
+  Vomiting
+  Depression
+  Fatigue
+  MedicationSideEffects
+  DifficultySwallowing
+  EarlySatiety
+  Other
+}
+
+enum NutritionMealsPerDay {
+  One
+  Two
+  Three
+  MoreThanThree
+}
+
+enum NutritionOralIntake {
+  Adequate
+  Reduced
+  Minimal
+  Nil
+}
+
+enum NutritionFluidIntake {
+  Adequate
+  Reduced
+  Minimal
+  Nil
+}
+
+enum NutritionSpecialDiet {
+  No
+  Yes
+}
+
+enum NutritionFeedingMethod {
+  Oral
+  NasogastricTube
+  PEGTube
+  Other
+}
+
+enum NutritionFeedingAssistance {
+  No
+  PartialAssistance
+  FullAssistance
+}
+
+enum NutritionSymptomSeverity {
+  None
+  Mild
+  Moderate
+  Severe
+}
+
+enum NutritionEnergyLevel {
+  Normal
+  MildFatigue
+  ModerateFatigue
+  SevereFatigue
+}
+
+enum NutritionMealPreparation {
+  Independent
+  RequiresAssistance
+  Unable
+}
+
+enum NutritionFeedingAbility {
+  Independent
+  RequiresAssistance
+  Dependent
+}
+
+enum NutritionLabTest {
+  Hemoglobin
+  Albumin
+  TotalProtein
+  BloodGlucose
+  Creatinine
+  Other
+}
+
+enum NutritionRiskFactor {
+  SignificantWeightLoss
+  PoorAppetite
+  AdvancedDisease
+  DifficultySwallowing
+  RecurrentVomiting
+  SevereFatigue
+  ReducedFoodIntake
+  LowBmi
+  FoodInsecurity
+}
+
+enum NutritionOverallRisk {
+  Low
+  Moderate
+  High
+  Critical
+}
+
+enum NutritionDiagnosis {
+  ProteinEnergyMalnutrition
+  InadequateOralIntake
+  CancerCachexia
+  Dysphagia
+  DehydrationRisk
+  FoodInsecurity
+  WeightLoss
+  Other
+}
+
+enum NutritionIntervention {
+  HighCalorieDiet
+  HighProteinDiet
+  OralNutritionalSupplements
+  SmallFrequentMeals
+  AppetiteStimulationStrategies
+  DysphagiaDietModification
+  TubeFeedingSupport
+  FamilyNutritionEducation
+  SocialSupportReferral
+  Other
+}
+
+enum NutritionMonitoringPlan {
+  WeeklyWeightMonitoring
+  DietaryIntakeMonitoring
+  SymptomMonitoring
+  MonthlyNutritionalReview
+  Other
+}
+
+enum NutritionAssessmentOutcome {
+  AdequateNutritionalStatus
+  MildNutritionalRisk
+  ModerateNutritionalRisk
+  HighNutritionalRisk
+  RequiresSpecializedNutritionalSupport
+  RequiresSocialSupportForNutrition
+}
+
+enum NutritionFinalRecommendation {
+  ContinueCurrentDiet
+  ModifiedTherapeuticDiet
+  OralNutritionalSupplements
+  IntensiveNutritionalMonitoring
+  HomeBasedNutritionFollowUp
+  MultidisciplinaryReviewRequired
+}
+
+// ═════════════════════════════════════════════════════════════
+// ── ENUMS: Pain Assessment ──
+// ═════════════════════════════════════════════════════════════
+enum PainAssessmentType {
+  Admission
+  FollowUp
+  EmergencyPainReview
+}
+
+enum PainOnset {
+  Acute
+  Chronic
+  Progressive
+}
+
+enum PainLocation {
+  Head
+  Chest
+  Abdomen
+  Back
+  Pelvis
+  Limbs
+  MultipleSites
+  Other
+}
+
+enum PainDescription {
+  Sharp
+  Dull
+  Burning
+  Throbbing
+  Cramping
+  Shooting
+  PressureLike
+}
+
+enum PainType {
+  NociceptiveSomatic
+  Visceral
+  Neuropathic
+  Mixed
+  BreakthroughPain
+}
+
+enum PainPattern {
+  Continuous
+  Intermittent
+  BreakthroughEpisodes
+  WorseAtNight
+  MovementRelated
+}
+
+enum PainAggravatingFactor {
+  Movement
+  Coughing
+  Eating
+  Stress
+  Positioning
+  Unknown
+}
+
+enum PainRelievingFactor {
+  Rest
+  Medication
+  PositionChange
+  HeatColdTherapy
+  Massage
+  Other
+}
+
+enum PainOpioidUse {
+  None
+  WeakOpioid
+  StrongOpioid
+}
+
+enum PainAdjuvantDrug {
+  Antidepressants
+  Anticonvulsants
+  Steroids
+  MuscleRelaxants
+}
+
+enum PainBreakthroughFrequency {
+  None
+  OneToTwoPerDay
+  ThreeToFivePerDay
+  Frequent
+}
+
+enum PainRescueEffectiveness {
+  Good
+  Partial
+  Poor
+}
+
+enum PainImpactArea {
+  Mobility
+  Sleep
+  Appetite
+  Mood
+  DailyActivities
+}
+
+enum PainImpactSeverity {
+  NoImpact
+  Mild
+  Moderate
+  Severe
+}
+
+enum PainAssociatedSymptom {
+  Nausea
+  Vomiting
+  Constipation
+  Fatigue
+  Anxiety
+  Depression
+  Dyspnea
+}
+
+enum PainPatientBehavior {
+  Comfortable
+  Grimacing
+  GuardingArea
+  Restless
+  Crying
+}
+
+enum PainManagementBarrier {
+  FearOfAddiction
+  MedicationSideEffects
+  PoorAdherence
+  FinancialConstraints
+  PoorAccessToOpioids
+  CulturalBeliefs
+  Other
+}
+
+enum PainDiagnosis {
+  ControlledPain
+  PartiallyControlledPain
+  UncontrolledPain
+  ComplexPainSyndrome
+  BreakthroughPainSyndrome
+}
+
+enum PainIntervention {
+  OptimizeOpioidTherapy
+  AddAdjuvantAnalgesics
+  AdjustDosingSchedule
+  BreakthroughPainProtocol
+  NonPharmacologicalTherapy
+  PhysiotherapyReferral
+  PsychologicalSupport
+}
+
+enum PainNonPharmacologicalMethod {
+  Positioning
+  RelaxationTechniques
+  Massage
+  HeatColdTherapy
+  SpiritualSupport
+}
+
+enum PainMonitoringPlan {
+  Daily
+  EveryShift
+  Weekly
+}
+
+enum PainAssessmentOutcome {
+  PainWellControlled
+  RequiresAdjustment
+  RequiresUrgentIntervention
+  ComplexPainManagementRequired
+  MultidisciplinaryReviewNeeded
+}
+
+enum PainFinalRecommendation {
+  ContinueCurrentRegimen
+  IncreaseOpioidDose
+  AddAdjuvantTherapy
+  ManageBreakthroughPain
+  IntegratePsychosocialSupport
+  FullHospicePainProtocolActivation
+}
+
+// ═════════════════════════════════════════════════════════════
+// ── ENUMS: Social Assessment ──
+// ═════════════════════════════════════════════════════════════
+enum SocialAssessmentType {
+  Admission
+  FollowUp
+  Reassessment
+}
+
+enum SocialLivingArrangement {
+  LivesAlone
+  LivesWithSpouse
+  LivesWithChildren
+  ExtendedFamily
+  CareInstitution
+  Other
+}
+
+enum SocialCaregiverAvailability {
+  FullTime
+  PartTime
+  Occasional
+  NotAvailable
+}
+
+enum SocialCaregiverHealth {
+  Good
+  Fair
+  Poor
+}
+
+enum SocialCaregiverUnderstanding {
+  Good
+  Moderate
+  Limited
+  None
+}
+
+enum SocialCaregiverStress {
+  Low
+  Moderate
+  High
+  Severe
+}
+
+enum SocialFamilySupport {
+  Strong
+  Moderate
+  Limited
+  None
+}
+
+enum SocialCommunitySupport {
+  ReligiousOrganization
+  Neighbors
+  CommunityVolunteers
+  LocalNgos
+  NoSupportAvailable
+}
+
+enum SocialContactFrequency {
+  Daily
+  Weekly
+  Monthly
+  Rarely
+}
+
+enum SocialIsolationRisk {
+  Low
+  Moderate
+  High
+}
+
+enum SocialIncomeSource {
+  Employment
+  Pension
+  FamilySupport
+  SocialAssistance
+  Savings
+  None
+  Other
+}
+
+enum SocialMonthlyIncome {
+  Below2000ETB
+  Between2000And5000ETB
+  Between5001And10000ETB
+  Above10000ETB
+}
+
+enum SocialFinancialChallenge {
+  MedicationCosts
+  TransportationCosts
+  FoodExpenses
+  HousingCosts
+  CaregiverIncomeLoss
+  Other
+}
+
+enum SocialFinancialRisk {
+  Low
+  Moderate
+  High
+}
+
+enum SocialResidenceType {
+  OwnedHouse
+  RentalHouse
+  GovernmentHousing
+  TemporaryShelter
+  Other
+}
+
+enum SocialHomeEnvironment {
+  Safe
+  RequiresModification
+  Unsafe
+}
+
+enum SocialUtilityService {
+  Electricity
+  WaterSupply
+  ToiletFacility
+  TelephoneAccess
+}
+
+enum SocialHomeBasedCareSuitability {
+  Suitable
+  PartiallySuitable
+  NotSuitable
+}
+
+enum SocialTransportAccess {
+  PrivateVehicle
+  PublicTransport
+  AmbulanceAccess
+  NoReliableTransport
+}
+
+enum SocialTransportChallenge {
+  None
+  Financial
+  PhysicalAccess
+  Availability
+  Other
+}
+
+enum SocialEmploymentStatus {
+  Employed
+  Unemployed
+  Retired
+  UnableToWork
+}
+
+enum SocialEducationLevel {
+  NoFormalEducation
+  PrimarySchool
+  SecondarySchool
+  Diploma
+  Degree
+  Postgraduate
+}
+
+enum SocialReligiousAffiliation {
+  Orthodox
+  Muslim
+  Protestant
+  Catholic
+  Other
+}
+
+enum SocialLegalConcern {
+  PropertyIssues
+  GuardianshipIssues
+  InheritanceIssues
+  None
+  Other
+}
+
+enum SocialFamilyPreparedness {
+  Yes
+  No
+  Partially
+}
+
+enum SocialAnticipatoryGrief {
+  None
+  Mild
+  Moderate
+  Severe
+}
+
+enum SocialBereavementRisk {
+  Low
+  Moderate
+  High
+}
+
+enum SocialMajorIssue {
+  FinancialHardship
+  CaregiverBurden
+  SocialIsolation
+  HousingProblems
+  TransportationBarriers
+  FoodInsecurity
+  FamilyConflict
+  LackOfSocialSupport
+  Other
+}
+
+enum SocialCarePlanIntervention {
+  FamilyCounseling
+  FinancialAssistanceReferral
+  CommunityResourceMobilization
+  CaregiverSupport
+  HomeCareAssessment
+  SpiritualCareReferral
+  BereavementSupport
+  LegalSupportReferral
+  Other
+}
+
+enum SocialAssessmentOutcome {
+  SuitableForInpatientHospiceCare
+  SuitableForHomeBasedHospiceCare
+  RequiresAdditionalSocialSupport
+  RequiresCommunityResourceMobilization
+  HighRiskSocialSituation
+  FollowUpAssessmentRequired
+}
+
+// ═════════════════════════════════════════════════════════════
+// ── ENUMS: Spiritual Assessment ──
+// ═════════════════════════════════════════════════════════════
+enum SpiritualAssessmentType {
+  Admission
+  FollowUp
+  Reassessment
+}
+
+enum SpiritualReligiousAffiliation {
+  EthiopianOrthodoxChristian
+  Muslim
+  Protestant
+  Catholic
+  TraditionalBelief
+  Other
+  NoReligiousAffiliation
+}
+
+enum SpiritualFaithImportance {
+  VeryImportant
+  Important
+  SomewhatImportant
+  NotImportant
+}
+
+enum SpiritualActivityParticipation {
+  Regularly
+  Occasionally
+  Rarely
+  Never
+}
+
+enum SpiritualSupportSource {
+  FamilyMembers
+  ReligiousLeaderClergy
+  Friends
+  FaithCommunity
+  HospiceChaplain
+  CommunityMembers
+  NoSpiritualSupport
+}
+
+enum SpiritualDistressConcernType {
+  MeaningOfIllness
+  FearOfDeath
+  FearOfSuffering
+  UnfinishedBusiness
+  Forgiveness
+  RelationshipConflicts
+  LossOfHope
+  AngerTowardGodHigherPower
+  SpiritualIsolation
+}
+
+enum SpiritualDistressLevel {
+  None
+  Mild
+  Moderate
+  Severe
+}
+
+enum SpiritualCopingMethod {
+  Prayer
+  ReligiousReadings
+  FamilySupport
+  Counseling
+  Meditation
+  Music
+  Other
+}
+
+enum SpiritualPeaceStatus {
+  Yes
+  Partially
+  No
+}
+
+enum SpiritualFamilySharesBeliefs {
+  Yes
+  No
+  Partially
+}
+
+enum SpiritualEndOfLifeCare {
+  Prayer
+  ReligiousReadings
+  SacramentsHolyCommunion
+  ClergyVisit
+  FamilyPresence
+  ReligiousMusic
+  Other
+}
+
+enum SpiritualPreferredPlaceOfCare {
+  Home
+  HospiceFacility
+  Hospital
+  Other
+}
+
+enum SpiritualPreferredPlaceOfDeath {
+  Home
+  HospiceFacility
+  Hospital
+  NoPreference
+}
+
+enum SpiritualPatientStrength {
+  StrongFaith
+  PositiveOutlook
+  FamilySupport
+  CommunitySupport
+  ReligiousInvolvement
+  AcceptanceOfIllness
+  Other
+}
+
+enum SpiritualIdentifiedNeed {
+  PrayerSupport
+  ReligiousCounseling
+  ClergyVisits
+  FamilySpiritualSupport
+  EndOfLifePlanning
+  GriefCounseling
+  ReconciliationSupport
+  Other
+}
+
+enum SpiritualFollowUpSchedule {
+  Daily
+  Weekly
+  Monthly
+  AsNeeded
+}
+
+enum SpiritualRecommendedService {
+  ChaplainServices
+  ReligiousLeaderReferral
+  FamilyCounseling
+  BereavementSupport
+  AdvanceCarePlanning
+  OngoingSpiritualCare
+}
+
+enum SpiritualAssessmentOutcome {
+  NoSpiritualConcernsIdentified
+  RoutineSpiritualFollowUp
+  ModerateSpiritualSupportRequired
+  IntensiveSpiritualCareRequired
+  FamilySpiritualSupportRequired
+  BereavementFollowUpRecommended
+}
+
+// ═════════════════════════════════════════════════════════════
+// ── ENUMS: Psychiatry Assessment ──
+// ═════════════════════════════════════════════════════════════
+enum PsychiatryAssessmentType {
+  Admission
+  FollowUp
+  EmergencyReview
+}
+
+enum PsychiatrySymptom {
+  Anxiety
+  Depression
+  Insomnia
+  Delirium
+  Hallucinations
+  Agitation
+  SuicidalIdeation
+  CognitiveDecline
+  AdjustmentDisorder
+  Other
+}
+
+enum PsychiatrySeverity {
+  Mild
+  Moderate
+  Severe
+  Fluctuating
+}
+
+enum PsychiatryAppearanceBehavior {
+  Calm
+  Restless
+  Agitated
+  Withdrawn
+  PoorSelfCare
+}
+
+enum PsychiatrySpeech {
+  Normal
+  Slow
+  Pressured
+  Minimal
+}
+
+enum PsychiatryMood {
+  Euthymic
+  Depressed
+  Anxious
+  Irritable
+}
+
+enum PsychiatryAffect {
+  Appropriate
+  Blunted
+  Flat
+  Labile
+}
+
+enum PsychiatryThoughtProcess {
+  Logical
+  Circumstantial
+  Disorganized
+  Tangential
+}
+
+enum PsychiatryThoughtContent {
+  NoDelusions
+  Hopelessness
+  Guilt
+  SuicidalThoughts
+  Paranoia
+  SomaticPreoccupation
+}
+
+enum PsychiatryPerception {
+  NoHallucinations
+  AuditoryHallucinations
+  VisualHallucinations
+}
+
+enum PsychiatryCognition {
+  OrientedX3
+  Disoriented
+  MemoryImpairment
+  AttentionDeficits
+}
+
+enum PsychiatryInsightJudgment {
+  Good
+  Partial
+  Poor
+}
+
+enum PsychiatrySuicidalIdeation {
+  None
+  PassiveThoughts
+  ActiveThoughts
+  PlanPresent
+}
+
+enum PsychiatrySuicideRiskLevel {
+  Low
+  Moderate
+  High
+}
+
+enum PsychiatryProtectiveFactor {
+  FamilySupport
+  ReligiousBeliefs
+  FearOfDeath
+  ResponsibilityForFamily
+  SocialSupport
+}
+
+enum PsychiatryOrganicCause {
+  Pain
+  Hypoxia
+  Infection
+  MedicationSideEffects
+  MetabolicImbalance
+  Delirium
+  CancerProgression
+}
+
+enum PsychiatrySleepPattern {
+  Normal
+  Insomnia
+  FragmentedSleep
+  ExcessiveSleepiness
+}
+
+enum PsychiatryAppetite {
+  Normal
+  Reduced
+  Poor
+}
+
+enum PsychiatryDailyFunctioning {
+  Independent
+  RequiresAssistance
+  Dependent
+}
+
+enum PsychiatrySocialWithdrawal {
+  None
+  Mild
+  Severe
+}
+
+enum PsychiatryDiagnosis {
+  MajorDepressiveDisorder
+  AnxietyDisorder
+  AdjustmentDisorder
+  Delirium
+  DepressionDueToMedicalCondition
+  MixedAnxietyDepression
+  Other
+}
+
+enum PsychiatryImmediateIntervention {
+  CrisisManagement
+  SuicidePrecautions
+  EnvironmentalSafety
+  SupportiveCounseling
+  FamilyCounseling
+}
+
+enum PsychiatryPharmacologicalPlan {
+  Antidepressants
+  Anxiolytics
+  Antipsychotics
+  SleepMedications
+  DoseAdjustmentReview
+}
+
+enum PsychiatryNonPharmacologicalPlan {
+  Psychotherapy
+  RelaxationTechniques
+  SpiritualSupport
+  MusicTherapy
+  BehavioralActivation
+}
+
+enum PsychiatryMonitoringPlan {
+  Daily
+  Weekly
+  AsNeeded
+}
+
+enum PsychiatryFamilyDistressLevel {
+  Low
+  Moderate
+  High
+}
+
+enum PsychiatryAssessmentOutcome {
+  NoPsychiatricInterventionRequired
+  RequiresSupportiveCounseling
+  RequiresPharmacologicalTreatment
+  RequiresCloseMonitoring
+  HighRiskSafetyPrecautionsRequired
+}
+
+enum PsychiatryFinalRecommendation {
+  ContinueHospicePsychologicalSupport
+  InitiatePsychiatricMedication
+  CrisisInterventionRequired
+  FamilyCounselingRequired
+  OngoingPsychiatricFollowUp
+}
+
+// ═════════════════════════════════════════════════════════════
 // 1. ADMIN
 // ═════════════════════════════════════════════════════════════
 model Admin {
@@ -1048,7 +2616,7 @@ model Admin {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
+  // Relations (existing)
   approvedReferrals                Referral[]                 @relation("ReferralApprovedBy")
   staffAssigned                    Staff[]                    @relation("StaffAssignedBy")
   patientsUpdated                  Patient[]                  @relation("PatientUpdatedBy")
@@ -1070,6 +2638,24 @@ model Admin {
   staffDeleted                     Staff[]                    @relation("StaffDeletedBy")
   hospiceNursingAssessments        HospiceNursingAssessment[] @relation("HospiceNursingUpdatedBy")
   hospiceNursingDeletedAssessments HospiceNursingAssessment[] @relation("HospiceNursingDeletedBy")
+
+  // Relations (assessment update/delete audit)
+  clinicalPharmacistUpdated ClinicalPharmacistAssessment[] @relation("ClinicalPharmacistUpdatedBy")
+  clinicalPharmacistDeleted ClinicalPharmacistAssessment[] @relation("ClinicalPharmacistDeletedBy")
+  physiotherapyUpdated      PhysiotherapyAssessment[]      @relation("PhysiotherapyUpdatedBy")
+  physiotherapyDeleted      PhysiotherapyAssessment[]      @relation("PhysiotherapyDeletedBy")
+  familyAssessmentUpdated   FamilyAssessment[]             @relation("FamilyAssessmentUpdatedBy")
+  familyAssessmentDeleted   FamilyAssessment[]             @relation("FamilyAssessmentDeletedBy")
+  nutritionalUpdated        NutritionalAssessment[]        @relation("NutritionalUpdatedBy")
+  nutritionalDeleted        NutritionalAssessment[]        @relation("NutritionalDeletedBy")
+  painUpdated               PainAssessment[]               @relation("PainUpdatedBy")
+  painDeleted               PainAssessment[]               @relation("PainDeletedBy")
+  socialUpdated             SocialAssessment[]             @relation("SocialUpdatedBy")
+  socialDeleted             SocialAssessment[]             @relation("SocialDeletedBy")
+  spiritualUpdated          SpiritualAssessment[]          @relation("SpiritualUpdatedBy")
+  spiritualDeleted          SpiritualAssessment[]          @relation("SpiritualDeletedBy")
+  psychiatryUpdated         PsychiatryAssessment[]         @relation("PsychiatryUpdatedBy")
+  psychiatryDeleted         PsychiatryAssessment[]         @relation("PsychiatryDeletedBy")
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -1101,11 +2687,12 @@ model Staff {
   updatedBy      Int?
   updatedByAdmin Admin?    @relation("StaffUpdatedBy", fields: [updatedBy], references: [id])
 
-  // Relations (as actor)
+  // Relations (as actor) — existing
   patientsRegistered       Patient[]                  @relation("PatientRegisteredBy")
   visitsCreated            HomeVisit[]                @relation("VisitCreatedBy")
   visitSignatures          HomeVisitSignature[]
   medicationsPrescribed    Medication[]               @relation("MedicationPrescribedBy")
+  medicationsUpdated       Medication[]               @relation("MedicationUpdatedByStaff")
   labsOrdered              LaboratoryTest[]           @relation("LabOrderedBy")
   imagingOrdered           ImagingOrder[]             @relation("ImagingOrderedBy")
   referralsRequested       Referral[]                 @relation("ReferralRequestedBy")
@@ -1116,6 +2703,16 @@ model Staff {
   progressNoteSignatures   ProgressNoteSignature[]
   hospiceNursingCreated    HospiceNursingAssessment[] @relation("HospiceNursingCreatedBy")
   hospiceNursingAssessed   HospiceNursingAssessment[] @relation("HospiceNursingAssessedBy")
+
+  // Relations (as actor) — assessment creations
+  clinicalPharmacistCreated ClinicalPharmacistAssessment[] @relation("ClinicalPharmacistCreatedBy")
+  physiotherapyCreated      PhysiotherapyAssessment[]      @relation("PhysiotherapyCreatedBy")
+  familyAssessmentCreated   FamilyAssessment[]             @relation("FamilyAssessmentCreatedBy")
+  nutritionalCreated        NutritionalAssessment[]        @relation("NutritionalCreatedBy")
+  painCreated               PainAssessment[]               @relation("PainCreatedBy")
+  socialCreated             SocialAssessment[]             @relation("SocialCreatedBy")
+  spiritualCreated          SpiritualAssessment[]          @relation("SpiritualCreatedBy")
+  psychiatryCreated         PsychiatryAssessment[]         @relation("PsychiatryCreatedBy")
 
   @@index([status])
   @@index([isEmailVerified])
@@ -1158,7 +2755,7 @@ model Patient {
   updatedBy      Int?
   updatedByAdmin Admin?   @relation("PatientUpdatedBy", fields: [updatedBy], references: [id])
 
-  // Relations
+  // Relations (existing)
   visits                    HomeVisit[]
   medications               Medication[]
   labTests                  LaboratoryTest[]
@@ -1169,6 +2766,16 @@ model Patient {
   imagingOrders             ImagingOrder[]
   labResults                LabResult[]
   hospiceNursingAssessments HospiceNursingAssessment[]
+
+  // Relations (assessments)
+  clinicalPharmacistAssessments ClinicalPharmacistAssessment[]
+  physiotherapyAssessments      PhysiotherapyAssessment[]
+  familyAssessments             FamilyAssessment[]
+  nutritionalAssessments        NutritionalAssessment[]
+  painAssessments               PainAssessment[]
+  socialAssessments             SocialAssessment[]
+  spiritualAssessments          SpiritualAssessment[]
+  psychiatryAssessments         PsychiatryAssessment[]
 
   @@index([status])
   @@index([currentLocation])
@@ -1191,15 +2798,16 @@ model Medication {
   administeredAt    MedicationAdministeredAt
   status            MedicationStatus         @default(Ordered)
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  updatedBy      Int?
-  updatedByAdmin Admin?   @relation("MedicationUpdatedBy", fields: [updatedBy], references: [id])
-
-  deletedAt      DateTime?
-  deletedBy      Int?
-  deletedByAdmin Admin?    @relation("MedicationDeletedBy", fields: [deletedBy], references: [id])
-  deletionReason String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  updatedBy        Int?
+  updatedByAdmin   Admin?    @relation("MedicationUpdatedBy", fields: [updatedBy], references: [id])
+  updatedByStaffId Int?
+  updatedByStaff   Staff?    @relation("MedicationUpdatedByStaff", fields: [updatedByStaffId], references: [id])
+  deletedAt        DateTime?
+  deletedBy        Int?
+  deletedByAdmin   Admin?    @relation("MedicationDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason   String?
 
   @@index([patientId])
   @@index([createdAt])
@@ -2457,4 +4065,877 @@ model HospiceNursingAssessment {
 
   @@index([patientId, assessmentDate])
   @@index([createdBy])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 14. CLINICAL PHARMACIST ASSESSMENT
+// ═════════════════════════════════════════════════════════════
+model ClinicalPharmacistAssessment {
+  id        Int     @id @default(autoincrement())
+  patientId Int
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  assessmentType PharmacistAssessmentType
+
+  // Patient snapshot
+  weightKg  Float?
+  allergies String?
+  wardUnit  String?
+
+  // Medication history
+  otcHerbalUsed              Boolean                 @default(false)
+  otcHerbalDetails           String?
+  medicationHistoryAdherence PharmacistWeightStatus?
+  hasAdrHistory              Boolean                 @default(false)
+  adrHistoryDetails          String?
+
+  // Pain management review
+  analgesicNonOpioids    Boolean @default(false)
+  analgesicWeakOpioids   Boolean @default(false)
+  analgesicStrongOpioids Boolean @default(false)
+  analgesicAdjuvants     Boolean @default(false)
+  analgesicOtherDetails  String?
+
+  painControl       PharmacistPainControl?
+  breakthroughPain  PharmacistBreakthroughPain?
+  opioidSideEffects PharmacistOpioidSideEffect[] @default([])
+
+  // Medication safety
+  drugDrugInteractions          PharmacistInteractionRisk?
+  drugDrugInteractionDetails    String?
+  drugDiseaseInteractions       Boolean                        @default(false)
+  drugDiseaseInteractionDetails String?
+  highRiskMedications           PharmacistHighRiskMedication[] @default([])
+
+  // Renal & hepatic
+  renalFunction   PharmacistOrganFunction?
+  creatinine      String?
+  hepaticFunction PharmacistOrganFunction?
+  lfts            String?
+
+  // Symptom effectiveness map
+  symptomMedicationEffectiveness Json @default("{}")
+
+  // ADR
+  suspectedAdr         Boolean                @default(false)
+  suspectedAdrDrug     String?
+  suspectedAdrReaction String?
+  adrSeverity          PharmacistAdrSeverity?
+  adrManagement        PharmacistAdrAction[]  @default([])
+
+  // Constipation
+  bowelFunction   PharmacistBowelFunction?
+  laxativeUse     Boolean                  @default(false)
+  laxativeDetails String?
+
+  // Dose adjustment
+  doseAdjustmentRequired Boolean                          @default(false)
+  doseAdjustmentReasons  PharmacistDoseAdjustmentReason[] @default([])
+
+  // Counselling
+  patientUnderstanding PharmacistPatientUnderstanding?
+  counselingTopics     PharmacistCounselingTopic[]     @default([])
+
+  // Plan
+  currentIssuesIdentified String?
+  medicationPlanActions   PharmacistMedicationPlanAction[] @default([])
+  medicationPlanOther     String?
+
+  // Access & supply
+  medicationAvailability PharmacistMedicationAvailability?
+  financialBarriers      Boolean                           @default(false)
+  pharmacyIntervention   Boolean                           @default(false)
+
+  // Summary
+  pharmacistSummary      String?
+  summaryFlags           PharmacistSummaryFlag[]         @default([])
+  finalRecommendations   PharmacistFinalRecommendation[] @default([])
+  clinicalPharmacistName String?
+
+  // Audit
+  createdBy      Int
+  createdByStaff Staff @relation("ClinicalPharmacistCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("ClinicalPharmacistUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("ClinicalPharmacistDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  currentMedications ClinicalPharmacistCurrentMedication[]
+
+  @@index([patientId])
+  @@index([createdBy])
+  @@index([createdAt])
+}
+
+model ClinicalPharmacistCurrentMedication {
+  id                             Int                          @id @default(autoincrement())
+  clinicalPharmacistAssessmentId Int
+  clinicalPharmacistAssessment   ClinicalPharmacistAssessment @relation(fields: [clinicalPharmacistAssessmentId], references: [id], onDelete: Cascade)
+
+  name       String?
+  dose       String?
+  route      String?
+  frequency  String?
+  indication String?
+
+  @@index([clinicalPharmacistAssessmentId])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 15. PHYSIOTHERAPY ASSESSMENT
+// ═════════════════════════════════════════════════════════════
+model PhysiotherapyAssessment {
+  id        Int     @id @default(autoincrement())
+  patientId Int
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  assessmentType PhysiotherapyAssessmentType
+
+  // Medical overview
+  comorbidities    PhysiotherapyComorbidity[]     @default([])
+  comorbidityOther String?
+  generalCondition PhysiotherapyGeneralCondition?
+
+  // Pain & symptoms
+  painLevel     Int?
+  painTypes     PhysiotherapyPainType[] @default([])
+  painTypeOther String?
+  symptoms      PhysiotherapySymptom[]  @default([])
+
+  // Functional mobility
+  mobilityStatus       PhysiotherapyMobilityStatus?
+  transferAbility      PhysiotherapyTransferAbility?
+  walkingAbility       PhysiotherapyWalkingAbility?
+  assistiveDevices     PhysiotherapyAssistiveDevice[] @default([])
+  assistiveDeviceOther String?
+
+  // Musculoskeletal
+  upperLimbStrength    Int?
+  lowerLimbStrength    Int?
+  rangeOfMotion        PhysiotherapyRangeOfMotion?
+  jointPainOrStiffness PhysiotherapyJointFinding?
+  jointPainLocation    String?
+
+  // Neurological
+  consciousness  PhysiotherapyConsciousness?
+  coordination   PhysiotherapyCoordination?
+  sensoryDeficit PhysiotherapySensoryDeficit?
+  balance        PhysiotherapyBalance?
+
+  // Respiratory
+  breathingPattern    PhysiotherapyBreathingPattern?
+  breathlessnessLevel PhysiotherapyBreathlessnessLevel?
+  chestExpansion      PhysiotherapyChestExpansion?
+  respiratoryNeeds    PhysiotherapyRespiratoryNeed[]    @default([])
+
+  // Pressure injury
+  pressureRisk        PhysiotherapyPressureRisk?
+  pressureAreas       PhysiotherapyPressureArea[]       @default([])
+  pressureAreaOther   String?
+  pressurePreventions PhysiotherapyPressurePrevention[] @default([])
+
+  // Fall risk
+  fallHistory      Boolean?
+  fallRiskLevel    PhysiotherapyFallRiskLevel?
+  fallContributors PhysiotherapyFallContributor[] @default([])
+
+  // Diagnosis + plan
+  diagnosis          PhysiotherapyDiagnosis[]         @default([])
+  goals              String?
+  interventions      PhysiotherapyIntervention[]      @default([])
+  frequency          PhysiotherapyFrequency[]         @default([])
+  equipment          PhysiotherapyEquipment[]         @default([])
+  caregiverTrainings PhysiotherapyCaregiverTraining[] @default([])
+
+  // Summary
+  outcome              PhysiotherapyOutcome[]             @default([])
+  finalRecommendations PhysiotherapyFinalRecommendation[] @default([])
+
+  // Audit
+  createdBy      Int
+  createdByStaff Staff @relation("PhysiotherapyCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("PhysiotherapyUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("PhysiotherapyDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  adl PhysiotherapyAdl[]
+
+  @@index([patientId])
+  @@index([createdBy])
+  @@index([createdAt])
+}
+
+model PhysiotherapyAdl {
+  id                        Int                     @id @default(autoincrement())
+  physiotherapyAssessmentId Int
+  physiotherapyAssessment   PhysiotherapyAssessment @relation(fields: [physiotherapyAssessmentId], references: [id], onDelete: Cascade)
+
+  activity PhysiotherapyAdlActivity
+  level    PhysiotherapyAdlLevel?
+
+  @@index([physiotherapyAssessmentId])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 16. FAMILY ASSESSMENT
+// ═════════════════════════════════════════════════════════════
+model FamilyAssessment {
+  id        Int     @id @default(autoincrement())
+  patientId Int
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  assessmentType FamilyAssessmentType
+
+  // Family composition
+  householdSize            Int?
+  primaryDecisionMaker     FamilyDecisionMaker?
+  primaryDecisionMakerName String?
+
+  // Caregiver identification
+  primaryCaregiverName         String?
+  primaryCaregiverRelationship String?
+  primaryCaregiverAge          Int?
+  primaryCaregiverPhone        String?
+
+  secondaryCaregiverName         String?
+  secondaryCaregiverRelationship String?
+  secondaryCaregiverPhone        String?
+
+  caregiverAvailability FamilyCaregiverAvailability?
+
+  // Caregiver capacity
+  physicalAbility    FamilyPhysicalAbility?
+  emotionalReadiness FamilyEmotionalReadiness?
+  knowledgeOfIllness FamilyKnowledgeLevel?
+
+  // Family support system
+  internalSupport     FamilyInternalSupport?
+  externalSupport     FamilyExternalSupport[]    @default([])
+  socialIsolationRisk FamilySocialIsolationRisk?
+
+  // Financial status
+  incomeSources       FamilyIncomeSource[]       @default([])
+  monthlyIncomeLevel  FamilyIncomeLevel?
+  financialBurden     FamilyFinancialBurden?
+  financialChallenges FamilyFinancialChallenge[] @default([])
+
+  // Living conditions
+  housingType      FamilyHousingType?
+  housingTypeOther String?
+  homeEnvironment  FamilyHomeEnvironment?
+  utilitiesAccess  Json                   @default("{}")
+
+  // Family coping & psychosocial
+  copingAbility         FamilyCopingAbility?
+  familyEmotionalStatus FamilyEmotionalStatus?
+  anticipatoryGrief     FamilyAnticipatoryGrief?
+
+  // Cultural & religious
+  religiousAffiliation         FamilyReligiousAffiliation?
+  religiousAffiliationOther    String?
+  culturalBeliefsAffectingCare String?
+  palliativeCareAcceptance     FamilyPalliativeAcceptance?
+
+  // Caregiver burden
+  burdenLevel   FamilyBurdenLevel?
+  burdenFactors FamilyBurdenFactor[] @default([])
+
+  // Family needs
+  needs FamilyNeed[] @default([])
+
+  // Family strengths
+  strengths FamilyStrength[] @default([])
+
+  // Care plan
+  plannedInterventions String?
+  supportServices      FamilySupportService[] @default([])
+  followUpPlan         FamilyFollowUpPlan?
+
+  // Summary
+  assessmentOutcome    FamilyAssessmentOutcome[]   @default([])
+  finalRecommendations FamilyFinalRecommendation[] @default([])
+  assessorName         String?
+
+  // Audit
+  createdBy      Int
+  createdByStaff Staff @relation("FamilyAssessmentCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("FamilyAssessmentUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("FamilyAssessmentDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  householdMembers FamilyHouseholdMember[]
+
+  @@index([patientId])
+  @@index([createdBy])
+  @@index([createdAt])
+}
+
+model FamilyHouseholdMember {
+  id                 Int              @id @default(autoincrement())
+  familyAssessmentId Int
+  familyAssessment   FamilyAssessment @relation(fields: [familyAssessmentId], references: [id], onDelete: Cascade)
+
+  name         String?
+  age          Int?
+  relationship String?
+  occupation   String?
+  contact      String?
+
+  @@index([familyAssessmentId])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 17. NUTRITIONAL ASSESSMENT
+// ═════════════════════════════════════════════════════════════
+model NutritionalAssessment {
+  id        Int     @id @default(autoincrement())
+  patientId Int
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  assessmentType NutritionAssessmentType
+
+  // Anthropometric
+  weightKg                        Float?
+  heightCm                        Float?
+  bmi                             Float?
+  muacCm                          Float?
+  recentWeightLossKg              Float?
+  weightLossPeriod                String?
+  nutritionalStatusClassification NutritionStatusClassification?
+
+  // Weight history
+  weightSixMonthsAgoKg   Float?
+  weightThreeMonthsAgoKg Float?
+  currentWeightKg        Float?
+  percentageWeightLoss   Float?
+  significantWeightLoss  NutritionSignificantWeightLoss?
+
+  // Appetite
+  currentAppetite    NutritionAppetite?
+  appetiteTrend      NutritionAppetiteTrend?
+  appetiteCauses     NutritionAppetiteCause[] @default([])
+  appetiteCauseOther String?
+
+  // Dietary intake
+  mealsPerDay        NutritionMealsPerDay?
+  oralIntake         NutritionOralIntake?
+  fluidIntake        NutritionFluidIntake?
+  specialDiet        NutritionSpecialDiet?
+  specialDietSpecify String?
+
+  // Feeding
+  feedingMethod               NutritionFeedingMethod?
+  feedingMethodOther          String?
+  feedingAssistanceRequired   NutritionFeedingAssistance?
+  difficultySwallowing        Boolean?
+  difficultySwallowingDetails String?
+
+  // GI symptoms
+  nauseaSeverity        NutritionSymptomSeverity?
+  vomitingSeverity      NutritionSymptomSeverity?
+  constipationSeverity  NutritionSymptomSeverity?
+  diarrheaSeverity      NutritionSymptomSeverity?
+  abdominalPainSeverity NutritionSymptomSeverity?
+  bloatingSeverity      NutritionSymptomSeverity?
+  mouthSoresSeverity    NutritionSymptomSeverity?
+
+  // Functional impact
+  energyLevel     NutritionEnergyLevel?
+  mealPreparation NutritionMealPreparation?
+  feedingAbility  NutritionFeedingAbility?
+
+  // Risk screening
+  riskFactors            NutritionRiskFactor[] @default([])
+  overallNutritionalRisk NutritionOverallRisk?
+
+  // Food security
+  adequateFoodAccess            Boolean?
+  financialBarriersToNutrition  Boolean?
+  requiresNutritionalAssistance Boolean?
+
+  // Diagnosis
+  diagnoses      NutritionDiagnosis[] @default([])
+  diagnosisOther String?
+
+  // Care plan
+  nutritionalGoals  String?
+  interventions     NutritionIntervention[] @default([])
+  interventionOther String?
+
+  monitoringPlans NutritionMonitoringPlan[] @default([])
+  monitoringOther String?
+
+  // Summary
+  assessmentOutcome    NutritionAssessmentOutcome[]   @default([])
+  finalRecommendations NutritionFinalRecommendation[] @default([])
+
+  // Audit
+  createdBy      Int
+  createdByStaff Staff @relation("NutritionalCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("NutritionalUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("NutritionalDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  dietaryRecall NutritionalDietaryRecall[]
+  labResults    NutritionalLabResult[]
+
+  @@index([patientId])
+  @@index([createdBy])
+  @@index([createdAt])
+}
+
+model NutritionalDietaryRecall {
+  id                      Int                   @id @default(autoincrement())
+  nutritionalAssessmentId Int
+  nutritionalAssessment   NutritionalAssessment @relation(fields: [nutritionalAssessmentId], references: [id], onDelete: Cascade)
+
+  mealType String
+  contents String?
+
+  @@index([nutritionalAssessmentId])
+}
+
+model NutritionalLabResult {
+  id                      Int                   @id @default(autoincrement())
+  nutritionalAssessmentId Int
+  nutritionalAssessment   NutritionalAssessment @relation(fields: [nutritionalAssessmentId], references: [id], onDelete: Cascade)
+
+  test      NutritionLabTest
+  testOther String?
+  result    String?
+
+  @@index([nutritionalAssessmentId])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 18. PAIN ASSESSMENT
+// ═════════════════════════════════════════════════════════════
+model PainAssessment {
+  id        Int     @id @default(autoincrement())
+  patientId Int
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  assessmentType PainAssessmentType
+
+  // Pain history
+  primaryPainComplaint String?
+  painOnset            PainOnset?
+  painDuration         String?
+
+  painLocations     PainLocation[]    @default([])
+  painLocationOther String?
+  painDescriptions  PainDescription[] @default([])
+
+  // Severity (0–10 NRS)
+  currentPainScore Int?
+  worstPainLast24h Int?
+  leastPainLast24h Int?
+
+  // Type & pattern
+  painType    PainType[]    @default([])
+  painPattern PainPattern[] @default([])
+
+  // Aggravating & relieving factors
+  aggravatingFactors PainAggravatingFactor[] @default([])
+  relievingFactors   PainRelievingFactor[]   @default([])
+  relievingOther     String?
+
+  // Opioid use
+  opioidUse PainOpioidUse?
+
+  // Adjuvant drugs
+  adjuvantDrugs PainAdjuvantDrug[] @default([])
+
+  // Breakthrough pain
+  breakthroughFrequency PainBreakthroughFrequency?
+  rescueMedicationUsed  Boolean?
+  rescueEffectiveness   PainRescueEffectiveness?
+
+  // Associated symptoms
+  associatedSymptoms PainAssociatedSymptom[] @default([])
+
+  // Clinical observation
+  patientBehaviors PainPatientBehavior[] @default([])
+
+  // Barriers
+  managementBarriers     PainManagementBarrier[] @default([])
+  managementBarrierOther String?
+
+  // Diagnosis
+  diagnosis PainDiagnosis[] @default([])
+
+  // Management plan
+  managementGoals           String?
+  interventions             PainIntervention[]             @default([])
+  nonPharmacologicalMethods PainNonPharmacologicalMethod[] @default([])
+  monitoringPlan            PainMonitoringPlan[]           @default([])
+
+  // Summary
+  assessmentOutcome    PainAssessmentOutcome[]   @default([])
+  finalRecommendations PainFinalRecommendation[] @default([])
+
+  // Audit
+  createdBy      Int
+  createdByStaff Staff @relation("PainCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("PainUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("PainDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  impacts PainImpact[]
+
+  @@index([patientId])
+  @@index([createdBy])
+  @@index([createdAt])
+}
+
+model PainImpact {
+  id               Int            @id @default(autoincrement())
+  painAssessmentId Int
+  painAssessment   PainAssessment @relation(fields: [painAssessmentId], references: [id], onDelete: Cascade)
+
+  area     PainImpactArea
+  severity PainImpactSeverity?
+
+  @@index([painAssessmentId])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 19. SOCIAL ASSESSMENT
+// ═════════════════════════════════════════════════════════════
+model SocialAssessment {
+  id        Int     @id @default(autoincrement())
+  patientId Int
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  assessmentType SocialAssessmentType
+
+  // Family composition
+  householdSize          Int?
+  livingArrangement      SocialLivingArrangement?
+  livingArrangementOther String?
+
+  // Caregiver
+  caregiverAvailability  SocialCaregiverAvailability?
+  caregiverHealth        SocialCaregiverHealth?
+  caregiverUnderstanding SocialCaregiverUnderstanding?
+  caregiverStress        SocialCaregiverStress?
+
+  // Social support
+  familySupport    SocialFamilySupport?
+  communitySupport SocialCommunitySupport[] @default([])
+  contactFrequency SocialContactFrequency?
+  isolationRisk    SocialIsolationRisk?
+
+  // Financial
+  incomeSources           SocialIncomeSource[]       @default([])
+  incomeSourceOther       String?
+  monthlyHouseholdIncome  SocialMonthlyIncome?
+  financialChallenges     SocialFinancialChallenge[] @default([])
+  financialChallengeOther String?
+  financialRiskLevel      SocialFinancialRisk?
+
+  // Housing
+  residenceType            SocialResidenceType?
+  residenceTypeOther       String?
+  homeEnvironment          SocialHomeEnvironment?
+  utilitiesAccess          Json                            @default("{}")
+  homeBasedCareSuitability SocialHomeBasedCareSuitability?
+
+  // Transportation
+  transportAccess            SocialTransportAccess[]    @default([])
+  distanceToHealthFacilityKm Float?
+  transportChallenges        SocialTransportChallenge[] @default([])
+  transportChallengeOther    String?
+
+  // Employment & education
+  employmentStatus SocialEmploymentStatus?
+  educationLevel   SocialEducationLevel?
+
+  // Cultural & spiritual
+  religiousAffiliation         SocialReligiousAffiliation?
+  religiousAffiliationOther    String?
+  spiritualSupportAvailable    Boolean?
+  culturalFactorsAffectingCare String?
+
+  // Legal & advocacy
+  hasLegalRepresentative     Boolean?
+  advanceDirectivesAvailable Boolean?
+  legalConcerns              SocialLegalConcern[] @default([])
+  legalConcernOther          String?
+
+  // Bereavement risk
+  familyPreparedForPrognosis SocialFamilyPreparedness?
+  anticipatoryGrief          SocialAnticipatoryGrief?
+  bereavementRisk            SocialBereavementRisk?
+  familyRequiresSupport      Boolean?
+
+  // Social work assessment
+  majorSocialIssues          SocialMajorIssue[] @default([])
+  majorSocialIssueOther      String?
+  strengthsAndResources      String?
+  areasRequiringIntervention String?
+
+  // Care plan
+  plannedInterventions     SocialCarePlanIntervention[] @default([])
+  plannedInterventionOther String?
+  followUpPlan             String?
+
+  // Summary
+  assessmentOutcome SocialAssessmentOutcome[] @default([])
+
+  // Audit
+  createdBy      Int
+  createdByStaff Staff @relation("SocialCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("SocialUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("SocialDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  householdMembers SocialHouseholdMember[]
+
+  @@index([patientId])
+  @@index([createdBy])
+  @@index([createdAt])
+}
+
+model SocialHouseholdMember {
+  id                 Int              @id @default(autoincrement())
+  socialAssessmentId Int
+  socialAssessment   SocialAssessment @relation(fields: [socialAssessmentId], references: [id], onDelete: Cascade)
+
+  name         String?
+  relationship String?
+  age          Int?
+  occupation   String?
+
+  @@index([socialAssessmentId])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 20. SPIRITUAL ASSESSMENT
+// ═════════════════════════════════════════════════════════════
+model SpiritualAssessment {
+  id        Int     @id @default(autoincrement())
+  patientId Int
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  assessmentType SpiritualAssessmentType
+
+  // Religious / spiritual background
+  religiousAffiliation      SpiritualReligiousAffiliation?
+  religiousAffiliationOther String?
+  faithImportance           SpiritualFaithImportance?
+  activityParticipation     SpiritualActivityParticipation?
+  placeOfWorship            String?
+
+  // Spiritual support system
+  supportSources SpiritualSupportSource[] @default([])
+
+  religiousLeaderName         String?
+  religiousLeaderOrganization String?
+  religiousLeaderPhone        String?
+
+  // Spiritual beliefs and values
+  lifeMeaningAndPurpose String?
+  sourcesOfStrength     String?
+
+  practicesToContinue        Boolean?
+  practicesToContinueDetails String?
+
+  ritualsToRespect        Boolean?
+  ritualsToRespectDetails String?
+
+  // Spiritual distress assessment
+  spiritualDistressLevel       SpiritualDistressLevel?
+  spiritualConcernsDescription String?
+
+  // Hope and coping assessment
+  currentHopes      String?
+  copingMethods     SpiritualCopingMethod[] @default([])
+  copingMethodOther String?
+  feelsAtPeace      SpiritualPeaceStatus?
+
+  // Family and spiritual needs
+  familySharesBeliefs      SpiritualFamilySharesBeliefs?
+  familyBenefitFromSupport Boolean?
+  familySpiritualConcerns  String?
+
+  // End-of-life spiritual preferences
+  preferredEndOfLifeCare       SpiritualEndOfLifeCare[]        @default([])
+  preferredEndOfLifeCareOther  String?
+  preferredPlaceOfCare         SpiritualPreferredPlaceOfCare?
+  preferredPlaceOfCareOther    String?
+  preferredPlaceOfDeath        SpiritualPreferredPlaceOfDeath?
+  religiousPracticesAfterDeath String?
+
+  // Spiritual strengths
+  patientStrengths     SpiritualPatientStrength[] @default([])
+  patientStrengthOther String?
+  additionalStrengths  String?
+
+  // Spiritual care plan
+  identifiedNeeds      SpiritualIdentifiedNeed[]  @default([])
+  identifiedNeedOther  String?
+  plannedInterventions String?
+  followUpSchedule     SpiritualFollowUpSchedule?
+
+  // Provider assessment
+  summaryOfAssessment   String?
+  providerDistressLevel SpiritualDistressLevel?
+  recommendedServices   SpiritualRecommendedService[] @default([])
+  assessmentOutcome     SpiritualAssessmentOutcome[]  @default([])
+
+  // Audit
+  createdBy      Int
+  createdByStaff Staff @relation("SpiritualCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("SpiritualUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("SpiritualDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  distressConcerns SpiritualDistressConcern[]
+
+  @@index([patientId])
+  @@index([createdBy])
+  @@index([createdAt])
+}
+
+model SpiritualDistressConcern {
+  id                    Int                 @id @default(autoincrement())
+  spiritualAssessmentId Int
+  spiritualAssessment   SpiritualAssessment @relation(fields: [spiritualAssessmentId], references: [id], onDelete: Cascade)
+
+  concern SpiritualDistressConcernType
+  present Boolean                      @default(false)
+
+  @@index([spiritualAssessmentId])
+}
+
+// ═════════════════════════════════════════════════════════════
+// 21. PSYCHIATRY ASSESSMENT
+// ═════════════════════════════════════════════════════════════
+model PsychiatryAssessment {
+  id        Int     @id @default(autoincrement())
+  patientId Int
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  assessmentType PsychiatryAssessmentType
+
+  // Presenting problem
+  reasonForReferral String?
+  currentSymptoms   PsychiatrySymptom[] @default([])
+  symptomOther      String?
+  onsetAndDuration  String?
+  severity          PsychiatrySeverity?
+
+  // Mental state examination
+  appearanceBehavior PsychiatryAppearanceBehavior[] @default([])
+  speech             PsychiatrySpeech?
+  mood               PsychiatryMood?
+  affect             PsychiatryAffect?
+  thoughtProcess     PsychiatryThoughtProcess[]     @default([])
+  thoughtContent     PsychiatryThoughtContent[]     @default([])
+  perception         PsychiatryPerception[]         @default([])
+  cognition          PsychiatryCognition[]          @default([])
+  insightJudgment    PsychiatryInsightJudgment?
+
+  // Suicide risk assessment
+  suicidalIdeation  PsychiatrySuicidalIdeation?
+  suicideRiskLevel  PsychiatrySuicideRiskLevel?
+  protectiveFactors PsychiatryProtectiveFactor[] @default([])
+
+  // Organic causes
+  organicCauses                   PsychiatryOrganicCause[] @default([])
+  medicationsAffectingMentalState String?
+
+  // Sleep & appetite
+  sleepPattern PsychiatrySleepPattern?
+  appetite     PsychiatryAppetite?
+
+  // Functional & social
+  dailyFunctioning PsychiatryDailyFunctioning?
+  socialWithdrawal PsychiatrySocialWithdrawal?
+
+  // Diagnosis
+  diagnoses      PsychiatryDiagnosis[] @default([])
+  diagnosisOther String?
+
+  // Management plan
+  immediateInterventions PsychiatryImmediateIntervention[]  @default([])
+  pharmacologicalPlan    PsychiatryPharmacologicalPlan[]    @default([])
+  nonPharmacologicalPlan PsychiatryNonPharmacologicalPlan[] @default([])
+  monitoringPlan         PsychiatryMonitoringPlan[]         @default([])
+
+  // Family & caregiver
+  familyDistressLevel    PsychiatryFamilyDistressLevel?
+  caregiverBurnout       Boolean?
+  familyCounselingNeeded Boolean?
+
+  // Summary
+  assessmentOutcome    PsychiatryAssessmentOutcome[]   @default([])
+  finalRecommendations PsychiatryFinalRecommendation[] @default([])
+
+  // Audit
+  createdBy      Int
+  createdByStaff Staff @relation("PsychiatryCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int?
+  updatedByAdmin Admin?   @relation("PsychiatryUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletedByAdmin Admin?    @relation("PsychiatryDeletedBy", fields: [deletedBy], references: [id])
+  deletionReason String?
+
+  @@index([patientId])
+  @@index([createdBy])
+  @@index([createdAt])
 }

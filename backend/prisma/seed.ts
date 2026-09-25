@@ -20,6 +20,9 @@ const prisma = new PrismaClient();
 // admin / staff accounts accept the same plaintext password.
 // The hash was produced at cost factor 10 (matches
 // BCRYPT_SALT_ROUNDS=10).
+//
+// Plaintext (for reference, do NOT commit to docs in prod):
+//   "Password123"
 // ─────────────────────────────────────────────────────────────
 const SHARED_PASSWORD_HASH =
   '$2b$10$GdLYFYhSYuTCkdhdBqPXRe2QiWQ443kzC3p60xCUaDLdiOb5IHW6O';
@@ -57,10 +60,22 @@ async function seedAdmin(): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Staff — 6 users with different roles
+// Staff — 12 users covering ALL StaffRole enum values
 //
 // All are created in `Active` state with verified email so they
 // can log in immediately without admin approval.
+//
+// Roles covered:
+//   ✅ Physician
+//   ✅ Nurse
+//   ✅ Pharmacist
+//   ✅ Radiologist
+//   ✅ LaboratoryTechnician
+//   ✅ Physiologist      
+//   ✅ Psychiatrist      
+//   ✅ Psychologist      
+//   ✅ SocialWorker      
+//   ✅ SpiritualPerson   
 // ─────────────────────────────────────────────────────────────
 interface StaffSeed {
   name: string;
@@ -70,6 +85,7 @@ interface StaffSeed {
 }
 
 const STAFF_SEEDS: StaffSeed[] = [
+  // ── Physicians ──
   {
     name: 'Dr. Abebe Tesfaye',
     email: 'abebe.physician@y12hmc.et',
@@ -82,6 +98,8 @@ const STAFF_SEEDS: StaffSeed[] = [
     phone: '+251911100002',
     role: 'Physician',
   },
+
+  // ── Nurses ──
   {
     name: 'Selam Bekele',
     email: 'selam.nurse@y12hmc.et',
@@ -94,24 +112,77 @@ const STAFF_SEEDS: StaffSeed[] = [
     phone: '+251911100004',
     role: 'Nurse',
   },
+
+  // ── Pharmacist ──
   {
     name: 'Dawit Girma',
     email: 'dawit.pharmacist@y12hmc.et',
     phone: '+251911100005',
     role: 'Pharmacist',
   },
+
+  // ── Radiologist ──
   {
     name: 'Hanna Solomon',
     email: 'hanna.radiologist@y12hmc.et',
     phone: '+251911100006',
     role: 'Radiologist',
   },
+
+  // ── Laboratory Technician ──
   {
     name: 'Yonas Kebede',
     email: 'yonas.labtech@y12hmc.et',
     phone: '+251911100007',
     role: 'LaboratoryTechnician',
   },
+
+  // ── Physiologist (NEW) ──
+  {
+    name: 'Dr. Bereket Assefa',
+    email: 'bereket.physiologist@y12hmc.et',
+    phone: '+251911100008',
+    role: 'Physiologist',
+  },
+
+  // ── Psychiatrist (NEW) ──
+  {
+    name: 'Dr. Rahel Tadesse',
+    email: 'rahel.psychiatrist@y12hmc.et',
+    phone: '+251911100009',
+    role: 'Psychiatrist',
+  },
+
+  // ── Psychologist (NEW) ──
+  {
+    name: 'Dr. Samuel Getachew',
+    email: 'samuel.psychologist@y12hmc.et',
+    phone: '+251911100010',
+    role: 'Psychologist',
+  },
+
+  // ── Social Worker (NEW) ──
+  {
+    name: 'Bethlehem Negash',
+    email: 'bethlehem.socialworker@y12hmc.et',
+    phone: '+251911100011',
+    role: 'SocialWorker',
+  },
+  //nutritionist
+  {
+    name: 'Alemitu Bekele',
+    email: 'alemitu.nutritionist@y12hmc.et',
+    phone: '+251911100013',
+    role: 'Nutritionist',
+  },
+  // ── Spiritual Person (NEW) ──
+  {
+    name: 'Father Yohannes Bekele',
+    email: 'yohannes.spiritual@y12hmc.et',
+    phone: '+251911100012',
+    role: 'SpiritualPerson',
+  },
+
 ];
 
 async function seedStaff(): Promise<number[]> {
@@ -411,9 +482,9 @@ async function seedPatients(registeredById: number): Promise<void> {
     // the seed doesn't create duplicates.
     const existing = p.hospitalPatientId
       ? await prisma.patient.findFirst({
-          where: { hospitalPatientId: p.hospitalPatientId },
-          select: { id: true },
-        })
+        where: { hospitalPatientId: p.hospitalPatientId },
+        select: { id: true },
+      })
       : null;
 
     if (existing) {

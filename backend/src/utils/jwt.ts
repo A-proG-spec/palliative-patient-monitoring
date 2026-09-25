@@ -8,9 +8,12 @@ const JWT_EXPIRE = env.JWT_EXPIRE;
 // JWT payload
 // `id` is stored as a STRING because JWT payloads must be
 // JSON-safe scalars — but downstream it maps to a Postgres Int.
+// `type` is optional for backwards compatibility with any
+// tokens issued before it was added; middleware treats a
+// missing type as 'staff'.
 // ─────────────────────────────────────────────────────────────
 export interface JwtPayload {
-  id: string;      // string form of the numeric Prisma id
+  id: string;
   email: string;
   type?: 'staff' | 'admin';
 }
@@ -22,6 +25,7 @@ export const generateToken = (
 ): string => {
   const payload: JwtPayload = { id: String(userId), email };
   if (userType) payload.type = userType;
+
   return jwt.sign(
     payload,
     JWT_SECRET,

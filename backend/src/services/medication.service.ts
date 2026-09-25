@@ -1,6 +1,7 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+
 // ─────────────────────────────────────────────────────────────
 // Order medication
 // ─────────────────────────────────────────────────────────────
@@ -60,6 +61,7 @@ export const getAllMedications = async (
     total,
   };
 };
+
 export const orderMedication = async (
   patientId: string,
   data: any,
@@ -220,7 +222,7 @@ export const updateMedicationStatus = async (
 
   const updated = await prisma.medication.update({
     where: { id: mid },
-  data: { status },
+    data: { status, updatedBy: aid },
     include: {
       prescribedByStaff: { select: { id: true, name: true } },
     },
@@ -313,6 +315,7 @@ export const restoreMedication = async (
 
   return { id: medicationId, restored: true };
 };
+
 // ─────────────────────────────────────────────────────────────
 // Pharmacist queue — all `Ordered` medications across patients
 // ─────────────────────────────────────────────────────────────
@@ -431,7 +434,7 @@ export const markMedicationGivenByQueue = async (
   pharmacistId: string | number,
 ) => {
   const mid = toId(medicationId, 'medication id');
-  const aid = toId(pharmacistId, 'pharmacist id');
+  const sid = toId(pharmacistId, 'pharmacist id');
 
   const existing = await prisma.medication.findUnique({
     where: { id: mid },
@@ -444,7 +447,11 @@ export const markMedicationGivenByQueue = async (
 
   const updated = await prisma.medication.update({
     where: { id: mid },
-    data: { status: 'Given', updatedByStaffId: aid },
+    data: {
+      status: 'Given',
+      updatedByStaffId: sid,   // ← route to the Staff FK
+      // updatedBy stays null — it's for admins
+    },
   });
 
   return { id: updated.id, status: updated.status, updatedAt: updated.updatedAt };

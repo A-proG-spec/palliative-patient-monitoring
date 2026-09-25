@@ -7,7 +7,7 @@ import { z } from 'zod';
 export const approveStaffSchema = z.object({
   body: z.object({
     role: z.enum(
-      [ 'Physician',  'Nurse',  'Pharmacist',  'Radiologist',  'LaboratoryTechnician',  'Physiologist',  'Psychiatrist',  'Psychologist',  'SocialWorker', 'SpiritualPerson'],
+      ['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician', 'Physiologist', 'Psychiatrist', 'Psychologist', 'SocialWorker', 'SpiritualPerson', 'Nutritionist'],
       {
         message:
           'Invalid role. Must be Physician, Nurse, Pharmacist, Radiologist, or LaboratoryTechnician',
@@ -79,7 +79,7 @@ export const getStaffListQuerySchema = z.object({
     limit: z.coerce.number().int().positive().max(100).optional().default(20),
     status: z.enum(['Active', 'Pending', 'Rejected', 'Deleted', 'All']).optional(),
     role: z
-      .enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'])
+      .enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician', 'Physiologist', 'Psychiatrist', 'Psychologist', 'SocialWorker', 'SpiritualPerson', 'Nutritionist'],)
       .optional(),
     search: z.string().trim().optional(),
   }),
@@ -101,7 +101,7 @@ export const updateStaffSchema = z.object({
         .max(20, 'Phone number is too long')
         .optional(),
       role: z
-        .enum(['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'])
+        .enum([ 'Physician',  'Nurse',  'Pharmacist',  'Radiologist',  'LaboratoryTechnician',  'Physiologist',  'Psychiatrist',  'Psychologist',  'SocialWorker', 'SpiritualPerson','Nutritionist'],)
         .optional(),
     })
     .refine(
@@ -132,7 +132,7 @@ export const getStaffPerformanceListQuerySchema = z.object({
     limit: z.coerce.number().int().positive().max(100).optional().default(20),
     search: z.string().trim().optional(),
     role: z
-      .enum(['TeamLeader', 'Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'])
+      .enum([ 'Physician',  'Nurse',  'Pharmacist',  'Radiologist',  'LaboratoryTechnician',  'Physiologist',  'Psychiatrist',  'Psychologist',  'SocialWorker', 'SpiritualPerson','Nutritionist'])
       .optional(),
   }),
 });
