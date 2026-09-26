@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useProfile, useUpdateProfile, useChangePassword, useActivityStats } from '@/hooks/useProfile';
 import { ProfileInfo } from '@/components/profile/ProfileInfo';
 import { ChangePassword } from '@/components/profile/ChangePassword';
@@ -8,8 +8,16 @@ import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
 import { BackButton } from '@/components/common/BackButton';
 import { ThemeSelector } from '@/components/common/ThemeToggle';
-import { Mail, Phone, BadgeCheck, Calendar, Palette } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import {
+  Mail,
+  Phone,
+  BadgeCheck,
+  Calendar,
+  Palette,
+  ChevronDown,
+  Lock,
+} from 'lucide-react';
+import { cn, formatDate } from '@/lib/utils';
 import { Profile, StaffProfile } from '@/types/profile.types';
 
 // ── Helper to get user initials safely ──────────────────────────
@@ -36,10 +44,12 @@ const ProfilePage: React.FC = () => {
   const updateProfileMutation = useUpdateProfile();
   const changePasswordMutation = useChangePassword();
 
-  // Loading state
-  if (isLoading || statsLoading) return <PageLoader />;
-  
-  // Error state
+  const [passwordOpen, setPasswordOpen] = useState(false);
+
+  // Only block on the primary profile query — the activity stats
+  // load in the background and render once ready.
+  if (isLoading) return <PageLoader />;
+
   if (error || !profile) return <ErrorState onRetry={refetch} />;
 
   const isStaff = isStaffProfile(profile);
@@ -49,12 +59,15 @@ const ProfilePage: React.FC = () => {
     <div className="max-w-4xl space-y-6">
       {/* Header with back button */}
       <div className="flex items-center gap-3">
-        <BackButton to={profile.type === 'admin' ? '/admin' : '/dashboard'} label="Dashboard" />
+        <BackButton
+          to={profile.type === 'admin' ? '/admin' : '/dashboard'}
+          label="Dashboard"
+        />
         <h1 className="text-2xl font-bold text-on-surface">My Profile</h1>
       </div>
 
-      {/* Identity Card - like patient identity section */}
-      <Card padding="lg" className="border-l-4 border-l-primary">
+      {/* Identity Card */}
+      <Card padding="lg">
         <div className="flex flex-col md:flex-row md:items-center gap-6">
           {/* Avatar */}
           <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-full bg-primary-light text-primary text-3xl font-bold">
@@ -63,8 +76,10 @@ const ProfilePage: React.FC = () => {
 
           {/* Identity details */}
           <div className="flex-1 space-y-2">
-            <h2 className="text-2xl font-bold text-on-surface">{profile.name}</h2>
-            
+            <h2 className="text-2xl font-bold text-on-surface">
+              {profile.name}
+            </h2>
+
             <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
               <span className="flex items-center gap-1.5 text-text-secondary">
                 <Mail size={14} className="text-text-muted" />
@@ -88,21 +103,27 @@ const ProfilePage: React.FC = () => {
 
             {isStaff && (
               <div className="flex items-center gap-3 mt-1">
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  profile.status === 'Active'
-                    ? 'bg-success-bg text-success'
-                    : profile.status === 'Pending'
-                    ? 'bg-warning-bg text-warning'
-                    : 'bg-error-bg text-error'
-                }`}>
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    profile.status === 'Active'
+                      ? 'bg-success-bg text-success'
+                      : profile.status === 'Pending'
+                        ? 'bg-warning-bg text-warning'
+                        : 'bg-error-bg text-error'
+                  }`}
+                >
                   {profile.status || 'Active'}
                 </span>
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  profile.isEmailVerified
-                    ? 'bg-success-bg text-success'
-                    : 'bg-warning-bg text-warning'
-                }`}>
-                  {profile.isEmailVerified ? '✓ Email Verified' : '⚠ Email Not Verified'}
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    profile.isEmailVerified
+                      ? 'bg-success-bg text-success'
+                      : 'bg-warning-bg text-warning'
+                  }`}
+                >
+                  {profile.isEmailVerified
+                    ? '✓ Email Verified'
+                    : '⚠ Email Not Verified'}
                 </span>
               </div>
             )}
@@ -124,21 +145,58 @@ const ProfilePage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Change Password */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Change Password</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ChangePassword
-            onSubmit={changePasswordMutation.mutate}
-            isSubmitting={changePasswordMutation.isPending}
+      {/* Change Password — collapsible */}
+      <Card padding="none">
+        <button
+          type="button"
+          onClick={() => setPasswordOpen((v) => !v)}
+          aria-expanded={passwordOpen}
+          aria-controls="change-password-panel"
+          className="w-full flex items-center justify-between gap-3 px-6 py-4 text-left rounded-xl hover:bg-surface-low transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Lock size={16} className="text-primary" />
+            <span className="text-base font-semibold text-on-surface">
+              Change Password
+            </span>
+          </div>
+          <ChevronDown
+            size={16}
+            className={cn(
+              'text-text-muted transition-transform duration-200',
+              passwordOpen && 'rotate-180',
+            )}
           />
-        </CardContent>
+        </button>
+
+        {passwordOpen && (
+          <div
+            id="change-password-panel"
+            className="px-6 pb-6 border-t border-border-base"
+          >
+            <div className="pt-5">
+              <ChangePassword
+                onSubmit={changePasswordMutation.mutate}
+                isSubmitting={changePasswordMutation.isPending}
+              />
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Activity Statistics */}
-      {stats && (
+      {statsLoading && !stats ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>My Activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-24 flex items-center justify-center text-sm text-text-muted">
+              Loading activity…
+            </div>
+          </CardContent>
+        </Card>
+      ) : stats ? (
         <Card>
           <CardHeader>
             <CardTitle>My Activity</CardTitle>
@@ -147,7 +205,7 @@ const ProfilePage: React.FC = () => {
             <ActivityStats stats={stats} userType={profile.type} />
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       {/* Appearance / Theme */}
       <Card>
@@ -159,8 +217,10 @@ const ProfilePage: React.FC = () => {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-text-secondary mb-4">
-            Choose your preferred colour theme. <strong className="text-on-surface">System</strong> follows your
-            operating system's light/dark preference and updates automatically.
+            Choose your preferred colour theme.{' '}
+            <strong className="text-on-surface">System</strong> follows your
+            operating system's light/dark preference and updates
+            automatically.
           </p>
           <ThemeSelector />
         </CardContent>
