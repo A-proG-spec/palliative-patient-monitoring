@@ -1,5 +1,11 @@
 import { z } from 'zod';
+import { StaffRole } from '@prisma/client';
 
+
+
+const staffRoleEnum = z.enum(
+  Object.values(StaffRole) as [StaffRole, ...StaffRole[]],
+)
 export const createVisitSchema = z.object({
   body: z.object({
     // ── Section 2: Visit Details ──
@@ -18,7 +24,7 @@ export const createVisitSchema = z.object({
       .array(
         z.object({
           staffId: z.string().optional(),
-          role: z.enum(['Physician', 'Nurse']),
+          role: staffRoleEnum,
           name: z.string().min(1, 'Team member name is required'),
           isTeamLeader: z.boolean().optional(),
         })
@@ -171,7 +177,7 @@ export const signVisitSchema = z.object({
   body: z.object({
     email: z.string().email('Invalid email address'),
     password: z.string().min(1, 'Password is required'),
-    role: z.enum(['Physician', 'Nurse']),
+    role: staffRoleEnum,
   }),
 });
 

@@ -293,7 +293,7 @@ function getSectionState(
 }
 
 // ═════════════════════════════════════════════════════════════
-// Shared UI helpers (unchanged from your original)
+// Shared UI helpers
 // ═════════════════════════════════════════════════════════════
 
 const SectionTitle: React.FC<{ num: string | number; children: React.ReactNode }> = ({
@@ -402,7 +402,7 @@ const SYMPTOM_KEYS = [
 ] as const;
 
 // ═════════════════════════════════════════════════════════════
-// Sidebar
+// Sidebar — scrollable section list, minimized height
 // ═════════════════════════════════════════════════════════════
 
 const SectionNav: React.FC<{
@@ -417,10 +417,11 @@ const SectionNav: React.FC<{
 
   return (
     <aside
-      className="hidden lg:flex flex-col w-64 flex-shrink-0 border-r border-border-base bg-surface-low/40"
+      className="hidden lg:flex flex-col w-64 flex-shrink-0 border-r border-border-base bg-surface-low/40 h-full min-h-0"
       aria-label="Progress note sections"
     >
-      <div className="px-4 pt-5 pb-4 border-b border-border-base">
+      {/* Progress summary — pinned */}
+      <div className="px-4 pt-4 pb-3 border-b border-border-base flex-shrink-0">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">
           Progress
         </p>
@@ -438,7 +439,8 @@ const SectionNav: React.FC<{
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-2">
+      {/* Scrollable section list */}
+      <nav className="flex-1 min-h-0 overflow-y-auto py-1.5 section-nav-scroll">
         {sections.map((section) => {
           const state = states[section.key];
           const isActive = activeKey === section.key;
@@ -449,9 +451,9 @@ const SectionNav: React.FC<{
               onClick={() => onSelect(section.key)}
               aria-current={isActive ? 'step' : undefined}
               className={cn(
-                'w-full flex items-start gap-3 px-4 py-2.5 text-left transition-colors group',
+                'w-full flex items-start gap-2.5 px-3.5 py-2 text-left transition-colors group',
                 isActive
-                  ? 'bg-primary-light text-primary'
+                  ? 'bg-primary-light text-primary border-r-2 border-primary'
                   : 'text-on-surface-variant hover:bg-surface-low hover:text-on-surface',
               )}
             >
@@ -459,7 +461,7 @@ const SectionNav: React.FC<{
                 <SectionStatusIcon state={state} isActive={isActive} />
               </span>
               <span className="flex-1 min-w-0">
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5">
                   <span
                     className={cn(
                       'font-mono text-[10px] rounded px-1.5 py-0.5 leading-none',
@@ -472,19 +474,16 @@ const SectionNav: React.FC<{
                   </span>
                   <span
                     className={cn(
-                      'text-sm truncate',
+                      'text-[13px] truncate',
                       isActive ? 'font-semibold' : 'font-medium',
                     )}
                   >
                     {section.label}
                   </span>
                 </span>
-                <span className="block text-[11px] text-text-muted mt-0.5 truncate">
-                  {section.description}
-                </span>
               </span>
               <ChevronRight
-                size={14}
+                size={13}
                 className={cn(
                   'flex-shrink-0 mt-0.5 transition-opacity',
                   isActive
@@ -778,8 +777,8 @@ const RecordProgressNotePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Sidebar + body card */}
-      <div className="flex border border-border-base rounded-2xl bg-surface-lowest overflow-hidden">
+      {/* Sidebar + body card — constrained height so sidebar list scrolls internally */}
+      <div className="flex border border-border-base rounded-2xl bg-surface-lowest overflow-hidden h-[600px]">
         <SectionNav
           sections={SECTIONS}
           activeKey={activeKey}
@@ -787,9 +786,9 @@ const RecordProgressNotePage: React.FC = () => {
           onSelect={setActiveKey}
         />
 
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
           {/* Mobile section picker */}
-          <div className="lg:hidden px-4 pt-4 pb-2 border-b border-border-base bg-surface-low/30">
+          <div className="lg:hidden px-4 pt-4 pb-2 border-b border-border-base bg-surface-low/30 flex-shrink-0">
             <label className="block text-xs font-medium text-text-muted mb-1">
               Section {activeIdx + 1} of {SECTIONS.length}
             </label>
@@ -806,8 +805,8 @@ const RecordProgressNotePage: React.FC = () => {
             </select>
           </div>
 
-          {/* Section header */}
-          <div className="px-6 pt-6 pb-4 border-b border-border-base">
+          {/* Section header — pinned */}
+          <div className="px-6 pt-5 pb-3 border-b border-border-base flex-shrink-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="font-mono text-[11px] bg-primary/10 text-primary rounded px-1.5 py-0.5 leading-none">
                 {activeDef.num}
@@ -819,8 +818,8 @@ const RecordProgressNotePage: React.FC = () => {
             <p className="text-xs text-text-muted">{activeDef.description}</p>
           </div>
 
-          {/* Section body */}
-          <div ref={bodyRef} className="px-6 py-6 min-h-[420px]">
+          {/* Section body — scrolls independently */}
+          <div ref={bodyRef} className="px-6 py-5 flex-1 min-h-0 overflow-y-auto">
             <SectionBody
               sectionKey={activeKey}
               form={form}
@@ -835,8 +834,8 @@ const RecordProgressNotePage: React.FC = () => {
             />
           </div>
 
-          {/* Prev / Next nav */}
-          <div className="px-6 py-4 border-t border-border-base bg-surface-low/30 flex items-center justify-between">
+          {/* Prev / Next nav — pinned footer */}
+          <div className="px-6 py-3 border-t border-border-base bg-surface-low/30 flex items-center justify-between flex-shrink-0">
             <Button
               variant="outline"
               size="sm"

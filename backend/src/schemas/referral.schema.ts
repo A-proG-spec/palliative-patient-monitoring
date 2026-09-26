@@ -1,23 +1,26 @@
 import { z } from 'zod';
 
-// ─────────────────────────────────────────────────────────────
-// Create
-// ─────────────────────────────────────────────────────────────
 export const createReferralSchema = z.object({
   body: z.object({
     referralType: z.enum(['Incoming', 'Outgoing']),
-    referralDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
+    referralDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
     primaryDiagnosis: z.string().min(1, 'Primary diagnosis is required'),
     diseaseStage: z.enum(['Early', 'Advanced', 'EndStage']),
-    ppsScore: z.number().min(0).max(100),
-    kpsScore: z.number().min(0).max(100),
+
+    // ── Coerce strings into numbers ──
+    ppsScore: z.coerce.number().min(0).max(100),
+    kpsScore: z.coerce.number().min(0).max(100),
+
     currentSymptoms: z.object({
-      pain: z.number().min(0).max(10),
-      dyspnea: z.number().min(0).max(10),
-      fatigue: z.number().min(0).max(10),
-      anxiety: z.number().min(0).max(10),
-      depression: z.number().min(0).max(10),
+      pain: z.coerce.number().min(0).max(10),
+      dyspnea: z.coerce.number().min(0).max(10),
+      fatigue: z.coerce.number().min(0).max(10),
+      anxiety: z.coerce.number().min(0).max(10),
+      depression: z.coerce.number().min(0).max(10),
     }),
+
     reasons: z
       .array(
         z.enum([

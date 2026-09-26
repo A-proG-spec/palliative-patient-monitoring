@@ -1,17 +1,4 @@
-/* src/style.css
- * ─────────────────────────────────────────────────────────────
- * This file used to hold the default Vite starter styles
- * (`#app`, `.hero`, `.counter`, `#next-steps`, `.ticks`, ...).
- * Those have been removed — the app no longer renders that
- * markup. All theming lives in `src/styles/globals.css`.
- *
- * What's kept here is a minimal reset plus the two rules that
- * prevent the browser's default light/dark preference from
- * leaking into native widgets. `color-scheme` is intentionally
- * NOT declared here — `globals.css` owns it so it can respond
- * to the `.dark` / `.system` classes rather than the OS.
- * ─────────────────────────────────────────────────────────────
- */
+
 
 html,
 body {

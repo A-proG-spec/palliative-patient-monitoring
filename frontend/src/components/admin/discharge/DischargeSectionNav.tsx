@@ -26,11 +26,11 @@ export const DischargeSectionNav: React.FC<DischargeSectionNavProps> = ({
 
   return (
     <aside
-      className="hidden lg:flex flex-col w-64 flex-shrink-0 border-r border-border-base bg-surface-low min-h-0"
+      className="hidden lg:flex flex-col w-64 flex-shrink-0 border-r border-border-base bg-surface-low min-h-0 h-full"
       aria-label="Discharge form sections"
     >
-      {/* Progress summary — fixed at the top of the sidebar */}
-      <div className="flex-shrink-0 px-4 pt-5 pb-4 border-b border-border-base">
+      {/* Progress summary — fixed at the top, doesn't scroll */}
+      <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-border-base">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">
           Progress
         </p>
@@ -48,8 +48,8 @@ export const DischargeSectionNav: React.FC<DischargeSectionNavProps> = ({
         </div>
       </div>
 
-      {/* Nav list — scrolls internally when the sidebar has a bounded height */}
-      <nav className="flex-1 min-h-0 overflow-y-auto py-2">
+      {/* Section list — scrolls internally, thin scrollbar */}
+      <nav className="flex-1 min-h-0 overflow-y-auto py-1.5 section-nav-scroll">
         {sections.map((section) => {
           const state = states[section.key];
           const isActive = activeKey === section.key;
@@ -61,9 +61,9 @@ export const DischargeSectionNav: React.FC<DischargeSectionNavProps> = ({
               onClick={() => onSelect(section.key)}
               aria-current={isActive ? 'step' : undefined}
               className={cn(
-                'w-full flex items-start gap-3 px-4 py-2.5 text-left transition-colors group',
+                'w-full flex items-start gap-2.5 px-3.5 py-2 text-left transition-colors group',
                 isActive
-                  ? 'bg-primary-light text-primary'
+                  ? 'bg-primary-light text-primary border-r-2 border-primary'
                   : 'text-on-surface-variant hover:bg-surface-low hover:text-on-surface',
               )}
             >
@@ -72,10 +72,10 @@ export const DischargeSectionNav: React.FC<DischargeSectionNavProps> = ({
               </span>
 
               <span className="flex-1 min-w-0">
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5">
                   <span
                     className={cn(
-                      'font-mono text-[10px] rounded px-1 py-0.5 leading-none',
+                      'font-mono text-[10px] rounded px-1.5 py-0.5 leading-none',
                       isActive
                         ? 'bg-primary/15 text-primary'
                         : 'bg-surface-container text-text-muted',
@@ -85,20 +85,17 @@ export const DischargeSectionNav: React.FC<DischargeSectionNavProps> = ({
                   </span>
                   <span
                     className={cn(
-                      'text-sm truncate',
+                      'text-[13px] truncate',
                       isActive ? 'font-semibold' : 'font-medium',
                     )}
                   >
                     {section.label}
                   </span>
                 </span>
-                <span className="block text-[11px] text-text-muted mt-0.5 truncate">
-                  {section.description}
-                </span>
               </span>
 
               <ChevronRight
-                size={14}
+                size={13}
                 className={cn(
                   'flex-shrink-0 mt-0.5 transition-opacity',
                   isActive

@@ -74,11 +74,6 @@ const AF: React.FC<{
         >
           {label}
         </label>
-        {isAuto && (
-          <span className="text-[9px] font-semibold text-primary bg-primary/[0.08] border border-primary/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">
-            auto-filled
-          </span>
-        )}
       </div>
       {childWithoutLabel}
     </div>

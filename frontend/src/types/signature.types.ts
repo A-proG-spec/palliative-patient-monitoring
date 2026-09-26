@@ -1,21 +1,40 @@
 // ─────────────────────────────────────────────────────────────
+// Shared role union for visit signatures
+// ─────────────────────────────────────────────────────────────
+export type VisitSignatureRole =
+  | 'Physician'
+  | 'Nurse'
+  | 'Pharmacist'
+  | 'Radiologist'
+  | 'LaboratoryTechnician'
+  | 'Physiologist'
+  | 'Psychiatrist'
+  | 'Psychologist'
+  | 'SocialWorker'
+  | 'SpiritualPerson'
+  | 'Nutritionist';
+
+// Progress notes additionally allow a "Reviewer" role
+export type ProgressNoteSignatureRole = VisitSignatureRole | 'Reviewer';
+
+// ─────────────────────────────────────────────────────────────
 // Signature entry — one item in a visit/note `signatures[]`
 // ─────────────────────────────────────────────────────────────
 export interface Signature {
   staffId: string;
   name: string;
-  role: 'TeamLeader' | 'Physician' | 'Nurse' | 'Reviewer';
+  role: VisitSignatureRole | 'TeamLeader' | 'Reviewer';
   isTeamLeader?: boolean;
   signedAt: string;
 }
 
 // ─────────────────────────────────────────────────────────────
-// Sign a visit — matches backend `signVisitSchema.body`
+// Sign a visit
 // ─────────────────────────────────────────────────────────────
 export interface SignVisitRequest {
   email: string;
   password: string;
-  role: 'Physician' | 'Nurse';
+  role: VisitSignatureRole;   // ← widened
 }
 
 export interface SignVisitResponse {
@@ -23,7 +42,7 @@ export interface SignVisitResponse {
   signedBy: {
     staffId: string;
     name: string;
-    role: string;
+    role: VisitSignatureRole;
     signedAt: string;
   };
   signatures: Signature[];
@@ -45,12 +64,12 @@ export interface VisitSignaturesResponse {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Sign a progress note — matches backend `signProgressNoteSchema.body`
+// Sign a progress note
 // ─────────────────────────────────────────────────────────────
 export interface SignProgressNoteRequest {
   email: string;
   password: string;
-  role: 'Physician' | 'Nurse' | 'Reviewer';
+  role: ProgressNoteSignatureRole;   // ← widened (includes Reviewer)
 }
 
 export interface ProgressNoteSignaturesResponse {
