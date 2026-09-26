@@ -99,7 +99,7 @@ const HospiceNursingDetailPage = lazy(
 );
 
 // ═════════════════════════════════════════════════════════════
-// NEW: Assessment pages (24 total — 3 per assessment)
+// Assessment pages (24 total — 3 per assessment)
 // ═════════════════════════════════════════════════════════════
 
 // Pain
@@ -182,166 +182,65 @@ const S = ({ children }: { children: React.ReactNode }) => (
 // ═════════════════════════════════════════════════════════════
 // Shared assessment route block
 //
-// Registered inside the DashboardLayout so every assessment
-// page renders with the sidebar. Mounted under /patients/:id.
+// Two nearly-identical blocks are registered — one under /admin
+// and one under the staff tree — so the same detail/list/form
+// pages work for both audiences. The `prefix` argument lets us
+// generate both sets from a single source of truth.
+//
+// Must return a Fragment (or Route elements), NOT a custom
+// component. React Router only accepts <Route> / <React.Fragment>
+// as children of <Routes> / nested <Route>.
 // ═════════════════════════════════════════════════════════════
 
-// ═════════════════════════════════════════════════════════════
-// Shared assessment route block
-//
-// Registered inside the DashboardLayout so every assessment
-// page renders with the sidebar. Mounted under /patients/:id.
-//
-// Must be a Fragment (or Route elements), NOT a custom component.
-// React Router only accepts <Route> / <React.Fragment> as children
-// of <Routes> / nested <Route>.
-// ═════════════════════════════════════════════════════════════
-
-const assessmentRoutes = (
+const buildAssessmentRoutes = (prefix: string) => (
   <>
     {/* ── Pain ── */}
-    <Route
-      path="/patients/:id/pain"
-      element={<S><PainAssessmentListPage /></S>}
-    />
-    <Route
-      path="/patients/:id/pain/new"
-      element={<S><PainAssessmentFormPage /></S>}
-    />
-    <Route
-      path="/patients/:id/pain/:assessmentId"
-      element={<S><PainAssessmentDetailPage /></S>}
-    />
-    <Route
-      path="/patients/:id/pain/:assessmentId/edit"
-      element={<S><PainAssessmentFormPage /></S>}
-    />
+    <Route path={`${prefix}/:id/pain`}                          element={<S><PainAssessmentListPage /></S>} />
+    <Route path={`${prefix}/:id/pain/new`}                      element={<S><PainAssessmentFormPage /></S>} />
+    <Route path={`${prefix}/:id/pain/:assessmentId`}            element={<S><PainAssessmentDetailPage /></S>} />
+    <Route path={`${prefix}/:id/pain/:assessmentId/edit`}       element={<S><PainAssessmentFormPage /></S>} />
 
     {/* ── Pharmacist ── */}
-    <Route
-      path="/patients/:id/pharmacist-assessment"
-      element={<S><PharmacistAssessmentListPage /></S>}
-    />
-    <Route
-      path="/patients/:id/pharmacist-assessment/new"
-      element={<S><PharmacistAssessmentFormPage /></S>}
-    />
-    <Route
-      path="/patients/:id/pharmacist-assessment/:assessmentId"
-      element={<S><PharmacistAssessmentDetailPage /></S>}
-    />
-    <Route
-      path="/patients/:id/pharmacist-assessment/:assessmentId/edit"
-      element={<S><PharmacistAssessmentFormPage /></S>}
-    />
+    <Route path={`${prefix}/:id/pharmacist-assessment`}                    element={<S><PharmacistAssessmentListPage /></S>} />
+    <Route path={`${prefix}/:id/pharmacist-assessment/new`}                element={<S><PharmacistAssessmentFormPage /></S>} />
+    <Route path={`${prefix}/:id/pharmacist-assessment/:assessmentId`}      element={<S><PharmacistAssessmentDetailPage /></S>} />
+    <Route path={`${prefix}/:id/pharmacist-assessment/:assessmentId/edit`} element={<S><PharmacistAssessmentFormPage /></S>} />
 
     {/* ── Physiotherapy ── */}
-    <Route
-      path="/patients/:id/physiotherapy-assessment"
-      element={<S><PhysiotherapyAssessmentListPage /></S>}
-    />
-    <Route
-      path="/patients/:id/physiotherapy-assessment/new"
-      element={<S><PhysiotherapyAssessmentFormPage /></S>}
-    />
-    <Route
-      path="/patients/:id/physiotherapy-assessment/:assessmentId"
-      element={<S><PhysiotherapyAssessmentDetailPage /></S>}
-    />
-    <Route
-      path="/patients/:id/physiotherapy-assessment/:assessmentId/edit"
-      element={<S><PhysiotherapyAssessmentFormPage /></S>}
-    />
+    <Route path={`${prefix}/:id/physiotherapy-assessment`}                    element={<S><PhysiotherapyAssessmentListPage /></S>} />
+    <Route path={`${prefix}/:id/physiotherapy-assessment/new`}                element={<S><PhysiotherapyAssessmentFormPage /></S>} />
+    <Route path={`${prefix}/:id/physiotherapy-assessment/:assessmentId`}      element={<S><PhysiotherapyAssessmentDetailPage /></S>} />
+    <Route path={`${prefix}/:id/physiotherapy-assessment/:assessmentId/edit`} element={<S><PhysiotherapyAssessmentFormPage /></S>} />
 
     {/* ── Family ── */}
-    <Route
-      path="/patients/:id/family-assessment"
-      element={<S><FamilyAssessmentListPage /></S>}
-    />
-    <Route
-      path="/patients/:id/family-assessment/new"
-      element={<S><FamilyAssessmentFormPage /></S>}
-    />
-    <Route
-      path="/patients/:id/family-assessment/:assessmentId"
-      element={<S><FamilyAssessmentDetailPage /></S>}
-    />
-    <Route
-      path="/patients/:id/family-assessment/:assessmentId/edit"
-      element={<S><FamilyAssessmentFormPage /></S>}
-    />
+    <Route path={`${prefix}/:id/family-assessment`}                    element={<S><FamilyAssessmentListPage /></S>} />
+    <Route path={`${prefix}/:id/family-assessment/new`}                element={<S><FamilyAssessmentFormPage /></S>} />
+    <Route path={`${prefix}/:id/family-assessment/:assessmentId`}      element={<S><FamilyAssessmentDetailPage /></S>} />
+    <Route path={`${prefix}/:id/family-assessment/:assessmentId/edit`} element={<S><FamilyAssessmentFormPage /></S>} />
 
     {/* ── Nutritional ── */}
-    <Route
-      path="/patients/:id/nutritional-assessment"
-      element={<S><NutritionalAssessmentListPage /></S>}
-    />
-    <Route
-      path="/patients/:id/nutritional-assessment/new"
-      element={<S><NutritionalAssessmentFormPage /></S>}
-    />
-    <Route
-      path="/patients/:id/nutritional-assessment/:assessmentId"
-      element={<S><NutritionalAssessmentDetailPage /></S>}
-    />
-    <Route
-      path="/patients/:id/nutritional-assessment/:assessmentId/edit"
-      element={<S><NutritionalAssessmentFormPage /></S>}
-    />
+    <Route path={`${prefix}/:id/nutritional-assessment`}                    element={<S><NutritionalAssessmentListPage /></S>} />
+    <Route path={`${prefix}/:id/nutritional-assessment/new`}                element={<S><NutritionalAssessmentFormPage /></S>} />
+    <Route path={`${prefix}/:id/nutritional-assessment/:assessmentId`}      element={<S><NutritionalAssessmentDetailPage /></S>} />
+    <Route path={`${prefix}/:id/nutritional-assessment/:assessmentId/edit`} element={<S><NutritionalAssessmentFormPage /></S>} />
 
     {/* ── Social ── */}
-    <Route
-      path="/patients/:id/social-assessment"
-      element={<S><SocialAssessmentListPage /></S>}
-    />
-    <Route
-      path="/patients/:id/social-assessment/new"
-      element={<S><SocialAssessmentFormPage /></S>}
-    />
-    <Route
-      path="/patients/:id/social-assessment/:assessmentId"
-      element={<S><SocialAssessmentDetailPage /></S>}
-    />
-    <Route
-      path="/patients/:id/social-assessment/:assessmentId/edit"
-      element={<S><SocialAssessmentFormPage /></S>}
-    />
+    <Route path={`${prefix}/:id/social-assessment`}                    element={<S><SocialAssessmentListPage /></S>} />
+    <Route path={`${prefix}/:id/social-assessment/new`}                element={<S><SocialAssessmentFormPage /></S>} />
+    <Route path={`${prefix}/:id/social-assessment/:assessmentId`}      element={<S><SocialAssessmentDetailPage /></S>} />
+    <Route path={`${prefix}/:id/social-assessment/:assessmentId/edit`} element={<S><SocialAssessmentFormPage /></S>} />
 
     {/* ── Spiritual ── */}
-    <Route
-      path="/patients/:id/spiritual-assessment"
-      element={<S><SpiritualAssessmentListPage /></S>}
-    />
-    <Route
-      path="/patients/:id/spiritual-assessment/new"
-      element={<S><SpiritualAssessmentFormPage /></S>}
-    />
-    <Route
-      path="/patients/:id/spiritual-assessment/:assessmentId"
-      element={<S><SpiritualAssessmentDetailPage /></S>}
-    />
-    <Route
-      path="/patients/:id/spiritual-assessment/:assessmentId/edit"
-      element={<S><SpiritualAssessmentFormPage /></S>}
-    />
+    <Route path={`${prefix}/:id/spiritual-assessment`}                    element={<S><SpiritualAssessmentListPage /></S>} />
+    <Route path={`${prefix}/:id/spiritual-assessment/new`}                element={<S><SpiritualAssessmentFormPage /></S>} />
+    <Route path={`${prefix}/:id/spiritual-assessment/:assessmentId`}      element={<S><SpiritualAssessmentDetailPage /></S>} />
+    <Route path={`${prefix}/:id/spiritual-assessment/:assessmentId/edit`} element={<S><SpiritualAssessmentFormPage /></S>} />
 
     {/* ── Psychiatry ── */}
-    <Route
-      path="/patients/:id/psychiatry-assessment"
-      element={<S><PsychiatryAssessmentListPage /></S>}
-    />
-    <Route
-      path="/patients/:id/psychiatry-assessment/new"
-      element={<S><PsychiatryAssessmentFormPage /></S>}
-    />
-    <Route
-      path="/patients/:id/psychiatry-assessment/:assessmentId"
-      element={<S><PsychiatryAssessmentDetailPage /></S>}
-    />
-    <Route
-      path="/patients/:id/psychiatry-assessment/:assessmentId/edit"
-      element={<S><PsychiatryAssessmentFormPage /></S>}
-    />
+    <Route path={`${prefix}/:id/psychiatry-assessment`}                    element={<S><PsychiatryAssessmentListPage /></S>} />
+    <Route path={`${prefix}/:id/psychiatry-assessment/new`}                element={<S><PsychiatryAssessmentFormPage /></S>} />
+    <Route path={`${prefix}/:id/psychiatry-assessment/:assessmentId`}      element={<S><PsychiatryAssessmentDetailPage /></S>} />
+    <Route path={`${prefix}/:id/psychiatry-assessment/:assessmentId/edit`} element={<S><PsychiatryAssessmentFormPage /></S>} />
   </>
 );
 
@@ -396,10 +295,22 @@ const AppRoutes: React.FC = () => (
           element={<S><DischargePatientPage /></S>}
         />
 
-        {/* Admin sub-record detail routes */}
+        {/* ── Admin sub-record detail routes ── */}
         <Route
           path="/admin/patients/:id/visits/:visitId"
           element={<S><VisitDetailPage /></S>}
+        />
+        <Route
+          path="/admin/patients/:id/progress-note/:noteId"
+          element={<S><RecordProgressNotePage /></S>}
+        />
+        <Route
+          path="/admin/patients/:id/progress-note/:noteId/edit"
+          element={<S><RecordProgressNotePage /></S>}
+        />
+        <Route
+          path="/admin/patients/:id/hospice-nursing/:assessmentId"
+          element={<S><HospiceNursingDetailPage /></S>}
         />
         <Route
           path="/admin/patients/:id/medications/:medicationId"
@@ -421,6 +332,9 @@ const AppRoutes: React.FC = () => (
           path="/admin/patients/:id/admissions/:admissionId"
           element={<S><AdmissionDetailPage /></S>}
         />
+
+        {/* ── Admin assessment routes (mirror of the staff ones) ── */}
+        {buildAssessmentRoutes('/admin/patients')}
 
         <Route path="/admin/staff" element={<S><StaffManagementPage /></S>} />
         <Route
@@ -526,11 +440,8 @@ const AppRoutes: React.FC = () => (
             element={<S><RecordProgressNotePage /></S>}
           />
 
-          {/* ═══════════════════════════════════════════════════
-              NEW: All 8 assessment routes
-              (form + list + detail + edit per assessment)
-          ═══════════════════════════════════════════════════ */}
-          {assessmentRoutes}
+          {/* ── All 8 assessment routes ── */}
+          {buildAssessmentRoutes('/patients')}
 
           {/* ── Physician-only ── */}
           <Route element={<PhysicianOnlyRoute />}>

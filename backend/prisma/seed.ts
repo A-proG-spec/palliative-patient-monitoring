@@ -88,13 +88,13 @@ const STAFF_SEEDS: StaffSeed[] = [
   // ── Physicians ──
   {
     name: 'Dr. Abebe Tesfaye',
-    email: 'abebe.physician@y12hmc.et',
+    email: 'abebe.physician@gmail.com',
     phone: '+251911100001',
     role: 'Physician',
   },
   {
     name: 'Dr. Tigist Alemu',
-    email: 'tigist.physician@y12hmc.et',
+    email: 'tigist.physician@gmail.com',
     phone: '+251911100002',
     role: 'Physician',
   },
@@ -102,13 +102,13 @@ const STAFF_SEEDS: StaffSeed[] = [
   // ── Nurses ──
   {
     name: 'Selam Bekele',
-    email: 'selam.nurse@y12hmc.et',
+    email: 'selam.nurse@gmail.com',
     phone: '+251911100003',
     role: 'Nurse',
   },
   {
     name: 'Meron Worku',
-    email: 'meron.nurse@y12hmc.et',
+    email: 'meron.nurse@gmail.com',
     phone: '+251911100004',
     role: 'Nurse',
   },
@@ -116,7 +116,7 @@ const STAFF_SEEDS: StaffSeed[] = [
   // ── Pharmacist ──
   {
     name: 'Dawit Girma',
-    email: 'dawit.pharmacist@y12hmc.et',
+    email: 'dawit.pharmacist@gmail.com',
     phone: '+251911100005',
     role: 'Pharmacist',
   },
@@ -124,7 +124,7 @@ const STAFF_SEEDS: StaffSeed[] = [
   // ── Radiologist ──
   {
     name: 'Hanna Solomon',
-    email: 'hanna.radiologist@y12hmc.et',
+    email: 'hanna.radiologist@gmail.com',
     phone: '+251911100006',
     role: 'Radiologist',
   },
@@ -132,7 +132,7 @@ const STAFF_SEEDS: StaffSeed[] = [
   // ── Laboratory Technician ──
   {
     name: 'Yonas Kebede',
-    email: 'yonas.labtech@y12hmc.et',
+    email: 'yonas.labtech@gmail.com',
     phone: '+251911100007',
     role: 'LaboratoryTechnician',
   },
@@ -140,7 +140,7 @@ const STAFF_SEEDS: StaffSeed[] = [
   // ── Physiologist (NEW) ──
   {
     name: 'Dr. Bereket Assefa',
-    email: 'bereket.physiologist@y12hmc.et',
+    email: 'bereket.physiologist@gmail.com',
     phone: '+251911100008',
     role: 'Physiologist',
   },
@@ -148,7 +148,7 @@ const STAFF_SEEDS: StaffSeed[] = [
   // ── Psychiatrist (NEW) ──
   {
     name: 'Dr. Rahel Tadesse',
-    email: 'rahel.psychiatrist@y12hmc.et',
+    email: 'rahel.psychiatrist@gmail.com',
     phone: '+251911100009',
     role: 'Psychiatrist',
   },
@@ -156,7 +156,7 @@ const STAFF_SEEDS: StaffSeed[] = [
   // ── Psychologist (NEW) ──
   {
     name: 'Dr. Samuel Getachew',
-    email: 'samuel.psychologist@y12hmc.et',
+    email: 'samuel.psychologist@gmail.com',
     phone: '+251911100010',
     role: 'Psychologist',
   },
@@ -164,21 +164,21 @@ const STAFF_SEEDS: StaffSeed[] = [
   // ── Social Worker (NEW) ──
   {
     name: 'Bethlehem Negash',
-    email: 'bethlehem.socialworker@y12hmc.et',
+    email: 'bethlehem.socialworker@gmail.com',
     phone: '+251911100011',
     role: 'SocialWorker',
   },
   //nutritionist
   {
     name: 'Alemitu Bekele',
-    email: 'alemitu.nutritionist@y12hmc.et',
+    email: 'alemitu.nutritionist@gmail.com',
     phone: '+251911100013',
     role: 'Nutritionist',
   },
   // ── Spiritual Person (NEW) ──
   {
     name: 'Father Yohannes Bekele',
-    email: 'yohannes.spiritual@y12hmc.et',
+    email: 'yohannes.spiritual@gmail.com',
     phone: '+251911100012',
     role: 'SpiritualPerson',
   },

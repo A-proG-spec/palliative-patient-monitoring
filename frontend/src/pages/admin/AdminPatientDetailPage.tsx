@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import type { NavigateFunction, Location } from 'react-router-dom';
 import {
   XCircle, Phone, MapPin, User, Calendar, FileText, Printer,
   AlertTriangle, NotebookPen, Trash2, Heart,
@@ -19,6 +20,8 @@ import {
   useRestoreProgressNote,
   useDeleteHospiceNursing,
   useRestoreHospiceNursing,
+  useDeleteVisit,
+  useRestoreVisit,
 } from '@/hooks/useAdmin';
 
 import {
@@ -62,7 +65,6 @@ import { AdminDeleteButton } from '@/components/admin/AdminDeleteButton';
 import { AdminRestoreButton } from '@/components/admin/AdminRestoreButton';
 import {
   AssessmentTabPanel,
-  DeletedBadge,
   dateColumn,
   typeColumn,
   adaptDeleteMutation,
@@ -75,7 +77,7 @@ import type { DischargeSummary } from '@/components/admin/DischargePatientModal'
 import { printDischargeSummary } from '@/lib/printDischargeSummary';
 
 // ═══════════════════════════════════════════════════════════
-// RowActions — used by the non-assessment tabs
+// RowActions
 // ═══════════════════════════════════════════════════════════
 
 interface RowActionsProps {
@@ -226,14 +228,53 @@ const tabs = [
 ] as const;
 type Tab = typeof tabs[number];
 
-// ─────────────────────────────────────────────────────────────
-// Main page
-// ─────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════
+// OUTER WRAPPER — reads the URL param and hard-guards it.
+// NEVER calls any hook that depends on `patientId` above the
+// guard. All real work happens in the inner component.
+// ═════════════════════════════════════════════════════════════
+
 const AdminPatientDetailPage: React.FC = () => {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
 
+  // HARD GUARD — bail out before any hook that depends on patientId.
+  if (!patientId) {
+    return (
+      <div className="max-w-2xl">
+        <ErrorState
+          message="No patient ID found in the URL. This usually means a link was built incorrectly."
+          onRetry={() => navigate('/admin/patients')}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <PatientDetailContent
+      patientId={patientId}
+      navigate={navigate}
+      location={location}
+    />
+  );
+};
+
+// ═════════════════════════════════════════════════════════════
+// INNER COMPONENT — receives a guaranteed non-empty `patientId`.
+// ═════════════════════════════════════════════════════════════
+
+interface PatientDetailContentProps {
+  patientId: string;
+  navigate: NavigateFunction;
+  location: Location;
+}
+
+const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
+  patientId,
+  navigate,
+  location,
+}) => {
   const [activeTab, setActiveTab] = useState<Tab>('Visits');
   const [showDischargeSummaryViewer, setShowDischargeSummaryViewer] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
@@ -241,32 +282,32 @@ const AdminPatientDetailPage: React.FC = () => {
   // ── Discharge summary ──
   const locationState =
     (location.state as { dischargeSummary?: DischargeSummary } | null) ?? null;
-  const { data: fetchedDischargeSummary } = useDischargeSummary(patientId!);
+  const { data: fetchedDischargeSummary } = useDischargeSummary(patientId);
   const dischargeSummary: DischargeSummary | null =
     locationState?.dischargeSummary ?? fetchedDischargeSummary ?? null;
 
   // ── Primary patient data ──
-  const { data: patient, isLoading, error, refetch } = useAdminPatientDetail(patientId!);
+  const { data: patient, isLoading, error, refetch } = useAdminPatientDetail(patientId);
 
   // ── Sub-record data ──
-  const { data: visitsData } = usePatientVisits(patientId!, { includeDeleted: showDeleted });
-  const { data: medsData } = usePatientMedications(patientId!, { includeDeleted: showDeleted });
-  const { data: labsData } = usePatientLabs(patientId!, { includeDeleted: showDeleted });
-  const { data: imagingData } = usePatientImaging(patientId!, { includeDeleted: showDeleted });
-  const { data: refsData } = usePatientReferrals(patientId!);
-  const { data: admsData } = usePatientAdmissions(patientId!, { includeDeleted: showDeleted });
-  const { data: progressNotesData } = useProgressNotes(patientId!, { includeDeleted: showDeleted });
-  const { data: hospiceData } = usePatientHospiceAssessments(patientId!, { includeDeleted: showDeleted });
+  const { data: visitsData } = usePatientVisits(patientId, { includeDeleted: showDeleted });
+  const { data: medsData } = usePatientMedications(patientId, { includeDeleted: showDeleted });
+  const { data: labsData } = usePatientLabs(patientId, { includeDeleted: showDeleted });
+  const { data: imagingData } = usePatientImaging(patientId, { includeDeleted: showDeleted });
+  const { data: refsData } = usePatientReferrals(patientId);
+  const { data: admsData } = usePatientAdmissions(patientId, { includeDeleted: showDeleted });
+  const { data: progressNotesData } = useProgressNotes(patientId, { includeDeleted: showDeleted });
+  const { data: hospiceData } = usePatientHospiceAssessments(patientId, { includeDeleted: showDeleted });
 
   // ── Assessment data ──
-  const { data: painData } = usePatientPainAssessments(patientId!, { includeDeleted: showDeleted });
-  const { data: pharmacistData } = usePatientPharmacistAssessments(patientId!, { includeDeleted: showDeleted });
-  const { data: physioData } = usePatientPhysiotherapyAssessments(patientId!, { includeDeleted: showDeleted });
-  const { data: familyData } = usePatientFamilyAssessments(patientId!, { includeDeleted: showDeleted });
-  const { data: nutritionData } = usePatientNutritionalAssessments(patientId!, { includeDeleted: showDeleted });
-  const { data: socialData } = usePatientSocialAssessments(patientId!, { includeDeleted: showDeleted });
-  const { data: spiritualData } = usePatientSpiritualAssessments(patientId!, { includeDeleted: showDeleted });
-  const { data: psychiatryData } = usePatientPsychiatryAssessments(patientId!, { includeDeleted: showDeleted });
+  const { data: painData } = usePatientPainAssessments(patientId, { includeDeleted: showDeleted });
+  const { data: pharmacistData } = usePatientPharmacistAssessments(patientId, { includeDeleted: showDeleted });
+  const { data: physioData } = usePatientPhysiotherapyAssessments(patientId, { includeDeleted: showDeleted });
+  const { data: familyData } = usePatientFamilyAssessments(patientId, { includeDeleted: showDeleted });
+  const { data: nutritionData } = usePatientNutritionalAssessments(patientId, { includeDeleted: showDeleted });
+  const { data: socialData } = usePatientSocialAssessments(patientId, { includeDeleted: showDeleted });
+  const { data: spiritualData } = usePatientSpiritualAssessments(patientId, { includeDeleted: showDeleted });
+  const { data: psychiatryData } = usePatientPsychiatryAssessments(patientId, { includeDeleted: showDeleted });
 
   const painAssessments = painData?.items ?? [];
   const pharmacistAssessments = pharmacistData?.items ?? [];
@@ -294,31 +335,33 @@ const AdminPatientDetailPage: React.FC = () => {
   const restoreProgressNote = useRestoreProgressNote();
   const deleteHospice = useDeleteHospiceNursing();
   const restoreHospice = useRestoreHospiceNursing();
+  const deleteVisit = useDeleteVisit();
+  const restoreVisit = useRestoreVisit();
 
   // ── Assessment delete/restore mutations ──
-  const deletePain = useDeletePainAssessment(patientId!);
-  const restorePain = useRestorePainAssessment(patientId!);
+  const deletePain = useDeletePainAssessment(patientId);
+  const restorePain = useRestorePainAssessment(patientId);
 
-  const deletePharmacist = useDeletePharmacistAssessment(patientId!);
-  const restorePharmacist = useRestorePharmacistAssessment(patientId!);
+  const deletePharmacist = useDeletePharmacistAssessment(patientId);
+  const restorePharmacist = useRestorePharmacistAssessment(patientId);
 
-  const deletePhysio = useDeletePhysiotherapyAssessment(patientId!);
-  const restorePhysio = useRestorePhysiotherapyAssessment(patientId!);
+  const deletePhysio = useDeletePhysiotherapyAssessment(patientId);
+  const restorePhysio = useRestorePhysiotherapyAssessment(patientId);
 
-  const deleteFamily = useDeleteFamilyAssessment(patientId!);
-  const restoreFamily = useRestoreFamilyAssessment(patientId!);
+  const deleteFamily = useDeleteFamilyAssessment(patientId);
+  const restoreFamily = useRestoreFamilyAssessment(patientId);
 
-  const deleteNutrition = useDeleteNutritionalAssessment(patientId!);
-  const restoreNutrition = useRestoreNutritionalAssessment(patientId!);
+  const deleteNutrition = useDeleteNutritionalAssessment(patientId);
+  const restoreNutrition = useRestoreNutritionalAssessment(patientId);
 
-  const deleteSocial = useDeleteSocialAssessment(patientId!);
-  const restoreSocial = useRestoreSocialAssessment(patientId!);
+  const deleteSocial = useDeleteSocialAssessment(patientId);
+  const restoreSocial = useRestoreSocialAssessment(patientId);
 
-  const deleteSpiritual = useDeleteSpiritualAssessment(patientId!);
-  const restoreSpiritual = useRestoreSpiritualAssessment(patientId!);
+  const deleteSpiritual = useDeleteSpiritualAssessment(patientId);
+  const restoreSpiritual = useRestoreSpiritualAssessment(patientId);
 
-  const deletePsychiatry = useDeletePsychiatryAssessment(patientId!);
-  const restorePsychiatry = useRestorePsychiatryAssessment(patientId!);
+  const deletePsychiatry = useDeletePsychiatryAssessment(patientId);
+  const restorePsychiatry = useRestorePsychiatryAssessment(patientId);
 
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
@@ -433,7 +476,6 @@ const AdminPatientDetailPage: React.FC = () => {
 
       {/* ── Tabbed records ── */}
       <Card padding="none">
-        {/* Tab bar + Show Deleted toggle */}
         <div className="flex items-center justify-between border-b border-border-base">
           <div className="flex overflow-x-auto flex-1">
             {tabs.map((tab) => (
@@ -457,7 +499,6 @@ const AdminPatientDetailPage: React.FC = () => {
             ))}
           </div>
 
-          {/* Show deleted toggle */}
           <label className="flex items-center gap-2 px-4 py-3 text-xs text-text-secondary cursor-pointer hover:text-on-surface transition-colors flex-shrink-0">
             <input
               type="checkbox"
@@ -472,14 +513,14 @@ const AdminPatientDetailPage: React.FC = () => {
 
         <div className="p-5 overflow-x-auto">
           {/* ═══════════════════════════════════════════════════════
-              Visits
+              Visits — WITH DELETE/RESTORE
           ═══════════════════════════════════════════════════════ */}
           {activeTab === 'Visits' && (
             visitsData?.items?.length ? (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-text-muted">
-                    {['Date', 'Type', 'Status', 'Outcome', 'Scores'].map((h) => (
+                    {['Date', 'Type', 'Status', 'Outcome', 'Scores', ''].map((h) => (
                       <th key={h} className="pb-3 pr-4 font-medium">{h}</th>
                     ))}
                   </tr>
@@ -491,23 +532,64 @@ const AdminPatientDetailPage: React.FC = () => {
                       <tr
                         key={v.id}
                         className={cn(
-                          'hover:bg-surface-low cursor-pointer',
+                          'hover:bg-surface-low',
                           isDeleted && 'bg-error-bg/20 opacity-70',
                         )}
-                        onClick={() => navigate(`/admin/patients/${patientId}/visits/${v.id}`)}
                       >
-                        <td className="py-3 pr-4">
+                        <td
+                          className="py-3 pr-4 cursor-pointer"
+                          onClick={() => navigate(`/admin/patients/${patientId}/visits/${v.id}`)}
+                        >
                           {formatDate(v.visitDate)}
                           {isDeleted && (
                             <Badge variant="error" className="ml-2 text-[10px]">Deleted</Badge>
                           )}
                         </td>
-                        <td className="py-3 pr-4">
-                          <Badge variant="secondary">{VISIT_TYPE_LABELS[v.visitType] || v.visitType}</Badge>
+                        <td
+                          className="py-3 pr-4 cursor-pointer"
+                          onClick={() => navigate(`/admin/patients/${patientId}/visits/${v.id}`)}
+                        >
+                          <Badge variant="secondary">
+                            {VISIT_TYPE_LABELS[v.visitType] || v.visitType}
+                          </Badge>
                         </td>
-                        <td className="py-3 pr-4"><StatusBadge status={v.overallStatus} /></td>
-                        <td className="py-3 pr-4"><StatusBadge status={v.outcome} type="visit" /></td>
-                        <td className="py-3 text-text-muted text-xs">PPS {v.ppsScore}% · KPS {v.kpsScore}</td>
+                        <td
+                          className="py-3 pr-4 cursor-pointer"
+                          onClick={() => navigate(`/admin/patients/${patientId}/visits/${v.id}`)}
+                        >
+                          <StatusBadge status={v.overallStatus} />
+                        </td>
+                        <td
+                          className="py-3 pr-4 cursor-pointer"
+                          onClick={() => navigate(`/admin/patients/${patientId}/visits/${v.id}`)}
+                        >
+                          <StatusBadge status={v.outcome} type="visit" />
+                        </td>
+                        <td
+                          className="py-3 text-text-muted text-xs cursor-pointer"
+                          onClick={() => navigate(`/admin/patients/${patientId}/visits/${v.id}`)}
+                        >
+                          PPS {v.ppsScore}% · KPS {v.kpsScore}
+                        </td>
+                        <td className="py-3 text-right">
+                          <RowActions
+                            isDeleted={isDeleted}
+                            resourceLabel="Visit"
+                            resourceIdentifier={`Visit from ${formatDate(v.visitDate)}`}
+                            isDeleting={
+                              deleteVisit.isPending &&
+                              (deleteVisit.variables as any)?.visitId === v.id
+                            }
+                            isRestoring={
+                              restoreVisit.isPending &&
+                              (restoreVisit.variables as any) === v.id
+                            }
+                            onDelete={(reason) =>
+                              deleteVisit.mutate({ visitId: v.id, reason })
+                            }
+                            onRestore={() => restoreVisit.mutate(v.id)}
+                          />
+                        </td>
                       </tr>
                     );
                   })}
@@ -545,7 +627,12 @@ const AdminPatientDetailPage: React.FC = () => {
                       )}
                     >
                       <div className="flex items-start justify-between gap-3 flex-wrap">
-                        <div className="flex-1 min-w-0">
+                        <div
+                          className="flex-1 min-w-0 cursor-pointer"
+                          onClick={() =>
+                            navigate(`/admin/patients/${patientId}/progress-note/${note.id}`)
+                          }
+                        >
                           <div className="flex items-center gap-2 flex-wrap mb-1.5">
                             <Badge variant="primary">
                               <NotebookPen size={11} className="mr-0.5" />
@@ -578,14 +665,14 @@ const AdminPatientDetailPage: React.FC = () => {
                             }
                             onDelete={(reason) =>
                               deleteProgressNote.mutate({
-                                patientId: patientId!,
+                                patientId,
                                 resourceId: note.id,
                                 reason,
                               })
                             }
                             onRestore={() =>
                               restoreProgressNote.mutate({
-                                patientId: patientId!,
+                                patientId,
                                 resourceId: note.id,
                               })
                             }
@@ -617,15 +704,7 @@ const AdminPatientDetailPage: React.FC = () => {
                 <table className="w-full text-sm min-w-[820px]">
                   <thead>
                     <tr className="text-left text-xs text-text-muted">
-                      {[
-                        'Assessment Date',
-                        'Assessed By',
-                        'Consciousness',
-                        'Pain',
-                        'Mobility',
-                        'Emotional',
-                        '',
-                      ].map((h) => (
+                      {['Assessment Date', 'Assessed By', 'Consciousness', 'Pain', 'Mobility', 'Emotional', ''].map((h) => (
                         <th key={h} className="pb-3 pr-4 font-medium whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -636,10 +715,7 @@ const AdminPatientDetailPage: React.FC = () => {
                       return (
                         <tr
                           key={a.id}
-                          className={cn(
-                            'hover:bg-surface-low',
-                            isDeleted && 'bg-error-bg/20 opacity-70',
-                          )}
+                          className={cn('hover:bg-surface-low', isDeleted && 'bg-error-bg/20 opacity-70')}
                         >
                           <td
                             className="py-3 pr-4 whitespace-nowrap cursor-pointer"
@@ -662,15 +738,7 @@ const AdminPatientDetailPage: React.FC = () => {
                           </td>
                           <td className="py-3 pr-4">
                             {a.painScore !== null && a.painScore !== undefined ? (
-                              <Badge
-                                variant={
-                                  a.painScore >= 7
-                                    ? 'error'
-                                    : a.painScore >= 4
-                                      ? 'warning'
-                                      : 'success'
-                                }
-                              >
+                              <Badge variant={a.painScore >= 7 ? 'error' : a.painScore >= 4 ? 'warning' : 'success'}>
                                 {a.painScore}/10
                               </Badge>
                             ) : (
@@ -694,17 +762,10 @@ const AdminPatientDetailPage: React.FC = () => {
                                 (restoreHospice.variables as any)?.resourceId === a.id
                               }
                               onDelete={(reason) =>
-                                deleteHospice.mutate({
-                                  patientId: patientId!,
-                                  resourceId: a.id,
-                                  reason,
-                                })
+                                deleteHospice.mutate({ patientId, resourceId: a.id, reason })
                               }
                               onRestore={() =>
-                                restoreHospice.mutate({
-                                  patientId: patientId!,
-                                  resourceId: a.id,
-                                })
+                                restoreHospice.mutate({ patientId, resourceId: a.id })
                               }
                             />
                           </td>
@@ -746,10 +807,7 @@ const AdminPatientDetailPage: React.FC = () => {
                     return (
                       <tr
                         key={m.id}
-                        className={cn(
-                          'hover:bg-surface-low',
-                          isDeleted && 'bg-error-bg/20 opacity-70',
-                        )}
+                        className={cn('hover:bg-surface-low', isDeleted && 'bg-error-bg/20 opacity-70')}
                       >
                         <td
                           className="py-3 pr-4 font-medium cursor-pointer"
@@ -776,17 +834,10 @@ const AdminPatientDetailPage: React.FC = () => {
                               (restoreMedication.variables as any)?.resourceId === m.id
                             }
                             onDelete={(reason) =>
-                              deleteMedication.mutate({
-                                patientId: patientId!,
-                                resourceId: m.id,
-                                reason,
-                              })
+                              deleteMedication.mutate({ patientId, resourceId: m.id, reason })
                             }
                             onRestore={() =>
-                              restoreMedication.mutate({
-                                patientId: patientId!,
-                                resourceId: m.id,
-                              })
+                              restoreMedication.mutate({ patientId, resourceId: m.id })
                             }
                           />
                         </td>
@@ -826,10 +877,7 @@ const AdminPatientDetailPage: React.FC = () => {
                     return (
                       <tr
                         key={l.id}
-                        className={cn(
-                          'hover:bg-surface-low',
-                          isDeleted && 'bg-error-bg/20 opacity-70',
-                        )}
+                        className={cn('hover:bg-surface-low', isDeleted && 'bg-error-bg/20 opacity-70')}
                       >
                         <td
                           className="py-3 pr-4 font-medium cursor-pointer"
@@ -856,17 +904,10 @@ const AdminPatientDetailPage: React.FC = () => {
                               (restoreLab.variables as any)?.resourceId === l.id
                             }
                             onDelete={(reason) =>
-                              deleteLab.mutate({
-                                patientId: patientId!,
-                                resourceId: l.id,
-                                reason,
-                              })
+                              deleteLab.mutate({ patientId, resourceId: l.id, reason })
                             }
                             onRestore={() =>
-                              restoreLab.mutate({
-                                patientId: patientId!,
-                                resourceId: l.id,
-                              })
+                              restoreLab.mutate({ patientId, resourceId: l.id })
                             }
                           />
                         </td>
@@ -906,10 +947,7 @@ const AdminPatientDetailPage: React.FC = () => {
                     return (
                       <tr
                         key={img.id}
-                        className={cn(
-                          'hover:bg-surface-low',
-                          isDeleted && 'bg-error-bg/20 opacity-70',
-                        )}
+                        className={cn('hover:bg-surface-low', isDeleted && 'bg-error-bg/20 opacity-70')}
                       >
                         <td
                           className="py-3 pr-4 cursor-pointer"
@@ -937,17 +975,10 @@ const AdminPatientDetailPage: React.FC = () => {
                               (restoreImaging.variables as any)?.resourceId === img.id
                             }
                             onDelete={(reason) =>
-                              deleteImaging.mutate({
-                                patientId: patientId!,
-                                resourceId: img.id,
-                                reason,
-                              })
+                              deleteImaging.mutate({ patientId, resourceId: img.id, reason })
                             }
                             onRestore={() =>
-                              restoreImaging.mutate({
-                                patientId: patientId!,
-                                resourceId: img.id,
-                              })
+                              restoreImaging.mutate({ patientId, resourceId: img.id })
                             }
                           />
                         </td>
@@ -969,7 +1000,7 @@ const AdminPatientDetailPage: React.FC = () => {
           )}
 
           {/* ═══════════════════════════════════════════════════════
-              Referrals (no soft delete on backend)
+              Referrals
           ═══════════════════════════════════════════════════════ */}
           {activeTab === 'Referrals' && (
             refsData?.items?.length ? (
@@ -1024,10 +1055,7 @@ const AdminPatientDetailPage: React.FC = () => {
                     return (
                       <tr
                         key={a.id}
-                        className={cn(
-                          'hover:bg-surface-low',
-                          isDeleted && 'bg-error-bg/20 opacity-70',
-                        )}
+                        className={cn('hover:bg-surface-low', isDeleted && 'bg-error-bg/20 opacity-70')}
                       >
                         <td
                           className="py-3 pr-4 cursor-pointer"
@@ -1054,17 +1082,10 @@ const AdminPatientDetailPage: React.FC = () => {
                               (restoreAdmission.variables as any)?.resourceId === a.id
                             }
                             onDelete={(reason) =>
-                              deleteAdmission.mutate({
-                                patientId: patientId!,
-                                resourceId: a.id,
-                                reason,
-                              })
+                              deleteAdmission.mutate({ patientId, resourceId: a.id, reason })
                             }
                             onRestore={() =>
-                              restoreAdmission.mutate({
-                                patientId: patientId!,
-                                resourceId: a.id,
-                              })
+                              restoreAdmission.mutate({ patientId, resourceId: a.id })
                             }
                           />
                         </td>
@@ -1091,7 +1112,8 @@ const AdminPatientDetailPage: React.FC = () => {
           {activeTab === 'Pain Assessments' && (
             <AssessmentTabPanel
               items={painAssessments}
-              patientId={patientId!}
+              patientId={patientId}
+              basePath="/admin/patients"
               resourceLabel="Pain assessment"
               detailRoute="pain"
               showDeleted={showDeleted}
@@ -1106,15 +1128,7 @@ const AdminPatientDetailPage: React.FC = () => {
                   header: 'Pain Score',
                   render: (a: any) =>
                     a.currentPainScore !== null && a.currentPainScore !== undefined ? (
-                      <Badge
-                        variant={
-                          a.currentPainScore >= 7
-                            ? 'error'
-                            : a.currentPainScore >= 4
-                              ? 'warning'
-                              : 'success'
-                        }
-                      >
+                      <Badge variant={a.currentPainScore >= 7 ? 'error' : a.currentPainScore >= 4 ? 'warning' : 'success'}>
                         {a.currentPainScore}/10
                       </Badge>
                     ) : (
@@ -1131,13 +1145,12 @@ const AdminPatientDetailPage: React.FC = () => {
             />
           )}
 
-          {/* ═══════════════════════════════════════════════════════
-              Pharmacist Assessments
-          ═══════════════════════════════════════════════════════ */}
+          {/* Pharmacist */}
           {activeTab === 'Pharmacist Assessments' && (
             <AssessmentTabPanel
               items={pharmacistAssessments}
-              patientId={patientId!}
+              patientId={patientId}
+              basePath="/admin/patients"
               resourceLabel="Pharmacist assessment"
               detailRoute="pharmacist-assessment"
               showDeleted={showDeleted}
@@ -1152,15 +1165,7 @@ const AdminPatientDetailPage: React.FC = () => {
                   header: 'Pain Control',
                   render: (a: any) =>
                     a.painControl ? (
-                      <Badge
-                        variant={
-                          a.painControl === 'WellControlled'
-                            ? 'success'
-                            : a.painControl === 'PartiallyControlled'
-                              ? 'warning'
-                              : 'error'
-                        }
-                      >
+                      <Badge variant={a.painControl === 'WellControlled' ? 'success' : a.painControl === 'PartiallyControlled' ? 'warning' : 'error'}>
                         {a.painControl.replace(/([A-Z])/g, ' $1').trim()}
                       </Badge>
                     ) : (
@@ -1177,13 +1182,12 @@ const AdminPatientDetailPage: React.FC = () => {
             />
           )}
 
-          {/* ═══════════════════════════════════════════════════════
-              Physiotherapy Assessments
-          ═══════════════════════════════════════════════════════ */}
+          {/* Physiotherapy */}
           {activeTab === 'Physiotherapy Assessments' && (
             <AssessmentTabPanel
               items={physioAssessments}
-              patientId={patientId!}
+              patientId={patientId}
+              basePath="/admin/patients"
               resourceLabel="Physiotherapy assessment"
               detailRoute="physiotherapy-assessment"
               showDeleted={showDeleted}
@@ -1203,15 +1207,7 @@ const AdminPatientDetailPage: React.FC = () => {
                   header: 'Fall Risk',
                   render: (a: any) =>
                     a.fallRiskLevel ? (
-                      <Badge
-                        variant={
-                          a.fallRiskLevel === 'High'
-                            ? 'error'
-                            : a.fallRiskLevel === 'Moderate'
-                              ? 'warning'
-                              : 'success'
-                        }
-                      >
+                      <Badge variant={a.fallRiskLevel === 'High' ? 'error' : a.fallRiskLevel === 'Moderate' ? 'warning' : 'success'}>
                         {a.fallRiskLevel}
                       </Badge>
                     ) : (
@@ -1223,13 +1219,12 @@ const AdminPatientDetailPage: React.FC = () => {
             />
           )}
 
-          {/* ═══════════════════════════════════════════════════════
-              Family Assessments
-          ═══════════════════════════════════════════════════════ */}
+          {/* Family */}
           {activeTab === 'Family Assessments' && (
             <AssessmentTabPanel
               items={familyAssessments}
-              patientId={patientId!}
+              patientId={patientId}
+              basePath="/admin/patients"
               resourceLabel="Family assessment"
               detailRoute="family-assessment"
               showDeleted={showDeleted}
@@ -1243,11 +1238,7 @@ const AdminPatientDetailPage: React.FC = () => {
                 {
                   header: 'Burden',
                   render: (a: any) =>
-                    a.burdenLevel ? (
-                      <Badge variant="secondary">{a.burdenLevel}</Badge>
-                    ) : (
-                      <span className="text-text-muted text-xs">—</span>
-                    ),
+                    a.burdenLevel ? <Badge variant="secondary">{a.burdenLevel}</Badge> : <span className="text-text-muted text-xs">—</span>,
                 },
                 {
                   header: 'Assessor',
@@ -1259,13 +1250,12 @@ const AdminPatientDetailPage: React.FC = () => {
             />
           )}
 
-          {/* ═══════════════════════════════════════════════════════
-              Nutritional Assessments
-          ═══════════════════════════════════════════════════════ */}
+          {/* Nutritional */}
           {activeTab === 'Nutritional Assessments' && (
             <AssessmentTabPanel
               items={nutritionAssessments}
-              patientId={patientId!}
+              patientId={patientId}
+              basePath="/admin/patients"
               resourceLabel="Nutritional assessment"
               detailRoute="nutritional-assessment"
               showDeleted={showDeleted}
@@ -1285,16 +1275,7 @@ const AdminPatientDetailPage: React.FC = () => {
                   header: 'Risk',
                   render: (a: any) =>
                     a.overallNutritionalRisk ? (
-                      <Badge
-                        variant={
-                          a.overallNutritionalRisk === 'Critical' ||
-                          a.overallNutritionalRisk === 'High'
-                            ? 'error'
-                            : a.overallNutritionalRisk === 'Moderate'
-                              ? 'warning'
-                              : 'success'
-                        }
-                      >
+                      <Badge variant={a.overallNutritionalRisk === 'Critical' || a.overallNutritionalRisk === 'High' ? 'error' : a.overallNutritionalRisk === 'Moderate' ? 'warning' : 'success'}>
                         {a.overallNutritionalRisk}
                       </Badge>
                     ) : (
@@ -1306,13 +1287,12 @@ const AdminPatientDetailPage: React.FC = () => {
             />
           )}
 
-          {/* ═══════════════════════════════════════════════════════
-              Social Assessments
-          ═══════════════════════════════════════════════════════ */}
+          {/* Social */}
           {activeTab === 'Social Assessments' && (
             <AssessmentTabPanel
               items={socialAssessments}
-              patientId={patientId!}
+              patientId={patientId}
+              basePath="/admin/patients"
               resourceLabel="Social assessment"
               detailRoute="social-assessment"
               showDeleted={showDeleted}
@@ -1332,15 +1312,7 @@ const AdminPatientDetailPage: React.FC = () => {
                   header: 'Bereavement Risk',
                   render: (a: any) =>
                     a.bereavementRisk ? (
-                      <Badge
-                        variant={
-                          a.bereavementRisk === 'High'
-                            ? 'error'
-                            : a.bereavementRisk === 'Moderate'
-                              ? 'warning'
-                              : 'success'
-                        }
-                      >
+                      <Badge variant={a.bereavementRisk === 'High' ? 'error' : a.bereavementRisk === 'Moderate' ? 'warning' : 'success'}>
                         {a.bereavementRisk}
                       </Badge>
                     ) : (
@@ -1352,13 +1324,12 @@ const AdminPatientDetailPage: React.FC = () => {
             />
           )}
 
-          {/* ═══════════════════════════════════════════════════════
-              Spiritual Assessments
-          ═══════════════════════════════════════════════════════ */}
+          {/* Spiritual */}
           {activeTab === 'Spiritual Assessments' && (
             <AssessmentTabPanel
               items={spiritualAssessments}
-              patientId={patientId!}
+              patientId={patientId}
+              basePath="/admin/patients"
               resourceLabel="Spiritual assessment"
               detailRoute="spiritual-assessment"
               showDeleted={showDeleted}
@@ -1378,16 +1349,7 @@ const AdminPatientDetailPage: React.FC = () => {
                   header: 'Distress Level',
                   render: (a: any) =>
                     a.spiritualDistressLevel ? (
-                      <Badge
-                        variant={
-                          a.spiritualDistressLevel === 'Severe' ||
-                          a.spiritualDistressLevel === 'Moderate'
-                            ? 'error'
-                            : a.spiritualDistressLevel === 'Mild'
-                              ? 'warning'
-                              : 'success'
-                        }
-                      >
+                      <Badge variant={a.spiritualDistressLevel === 'Severe' || a.spiritualDistressLevel === 'Moderate' ? 'error' : a.spiritualDistressLevel === 'Mild' ? 'warning' : 'success'}>
                         {a.spiritualDistressLevel}
                       </Badge>
                     ) : (
@@ -1399,13 +1361,12 @@ const AdminPatientDetailPage: React.FC = () => {
             />
           )}
 
-          {/* ═══════════════════════════════════════════════════════
-              Psychiatry Assessments
-          ═══════════════════════════════════════════════════════ */}
+          {/* Psychiatry */}
           {activeTab === 'Psychiatry Assessments' && (
             <AssessmentTabPanel
               items={psychiatryAssessments}
-              patientId={patientId!}
+              patientId={patientId}
+              basePath="/admin/patients"
               resourceLabel="Psychiatry assessment"
               detailRoute="psychiatry-assessment"
               showDeleted={showDeleted}
@@ -1420,15 +1381,7 @@ const AdminPatientDetailPage: React.FC = () => {
                   header: 'Suicide Risk',
                   render: (a: any) =>
                     a.suicideRiskLevel ? (
-                      <Badge
-                        variant={
-                          a.suicideRiskLevel === 'High'
-                            ? 'error'
-                            : a.suicideRiskLevel === 'Moderate'
-                              ? 'warning'
-                              : 'success'
-                        }
-                      >
+                      <Badge variant={a.suicideRiskLevel === 'High' ? 'error' : a.suicideRiskLevel === 'Moderate' ? 'warning' : 'success'}>
                         {a.suicideRiskLevel}
                       </Badge>
                     ) : (
@@ -1447,7 +1400,6 @@ const AdminPatientDetailPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* ── Discharge summary viewer ── */}
       {showDischargeSummaryViewer && dischargeSummary && (
         <DischargeSummaryViewer
           summary={dischargeSummary}

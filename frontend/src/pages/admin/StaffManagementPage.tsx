@@ -40,6 +40,24 @@ import type {
 
 type Tab = 'active' | 'pending' | 'performance';
 
+// ═════════════════════════════════════════════════════════════
+// Canonical staff-role option list — 11 roles, no TeamLeader.
+// Mirrors the backend `StaffRole` enum exactly.
+// ═════════════════════════════════════════════════════════════
+const STAFF_ROLE_OPTIONS: { value: ApprovableStaffRole; label: string }[] = [
+  { value: 'Physician',            label: 'Physician' },
+  { value: 'Nurse',                label: 'Nurse' },
+  { value: 'Pharmacist',           label: 'Pharmacist' },
+  { value: 'Radiologist',          label: 'Radiologist' },
+  { value: 'LaboratoryTechnician', label: 'Laboratory Technician' },
+  { value: 'Physiologist',         label: 'Physiologist' },
+  { value: 'Psychiatrist',         label: 'Psychiatrist' },
+  { value: 'Psychologist',         label: 'Psychologist' },
+  { value: 'SocialWorker',         label: 'Social Worker' },
+  { value: 'SpiritualPerson',      label: 'Spiritual Person' },
+  { value: 'Nutritionist',         label: 'Nutritionist' },
+];
+
 // ─────────────────────────────────────────────────────────────
 // Delete modal
 // ─────────────────────────────────────────────────────────────
@@ -292,12 +310,7 @@ const StaffManagementPage: React.FC = () => {
             <Select
               options={[
                 { value: '', label: 'All Roles' },
-                { value: 'TeamLeader', label: 'Team Leader' },
-                { value: 'Physician', label: 'Physician' },
-                { value: 'Nurse', label: 'Nurse' },
-                { value: 'Pharmacist', label: 'Pharmacist' },
-                { value: 'LaboratoryTechnician', label: 'Laboratory Technician' },
-                { value: 'Radiologist', label: 'Radiologist' },
+                ...STAFF_ROLE_OPTIONS,
               ]}
               value={roleFilter}
               onChange={(e) =>
@@ -522,19 +535,7 @@ const StaffManagementPage: React.FC = () => {
                       </td>
                       <td className="px-5 py-4">
                         <Select
-                          options={[
-                            { value: 'Physician', label: 'Physician' },
-                            { value: 'Nurse', label: 'Nurse' },
-                            { value: 'Pharmacist', label: 'Pharmacist' },
-                            { value: 'Radiologist', label: 'Radiologist' },
-                            { value: 'LaboratoryTechnician', label: 'Laboratory Technician' },
-                            { value: 'Physiologist', label: 'Physiologist' },
-                            { value: 'Psychiatrist', label: 'Psychiatrist' },
-                            { value: 'Psychologist', label: 'Psychologist' },
-                            { value: 'SocialWorker', label: 'Social Worker' },
-                            { value: 'SpiritualPerson', label: 'Spiritual Person' },
-                            { value: 'Nutritionist', label: 'Nutritionist' },
-                          ]}
+                          options={STAFF_ROLE_OPTIONS}
                           placeholder="Select role…"
                           value={roleSelections[staff.id] || ''}
                           onChange={(e) =>

@@ -90,7 +90,15 @@ export interface AssessmentTabPanelProps<T> {
   isRowDeleted?: (row: T) => boolean;
   /** Human-readable resource name, e.g. "Pain assessment". */
   resourceLabel: string;
-  /** Base route for row click: `/admin/patients/:pid/<detailRoute>/:id`. */
+  /**
+   * Base path used to build the row's detail link.
+   *
+   * Defaults to `/admin/patients`, which is what the admin detail
+   * page needs. Staff-facing lists should pass `/patients` so that
+   * the same component works in both trees.
+   */
+  basePath?: string;
+  /** URL segment — appended after `${basePath}/:patientId/`. */
   detailRoute: string;
   /** Patient id (for building detail links). */
   patientId: string;
@@ -128,6 +136,7 @@ export function AssessmentTabPanel<T>({
   getRowDate,
   isRowDeleted = (row) => !!(row as { deletedAt?: string | null }).deletedAt,
   resourceLabel,
+  basePath = '/admin/patients',
   detailRoute,
   patientId,
   showDeleted,
@@ -218,7 +227,7 @@ export function AssessmentTabPanel<T>({
                     className={cn('py-3 pr-4 cursor-pointer', col.className)}
                     onClick={() =>
                       navigate(
-                        `/admin/patients/${patientId}/${detailRoute}/${rowId}`,
+                        `${basePath}/${patientId}/${detailRoute}/${rowId}`,
                       )
                     }
                   >

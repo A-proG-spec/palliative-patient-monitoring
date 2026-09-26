@@ -13,8 +13,33 @@ import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
 import { formatDate } from '@/lib/utils';
 
+// ═══════════════════════════════════════════════════════════
+// OUTER — reads params, hard-guards before ANY hook runs.
+// ═══════════════════════════════════════════════════════════
 const MedicationDetailPage: React.FC = () => {
-  const { id, medicationId } = useParams<{ id: string; medicationId: string }>();
+  const { id, medicationId } = useParams<{
+    id: string;
+    medicationId: string;
+  }>();
+
+  if (!id || !medicationId) {
+    return (
+      <div className="max-w-2xl">
+        <ErrorState message="Missing patient or medication id in the URL." />
+      </div>
+    );
+  }
+
+  return <MedicationDetailContent patientId={id} medicationId={medicationId} />;
+};
+
+// ═══════════════════════════════════════════════════════════
+// INNER — receives guaranteed non-empty params.
+// ═══════════════════════════════════════════════════════════
+const MedicationDetailContent: React.FC<{
+  patientId: string;
+  medicationId: string;
+}> = ({ patientId, medicationId }) => {
   const navigate = useNavigate();
 
   const {
@@ -22,8 +47,9 @@ const MedicationDetailPage: React.FC = () => {
     isLoading,
     error,
     refetch,
-  } = useMedicationDetail(id!, medicationId!);
-  const updateMutation = useUpdateMedicationStatus(id!);
+  } = useMedicationDetail(patientId, medicationId);
+
+  const updateMutation = useUpdateMedicationStatus(patientId);
 
   if (isLoading) return <PageLoader />;
   if (error || !med) return <ErrorState onRetry={refetch} />;
@@ -36,7 +62,7 @@ const MedicationDetailPage: React.FC = () => {
   return (
     <div className="max-w-xl space-y-5">
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={`/patients/${patientId}`} label="Patient" />
         <h1 className="text-xl font-bold text-on-surface">
           Medication Detail
         </h1>
@@ -67,8 +93,8 @@ const MedicationDetailPage: React.FC = () => {
                 loading={updateMutation.isPending}
                 onClick={() =>
                   updateMutation.mutate(
-                    { medicationId: medicationId!, data: { status: 'Given' } },
-                    { onSuccess: () => navigate(`/patients/${id}`) },
+                    { medicationId, data: { status: 'Given' } },
+                    { onSuccess: () => navigate(`/patients/${patientId}`) },
                   )
                 }
               >
@@ -77,7 +103,7 @@ const MedicationDetailPage: React.FC = () => {
               <Button
                 variant="outline"
                 leftIcon={<ArrowLeft size={14} />}
-                onClick={() => navigate(`/patients/${id}`)}
+                onClick={() => navigate(`/patients/${patientId}`)}
               >
                 Back
               </Button>

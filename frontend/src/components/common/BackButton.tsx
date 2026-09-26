@@ -1,5 +1,5 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -10,17 +10,26 @@ interface BackButtonProps {
   className?: string;
 }
 
-/**
- * Consistent back-navigation button used across every page.
- * Shows an arrow with an optional label.  When `to` is provided it
- * navigates to that route; otherwise it calls navigate(-1) so the
- * user returns to wherever they came from.
- */
+
 export const BackButton: React.FC<BackButtonProps> = ({ to, label, className }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const resolvedTo = useMemo(() => {
+    if (!to) return undefined;
+
+    const isAdminContext = location.pathname.startsWith('/admin');
+    const isStaffPath = !to.startsWith('/admin');
+
+    if (isAdminContext && isStaffPath) {
+      // `/patients/10` → `/admin/patients/10`
+      return `/admin${to.startsWith('/') ? to : `/${to}`}`;
+    }
+    return to;
+  }, [to, location.pathname]);
 
   const handleClick = () => {
-    if (to) navigate(to);
+    if (resolvedTo) navigate(resolvedTo);
     else navigate(-1);
   };
 
@@ -41,3 +50,5 @@ export const BackButton: React.FC<BackButtonProps> = ({ to, label, className }) 
     </button>
   );
 };
+
+export default BackButton;
