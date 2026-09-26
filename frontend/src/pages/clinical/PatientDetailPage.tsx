@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { usePatient } from '@/hooks/usePatients';
 import { usePatientVisits } from '@/hooks/useVisits';
 import { usePatientMedications } from '@/hooks/useMedications';
@@ -9,6 +10,15 @@ import { usePatientReferrals } from '@/hooks/useReferrals';
 import { usePatientAdmissions } from '@/hooks/useAdmissions';
 import { useProgressNotes } from '@/hooks/useProgressNotes';
 import { usePatientHospiceAssessments } from '@/hooks/useHospiceNursing';
+import { usePatientPainAssessments } from '@/hooks/usePainAssessments';
+import { usePatientPharmacistAssessments } from '@/hooks/usePharmacistAssessments';
+import { usePatientPhysiotherapyAssessments } from '@/hooks/usePhysiotherapyAssessments';
+import { usePatientFamilyAssessments } from '@/hooks/useFamilyAssessments';
+import { usePatientNutritionalAssessments } from '@/hooks/useNutritionalAssessments';
+import { usePatientSocialAssessments } from '@/hooks/useSocialAssessments';
+import { usePatientSpiritualAssessments } from '@/hooks/useSpiritualAssessments';
+import { usePatientPsychiatryAssessments } from '@/hooks/usePsychiatryAssessments';
+import { visitApi } from '@/api/visits';
 import type { HospitalAdmission } from '@/types/admission.types';
 import { Card } from '@/components/ui/Card';
 import { PageLoader } from '@/components/common/LoadingSpinner';
@@ -38,12 +48,15 @@ import {
   canAddAnyRecord,
   type StaffRole,
 } from '@/config/permissions';
+import { useToast } from '@/context/ToastContext';
 
 const PatientDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<PatientTab>('Visits');
   const [showAddRecord, setShowAddRecord] = useState(false);
@@ -52,7 +65,7 @@ const PatientDetailPage: React.FC = () => {
 
   const userRole = (user?.role ?? '') as StaffRole;
 
-  // ── Data fetching (same hooks as before) ──
+  // ── Data fetching ──
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
   const { data: visitsData } = usePatientVisits(id!);
   const { data: progressNotesData } = useProgressNotes(id!);
@@ -62,6 +75,16 @@ const PatientDetailPage: React.FC = () => {
   const { data: imagingData } = usePatientImaging(id!);
   const { data: refsData } = usePatientReferrals(id!);
   const { data: admsData } = usePatientAdmissions(id!);
+
+  // ── Assessments (fetched for print) ──
+  const { data: painData } = usePatientPainAssessments(id!, { limit: 100 });
+  const { data: pharmacistData } = usePatientPharmacistAssessments(id!, { limit: 100 });
+  const { data: physioData } = usePatientPhysiotherapyAssessments(id!, { limit: 100 });
+  const { data: familyData } = usePatientFamilyAssessments(id!, { limit: 100 });
+  const { data: nutritionData } = usePatientNutritionalAssessments(id!, { limit: 100 });
+  const { data: socialData } = usePatientSocialAssessments(id!, { limit: 100 });
+  const { data: spiritualData } = usePatientSpiritualAssessments(id!, { limit: 100 });
+  const { data: psychiatryData } = usePatientPsychiatryAssessments(id!, { limit: 100 });
 
   // ── Derived tab visibility ──
   const canViewHospice = hasPermission(userRole, 'canViewHospiceNursing');
@@ -84,7 +107,6 @@ const PatientDetailPage: React.FC = () => {
     if (!tabs.includes(activeTab)) setActiveTab(tabs[0]);
   }, [tabs, activeTab]);
 
-  // ── Post-save tab restoration ──
   const locationState = location.state as {
     savedProgressNote?: boolean;
     savedHospiceAssessment?: boolean;
@@ -99,12 +121,12 @@ const PatientDetailPage: React.FC = () => {
       setActiveTab('Hospice Nursing');
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationState]);
 
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
-  // ── Tab counts ──
   const tabCounts: Record<PatientTab, number> = {
     'Visits': visitsData?.total ?? 0,
     'Progress Notes': progressNotesData?.items?.length ?? 0,
@@ -116,20 +138,67 @@ const PatientDetailPage: React.FC = () => {
     'Admissions': admsData?.total ?? 0,
   };
 
-  const handlePrint = () => {
+  // ═══════════════════════════════════════════════════════════
+  // THE FIX — handlePrint that fetches FULL visit details
+  // ═══════════════════════════════════════════════════════════
+  const handlePrint = async () => {
     setIsPrinting(true);
-    setTimeout(() => {
+
+    try {
+      // 1. Fetch full details for every visit in parallel.
+      //    The list endpoint returns a light shape — the detail
+      //    endpoint returns vitals, ADL, pain, symptoms, etc.
+      const visitIds = (visitsData?.items ?? []).map((v) => String(v.id));
+
+      const visitDetails = await Promise.all(
+        visitIds.map((visitId) =>
+          queryClient
+            .fetchQuery({
+              queryKey: ['patients', id, 'visits', visitId],
+              queryFn: () => visitApi.getById(id!, visitId),
+              staleTime: 0,
+            })
+            .catch(() => null),
+        ),
+      );
+
+      // 2. Merge list items with their detail records.
+      const fullVisits = (visitsData?.items ?? []).map((listItem, i) => ({
+        ...listItem,
+        ...(visitDetails[i] ?? {}),
+      }));
+
+      // 3. Build the complete payload with EVERYTHING.
       printPatientReport({
         patient,
-        visits: visitsData?.items ?? [],
+        visits: fullVisits,
+
         medications: medsData?.items ?? [],
         labs: labsData?.items ?? [],
         referrals: refsData?.items ?? [],
         admissions: (admsData?.items ?? []) as unknown as HospitalAdmission[],
+
+        // These were ALL missing before:
+        progressNotes: progressNotesData?.items ?? [],
+        hospiceNursing: hospiceData?.items ?? [],
+
+        painAssessments: painData?.items ?? [],
+        pharmacistAssessments: pharmacistData?.items ?? [],
+        physiotherapyAssessments: physioData?.items ?? [],
+        familyAssessments: familyData?.items ?? [],
+        nutritionalAssessments: nutritionData?.items ?? [],
+        socialAssessments: socialData?.items ?? [],
+        spiritualAssessments: spiritualData?.items ?? [],
+        psychiatryAssessments: psychiatryData?.items ?? [],
+
         appName: APP_NAME,
       });
+    } catch (err) {
+      toast.error('Failed to prepare the print report. Please try again.');
+      console.error('[Print] Failed:', err);
+    } finally {
       setIsPrinting(false);
-    }, 50);
+    }
   };
 
   const handleAddRecord = (route: string) => {
@@ -141,7 +210,6 @@ const PatientDetailPage: React.FC = () => {
   const showAddRecordButton =
     canAddAnyRecord(userRole) && !isAddRecordDisabled;
 
-  // ── Render ──
   return (
     <div className="space-y-6 max-w-5xl">
       <PatientHeader
