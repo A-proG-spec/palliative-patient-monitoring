@@ -1,4 +1,5 @@
-import type { User, LoginResponse, RegisterResponse, StaffProfile } from '@/types/auth.types';
+import type { User, LoginResponse, RegisterResponse } from '@/types/auth.types';
+import type { StaffProfile } from '@/types/profile.types';
 import { delay } from '@/lib/utils';
 
 // Mock users
@@ -46,8 +47,9 @@ const setCurrentMockUser = (user: User | null): void => {
 // Additional staff for admin panel fixtures
 export const MOCK_STAFF_LIST = [
   { id: 'staff-001', name: 'John Doe', email: 'john@gmail.com', phone: '+251911234567', role: 'Physician' as const, status: 'Active' as const, isEmailVerified: true, createdAt: '2026-01-15T08:00:00Z' },
-  { id: 'staff-002', name: 'Dr. Tigist Alemu', email: 'tigist@hospital.et', phone: '+251922345678', role: 'TeamLeader' as const, status: 'Active' as const, isEmailVerified: true, createdAt: '2026-01-20T08:00:00Z' },
+  { id: 'staff-002', name: 'Dr. Tigist Alemu', email: 'tigist@hospital.et', phone: '+251922345678', role: 'Physician' as const, status: 'Active' as const, isEmailVerified: true, createdAt: '2026-01-20T08:00:00Z' },
   { id: 'staff-003', name: 'Nurse Selam Bekele', email: 'selam@hospital.et', phone: '+251933456789', role: 'Nurse' as const, status: 'Active' as const, isEmailVerified: true, createdAt: '2026-02-01T08:00:00Z' },
+  { id: 'staff-004', name: 'Sosina Bekele', email: 'sosina@hospital.et', phone: '+251944556677', role: 'Nutritionist' as const, status: 'Active' as const, isEmailVerified: true, createdAt: '2026-02-02T08:00:00Z' },
 ];
 
 export const MOCK_PENDING_STAFF = [
@@ -62,11 +64,11 @@ export const MOCK_STAFF_PROFILE: StaffProfile = {
   email: 'john@gmail.com',
   phone: '+251911234567',
   role: 'Physician',
+  type: 'staff',
   status: 'Active',
   isEmailVerified: true,
-  assignedPatientsCount: 8,
-  todayVisitsCount: 3,
   createdAt: '2026-01-15T08:00:00Z',
+  updatedAt: '2026-01-15T08:00:00Z',
 };
 
 // ── Mock Activity Stats ─────────────────────────────────────────
@@ -155,12 +157,12 @@ export const mockAuthApi = {
         email: user.email,
         phone: '+251900000000',
         role: 'Physician',
+        type: 'staff',
         status: 'Active',
         isEmailVerified: true,
-        assignedPatientsCount: 0,
-        todayVisitsCount: 0,
         createdAt: user.createdAt || new Date().toISOString(),
-      } as StaffProfile;
+        updatedAt: new Date().toISOString(),
+      } satisfies StaffProfile;
     }
     return {
       ...MOCK_STAFF_PROFILE,

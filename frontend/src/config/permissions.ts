@@ -14,7 +14,6 @@ import type { LucideIcon } from 'lucide-react';
 
 // ── Types ──────────────────────────────────────────────────────────
 export type StaffRole =
-  | 'TeamLeader'
   | 'Physician'
   | 'Nurse'
   | 'Pharmacist'
@@ -175,7 +174,7 @@ export function getSidebarItems(
         { label: 'Profile', href: '/profile', icon: User },
       ];
 
-    // ── Physician / Nurse / TeamLeader ──
+    // ── Physician / Nurse ──
     //
     // Every sub-resource (visits, medications, labs, imaging,
     // referrals, progress notes, admissions) is scoped to a patient
@@ -185,7 +184,7 @@ export function getSidebarItems(
     // /dashboard and /patients.
     case 'Nurse':
     case 'Physician':
-    case 'TeamLeader':
+    case 'Nutritionist':
     default:
       return [
         {

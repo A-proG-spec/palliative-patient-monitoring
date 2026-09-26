@@ -23,7 +23,7 @@ export type ProgressNoteSignatureRole = VisitSignatureRole | 'Reviewer';
 export interface Signature {
   staffId: string;
   name: string;
-  role: VisitSignatureRole | 'TeamLeader' | 'Reviewer';
+  role: VisitSignatureRole | 'Reviewer';
   isTeamLeader?: boolean;
   signedAt: string;
 }

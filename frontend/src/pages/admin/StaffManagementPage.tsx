@@ -143,7 +143,7 @@ const StaffManagementPage: React.FC = () => {
   } = usePendingStaff();
   const approveStaffMutation = useApproveStaff();
   const rejectStaffMutation = useRejectStaff();
-  const [roleSelections, setRoleSelections] = useState<Record<number, string>>({});
+  const [roleSelections, setRoleSelections] = useState<Record<string, string>>({});
 
   // ── Active ──
   const [searchTerm, setSearchTerm] = useState('');
@@ -180,7 +180,7 @@ const StaffManagementPage: React.FC = () => {
     );
   };
 
-  const handleRestore = (staffId: number) => {
+  const handleRestore = (staffId: string) => {
     restoreMutation.mutate(staffId);
   };
 
@@ -189,8 +189,6 @@ const StaffManagementPage: React.FC = () => {
 
   const getRoleBadgeVariant = (role: string | null) => {
     switch (role) {
-      case 'TeamLeader':
-        return 'primary';
       case 'Physician':
         return 'success';
       case 'Nurse':
@@ -528,8 +526,14 @@ const StaffManagementPage: React.FC = () => {
                             { value: 'Physician', label: 'Physician' },
                             { value: 'Nurse', label: 'Nurse' },
                             { value: 'Pharmacist', label: 'Pharmacist' },
-                            { value: 'LaboratoryTechnician', label: 'Lab Technician' },
                             { value: 'Radiologist', label: 'Radiologist' },
+                            { value: 'LaboratoryTechnician', label: 'Laboratory Technician' },
+                            { value: 'Physiologist', label: 'Physiologist' },
+                            { value: 'Psychiatrist', label: 'Psychiatrist' },
+                            { value: 'Psychologist', label: 'Psychologist' },
+                            { value: 'SocialWorker', label: 'Social Worker' },
+                            { value: 'SpiritualPerson', label: 'Spiritual Person' },
+                            { value: 'Nutritionist', label: 'Nutritionist' },
                           ]}
                           placeholder="Select role…"
                           value={roleSelections[staff.id] || ''}

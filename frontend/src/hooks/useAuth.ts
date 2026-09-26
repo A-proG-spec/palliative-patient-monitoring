@@ -33,7 +33,6 @@ function getDefaultRoute(user: {
       return '/imaging-orders';
     case 'Physician':
     case 'Nurse':
-    case 'TeamLeader':
     default:
       return '/dashboard';
   }

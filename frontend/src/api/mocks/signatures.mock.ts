@@ -9,7 +9,7 @@ const makeTeamLeaderSig = (teamLeaderName?: string): Signature | null =>
     ? {
         staffId: 'staff-002',
         name: teamLeaderName,
-        role: 'TeamLeader',
+        role: 'Physician',
         signedAt: new Date().toISOString(),
       }
     : null;
@@ -49,9 +49,8 @@ export const mockSignaturesApi = {
     const defaultTl = makeTeamLeaderSig('Team Leader');
     const allSigs: Signature[] = sigs.length > 0 ? sigs : (defaultTl ? [defaultTl] : []);
 
-    const teamLeader = allSigs.find((s) => s.role === 'TeamLeader') ?? null;
+    const teamLeader = allSigs.find((s) => s.role === 'Physician') ?? null;
     const allSigned =
-      !!allSigs.find((s) => s.role === 'TeamLeader') &&
       !!allSigs.find((s) => s.role === 'Physician') &&
       !!allSigs.find((s) => s.role === 'Nurse');
 

@@ -244,12 +244,17 @@ const AdminDashboardPage: React.FC = () => {
                     <td className="px-5 py-3.5">
                       <Select
                         options={[
-                          { value: 'TeamLeader',    label: 'Team Leader' },
-                          { value: 'Physician',     label: 'Physician' },
-                          { value: 'Nurse',         label: 'Nurse' },
-                          { value: 'Pharmacist',    label: 'Pharmacist' },
-                          { value: 'LabTechnician', label: 'Lab Technician' },
-                          { value: 'Radiologist',   label: 'Radiologist' },
+                          { value: 'Physician', label: 'Physician' },
+                          { value: 'Nurse', label: 'Nurse' },
+                          { value: 'Pharmacist', label: 'Pharmacist' },
+                          { value: 'Radiologist', label: 'Radiologist' },
+                          { value: 'LaboratoryTechnician', label: 'Laboratory Technician' },
+                          { value: 'Physiologist', label: 'Physiologist' },
+                          { value: 'Psychiatrist', label: 'Psychiatrist' },
+                          { value: 'Psychologist', label: 'Psychologist' },
+                          { value: 'SocialWorker', label: 'Social Worker' },
+                          { value: 'SpiritualPerson', label: 'Spiritual Person' },
+                          { value: 'Nutritionist', label: 'Nutritionist' },
                         ]}
                         placeholder="Select role…"
                         value={roleSelections[staff.id] || ''}

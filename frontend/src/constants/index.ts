@@ -143,7 +143,6 @@ export const OUTCOME_LABELS: Record<string, string> = {
 // ── FIX: keys must match the backend StaffRole enum (long form) ──
 // `LaboratoryTechnician`, not `LabTechnician`.
 export const ROLE_LABELS: Record<string, string> = {
-  TeamLeader: 'Team Leader',
   Physician: 'Physician',
   Nurse: 'Nurse',
   Pharmacist: 'Pharmacist',
@@ -153,9 +152,9 @@ export const ROLE_LABELS: Record<string, string> = {
   Physiologist: 'Physiologist',
   Psychiatrist: 'Psychiatrist',
   Psychologist: 'Psychologist',
-  SocialWorker: 'SocialWorker',
-  SpiritualPerson: 'SpiritualPerson',
-
+  SocialWorker: 'Social Worker',
+  SpiritualPerson: 'Spiritual Person',
+  Nutritionist: 'Nutritionist',
 };
 
 export const REFERRAL_REASON_LABELS: Record<string, string> = {
