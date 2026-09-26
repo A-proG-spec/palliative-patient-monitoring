@@ -55,12 +55,17 @@ export interface StaffMember {
   email: string;
   phone: string;
   role:
-    | 'TeamLeader'
     | 'Physician'
     | 'Nurse'
     | 'Pharmacist'
     | 'Radiologist'
-    | 'LaboratoryTechnician';
+    | 'LaboratoryTechnician'
+    | 'Physiologist'
+    | 'Psychiatrist'
+    | 'Psychologist'
+    | 'SocialWorker'
+    | 'SpiritualPerson'
+    | 'Nutritionist';
   status: 'Pending' | 'Active' | 'Rejected';
   isEmailVerified: boolean;
   assignedPatientsCount: number;

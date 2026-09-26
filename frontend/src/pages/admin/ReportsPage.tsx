@@ -119,7 +119,7 @@ const ReportsPage: React.FC = () => {
                 label={({ location, percent }) => `${location} ${(percent * 100).toFixed(0)}%`}
               >
                 {data.patientsByLocation.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} cornerRadius={4} />
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip
@@ -180,7 +180,7 @@ const ReportsPage: React.FC = () => {
                 label={({ status, count }) => `${status}: ${count}`}
               >
                 {data.referralsByStatus.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} cornerRadius={4} />
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip

@@ -7,12 +7,17 @@ export interface StaffProfile {
   email: string;
   phone: string;
   role:
-    | 'TeamLeader'
     | 'Physician'
     | 'Nurse'
     | 'Pharmacist'
     | 'Radiologist'
     | 'LaboratoryTechnician'
+    | 'Physiologist'
+    | 'Psychiatrist'
+    | 'Psychologist'
+    | 'SocialWorker'
+    | 'SpiritualPerson'
+    | 'Nutritionist'
     | null;
   type: 'staff';
   status: 'Pending' | 'Active' | 'Rejected';

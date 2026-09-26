@@ -14,7 +14,7 @@ const makeVisit = (id: string, patientId: string, date: string, outcome: HomeVis
   ],
   overallStatus: outcome === 'Stable' || outcome === 'SymptomsImproved' ? 'Stable' : 'Deteriorating',
   mobility: 'RequiresAssistance',
-  vitals: { temperature: 36.8, pulse: 88, bp: '120/80', respiration: 18, spo2: 96 },
+  vitals: { temperature: 36.8, pulse: 88, bp: '120/80', respiration: 18, spO2: 96 },
   painScore: 4,
   painLocation: ['Abdomen', 'Back'],
   painCharacteristics: ['Dull', 'Intermittent'],

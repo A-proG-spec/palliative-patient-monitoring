@@ -24,6 +24,7 @@ export const createPatientSchema = z.object({
   caregiverName: z.string().min(1, 'Caregiver name is required'),
   caregiverPhone: z.string().min(10, 'Caregiver phone is required'),
   caregiverRelation: z.string().optional(),
+  hospitalPatientId: z.string().optional(),
   primaryDiagnosis: z.string().min(1, 'Primary diagnosis is required'),
   secondaryDiagnoses: z.array(z.string()).optional().default([]),
   diseaseStage: z.enum(['Early', 'Advanced', 'EndStage']),

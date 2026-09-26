@@ -150,7 +150,7 @@ const RequestReferralPage: React.FC = () => {
     const mrn =
       patient.hospitalPatientId ??
       getPatientDisplayId({
-        id: patient.id,
+        id: Number(patient.id),
         hospitalPatientId: patient.hospitalPatientId,
       });
     const ward =
@@ -232,7 +232,7 @@ const RequestReferralPage: React.FC = () => {
 
   const displayId = patient
     ? getPatientDisplayId({
-        id: patient.id,
+        id: Number(patient.id),
         hospitalPatientId: patient.hospitalPatientId,
       })
     : '—';

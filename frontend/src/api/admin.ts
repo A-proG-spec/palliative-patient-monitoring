@@ -43,7 +43,7 @@ export interface AdminUpdateVisitRequest {
 }
 
 export interface AdminUpdateVisitResponse {
-  id: number;
+  id: string;
   updatedAt: string;
   changes: Array<{ field: string; from: unknown; to: unknown }>;
 }
@@ -129,9 +129,9 @@ export const adminApi = {
 
   rejectStaff: (
     staffId: number | string,
-  ): Promise<{ id: number; status: string }> => {
+  ): Promise<{ id: string; status: string }> => {
     return apiClient
-      .put<{ id: number; status: string }>(`/admin/staff/${staffId}/reject`)
+      .put<{ id: string; status: string }>(`/admin/staff/${staffId}/reject`)
       .then((r) => r.data);
   },
 
@@ -178,9 +178,9 @@ export const adminApi = {
 
   restoreStaff: (
     staffId: number | string,
-  ): Promise<{ id: number; restored: boolean }> => {
+  ): Promise<{ id: string; restored: boolean }> => {
     return apiClient
-      .post<{ id: number; restored: boolean }>(
+      .post<{ id: string; restored: boolean }>(
         `/admin/staff/${staffId}/restore`,
       )
       .then((r) => r.data);

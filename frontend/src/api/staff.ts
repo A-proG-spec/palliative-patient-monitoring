@@ -2,7 +2,7 @@ import apiClient from './client';
 import { USE_MOCK } from '@/lib/config';
 import { mockStaffApi } from './mocks/staff.mock';
 import type { StaffDashboardStats } from '@/types/staff.types';
-import type { StaffProfile } from '@/types/auth.types';
+import type { StaffProfile } from '@/types/profile.types';
 
 export const staffApi = {
   getDashboardStats: (): Promise<StaffDashboardStats> => {

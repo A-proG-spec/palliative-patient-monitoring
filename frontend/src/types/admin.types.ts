@@ -10,7 +10,7 @@ export type { StaffRole, RegisterableStaffRole };
 export type ApprovableStaffRole = RegisterableStaffRole;
 
 export interface PendingStaff {
-  id: number;
+  id: string;
   name: string;
   email: string;
   phone: string;
@@ -25,13 +25,13 @@ export interface ApproveStaffRequest {
 }
 
 export interface ApprovedStaffResponse {
-  id: number;
+  id: string;
   name: string;
   email: string;
   phone: string;
   role: ApprovableStaffRole;
   status: 'Active';
-  assignedBy: { id: number; name: string };
+  assignedBy: { id: string; name: string };
   updatedAt: string;
 }
 
@@ -55,7 +55,7 @@ export interface DashboardStats {
   patientsByStatus: Array<{ status: string; count: number }>;
 
   recentReferrals: Array<{
-    id: number;
+    id: string;
     patientName: string;
     date: string;
     status: string;
@@ -72,13 +72,13 @@ export interface DashboardStats {
 // Notifications
 // ─────────────────────────────────────────────────────────────
 export interface Notification {
-  id: number;
+  id: string;
   type: 'StaffApproval' | 'ReferralApproval' | 'CloseCase';
   message: string;
   data: {
-    staffId?: number;
-    referralId?: number;
-    patientId?: number;
+    staffId?: string;
+    referralId?: string;
+    patientId?: string;
     patientName?: string;
     staffName?: string;
   };
@@ -100,7 +100,7 @@ export interface CloseCaseRequest {
 }
 
 export interface CloseCaseResponse {
-  id: number;
+  id: string;
   status: 'Discharged';
   closeReason: 'Improved' | 'Deceased';
   closeDate: string;
@@ -110,7 +110,7 @@ export interface CloseCaseResponse {
 // Admin patient list + detail
 // ─────────────────────────────────────────────────────────────
 export interface AdminPatient {
-  id: number;
+  id: string;
   patientDisplayId: string;
   firstName: string;
   lastName: string;
@@ -121,7 +121,7 @@ export interface AdminPatient {
   primaryDiagnosis: string;
   diseaseStage: 'Early' | 'Advanced' | 'EndStage';
   registeredAt: string;
-  registeredBy: { id: number; name: string };
+  registeredBy: { id: string; name: string };
 }
 
 export interface AdminPatientDetail extends AdminPatient {
@@ -138,7 +138,7 @@ export interface AdminPatientDetail extends AdminPatient {
   estimatedPrognosis: 'Days' | 'Weeks' | 'Months' | 'Uncertain';
 
   visits: Array<{
-    id: number;
+    id: string;
     visitDate: string;
     visitType: string;
     overallStatus: string;
@@ -149,7 +149,7 @@ export interface AdminPatientDetail extends AdminPatient {
   }>;
 
   medications: Array<{
-    id: number;
+    id: string;
     name: string;
     dosage: string;
     frequency: string;
@@ -160,7 +160,7 @@ export interface AdminPatientDetail extends AdminPatient {
   }>;
 
   labTests: Array<{
-    id: number;
+    id: string;
     name: string;
     dateOrdered: string;
     datePerformed?: string | null;
@@ -170,7 +170,7 @@ export interface AdminPatientDetail extends AdminPatient {
   }>;
 
   imagingOrders: Array<{
-    id: number;
+    id: string;
     modality: string;
     bodyRegion: string;
     specificSite?: string | null;
@@ -183,8 +183,8 @@ export interface AdminPatientDetail extends AdminPatient {
   }>;
 
   progressNotes: Array<{
-    id: number;
-    admissionId?: number | null;
+    id: string;
+    admissionId?: string | null;
     generalCondition: string | null;
     levelOfConsciousness: string | null;
     attendingClinician: string;
@@ -194,7 +194,7 @@ export interface AdminPatientDetail extends AdminPatient {
   }>;
 
   referrals: Array<{
-    id: number;
+    id: string;
     date: string;
     referralType: string;
     status: string;
@@ -202,7 +202,7 @@ export interface AdminPatientDetail extends AdminPatient {
   }>;
 
   admissions: Array<{
-    id: number;
+    id: string;
     date: string;
     dischargeDate?: string | null;
     ward: string;
@@ -213,8 +213,8 @@ export interface AdminPatientDetail extends AdminPatient {
   }>;
 
   dischargeSummary: {
-    id: number;
-    admissionId?: number | null;
+    id: string;
+    admissionId?: string | null;
     dateOfDischarge: string;
     timeOfDischarge?: string | null;
     dischargeType: string | null;
@@ -255,7 +255,7 @@ export type StaffStatus = 'Pending' | 'Active' | 'Rejected';
 export type StaffListFilterStatus = StaffStatus | 'Deleted' | 'All';
 
 export interface StaffListItem {
-  id: number;
+  id: string;
   name: string;
   email: string;
   phone: string;
@@ -275,7 +275,7 @@ export interface StaffListResponse {
 }
 
 export interface StaffDetail {
-  id: number;
+  id: string;
   name: string;
   email: string;
   phone: string;
@@ -294,7 +294,7 @@ export interface UpdateStaffRequest {
 }
 
 export interface DeletedStaffResponse {
-  id: number;
+  id: string;
   success: boolean;
   deletedAt: string;
 }
@@ -303,7 +303,7 @@ export interface DeletedStaffResponse {
 // Staff performance
 // ─────────────────────────────────────────────────────────────
 export interface StaffPerformanceItem {
-  id: number;
+  id: string;
   name: string;
   role: StaffRole | null;
   totalPatientsAssigned: number;
@@ -343,7 +343,7 @@ export interface StaffActivityResponse {
 }
 
 export interface StaffPerformanceDetail {
-  id: number;
+  id: string;
   name: string;
   role: StaffRole | null;
   totalVisitsRecorded: number;

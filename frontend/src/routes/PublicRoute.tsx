@@ -10,7 +10,7 @@ import type { StaffRole } from '@/types/auth.types';
  * Pharmacist           → /medication-orders  (queue)
  * LaboratoryTechnician → /lab-requests       (queue)
  * Radiologist          → /imaging-orders     (queue)
- * Physician / Nurse / TeamLeader → /dashboard
+ * Physician / Nurse → /dashboard
  *
  * NOTE: the backend enum is `LaboratoryTechnician` (long form). The
  * short form `LabTechnician` would silently fall through to the
@@ -28,7 +28,6 @@ function getDefaultRoute(user: { type: string; role?: StaffRole | null }): strin
       return '/imaging-orders';
     case 'Physician':
     case 'Nurse':
-    case 'TeamLeader':
     default:
       return '/dashboard';
   }

@@ -223,7 +223,7 @@ export const mockAdminApi = {
     return [...MOCK_PENDING_STAFF];
   },
 
-  approveStaff: async (staffId: string, data: { role: 'TeamLeader' | 'Physician' | 'Nurse' }) => {
+  approveStaff: async (staffId: string, data: { role: 'Physician' | 'Nurse' }) => {
     await delay(600);
     const idx = MOCK_PENDING_STAFF.findIndex((s) => s.id === staffId);
     if (idx !== -1) MOCK_PENDING_STAFF.splice(idx, 1);

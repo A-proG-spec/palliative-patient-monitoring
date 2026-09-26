@@ -2,7 +2,6 @@
 // Shared staff role enum — mirrors backend StaffRole
 // ─────────────────────────────────────────────────────────────
 export type StaffRole =
-  | 'TeamLeader'
   | 'Physician'
   | 'Nurse'
   | 'Pharmacist'
