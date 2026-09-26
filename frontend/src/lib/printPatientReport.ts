@@ -59,12 +59,37 @@ const safeBool = (v?: boolean | null): string => {
   return '—';
 };
 
+/**
+ * Renders a number — including 0 — with an optional suffix.
+ * `safe()` treats 0 as empty; this helper does not.
+ */
+const num = (
+  n: number | null | undefined,
+  suffix = '',
+): string => {
+  if (n === null || n === undefined || Number.isNaN(n)) return '—';
+  return `${n}${suffix}`;
+};
 
 const labelList = (arr: string[] | undefined, map: Record<string, string>) =>
   arr?.length ? arr.map((k) => map[k] ?? k).join(', ') : '—';
 
-const patientDisplayId = (p: Patient): string =>
-  p.hospitalPatientId ?? p.patientDisplayId ?? '—';
+/**
+ * Derive a stable patient ID.
+ * Prefers `hospitalPatientId` (real MRN) when set, falls back to
+ * `patientDisplayId` (system ID like PAT-0001), then derives from
+ * the numeric PK.
+ */
+const patientDisplayId = (
+  p: Patient & { id?: string | number },
+): string => {
+  if (p.hospitalPatientId) return p.hospitalPatientId;
+  if (p.patientDisplayId) return p.patientDisplayId;
+  if (p.id !== undefined && p.id !== null) {
+    return `PAT-${String(p.id).padStart(4, '0')}`;
+  }
+  return '—';
+};
 
 // ── Layout building blocks ───────────────────────────────────────
 
@@ -80,7 +105,12 @@ const table = (headers: string[], rows: string[][], caption?: string) => `
     <thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead>
     <tbody>${
       rows.length
-        ? rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')
+        ? rows
+            .map(
+              (r) =>
+                `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`,
+            )
+            .join('')
         : `<tr><td colspan="${headers.length}" class="empty">No records</td></tr>`
     }</tbody>
   </table>`;
@@ -246,24 +276,33 @@ const statusBadge = (status: string | null | undefined): string => {
 };
 
 // ── Normalizers for visits (flat columns → nested) ───────────────
+//
+// The backend returns vitals + ADL as FLAT columns on the visit
+// record, but the API contract exposes them nested. Handle both:
+// prefer the nested object when present, else read the flat fields.
 
-const visitVitals = (v: any) =>
-  v.vitals ?? {
+const visitVitals = (v: any) => {
+  if (v.vitals && typeof v.vitals === 'object') return v.vitals;
+  return {
     temperature: v.temperature,
     pulse: v.pulse,
-    bloodPressure: v.bloodPressure,
+    bloodPressure: v.bloodPressure ?? v.bp,
     respiration: v.respiration,
     spO2: v.spO2,
   };
+};
 
-const visitAdl = (v: any) =>
-  v.adl ?? {
+const visitAdl = (v: any) => {
+  if (v.adl && typeof v.adl === 'object') return v.adl;
+  return {
     feeding: v.feeding,
     bathing: v.bathing,
     dressing: v.dressing,
     toileting: v.toileting,
+    // Note: backend capitalises `Mobility` in the Prisma model.
     mobility: v.Mobility ?? v.mobility,
   };
+};
 
 // ── Visit block renderer ─────────────────────────────────────────
 
@@ -271,17 +310,19 @@ const renderVisitBlock = (v: HomeVisit): string => {
   const vitals = visitVitals(v);
   const adl = visitAdl(v);
 
-  const symptoms = (v.symptoms ?? [])
-    .map((s) => SYMPTOM_LABELS[s] ?? s)
-    .join(', ') || '—';
+  const symptoms =
+    (v.symptoms ?? []).map((s) => SYMPTOM_LABELS[s] ?? s).join(', ') ||
+    '—';
 
-  const painLocs = (v.painLocation ?? [])
-    .map((p) => PAIN_LOCATION_LABELS[p] ?? p)
-    .join(', ') || '—';
+  const painLocs =
+    (v.painLocation ?? [])
+      .map((p) => PAIN_LOCATION_LABELS[p] ?? p)
+      .join(', ') || '—';
 
-  const team = (v.teamMembers ?? [])
-    .map((m: any) => `${m.name} (${m.role})`)
-    .join(', ') || '—';
+  const team =
+    (v.teamMembers ?? [])
+      .map((m: any) => `${m.name} (${m.role})`)
+      .join(', ') || '—';
 
   const redFlags = (v.redFlags ?? []).filter((f: string) => f !== 'None');
 
@@ -297,9 +338,9 @@ const renderVisitBlock = (v: HomeVisit): string => {
         <div class="vb-grid">
           <div class="vb-row"><span class="vb-label">Time</span><span class="vb-value">${safe(v.timeStarted)} – ${safe(v.timeEnded)}</span></div>
           <div class="vb-row"><span class="vb-label">Overall Status</span><span class="vb-value">${safe(v.overallStatus)}</span></div>
-          <div class="vb-row"><span class="vb-label">PPS Score</span><span class="vb-value">${safe(v.ppsScore)}%</span></div>
-          <div class="vb-row"><span class="vb-label">KPS Score</span><span class="vb-value">${safe(v.kpsScore)}/100</span></div>
-          <div class="vb-row"><span class="vb-label">Pain Score</span><span class="vb-value">${safe(v.painScore)}/10</span></div>
+          <div class="vb-row"><span class="vb-label">PPS Score</span><span class="vb-value">${num(v.ppsScore, '%')}</span></div>
+          <div class="vb-row"><span class="vb-label">KPS Score</span><span class="vb-value">${num(v.kpsScore)}/100</span></div>
+          <div class="vb-row"><span class="vb-label">Pain Score</span><span class="vb-value">${num(v.painScore)}/10</span></div>
           <div class="vb-row"><span class="vb-label">Mobility</span><span class="vb-value">${safe(v.mobility)}</span></div>
           <div class="vb-row"><span class="vb-label">Pain Locations</span><span class="vb-value">${painLocs}</span></div>
           <div class="vb-row"><span class="vb-label">Medication Effective</span><span class="vb-value">${safeBool(v.painMedicationEffective)}</span></div>
@@ -316,7 +357,9 @@ const renderVisitBlock = (v: HomeVisit): string => {
           redFlags.length > 0
             ? `<div class="vb-note">⚠ Red flags: ${redFlags
                 .map((f: string) => RED_FLAG_LABELS[f] ?? f)
-                .join(', ')}${v.redFlagActions ? ` — ${v.redFlagActions}` : ''}</div>`
+                .join(', ')}${
+                v.redFlagActions ? ` — ${v.redFlagActions}` : ''
+              }</div>`
             : ''
         }
       </div>
@@ -414,16 +457,43 @@ export function printPatientReport(data: PrintReportData): void {
       ['Date of Birth', fmt(patient.dateOfBirth)],
       ['Address', safe(patient.address)],
       ['Phone', safe(patient.phone)],
-      ['Current Location', patient.currentLocation === 'ReferredHospital' ? 'Referred Hospital' : 'Home'],
+      [
+        'Current Location',
+        patient.currentLocation === 'ReferredHospital'
+          ? 'Referred Hospital'
+          : 'Home',
+      ],
       ['Status', safe(patient.status)],
       ['Primary Diagnosis', safe(patient.primaryDiagnosis)],
-      ['Secondary Diagnoses', patient.secondaryDiagnoses?.length ? patient.secondaryDiagnoses.join(', ') : '—'],
-      ['Disease Stage', DISEASE_STAGE_LABELS[patient.diseaseStage] ?? safe(patient.diseaseStage)],
-      ['Comorbidities', patient.comorbidities?.length ? patient.comorbidities.join(', ') : '—'],
+      [
+        'Secondary Diagnoses',
+        patient.secondaryDiagnoses?.length
+          ? patient.secondaryDiagnoses.join(', ')
+          : '—',
+      ],
+      [
+        'Disease Stage',
+        DISEASE_STAGE_LABELS[patient.diseaseStage] ??
+          safe(patient.diseaseStage),
+      ],
+      [
+        'Comorbidities',
+        patient.comorbidities?.length
+          ? patient.comorbidities.join(', ')
+          : '—',
+      ],
       ['Prognosis', safe(patient.estimatedPrognosis)],
       ['Registered', fmt(patient.createdAt)],
-      ['Emergency Contact', `${safe(patient.emergencyContactName)} · ${safe(patient.emergencyContactPhone)}`],
-      ['Caregiver', `${safe(patient.caregiverName)} · ${safe(patient.caregiverPhone)}`],
+      [
+        'Emergency Contact',
+        `${safe(patient.emergencyContactName)} · ${safe(
+          patient.emergencyContactPhone,
+        )}`,
+      ],
+      [
+        'Caregiver',
+        `${safe(patient.caregiverName)} · ${safe(patient.caregiverPhone)}`,
+      ],
     ]),
   );
 
@@ -439,7 +509,15 @@ export function printPatientReport(data: PrintReportData): void {
   const medicationSection = section(
     'Medications',
     table(
-      ['Medication', 'Dosage', 'Frequency', 'Route', 'Administered At', 'Status', 'Date Ordered'],
+      [
+        'Medication',
+        'Dosage',
+        'Frequency',
+        'Route',
+        'Administered At',
+        'Status',
+        'Date Ordered',
+      ],
       medications.map((m) => [
         safe(m.name),
         safe(m.dosage),
@@ -456,7 +534,14 @@ export function printPatientReport(data: PrintReportData): void {
   const labSection = section(
     'Laboratory Tests',
     table(
-      ['Test Name', 'Date Ordered', 'Date Performed', 'Location', 'Status', 'Result'],
+      [
+        'Test Name',
+        'Date Ordered',
+        'Date Performed',
+        'Location',
+        'Status',
+        'Result',
+      ],
       labs.map((l) => [
         safe(l.testName),
         fmt(l.dateOrdered),
@@ -488,7 +573,15 @@ export function printPatientReport(data: PrintReportData): void {
   const admissionSection = section(
     'Hospital Admissions',
     table(
-      ['Admission Date', 'Bed', 'Ward', 'Physician', 'Care Team', 'Status', 'Discharge Date'],
+      [
+        'Admission Date',
+        'Bed',
+        'Ward',
+        'Physician',
+        'Care Team',
+        'Status',
+        'Discharge Date',
+      ],
       admissions.map((a) => [
         fmt(a.admissionDate),
         safe(a.bedNumber),
@@ -512,11 +605,26 @@ export function printPatientReport(data: PrintReportData): void {
               n.createdAt,
               n.attendingClinician ?? '—',
               [
-                { label: 'General Condition', value: (r) => safe(r.generalCondition) },
-                { label: 'Consciousness', value: (r) => safe(r.levelOfConsciousness) },
-                { label: 'Overall Assessment', value: (r) => safe(r.overallAssessment) },
-                { label: 'SOAP — Subjective', value: (r) => safe(r.soapSubjective) },
-                { label: 'All Signed', value: (r) => (r.allSigned ? 'Yes' : 'No') },
+                {
+                  label: 'General Condition',
+                  value: (r) => safe(r.generalCondition),
+                },
+                {
+                  label: 'Consciousness',
+                  value: (r) => safe(r.levelOfConsciousness),
+                },
+                {
+                  label: 'Overall Assessment',
+                  value: (r) => safe(r.overallAssessment),
+                },
+                {
+                  label: 'SOAP — Subjective',
+                  value: (r) => safe(r.soapSubjective),
+                },
+                {
+                  label: 'All Signed',
+                  value: (r) => (r.allSigned ? 'Yes' : 'No'),
+                },
               ],
               n,
             ),
@@ -536,11 +644,27 @@ export function printPatientReport(data: PrintReportData): void {
               h.assessmentDate,
               h.assessedBy?.name ?? '—',
               [
-                { label: 'Consciousness', value: (r) => safe(r.levelOfConsciousness) },
-                { label: 'Pain Score', value: (r) => (r.painScore != null ? `${r.painScore}/10` : '—') },
-                { label: 'Mobility', value: (r) => safe(r.mobilityStatus) },
-                { label: 'Emotional Status', value: (r) => safe(r.emotionalStatus) },
-                { label: 'Summary', value: (r) => safe(r.nurseSummary) },
+                {
+                  label: 'Consciousness',
+                  value: (r) => safe(r.levelOfConsciousness),
+                },
+                {
+                  label: 'Pain Score',
+                  value: (r) =>
+                    r.painScore != null ? `${r.painScore}/10` : '—',
+                },
+                {
+                  label: 'Mobility',
+                  value: (r) => safe(r.mobilityStatus),
+                },
+                {
+                  label: 'Emotional Status',
+                  value: (r) => safe(r.emotionalStatus),
+                },
+                {
+                  label: 'Summary',
+                  value: (r) => safe(r.nurseSummary),
+                },
               ],
               h,
             ),
@@ -560,11 +684,39 @@ export function printPatientReport(data: PrintReportData): void {
               a.createdAt,
               a.assessmentType ?? '—',
               [
-                { label: 'Current Pain Score', value: (r) => (r.currentPainScore != null ? `${r.currentPainScore}/10` : '—') },
-                { label: 'Worst (24h)', value: (r) => (r.worstPainLast24h != null ? `${r.worstPainLast24h}/10` : '—') },
-                { label: 'Pain Type', value: (r) => (r.painType?.length ? r.painType.join(', ') : '—') },
-                { label: 'Diagnosis', value: (r) => (r.diagnosis?.length ? r.diagnosis.join(', ') : '—') },
-                { label: 'Outcome', value: (r) => (r.assessmentOutcome?.length ? r.assessmentOutcome.join(', ') : '—') },
+                {
+                  label: 'Current Pain Score',
+                  value: (r) =>
+                    r.currentPainScore != null
+                      ? `${r.currentPainScore}/10`
+                      : '—',
+                },
+                {
+                  label: 'Worst (24h)',
+                  value: (r) =>
+                    r.worstPainLast24h != null
+                      ? `${r.worstPainLast24h}/10`
+                      : '—',
+                },
+                {
+                  label: 'Pain Type',
+                  value: (r) =>
+                    r.painType?.length ? r.painType.join(', ') : '—',
+                },
+                {
+                  label: 'Diagnosis',
+                  value: (r) =>
+                    r.diagnosis?.length
+                      ? r.diagnosis.join(', ')
+                      : '—',
+                },
+                {
+                  label: 'Outcome',
+                  value: (r) =>
+                    r.assessmentOutcome?.length
+                      ? r.assessmentOutcome.join(', ')
+                      : '—',
+                },
               ],
               a,
             ),
@@ -584,10 +736,28 @@ export function printPatientReport(data: PrintReportData): void {
               a.createdAt,
               a.assessmentType ?? '—',
               [
-                { label: 'Pain Control', value: (r) => safe(r.painControl) },
-                { label: 'Summary', value: (r) => safe(r.pharmacistSummary) },
-                { label: 'Summary Flags', value: (r) => (r.summaryFlags?.length ? r.summaryFlags.join(', ') : '—') },
-                { label: 'Recommendations', value: (r) => (r.finalRecommendations?.length ? r.finalRecommendations.join(', ') : '—') },
+                {
+                  label: 'Pain Control',
+                  value: (r) => safe(r.painControl),
+                },
+                {
+                  label: 'Summary',
+                  value: (r) => safe(r.pharmacistSummary),
+                },
+                {
+                  label: 'Summary Flags',
+                  value: (r) =>
+                    r.summaryFlags?.length
+                      ? r.summaryFlags.join(', ')
+                      : '—',
+                },
+                {
+                  label: 'Recommendations',
+                  value: (r) =>
+                    r.finalRecommendations?.length
+                      ? r.finalRecommendations.join(', ')
+                      : '—',
+                },
               ],
               a,
             ),
@@ -607,11 +777,30 @@ export function printPatientReport(data: PrintReportData): void {
               a.createdAt,
               a.assessmentType ?? '—',
               [
-                { label: 'General Condition', value: (r) => safe(r.generalCondition) },
-                { label: 'Mobility Status', value: (r) => safe(r.mobilityStatus) },
-                { label: 'Fall Risk', value: (r) => safe(r.fallRiskLevel) },
-                { label: 'Diagnosis', value: (r) => (r.diagnosis?.length ? r.diagnosis.join(', ') : '—') },
-                { label: 'Outcome', value: (r) => (r.outcome?.length ? r.outcome.join(', ') : '—') },
+                {
+                  label: 'General Condition',
+                  value: (r) => safe(r.generalCondition),
+                },
+                {
+                  label: 'Mobility Status',
+                  value: (r) => safe(r.mobilityStatus),
+                },
+                {
+                  label: 'Fall Risk',
+                  value: (r) => safe(r.fallRiskLevel),
+                },
+                {
+                  label: 'Diagnosis',
+                  value: (r) =>
+                    r.diagnosis?.length
+                      ? r.diagnosis.join(', ')
+                      : '—',
+                },
+                {
+                  label: 'Outcome',
+                  value: (r) =>
+                    r.outcome?.length ? r.outcome.join(', ') : '—',
+                },
               ],
               a,
             ),
@@ -631,10 +820,25 @@ export function printPatientReport(data: PrintReportData): void {
               a.createdAt,
               a.assessmentType ?? '—',
               [
-                { label: 'Burden Level', value: (r) => safe(r.burdenLevel) },
-                { label: 'Palliative Care Acceptance', value: (r) => safe(r.palliativeCareAcceptance) },
-                { label: 'Assessor', value: (r) => safe(r.assessorName) },
-                { label: 'Outcome', value: (r) => (r.assessmentOutcome?.length ? r.assessmentOutcome.join(', ') : '—') },
+                {
+                  label: 'Burden Level',
+                  value: (r) => safe(r.burdenLevel),
+                },
+                {
+                  label: 'Palliative Care Acceptance',
+                  value: (r) => safe(r.palliativeCareAcceptance),
+                },
+                {
+                  label: 'Assessor',
+                  value: (r) => safe(r.assessorName),
+                },
+                {
+                  label: 'Outcome',
+                  value: (r) =>
+                    r.assessmentOutcome?.length
+                      ? r.assessmentOutcome.join(', ')
+                      : '—',
+                },
               ],
               a,
             ),
@@ -655,9 +859,19 @@ export function printPatientReport(data: PrintReportData): void {
               a.assessmentType ?? '—',
               [
                 { label: 'BMI', value: (r) => safe(r.bmi) },
-                { label: 'Nutritional Status', value: (r) => safe(r.nutritionalStatusClassification) },
-                { label: 'Overall Risk', value: (r) => safe(r.overallNutritionalRisk) },
-                { label: 'Appetite', value: (r) => safe(r.currentAppetite) },
+                {
+                  label: 'Nutritional Status',
+                  value: (r) =>
+                    safe(r.nutritionalStatusClassification),
+                },
+                {
+                  label: 'Overall Risk',
+                  value: (r) => safe(r.overallNutritionalRisk),
+                },
+                {
+                  label: 'Appetite',
+                  value: (r) => safe(r.currentAppetite),
+                },
               ],
               a,
             ),
@@ -677,11 +891,29 @@ export function printPatientReport(data: PrintReportData): void {
               a.createdAt,
               a.assessmentType ?? '—',
               [
-                { label: 'Living Arrangement', value: (r) => safe(r.livingArrangement) },
-                { label: 'Isolation Risk', value: (r) => safe(r.isolationRisk) },
-                { label: 'Financial Risk', value: (r) => safe(r.financialRiskLevel) },
-                { label: 'Bereavement Risk', value: (r) => safe(r.bereavementRisk) },
-                { label: 'Outcome', value: (r) => (r.assessmentOutcome?.length ? r.assessmentOutcome.join(', ') : '—') },
+                {
+                  label: 'Living Arrangement',
+                  value: (r) => safe(r.livingArrangement),
+                },
+                {
+                  label: 'Isolation Risk',
+                  value: (r) => safe(r.isolationRisk),
+                },
+                {
+                  label: 'Financial Risk',
+                  value: (r) => safe(r.financialRiskLevel),
+                },
+                {
+                  label: 'Bereavement Risk',
+                  value: (r) => safe(r.bereavementRisk),
+                },
+                {
+                  label: 'Outcome',
+                  value: (r) =>
+                    r.assessmentOutcome?.length
+                      ? r.assessmentOutcome.join(', ')
+                      : '—',
+                },
               ],
               a,
             ),
@@ -701,10 +933,25 @@ export function printPatientReport(data: PrintReportData): void {
               a.createdAt,
               a.assessmentType ?? '—',
               [
-                { label: 'Religious Affiliation', value: (r) => safe(r.religiousAffiliation) },
-                { label: 'Distress Level', value: (r) => safe(r.spiritualDistressLevel) },
-                { label: 'Feels at Peace', value: (r) => safe(r.feelsAtPeace) },
-                { label: 'Outcome', value: (r) => (r.assessmentOutcome?.length ? r.assessmentOutcome.join(', ') : '—') },
+                {
+                  label: 'Religious Affiliation',
+                  value: (r) => safe(r.religiousAffiliation),
+                },
+                {
+                  label: 'Distress Level',
+                  value: (r) => safe(r.spiritualDistressLevel),
+                },
+                {
+                  label: 'Feels at Peace',
+                  value: (r) => safe(r.feelsAtPeace),
+                },
+                {
+                  label: 'Outcome',
+                  value: (r) =>
+                    r.assessmentOutcome?.length
+                      ? r.assessmentOutcome.join(', ')
+                      : '—',
+                },
               ],
               a,
             ),
@@ -725,10 +972,28 @@ export function printPatientReport(data: PrintReportData): void {
               a.assessmentType ?? '—',
               [
                 { label: 'Severity', value: (r) => safe(r.severity) },
-                { label: 'Suicidal Ideation', value: (r) => safe(r.suicidalIdeation) },
-                { label: 'Suicide Risk Level', value: (r) => safe(r.suicideRiskLevel) },
-                { label: 'Diagnoses', value: (r) => (r.diagnoses?.length ? r.diagnoses.join(', ') : '—') },
-                { label: 'Outcome', value: (r) => (r.assessmentOutcome?.length ? r.assessmentOutcome.join(', ') : '—') },
+                {
+                  label: 'Suicidal Ideation',
+                  value: (r) => safe(r.suicidalIdeation),
+                },
+                {
+                  label: 'Suicide Risk Level',
+                  value: (r) => safe(r.suicideRiskLevel),
+                },
+                {
+                  label: 'Diagnoses',
+                  value: (r) =>
+                    r.diagnoses?.length
+                      ? r.diagnoses.join(', ')
+                      : '—',
+                },
+                {
+                  label: 'Outcome',
+                  value: (r) =>
+                    r.assessmentOutcome?.length
+                      ? r.assessmentOutcome.join(', ')
+                      : '—',
+                },
               ],
               a,
             ),

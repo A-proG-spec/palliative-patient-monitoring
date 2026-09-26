@@ -29,26 +29,48 @@ const PatientPrintPage: React.FC = () => {
   const navigate = useNavigate();
 
   // ── Core patient ──
-  const { data: patient, isLoading: pLoading, error: pError } = usePatient(id!);
+  const {
+    data: patient,
+    isLoading: pLoading,
+    error: pError,
+  } = usePatient(id!);
 
   // ── List endpoints (id + summary fields) ──
-  const { data: visitsData } = usePatientVisits(id!);
-  const { data: medsData } = usePatientMedications(id!);
-  const { data: labsData } = usePatientLabs(id!);
-  const { data: refsData } = usePatientReferrals(id!);
-  const { data: admsData } = usePatientAdmissions(id!);
-  const { data: progressNotesData } = useProgressNotes(id!);
-  const { data: hospiceData } = usePatientHospiceAssessments(id!);
+  // Explicit `limit: 100` so a patient with many records
+  // doesn't silently drop the tail.
+  const { data: visitsData } = usePatientVisits(id!, { limit: 100 });
+  const { data: medsData } = usePatientMedications(id!, { limit: 100 });
+  const { data: labsData } = usePatientLabs(id!, { limit: 100 });
+  const { data: refsData } = usePatientReferrals(id!, { limit: 100 });
+  const { data: admsData } = usePatientAdmissions(id!, { limit: 100 });
+  const { data: progressNotesData } = useProgressNotes(id!, { limit: 100 });
+  const { data: hospiceData } = usePatientHospiceAssessments(id!, {
+    limit: 100,
+  });
 
   // ── Assessments ──
-  const { data: painData } = usePatientPainAssessments(id!);
-  const { data: pharmacistData } = usePatientPharmacistAssessments(id!);
-  const { data: physioData } = usePatientPhysiotherapyAssessments(id!);
-  const { data: familyData } = usePatientFamilyAssessments(id!);
-  const { data: nutritionData } = usePatientNutritionalAssessments(id!);
-  const { data: socialData } = usePatientSocialAssessments(id!);
-  const { data: spiritualData } = usePatientSpiritualAssessments(id!);
-  const { data: psychiatryData } = usePatientPsychiatryAssessments(id!);
+  const { data: painData } = usePatientPainAssessments(id!, { limit: 100 });
+  const { data: pharmacistData } = usePatientPharmacistAssessments(id!, {
+    limit: 100,
+  });
+  const { data: physioData } = usePatientPhysiotherapyAssessments(id!, {
+    limit: 100,
+  });
+  const { data: familyData } = usePatientFamilyAssessments(id!, {
+    limit: 100,
+  });
+  const { data: nutritionData } = usePatientNutritionalAssessments(id!, {
+    limit: 100,
+  });
+  const { data: socialData } = usePatientSocialAssessments(id!, {
+    limit: 100,
+  });
+  const { data: spiritualData } = usePatientSpiritualAssessments(id!, {
+    limit: 100,
+  });
+  const { data: psychiatryData } = usePatientPsychiatryAssessments(id!, {
+    limit: 100,
+  });
 
   // ── Per-visit detail fetch ──
   //
@@ -91,12 +113,34 @@ const PatientPrintPage: React.FC = () => {
     });
   }, [visitsData, visitDetailQueries]);
 
-  const isLoading = pLoading || !patient || visitsLoading;
+  // ── Wait for every data source before printing ──
+  // Previously only the patient + visits were gated. Assessment
+  // hooks resolve independently; without gating on them, the
+  // print fires with empty arrays and the PDF shows
+  // "No X assessments found" even when records exist.
+  const assessmentsLoading =
+    !painData ||
+    !pharmacistData ||
+    !physioData ||
+    !familyData ||
+    !nutritionData ||
+    !socialData ||
+    !spiritualData ||
+    !psychiatryData ||
+    !progressNotesData ||
+    !hospiceData ||
+    !medsData ||
+    !labsData ||
+    !refsData ||
+    !admsData;
+
+  const isLoading =
+    pLoading || !patient || visitsLoading || assessmentsLoading;
 
   // ── Bundle everything into a single payload ──
   const reportPayload = useMemo(
     () =>
-      patient && !visitsLoading
+      patient && !isLoading
         ? {
             patient,
             visits: fullVisits,
@@ -120,7 +164,7 @@ const PatientPrintPage: React.FC = () => {
         : null,
     [
       patient,
-      visitsLoading,
+      isLoading,
       fullVisits,
       medsData,
       labsData,
