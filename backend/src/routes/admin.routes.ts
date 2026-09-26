@@ -43,10 +43,6 @@ router.use(rateLimiter);
 // Pending approvals
 router.get('/staff/pending', adminController.getPendingStaff);
 
-// ⚠️ ORDER MATTERS: literal paths BEFORE :param paths
-//    `/staff/performance` must come before `/staff/:staffId`,
-//    otherwise `:staffId` captures the literal "performance".
-
 // ── Performance (must be above /staff/:staffId) ──
 router.get(
   '/staff/performance',

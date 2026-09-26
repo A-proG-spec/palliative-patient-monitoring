@@ -2,6 +2,8 @@ import bcrypt from 'bcrypt';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import type { StaffRole } from '@prisma/client';
+
 // ─────────────────────────────────────────────────────────────
 // DTO helpers
 // ─────────────────────────────────────────────────────────────
@@ -14,12 +16,47 @@ const formatSignatures = (signatures: any[]) =>
     signedAt: s.signedAt,
   }));
 
+// ─────────────────────────────────────────────────────────────
+// Prisma stores vitals + ADL as flat columns, but the frontend
+// `HomeVisit` type expects them nested:
+//   vitals: { temperature, pulse, bloodPressure, respiration, spO2 }
+//   adl:    { feeding, bathing, dressing, toileting, mobility }
+//
+// This helper reshapes a raw Prisma row into the API contract the
+// frontend consumes. Every service that returns a visit should
+// run its result through this.
+// ─────────────────────────────────────────────────────────────
+const normalizeVisit = (visit: any) => {
+  if (!visit) return visit;
+
+  return {
+    ...visit,
+
+    // Nest vitals
+    vitals: {
+      temperature: visit.temperature ?? '',
+      pulse: visit.pulse ?? '',
+      bloodPressure: visit.bloodPressure ?? '',
+      respiration: visit.respiration ?? '',
+      spO2: visit.spO2 ?? '',
+    },
+
+    // Nest ADL. Note the Prisma column is `Mobility` (capital M);
+    // the API contract wants lowercase `mobility`.
+    adl: {
+      feeding: visit.feeding ?? null,
+      bathing: visit.bathing ?? null,
+      dressing: visit.dressing ?? null,
+      toileting: visit.toileting ?? null,
+      mobility: visit.Mobility ?? visit.mobility ?? null,
+    },
+  };
+};
+
 const isAllSigned = (signatures: any[]): boolean => {
   const roles = new Set((signatures || []).map((s) => s.role));
   return roles.has('Physician') && roles.has('Nurse');
 };
-
-
 
 // ─────────────────────────────────────────────────────────────
 // GET ALL home visits for a patient
@@ -73,12 +110,9 @@ export const getAllVisits = async (
     total,
   };
 };
+
 // ═════════════════════════════════════════════════════════════
 // Record visit
-//
-// The submitting staff (`req.user.id`) becomes the team leader:
-//   - HomeVisit.createdBy = staffId
-//   - One auto-inserted HomeVisitSignature with isTeamLeader = true
 // ═════════════════════════════════════════════════════════════
 export const recordVisit = async (
   patientId: string,
@@ -98,22 +132,61 @@ export const recordVisit = async (
 
   if (!patient) throw new ApiError(404, 'Patient not found');
   if (!teamLeader) throw new ApiError(404, 'Team leader not found');
+  if (!teamLeader.role) {
+    throw new ApiError(
+      400,
+      'Your account has no assigned role. Ask an admin to assign one before recording visits.',
+    );
+  }
 
-  // Validate any referenced team member staffIds exist
-  const memberIds = (data.teamMembers || [])
+  // Validate any referenced team member staffIds exist AND have a role.
+  const memberIds = (Array.isArray(data.teamMembers) ? data.teamMembers : [])
     .map((m: any) => (m.staffId ? Number(m.staffId) : null))
     .filter((x): x is number => x !== null && Number.isInteger(x) && x > 0);
 
   if (memberIds.length > 0) {
-    const found = await prisma.staff.count({ where: { id: { in: memberIds } } });
-    if (found !== memberIds.length) {
+    const members = await prisma.staff.findMany({
+      where: { id: { in: memberIds } },
+      select: { id: true, role: true },
+    });
+    if (members.length !== memberIds.length) {
       throw new ApiError(400, 'One or more team members not found');
+    }
+    const membersWithoutRole = members.filter((m) => !m.role);
+    if (membersWithoutRole.length > 0) {
+      throw new ApiError(
+        400,
+        `Team members ${membersWithoutRole.map((m) => m.id).join(', ')} have no assigned role`,
+      );
     }
   }
 
-  // Fallback: if the submitting staff has no role set, default to Nurse
-  // (their signature still uses isTeamLeader: true).
-  const leaderRole = teamLeader.role === 'Physician' ? 'Physician' : 'Nurse';
+  // ── Build the full signature list ONCE ──
+  //
+  // The previous version had a duplicate `signatures` key in the
+  // object literal which worked by accident (the second block
+  // overwrote the first). This approach avoids that fragility
+  // entirely.
+  const teamLeaderSignature = {
+    staffId: sid,
+    name: teamLeader.name,
+    role: teamLeader.role,        // ← the real StaffRole
+    isTeamLeader: true,
+    signedAt: new Date(),
+  };
+
+  const additionalSignatures = (Array.isArray(data.teamMembers)
+    ? data.teamMembers
+    : []
+  )
+    .filter((m: any) => m.staffId && Number(m.staffId) !== sid)
+    .map((m: any) => ({
+      staffId: Number(m.staffId),
+      name: m.name,
+      role: m.role as StaffRole,  // ← the real StaffRole
+      isTeamLeader: false,
+      signedAt: new Date(),
+    }));
 
   const visit = await prisma.homeVisit.create({
     data: {
@@ -141,7 +214,8 @@ export const recordVisit = async (
       painCharacteristics: data.painCharacteristics ?? [],
       currentPainMedication: data.currentPainMedication ?? null,
       painMedicationEffective: data.painMedicationEffective,
-      painManagementIneffectiveReason: data.painManagementIneffectiveReason ?? null,
+      painManagementIneffectiveReason:
+        data.painManagementIneffectiveReason ?? null,
 
       // symptoms
       symptoms: data.symptoms ?? [],
@@ -227,47 +301,15 @@ export const recordVisit = async (
       // audit
       createdBy: sid,
 
-      // Auto-signature: the submitting staff is the team leader
+      // ONE signature block — the writer is the team leader, then
+      // any additional team members, all with their real role.
       signatures: {
-        create: [
-          {
-            staffId: sid,
-            name: teamLeader.name,
-            role: leaderRole,
-            isTeamLeader: true,
-            signedAt: new Date(),
-          },
-        ],
+        create: [teamLeaderSignature, ...additionalSignatures],
       },
 
-      // Additional team members (if any) go in as signatures with isTeamLeader: false
-      ...(Array.isArray(data.teamMembers) && data.teamMembers.length > 0
-        ? {
-          signatures: {
-            create: [
-              {
-                staffId: sid,
-                name: teamLeader.name,
-                role: leaderRole,
-                isTeamLeader: true,
-                signedAt: new Date(),
-              },
-              ...data.teamMembers
-                .filter((m: any) => m.staffId && Number(m.staffId) !== sid)
-                .map((m: any) => ({
-                  staffId: Number(m.staffId),
-                  name: m.name,
-                  role: m.role === 'Physician' ? 'Physician' : 'Nurse',
-                  isTeamLeader: false,
-                  signedAt: new Date(),
-                })),
-            ],
-          },
-        }
-        : {}),
-
       // Current medications (child rows)
-      ...(Array.isArray(data.currentMedications) && data.currentMedications.length > 0
+      ...(Array.isArray(data.currentMedications) &&
+        data.currentMedications.length > 0
         ? {
           currentMedications: {
             create: data.currentMedications.map((m: any) => ({
@@ -365,32 +407,36 @@ export const getVisitById = async (patientId: string, visitId: string) => {
 
   if (!visit) throw new ApiError(404, 'Visit not found');
 
-  const { createdByStaff, ...rest } = visit;
+  const leaderSignature = visit.signatures.find((s) => s.isTeamLeader);
+
   return {
-    ...rest,
-    // numeric FK, unchanged — matches getVisits()
-    createdByStaff: createdByStaff
+    ...normalizeVisit(visit),
+    createdByStaff: visit.createdByStaff
       ? {
-          id: createdByStaff.id,
-          name: createdByStaff.name,
-          role: createdByStaff.role,
-        }
+        id: visit.createdByStaff.id,
+        name: visit.createdByStaff.name,
+        role: visit.createdByStaff.role,
+      }
+      : null,
+    teamLeader: leaderSignature
+      ? {
+        staffId: leaderSignature.staffId,
+        name: leaderSignature.name,
+        role: leaderSignature.role,
+        signedAt: leaderSignature.signedAt,
+      }
       : null,
     signatures: formatSignatures(visit.signatures),
     allSigned: isAllSigned(visit.signatures),
     currentMedications: visit.currentMedications,
   };
 };
-
 // ═════════════════════════════════════════════════════════════
 // Sign visit — verifies email + password (bcrypt)
-//
-// The team leader is auto-signed at creation, so they cannot
-// sign again. Only Physician/Nurse roles can sign here.
 // ═════════════════════════════════════════════════════════════
 export const signVisit = async (
   visitId: string,
-  data: { email: string; password: string; role: 'Physician' | 'Nurse' },
+  data: { email: string; password: string; role: StaffRole },
   _currentUserId: string | number,
 ) => {
   const vid = toId(visitId, 'visit id');
@@ -415,8 +461,11 @@ export const signVisit = async (
   const passwordOk = await bcrypt.compare(data.password, staff.password);
   if (!passwordOk) throw new ApiError(401, 'Invalid credentials');
 
-  if (staff.role !== data.role) {
-    throw new ApiError(403, `You are not registered as a ${data.role}`);
+  if (!staff.role) {
+    throw new ApiError(
+      403,
+      'Your account has no assigned role. Ask an administrator to assign one before signing.',
+    );
   }
 
   const alreadySigned = visit.signatures.some((s) => s.staffId === staff.id);
@@ -429,7 +478,7 @@ export const signVisit = async (
       homeVisitId: vid,
       staffId: staff.id,
       name: staff.name,
-      role: data.role,
+      role: staff.role,        // ← use DB role, not the request body
       isTeamLeader: false,
       signedAt: new Date(),
     },
@@ -445,7 +494,7 @@ export const signVisit = async (
     signedBy: {
       staffId: staff.id,
       name: staff.name,
-      role: data.role,
+      role: staff.role,
       signedAt: refreshed[refreshed.length - 1].signedAt,
     },
     signatures: formatSignatures(refreshed),
@@ -480,11 +529,13 @@ export const getVisitSignatures = async (visitId: string) => {
         role: leaderSignature.role,
         signedAt: leaderSignature.signedAt,
       }
-      : {
-        staffId: visit.createdByStaff.id,
-        name: visit.createdByStaff.name,
-        role: visit.createdByStaff.role,
-      },
+      : visit.createdByStaff
+        ? {
+          staffId: visit.createdByStaff.id,
+          name: visit.createdByStaff.name,
+          role: visit.createdByStaff.role,
+        }
+        : null,
     signatures: formatSignatures(visit.signatures),
     allSigned: isAllSigned(visit.signatures),
     totalSignatures: visit.signatures.length,
@@ -576,7 +627,10 @@ export const deleteVisit = async (
 // ═════════════════════════════════════════════════════════════
 // Restore
 // ═════════════════════════════════════════════════════════════
-export const restoreVisit = async (visitId: string, adminId: string | number) => {
+export const restoreVisit = async (
+  visitId: string,
+  adminId: string | number,
+) => {
   const vid = toId(visitId, 'visit id');
   const aid = toId(adminId, 'admin id');
 

@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useVisitSignatures, useSignVisit } from '@/hooks/useSignatures';
-import { signVisitSchema, type SignVisitFormData } from '@/schemas/signature.schema';
+import {
+  signVisitSchema,
+  STAFF_ROLE_VALUES,
+  type SignVisitFormData,
+} from '@/schemas/signature.schema';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -16,24 +20,39 @@ import {
   AlertCircle,
   Mail,
   Lock,
+  UserPlus,
 } from 'lucide-react';
-import type { Signature } from '@/types/signature.types';
+import { useAuthStore } from '@/store/auth.store';
+
+// Roles that gate "finalised". Other roles can cosign freely.
+const REQUIRED_ROLES = ['Physician', 'Nurse'] as const;
+
+const ROLE_LABELS: Record<string, string> = {
+  Physician: 'Physician',
+  Nurse: 'Nurse',
+  Pharmacist: 'Pharmacist',
+  Radiologist: 'Radiologist',
+  LaboratoryTechnician: 'Laboratory Technician',
+  Physiologist: 'Physiologist',
+  Psychiatrist: 'Psychiatrist',
+  Psychologist: 'Psychologist',
+  SocialWorker: 'Social Worker',
+  SpiritualPerson: 'Spiritual Person',
+  Nutritionist: 'Nutritionist',
+};
+
+const ROLE_OPTIONS = STAFF_ROLE_VALUES.map((r) => ({
+  value: r,
+  label: ROLE_LABELS[r] ?? r,
+}));
 
 interface SignatureSectionProps {
   patientId: string;
   visitId: string;
-  /** Optional — used to display the team leader's name when not populated. */
   teamMembers?: Array<{ role: string; name: string }>;
-  /** Fires when all required roles have signed. */
   onAllSigned?: () => void;
 }
 
-/**
- * SignatureSection
- * ────────────────
- * Visit signing card. The Team Leader is auto-signed on visit creation,
- * so this section only offers to sign as Physician or Nurse.
- */
 export const SignatureSection: React.FC<SignatureSectionProps> = ({
   patientId,
   visitId,
@@ -42,8 +61,9 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
 }) => {
   const { data, isLoading, refetch } = useVisitSignatures(patientId, visitId);
   const signMutation = useSignVisit(patientId, visitId);
+  const currentUser = useAuthStore((s) => s.user);
 
-  const [signingRole, setSigningRole] = useState<'Physician' | 'Nurse' | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const {
     register,
@@ -51,28 +71,62 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
     formState: { errors },
     reset,
     setError,
+    setValue,
+    watch,
   } = useForm<SignVisitFormData>({
     resolver: zodResolver(signVisitSchema),
-    defaultValues: { role: 'Physician', email: '', password: '' },
+    defaultValues: {
+      role: (currentUser?.role as SignVisitFormData['role']) ?? 'Nurse',
+      email: currentUser?.email ?? '',
+      password: '',
+    },
   });
+
+  const selectedRole = watch('role');
+
+  // ── Quick-sign shortcut: pre-fill the form with the logged-in user
+  //     so they don't have to retype their own email. ──
+  const openQuickSign = (role: 'Physician' | 'Nurse') => {
+    setValue('role', role, { shouldValidate: false });
+    setValue('email', currentUser?.email ?? '', { shouldValidate: false });
+    setValue('password', '', { shouldValidate: false });
+    setShowAddForm(true);
+  };
+
+  // ── Add Staff Signature: blank slate. Any role, any email. ──
+  const openAddStaffForm = () => {
+    setValue(
+      'role',
+      (currentUser?.role as SignVisitFormData['role']) ?? 'Nurse',
+      { shouldValidate: false },
+    );
+    setValue('email', '', { shouldValidate: false });
+    setValue('password', '', { shouldValidate: false });
+    setShowAddForm(true);
+  };
+
+  const closeForm = () => {
+    setShowAddForm(false);
+    reset({
+      role: (currentUser?.role as SignVisitFormData['role']) ?? 'Nurse',
+      email: currentUser?.email ?? '',
+      password: '',
+    });
+  };
 
   const onSubmit = (form: SignVisitFormData) => {
     signMutation.mutate(form, {
       onSuccess: () => {
-        setSigningRole(null);
-        reset({ role: 'Physician', email: '', password: '' });
+        closeForm();
         refetch();
-        // Fire the callback if signatures are now complete.
-        // We can't read the fresh state synchronously here, so we
-        // check the response shape from the mutation.
         setTimeout(() => {
-          // The query will have refetched by now.
+          if (data?.allSigned) onAllSigned?.();
         }, 0);
       },
       onError: (err: unknown) => {
         const msg =
-          (err as { response?: { data?: { message?: string } } })?.response?.data
-            ?.message ?? 'Signature failed.';
+          (err as { response?: { data?: { message?: string } } })?.response
+            ?.data?.message ?? 'Signature failed.';
         setError('root', { message: msg });
       },
     });
@@ -90,14 +144,17 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
   const teamLeader = data?.teamLeader ?? null;
   const allSigned = data?.allSigned ?? false;
 
-  const findSig = (role: Signature['role']) =>
+  const findSig = (role: string) =>
     signatures.find((s) => s.role === role) ?? null;
 
   const physicianSig = findSig('Physician');
   const nurseSig = findSig('Nurse');
 
-  // Team leader fallback: use the response field first, else the
-  // passed teamMembers list.
+  // All signatures whose role is NOT in REQUIRED_ROLES
+  const cosignerSigs = signatures.filter(
+    (s) => !(REQUIRED_ROLES as readonly string[]).includes(s.role),
+  );
+
   const teamLeaderFallback = teamMembers.find((m) => m.role === 'TeamLeader');
   const teamLeaderDisplay = teamLeader
     ? { staffId: teamLeader.staffId, name: teamLeader.name }
@@ -128,7 +185,7 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
         )}
       </div>
 
-      {/* Rows */}
+      {/* ── Signature rows ── */}
       <div className="divide-y divide-border-base">
         {/* Team Leader — auto-signed */}
         <SignatureRow
@@ -145,10 +202,10 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
           }
         />
 
-        {/* Physician */}
+        {/* Physician — required */}
         <SignatureRow
           label="Physician"
-          subtitle="Sign with email + password"
+          subtitle="Required — sign with email + password"
           signature={
             physicianSig
               ? {
@@ -158,13 +215,13 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
                 }
               : null
           }
-          onSignClick={!physicianSig ? () => setSigningRole('Physician') : undefined}
+          onSignClick={!physicianSig ? () => openQuickSign('Physician') : undefined}
         />
 
-        {/* Nurse */}
+        {/* Nurse — required */}
         <SignatureRow
           label="Nurse"
-          subtitle="Sign with email + password"
+          subtitle="Required — sign with email + password"
           signature={
             nurseSig
               ? {
@@ -174,26 +231,60 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
                 }
               : null
           }
-          onSignClick={!nurseSig ? () => setSigningRole('Nurse') : undefined}
+          onSignClick={!nurseSig ? () => openQuickSign('Nurse') : undefined}
         />
+
+        {/* Cosigners — every other role that has signed */}
+        {cosignerSigs.map((sig) => (
+          <SignatureRow
+            key={`${sig.role}-${sig.staffId}`}
+            label={ROLE_LABELS[sig.role] ?? sig.role}
+            subtitle="Cosignature"
+            signature={{
+              name: sig.name,
+              signedAt: sig.signedAt,
+              autoSigned: false,
+            }}
+          />
+        ))}
       </div>
 
-      {/* Sign form */}
-      {signingRole && (
+      {/* ── Add Staff Signature button ── */}
+      <div className="px-5 py-3 border-t border-border-base bg-surface-low/20 flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs text-text-muted">
+          Add signatures from additional staff members (Pharmacist, Nutritionist,
+          Social Worker, Spiritual Person, etc.).
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          leftIcon={<UserPlus size={13} />}
+          onClick={openAddStaffForm}
+        >
+          Add Staff Signature
+        </Button>
+      </div>
+
+      {/* ── Sign form ── */}
+      {showAddForm && (
         <div className="border-t border-border-base bg-surface-low/30 px-5 py-4">
           <div className="flex items-center gap-2 mb-3">
             <PenLine size={14} className="text-primary" />
             <p className="text-sm font-medium text-on-surface">
-              Sign as {signingRole}
+              Add a signature
             </p>
           </div>
           <p className="text-xs text-text-muted mb-4 leading-relaxed">
-            Signatures are verified against your registered email and password.
-            Only staff registered as <strong>{signingRole}</strong> can sign
-            as that role.
+            Enter the staff member's email and password. The role must match
+            their registered account on the server — the signature will be
+            rejected if it doesn't.
           </p>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3" noValidate>
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="space-y-3"
+            noValidate
+          >
             {errors.root && (
               <div className="rounded-lg bg-error-bg border border-error/20 px-3 py-2 text-xs text-error flex items-start gap-2">
                 <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
@@ -201,14 +292,23 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
               </div>
             )}
 
-            {/* Inject role — hidden */}
-            <input type="hidden" value={signingRole} {...register('role')} />
+            {/* Role dropdown — full list */}
+            <Select
+              label="Signing as"
+              options={ROLE_OPTIONS as unknown as {
+                value: string;
+                label: string;
+              }[]}
+              placeholder="Select role…"
+              error={errors.role?.message}
+              {...register('role')}
+            />
 
             <div className="grid sm:grid-cols-2 gap-3">
               <Input
                 label="Email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="staff@example.com"
                 leftIcon={<Mail size={14} />}
                 error={errors.email?.message}
                 {...register('email')}
@@ -229,39 +329,44 @@ export const SignatureSection: React.FC<SignatureSectionProps> = ({
                 size="sm"
                 loading={signMutation.isPending}
               >
-                Confirm Signature
+                Add Signature
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                onClick={() => {
-                  setSigningRole(null);
-                  reset({ role: 'Physician', email: '', password: '' });
-                }}
+                onClick={closeForm}
                 disabled={signMutation.isPending}
               >
                 Cancel
               </Button>
             </div>
+
+            {selectedRole && (
+              <p className="text-[11px] text-text-muted pt-1">
+                Signing as <strong>{ROLE_LABELS[selectedRole] ?? selectedRole}</strong>.
+                The server will verify that this email is registered with that role.
+              </p>
+            )}
           </form>
         </div>
       )}
 
-      {/* Status line */}
+      {/* ── Status line ── */}
       <div className="border-t border-border-base px-5 py-3 bg-surface-low/20">
         {allSigned ? (
           <p className="text-xs text-success flex items-center gap-1.5">
             <CheckCircle2 size={12} />
-            All team members have signed. This visit is ready to be finalized.
+            All required signatures collected. This visit is ready to be
+            finalised.
           </p>
         ) : (
           <div className="flex items-start gap-1.5 text-xs text-warning">
             <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
             <span>
-              All team members must sign before the visit can be finalized.
-              {!physicianSig && ' Physician needs to sign.'}
-              {!nurseSig && ' Nurse needs to sign.'}
+              A Physician and a Nurse must both sign to finalise this visit.
+              {!physicianSig && ' Physician signature pending.'}
+              {!nurseSig && ' Nurse signature pending.'}
             </span>
           </div>
         )}

@@ -21,8 +21,18 @@ export type VisitOutcome =
   | 'ReferredToFacility'
   | 'Deceased';
 
-export type VisitTeamRole = 'TeamLeader' | 'Physician' | 'Nurse';
-
+export type VisitTeamRole =
+  | 'Physician'
+  | 'Nurse'
+  | 'Pharmacist'
+  | 'Radiologist'
+  | 'LaboratoryTechnician'
+  | 'Physiologist'
+  | 'Psychiatrist'
+  | 'Psychologist'
+  | 'SocialWorker'
+  | 'SpiritualPerson'
+  | 'Nutritionist';
 // ─────────────────────────────────────────────────────────────
 // Signature
 // ─────────────────────────────────────────────────────────────
@@ -95,11 +105,11 @@ export interface HomeVisit {
 
   // Section 9 — Psychosocial
   emotionalStatus:
-    | 'Stable'
-    | 'Anxious'
-    | 'Depressed'
-    | 'Fearful'
-    | 'Distressed';
+  | 'Stable'
+  | 'Anxious'
+  | 'Depressed'
+  | 'Fearful'
+  | 'Distressed';
   emotionalComments?: string;
   familySupport: 'Excellent' | 'Good' | 'Limited' | 'None';
   financialDifficulty: boolean;
@@ -242,11 +252,11 @@ export interface CreateVisitRequest {
 
   // Section 9
   emotionalStatus:
-    | 'Stable'
-    | 'Anxious'
-    | 'Depressed'
-    | 'Fearful'
-    | 'Distressed';
+  | 'Stable'
+  | 'Anxious'
+  | 'Depressed'
+  | 'Fearful'
+  | 'Distressed';
   emotionalComments?: string;
   familySupport: 'Excellent' | 'Good' | 'Limited' | 'None';
   financialDifficulty: boolean;

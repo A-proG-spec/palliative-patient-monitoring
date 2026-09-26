@@ -1,6 +1,7 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { StaffRole } from '@prisma/client';
 // ═════════════════════════════════════════════════════════════
 // HELPERS
 // ═════════════════════════════════════════════════════════════
@@ -753,12 +754,7 @@ export const getStaffList = async (
   limit: number = 20,
   filters: {
     status?: 'Active' | 'Pending' | 'Rejected' | 'Deleted' | 'All';
-    role?:
-    | 'Physician'
-    | 'Nurse'
-    | 'Pharmacist'
-    | 'Radiologist'
-    | 'LaboratoryTechnician';
+    role?:StaffRole;
     search?: string;
   } = {},
 ) => {

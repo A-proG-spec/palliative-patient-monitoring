@@ -50,10 +50,53 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
   const [showDiscard, setShowDiscard] = useState(false);
 
   const bodyRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeKey]);
+
+  // ═══════════════════════════════════════════════════════════
+  // Hard-disable browser autofill on every field inside the wizard.
+  // ═══════════════════════════════════════════════════════════
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const neutralize = (el: Element) => {
+      const tag = el.tagName.toLowerCase();
+      if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') return;
+      const htmlEl = el as HTMLElement;
+      if (htmlEl.dataset.autofillNeutralized === '1') return;
+      htmlEl.dataset.autofillNeutralized = '1';
+
+      htmlEl.setAttribute('autocomplete', 'new-password');
+      htmlEl.setAttribute('autocorrect', 'off');
+      htmlEl.setAttribute('autocapitalize', 'off');
+      htmlEl.setAttribute('spellcheck', 'false');
+      htmlEl.setAttribute('data-form-type', 'other');
+      htmlEl.setAttribute('data-lpignore', 'true');
+      htmlEl.setAttribute('data-1p-ignore', 'true');
+      htmlEl.setAttribute('data-bwignore', 'true');
+      htmlEl.setAttribute('data-protonpass-ignore', 'true');
+    };
+
+    const scan = () => {
+      root.querySelectorAll('input, textarea, select').forEach(neutralize);
+    };
+
+    scan();
+
+    const observer = new MutationObserver(() => scan());
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['name', 'id', 'type'],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   const activeIdx = DISCHARGE_SECTIONS.findIndex((s) => s.key === activeKey);
   const activeDef = DISCHARGE_SECTIONS[activeIdx];
@@ -94,7 +137,7 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div ref={rootRef} className="space-y-4">
       {/* ═══════════════════════════════════════════════════════
           Page header — normal flow, scrolls with the page
       ═══════════════════════════════════════════════════════ */}
@@ -141,10 +184,11 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
       </div>
 
       {/* ═══════════════════════════════════════════════════════
-          Sidebar + Body
+          Sidebar + Body — constrained height so both panes
+          scroll internally instead of stretching the page
       ═══════════════════════════════════════════════════════ */}
-      <div className="flex gap-0 border border-border-base rounded-2xl bg-surface-lowest overflow-hidden">
-        {/* Sidebar — its own scroll area, capped height */}
+      <div className="flex gap-0 border border-border-base rounded-2xl bg-surface-lowest overflow-hidden h-[600px]">
+        {/* Sidebar — its own scroll area, capped by card height */}
         <DischargeSectionNav
           sections={DISCHARGE_SECTIONS}
           activeKey={activeKey}
@@ -154,9 +198,9 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
         />
 
         {/* Body */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
           {/* Mobile section picker */}
-          <div className="lg:hidden px-4 pt-4 pb-2 border-b border-border-base bg-surface-low/30">
+          <div className="lg:hidden px-4 pt-4 pb-2 border-b border-border-base bg-surface-low/30 flex-shrink-0">
             <label className="block text-xs font-medium text-text-muted mb-1">
               Section {activeIdx + 1} of {DISCHARGE_SECTIONS.length}
             </label>
@@ -175,8 +219,8 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
             </select>
           </div>
 
-          {/* Section header */}
-          <div className="px-6 pt-6 pb-4 border-b border-border-base">
+          {/* Section header — pinned */}
+          <div className="px-6 pt-5 pb-3 border-b border-border-base flex-shrink-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="font-mono text-[11px] bg-primary/10 text-primary rounded px-1.5 py-0.5 leading-none">
                 {activeDef.letter}
@@ -188,8 +232,8 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
             <p className="text-xs text-text-muted">{activeDef.description}</p>
           </div>
 
-          {/* Section body */}
-          <div ref={bodyRef} className="px-6 py-6 min-h-[400px]">
+          {/* Section body — the only scrolling region in the card */}
+          <div ref={bodyRef} className="px-6 py-5 flex-1 min-h-0 overflow-y-auto">
             <DischargeSectionBody
               sectionKey={activeKey}
               form={form}
@@ -198,8 +242,8 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
             />
           </div>
 
-          {/* Prev / Next nav */}
-          <div className="px-6 py-4 border-t border-border-base bg-surface-low/30 flex items-center justify-between">
+          {/* Prev / Next nav — pinned footer */}
+          <div className="px-6 py-3 border-t border-border-base bg-surface-low/30 flex items-center justify-between flex-shrink-0">
             <Button
               variant="outline"
               size="sm"

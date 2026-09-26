@@ -29,7 +29,6 @@ export const prisma = (prismaBase.$extends({
           'LaboratoryTest',
           'ImagingOrder',
           'HomeVisit',
-          'Referral',
           'HospitalAdmission',
           'DischargeSummary',
           'PatientProgressNote',

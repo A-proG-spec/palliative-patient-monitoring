@@ -1,10 +1,17 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+
+
+const patientDisplayId = (p: {
+  id: number;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
 // ─────────────────────────────────────────────────────────────
 // Register patient
 // ─────────────────────────────────────────────────────────────
-export const registerPatient = async (data: any, staffId: string|number) => {
+export const registerPatient = async (data: any, staffId: string | number) => {
   const registeredById = toId(staffId, 'staff id');
 
   const staff = await prisma.staff.findUnique({
@@ -45,45 +52,20 @@ export const registerPatient = async (data: any, staffId: string|number) => {
 // List patients
 // ─────────────────────────────────────────────────────────────
 export const getPatients = async (
-  staffId: string | number,
+  _staffId: string | number,
   page: number = 1,
   limit: number = 20,
   status?: string,
   search?: string,
 ) => {
-  const sid = toId(staffId, 'staff id');
+  const where: any = {};
 
-  // Collect patient ids the staff member is tied to.
-  const [registered, visited] = await Promise.all([
-    prisma.patient.findMany({
-      where: { registeredBy: sid },
-      select: { id: true },
-    }),
-    prisma.homeVisit.findMany({
-      where: {
-        OR: [
-          { createdBy: sid },
-          { signatures: { some: { staffId: sid } } },
-        ],
-      },
-      select: { patientId: true },
-      distinct: ['patientId'],
-    }),
-  ]);
-
-  const accessibleIds = Array.from(
-    new Set([
-      ...registered.map((p) => p.id),
-      ...visited.map((v) => v.patientId),
-    ]),
-  );
-
-  const where: any = { id: { in: accessibleIds } };
   if (status) where.status = status;
   if (search) {
     where.OR = [
       { firstName: { contains: search, mode: 'insensitive' } },
       { lastName: { contains: search, mode: 'insensitive' } },
+      { hospitalPatientId: { contains: search, mode: 'insensitive' } },
     ];
   }
 
@@ -102,6 +84,8 @@ export const getPatients = async (
   return {
     items: items.map((p) => ({
       id: p.id,
+      patientDisplayId: patientDisplayId(p),
+      hospitalPatientId: p.hospitalPatientId,
       firstName: p.firstName,
       lastName: p.lastName,
       age: p.age,
@@ -109,6 +93,7 @@ export const getPatients = async (
       status: p.status,
       currentLocation: p.currentLocation,
       primaryDiagnosis: p.primaryDiagnosis,
+      diseaseStage: p.diseaseStage,
       registeredAt: p.createdAt,
     })),
     page,
@@ -116,7 +101,6 @@ export const getPatients = async (
     total,
   };
 };
-
 // ─────────────────────────────────────────────────────────────
 // Get one patient
 // ─────────────────────────────────────────────────────────────
@@ -135,6 +119,7 @@ export const getPatientById = async (patientId: string) => {
   return {
     id: patient.id,
     hospitalPatientId: patient.hospitalPatientId,
+    patientDisplayId: patientDisplayId(patient),   // ← NEW
     firstName: patient.firstName,
     lastName: patient.lastName,
     age: patient.age,
@@ -169,7 +154,7 @@ export const getPatientById = async (patientId: string) => {
 export const updatePatient = async (
   patientId: string,
   data: any,
-  adminId: string|number,
+  adminId: string | number,
 ) => {
   const id = toId(patientId, 'patient id');
   const admin = toId(adminId, 'admin id');
@@ -326,14 +311,14 @@ export const getPatientSummary = async (patientId: string) => {
     })),
     dischargeSummary: latestDischarge
       ? {
-          id: latestDischarge.id,
-          dateOfDischarge: latestDischarge.dateOfDischarge,
-          timeOfDischarge: latestDischarge.timeOfDischarge,
-          dischargeType: latestDischarge.dischargeType,
-          overallCondition: latestDischarge.overallCondition,
-          dischargedTo: latestDischarge.dischargedTo,
-          status: latestDischarge.status,
-        }
+        id: latestDischarge.id,
+        dateOfDischarge: latestDischarge.dateOfDischarge,
+        timeOfDischarge: latestDischarge.timeOfDischarge,
+        dischargeType: latestDischarge.dischargeType,
+        overallCondition: latestDischarge.overallCondition,
+        dischargedTo: latestDischarge.dischargedTo,
+        status: latestDischarge.status,
+      }
       : null,
   };
 };

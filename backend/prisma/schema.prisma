@@ -342,6 +342,15 @@ enum VisitType {
 enum VisitTeamRole {
   Physician
   Nurse
+  Pharmacist
+  Radiologist
+  LaboratoryTechnician
+  Physiologist
+  Psychiatrist
+  Psychologist
+  SocialWorker
+  SpiritualPerson
+  Nutritionist
 }
 
 enum VisitOverallStatus {

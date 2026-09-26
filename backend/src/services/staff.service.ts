@@ -39,18 +39,51 @@ export const getDashboardStats = async (staffId: string | number) => {
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
+  const sevenDaysFromNow = new Date(today);
+  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
 
   const visitFilter = visitFilterFor(id);
 
-  const [todayVisits, visitsForPatientIds, recentVisits] = await Promise.all([
-    prisma.homeVisit.count({
-      where: { ...visitFilter, visitDate: { gte: today, lt: tomorrow } },
+  // ── Scoped IDs for the "My Patients" widget only ──
+  const [registered, visited] = await Promise.all([
+    prisma.patient.findMany({
+      where: { registeredBy: id },
+      select: { id: true },
     }),
     prisma.homeVisit.findMany({
       where: visitFilter,
       select: { patientId: true },
       distinct: ['patientId'],
     }),
+  ]);
+  const myPatientIds = Array.from(
+    new Set([
+      ...registered.map((p) => p.id),
+      ...visited.map((v) => v.patientId),
+    ]),
+  );
+
+  const [
+    todayVisits,          // unit-wide
+    totalPatients,        // unit-wide
+    activePatients,       // unit-wide
+    recentVisits,         // scoped to caller
+    upcomingVisits,       // scoped to caller
+    alerts,               // scoped to caller
+    myPatients,           // scoped to caller
+  ] = await Promise.all([
+    // 1. Today's visits — ALL staff (unit-wide)
+    prisma.homeVisit.count({
+      where: { visitDate: { gte: today, lt: tomorrow } },
+    }),
+
+    // 2. Total patients — ALL (unit-wide)
+    prisma.patient.count(),
+
+    // 3. Active patients — ALL (unit-wide)
+    prisma.patient.count({ where: { status: 'Active' } }),
+
+    // 4. Recent visits — only the caller's
     prisma.homeVisit.findMany({
       where: visitFilter,
       orderBy: { visitDate: 'desc' },
@@ -59,25 +92,40 @@ export const getDashboardStats = async (staffId: string | number) => {
         patient: { select: { id: true, firstName: true, lastName: true } },
       },
     }),
-  ]);
 
-  const patientIds = visitsForPatientIds.map((v) => v.patientId);
+    // 5. Upcoming visits — only the caller's
+    prisma.homeVisit.findMany({
+      where: {
+        ...visitFilter,
+        nextVisitDate: { gte: today, lte: sevenDaysFromNow },
+      },
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
 
-  const [totalPatients, activePatients, assignedPatients] = await Promise.all([
-    Promise.resolve(patientIds.length),
-    prisma.patient.count({ where: { id: { in: patientIds }, status: 'Active' } }),
+    // 6. Alerts
+    getAlertsForStaff(id),
+
+    // 7. "My Patients" widget — registered OR visited by the caller
     prisma.patient.findMany({
-      where: { id: { in: patientIds } },
+      where: { id: { in: myPatientIds } },
       select: {
-        id: true, firstName: true, lastName: true, age: true, sex: true,
-        status: true, currentLocation: true, primaryDiagnosis: true,
+        id: true,
+        firstName: true,
+        lastName: true,
+        age: true,
+        sex: true,
+        status: true,
+        currentLocation: true,
+        primaryDiagnosis: true,
       },
     }),
   ]);
 
-  // Last visit + active admission per patient
-  const patientsWithLastVisit = await Promise.all(
-    assignedPatients.map(async (p) => {
+  // Enrich each of my patients with last-visit + active admission
+  const assignedPatients = await Promise.all(
+    myPatients.map(async (p) => {
       const [lastVisit, activeAdmission] = await Promise.all([
         prisma.homeVisit.findFirst({
           where: { patientId: p.id, ...visitFilter },
@@ -97,22 +145,6 @@ export const getDashboardStats = async (staffId: string | number) => {
     }),
   );
 
-  // Upcoming visits
-  const sevenDaysFromNow = new Date(today);
-  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
-
-  const upcomingVisits = await prisma.homeVisit.findMany({
-    where: {
-      ...visitFilter,
-      nextVisitDate: { gte: today, lte: sevenDaysFromNow },
-    },
-    include: {
-      patient: { select: { id: true, firstName: true, lastName: true } },
-    },
-  });
-
-  const alerts = await getAlertsForStaff(id);
-
   return {
     todayVisits,
     totalPatients,
@@ -125,7 +157,7 @@ export const getDashboardStats = async (staffId: string | number) => {
       visitDate: v.visitDate,
       outcome: v.outcome,
     })),
-    assignedPatients: patientsWithLastVisit,
+    assignedPatients,
     upcomingVisits: upcomingVisits.map((v) => ({
       id: v.id,
       patientId: v.patient.id,
@@ -136,7 +168,6 @@ export const getDashboardStats = async (staffId: string | number) => {
     alerts,
   };
 };
-
 // ═════════════════════════════════════════════════════════════
 // Alerts
 // ═════════════════════════════════════════════════════════════

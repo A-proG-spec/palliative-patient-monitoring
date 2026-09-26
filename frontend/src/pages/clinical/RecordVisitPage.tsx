@@ -1,8 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Trash2, ChevronDown, ClipboardList, CheckCircle2, ArrowLeft } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  ChevronDown,
+  ClipboardList,
+  CheckCircle2,
+  ArrowLeft,
+} from 'lucide-react';
 import { createVisitSchema, type CreateVisitFormData } from '@/schemas/visit.schema';
 import { useRecordVisit } from '@/hooks/useVisits';
 import { usePatient } from '@/hooks/usePatients';
@@ -10,7 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { cn } from '@/lib/utils';
@@ -22,6 +29,7 @@ import {
 } from '@/constants';
 import { SignatureSection } from '@/components/visits/SignatureSection';
 import { useAuthStore } from '@/store/auth.store';
+import { useToast } from '@/context/ToastContext';
 
 // ── Collapsible section wrapper ─────────────────────────────────
 const Section: React.FC<{
@@ -76,12 +84,57 @@ const CheckboxGroup: React.FC<{
   </div>
 );
 
+// ── True/False radio group that writes a real boolean ───────────
+const BooleanRadio: React.FC<{
+  label: string;
+  value: boolean | null | undefined;
+  onChange: (v: boolean | null) => void;
+  allowNull?: boolean;
+  nullLabel?: string;
+}> = ({ label, value, onChange, allowNull = false, nullLabel = 'N/A' }) => (
+  <div>
+    <p className="text-sm font-medium text-on-surface mb-2">{label}</p>
+    <div className="flex gap-4">
+      <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <input
+          type="radio"
+          checked={value === true}
+          onChange={() => onChange(true)}
+          className="h-4 w-4 text-primary"
+        />
+        Yes
+      </label>
+      <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <input
+          type="radio"
+          checked={value === false}
+          onChange={() => onChange(false)}
+          className="h-4 w-4 text-primary"
+        />
+        No
+      </label>
+      {allowNull && (
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="radio"
+            checked={value === null}
+            onChange={() => onChange(null)}
+            className="h-4 w-4 text-primary"
+          />
+          {nullLabel}
+        </label>
+      )}
+    </div>
+  </div>
+);
+
 const RecordVisitPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: patient, isLoading: patientLoading } = usePatient(id!);
   const recordMutation = useRecordVisit(id!);
   const user = useAuthStore((s) => s.user);
+  const { toast } = useToast();
 
   const [createdVisitId, setCreatedVisitId] = useState<string | null>(null);
 
@@ -92,6 +145,7 @@ const RecordVisitPage: React.FC = () => {
     control,
     watch,
     setValue,
+    getValues,
   } = useForm<CreateVisitFormData>({
     resolver: zodResolver(createVisitSchema),
     defaultValues: {
@@ -108,8 +162,10 @@ const RecordVisitPage: React.FC = () => {
       teamMembers: [],
       overallStatus: 'Stable',
       mobility: 'RequiresAssistance',
+      painPresent: false,
       painScore: 0,
       painMedicationEffective: true,
+      currentPainMedication: false,
       adl: {
         feeding: 'NeedsAssistance',
         bathing: 'NeedsAssistance',
@@ -131,7 +187,7 @@ const RecordVisitPage: React.FC = () => {
       medicationCorrectlyTaken: true,
       medicationSideEffects: false,
       medicationRefillNeeded: false,
-      morphineAvailable: true,
+      morphineAvailable: null,
       adherenceLevel: 'Good',
       currentMedications: [],
       caregiverBurden: 'Moderate',
@@ -140,15 +196,17 @@ const RecordVisitPage: React.FC = () => {
       familyEmotionalStatus: 'Stable',
       homeCondition: 'Clean',
       outcome: 'Stable',
-      teamLeaderId: user?.id || '',
       painLocation: [],
       painCharacteristics: [],
+      painReliefMeasures: [],
       symptoms: [],
       educationProvided: [],
       homeObservations: [],
       nursingCareGiven: [],
       redFlags: ['None'],
       referralsMade: [],
+      additionalSupportNeeded: false,
+      trainingNeeds: [],
     },
   });
 
@@ -164,12 +222,87 @@ const RecordVisitPage: React.FC = () => {
     remove: removeMed,
   } = useFieldArray({ control, name: 'currentMedications' });
 
+  // ═══════════════════════════════════════════════════════════════
+  // AUTO-FILL
+  //
+  // Runs once the patient loads. Fills:
+  //   • caregiver section (primaryCaregiver, relationship, phone)
+  //   • team leader (name + role)
+  // ═══════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!patient) return;
+
+    // Caregiver auto-fill
+    setValue('primaryCaregiver', patient.caregiverName ?? '');
+    setValue('caregiverRelationship', patient.caregiverRelation ?? '');
+    setValue('caregiverPhone', patient.caregiverPhone ?? '');
+
+    // Auto-register the current user as the first team member
+    // (team leader). This is what was missing and causing the
+    // save button to silently fail — the schema requires
+    // `teamMembers.min(1)`.
+    if (user?.name && teamFields.length === 0) {
+      appendTeam({
+        role: (user.role as 'Physician' | 'Nurse') ?? 'Nurse',
+        name: user.name,
+        isTeamLeader: true,
+        staffId: String(user.id ?? ''),
+      });
+    }
+  }, [patient, user, appendTeam, setValue, teamFields.length]);
+
   const onSubmit = (data: CreateVisitFormData) => {
     recordMutation.mutate(data, {
       onSuccess: (response) => {
         setCreatedVisitId(response.id);
       },
+      onError: (err: any) => {
+        // Surface backend validation errors instead of silently swallowing
+        const message =
+          err?.response?.data?.message ?? 'Failed to save visit.';
+        const fieldErrors = err?.response?.data?.errors;
+        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+          toast.error(
+            `${message} — ${fieldErrors
+              .slice(0, 3)
+              .map((e: any) => e.message ?? e.field)
+              .join(', ')}`,
+          );
+        } else {
+          toast.error(message);
+        }
+      },
     });
+  };
+
+  // onInvalid: surface ALL validation errors so the user
+  // actually knows why the save button "does nothing".
+  const onInvalid = (formErrors: any) => {
+    const flat: string[] = [];
+    const walk = (obj: any, path = ''): void => {
+      if (!obj || typeof obj !== 'object') return;
+      if ('message' in obj && typeof obj.message === 'string') {
+        flat.push(`${path || 'form'}: ${obj.message}`);
+        return;
+      }
+      for (const [k, v] of Object.entries(obj)) {
+        const next = path ? `${path}.${k}` : k;
+        if (Array.isArray(v)) {
+          v.forEach((item, i) => walk(item, `${next}[${i}]`));
+        } else {
+          walk(v, next);
+        }
+      }
+    };
+    walk(formErrors);
+
+    if (flat.length > 0) {
+      const shown = flat.slice(0, 3).join(' • ');
+      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
+      toast.error(`Save failed — ${shown}${rest}`, 8000);
+    } else {
+      toast.error('Save failed — please review the form.');
+    }
   };
 
   if (patientLoading) return <PageLoader />;
@@ -181,6 +314,10 @@ const RecordVisitPage: React.FC = () => {
   ];
 
   const isSubmitting = recordMutation.isPending;
+
+  // ── Derived display values ──
+  const displayId =
+    patient?.hospitalPatientId ?? patient?.patientDisplayId ?? '—';
 
   // ── Saved state — show signature section ──
   if (createdVisitId) {
@@ -207,7 +344,7 @@ const RecordVisitPage: React.FC = () => {
         <SignatureSection
           patientId={id!}
           visitId={createdVisitId}
-          teamMembers={watch('teamMembers')}
+          teamMembers={getValues('teamMembers')}
           onAllSigned={() => {
             setTimeout(() => navigate(`/patients/${id}`), 1200);
           }}
@@ -240,16 +377,14 @@ const RecordVisitPage: React.FC = () => {
           </p>
           {patient && (
             <p className="text-sm text-text-muted mt-1">
-              {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
+              {patient.firstName} {patient.lastName} · {displayId}
             </p>
           )}
         </div>
       </div>
 
       <form
-        onSubmit={handleSubmit(onSubmit, (errs) =>
-          console.error('[RecordVisit] validation failed:', errs),
-        )}
+        onSubmit={handleSubmit(onSubmit, onInvalid)}
         className="space-y-4"
         noValidate
       >
@@ -263,7 +398,7 @@ const RecordVisitPage: React.FC = () => {
             />
             <Input
               label="Hospital ID / MRN"
-              value={patient?.patientDisplayId || '—'}
+              value={displayId}
               disabled
             />
             <Input
@@ -288,7 +423,11 @@ const RecordVisitPage: React.FC = () => {
               value={patient?.caregiverName || '—'}
               disabled
             />
-            <Input label="Relationship" value="—" disabled />
+            <Input
+              label="Relationship"
+              value={patient?.caregiverRelation || '—'}
+              disabled
+            />
           </div>
         </Section>
 
@@ -328,10 +467,9 @@ const RecordVisitPage: React.FC = () => {
             {...register('visitType')}
           />
 
-          {/* Additional team members — TeamLeader is implicit */}
           <div>
             <p className="text-sm font-medium text-on-surface mb-1">
-              Additional Visiting Team Members
+              Visiting Team Members
             </p>
             <p className="text-xs text-text-muted mb-3">
               You are automatically recorded as the Team Leader. Add any other
@@ -351,6 +489,7 @@ const RecordVisitPage: React.FC = () => {
                 />
                 <Input
                   placeholder="Staff name"
+                  error={errors.teamMembers?.[i]?.name?.message}
                   {...register(`teamMembers.${i}.name`)}
                   className="flex-1"
                 />
@@ -360,11 +499,18 @@ const RecordVisitPage: React.FC = () => {
                   size="icon"
                   className="h-10 w-10 flex-shrink-0"
                   onClick={() => removeTeam(i)}
+                  disabled={teamFields.length <= 1}
                 >
                   <Trash2 size={14} />
                 </Button>
               </div>
             ))}
+            {errors.teamMembers && (
+              <p className="text-xs text-error">
+                {(errors.teamMembers as any).message ??
+                  'At least one team member is required.'}
+              </p>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -474,28 +620,14 @@ const RecordVisitPage: React.FC = () => {
                     {...register('generalObservation.generalAppearance')}
                     className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary"
                   />
-                  {opt === 'Comfortable'
-                    ? 'Comfortable'
-                    : opt === 'MildDistress'
-                      ? 'Mild Distress'
-                      : opt === 'ModerateDistress'
-                        ? 'Moderate Distress'
-                        : opt === 'SevereDistress'
-                          ? 'Severe Distress'
-                          : opt === 'Cachectic'
-                            ? 'Cachectic'
-                            : opt === 'Bedridden'
-                              ? 'Bedridden'
-                              : opt === 'WellGroomed'
-                                ? 'Well Groomed'
-                                : 'Poor Hygiene'}
+                  {opt.replace(/([A-Z])/g, ' $1').trim()}
                 </label>
               ))}
             </div>
           </div>
         </Section>
 
-        {/* 4. VITAL SIGNS — corrected field names */}
+        {/* 4. VITAL SIGNS */}
         <Section title="4. VITAL SIGNS (IF AVAILABLE)" defaultOpen={false}>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <Input
@@ -530,38 +662,18 @@ const RecordVisitPage: React.FC = () => {
         {/* 5. PAIN ASSESSMENT */}
         <Section title="5. PAIN ASSESSMENT">
           <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm font-medium text-on-surface mb-2">
-                Pain Present
-              </p>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    value="true"
-                    {...register('painPresent')}
-                    className="h-4 w-4 text-primary"
-                  />
-                  Yes
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    value="false"
-                    {...register('painPresent')}
-                    className="h-4 w-4 text-primary"
-                  />
-                  No
-                </label>
-              </div>
-            </div>
+            <BooleanRadio
+              label="Pain Present"
+              value={watch('painPresent')}
+              onChange={(v) => setValue('painPresent', v as boolean, { shouldDirty: true })}
+            />
             <Input
               label="Pain Score (0–10)"
               type="number"
               min={0}
               max={10}
               error={errors.painScore?.message}
-              {...register('painScore')}
+              {...register('painScore', { valueAsNumber: true })}
             />
           </div>
 
@@ -618,58 +730,22 @@ const RecordVisitPage: React.FC = () => {
           </div>
 
           <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm font-medium text-on-surface mb-2">
-                Current Pain Medication
-              </p>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    value="true"
-                    {...register('currentPainMedication')}
-                    className="h-4 w-4 text-primary"
-                  />
-                  Yes
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    value="false"
-                    {...register('currentPainMedication')}
-                    className="h-4 w-4 text-primary"
-                  />
-                  No
-                </label>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-on-surface mb-2">
-                Current Management Effective
-              </p>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    value="true"
-                    {...register('painMedicationEffective')}
-                    className="h-4 w-4 text-primary"
-                  />
-                  Yes
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    value="false"
-                    {...register('painMedicationEffective')}
-                    className="h-4 w-4 text-primary"
-                  />
-                  No
-                </label>
-              </div>
-            </div>
+            <BooleanRadio
+              label="Current Pain Medication"
+              value={watch('currentPainMedication')}
+              onChange={(v) =>
+                setValue('currentPainMedication', v as boolean, { shouldDirty: true })
+              }
+            />
+            <BooleanRadio
+              label="Current Management Effective"
+              value={watch('painMedicationEffective')}
+              onChange={(v) =>
+                setValue('painMedicationEffective', v as boolean, { shouldDirty: true })
+              }
+            />
           </div>
-          {!watch('painMedicationEffective') && (
+          {watch('painMedicationEffective') === false && (
             <Textarea
               label="If No, explain:"
               rows={2}
@@ -713,7 +789,7 @@ const RecordVisitPage: React.FC = () => {
           </div>
         </Section>
 
-        {/* B1. RESPIRATORY ASSESSMENT */}
+        {/* B1. RESPIRATORY */}
         <Section title="B1. RESPIRATORY ASSESSMENT" defaultOpen={false}>
           <div className="grid sm:grid-cols-2 gap-4">
             <Select
@@ -762,41 +838,23 @@ const RecordVisitPage: React.FC = () => {
               {...register('respiratory.sputum')}
             />
           </div>
-          <div>
-            <p className="text-sm font-medium text-on-surface mb-2">
-              Oxygen Therapy
-            </p>
-            <div className="flex gap-4 mb-2">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  value="true"
-                  {...register('respiratory.oxygenTherapy')}
-                  className="h-4 w-4 text-primary"
-                />
-                Yes
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  value="false"
-                  {...register('respiratory.oxygenTherapy')}
-                  className="h-4 w-4 text-primary"
-                />
-                No
-              </label>
-            </div>
-            {watch('respiratory.oxygenTherapy' as any) === true && (
-              <Input
-                label="Flow Rate (L/min)"
-                placeholder="e.g. 2"
-                {...register('respiratory.oxygenFlowRate')}
-              />
-            )}
-          </div>
+          <BooleanRadio
+            label="Oxygen Therapy"
+            value={watch('respiratory.oxygenTherapy') as boolean | null}
+            onChange={(v) =>
+              setValue('respiratory.oxygenTherapy', v as boolean, { shouldDirty: true })
+            }
+          />
+          {watch('respiratory.oxygenTherapy') === true && (
+            <Input
+              label="Flow Rate (L/min)"
+              placeholder="e.g. 2"
+              {...register('respiratory.oxygenFlowRate')}
+            />
+          )}
         </Section>
 
-        {/* B2. CARDIOVASCULAR ASSESSMENT */}
+        {/* B2. CARDIOVASCULAR */}
         <Section title="B2. CARDIOVASCULAR ASSESSMENT" defaultOpen={false}>
           <div className="grid sm:grid-cols-2 gap-4">
             <Select
@@ -870,14 +928,14 @@ const RecordVisitPage: React.FC = () => {
               type="number"
               min={0}
               max={100}
-              {...register('ppsScore')}
+              {...register('ppsScore', { valueAsNumber: true })}
             />
             <Input
               label="KPS Score (/100)"
               type="number"
               min={0}
               max={100}
-              {...register('kpsScore')}
+              {...register('kpsScore', { valueAsNumber: true })}
             />
           </div>
 
@@ -944,7 +1002,7 @@ const RecordVisitPage: React.FC = () => {
           />
         </Section>
 
-        {/* C1. GENITOURINARY ASSESSMENT */}
+        {/* C1. GENITOURINARY */}
         <Section title="C1. GENITOURINARY ASSESSMENT" defaultOpen={false}>
           <div className="grid sm:grid-cols-2 gap-4">
             <Select
@@ -973,7 +1031,7 @@ const RecordVisitPage: React.FC = () => {
           </div>
         </Section>
 
-        {/* C2. SKIN ASSESSMENT */}
+        {/* C2. SKIN */}
         <Section title="C2. SKIN ASSESSMENT" defaultOpen={false}>
           <div className="grid sm:grid-cols-2 gap-4">
             <Select
@@ -999,54 +1057,36 @@ const RecordVisitPage: React.FC = () => {
               {...register('skin.pressureInjuryRisk')}
             />
           </div>
-          <div>
-            <p className="text-sm font-medium text-on-surface mb-2">
-              Existing Pressure Ulcer
-            </p>
-            <div className="flex gap-4 mb-2">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  value="true"
-                  {...register('skin.pressureUlcerPresent')}
-                  className="h-4 w-4 text-primary"
-                />
-                Yes
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  value="false"
-                  {...register('skin.pressureUlcerPresent')}
-                  className="h-4 w-4 text-primary"
-                />
-                No
-              </label>
+          <BooleanRadio
+            label="Existing Pressure Ulcer"
+            value={watch('skin.pressureUlcerPresent') as boolean | null}
+            onChange={(v) =>
+              setValue('skin.pressureUlcerPresent', v as boolean, { shouldDirty: true })
+            }
+          />
+          {watch('skin.pressureUlcerPresent') === true && (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Input
+                label="Location"
+                placeholder="e.g. sacrum"
+                {...register('skin.pressureUlcerLocation')}
+              />
+              <Select
+                label="Stage"
+                options={[
+                  { value: 'I', label: 'Stage I' },
+                  { value: 'II', label: 'Stage II' },
+                  { value: 'III', label: 'Stage III' },
+                  { value: 'IV', label: 'Stage IV' },
+                ]}
+                placeholder="Select stage…"
+                {...register('skin.pressureUlcerStage')}
+              />
             </div>
-            {watch('skin.pressureUlcerPresent' as any) === true && (
-              <div className="grid sm:grid-cols-2 gap-4">
-                <Input
-                  label="Location"
-                  placeholder="e.g. sacrum"
-                  {...register('skin.pressureUlcerLocation')}
-                />
-                <Select
-                  label="Stage"
-                  options={[
-                    { value: 'I', label: 'Stage I' },
-                    { value: 'II', label: 'Stage II' },
-                    { value: 'III', label: 'Stage III' },
-                    { value: 'IV', label: 'Stage IV' },
-                  ]}
-                  placeholder="Select stage…"
-                  {...register('skin.pressureUlcerStage')}
-                />
-              </div>
-            )}
-          </div>
+          )}
         </Section>
 
-        {/* C3. MOBILITY ASSESSMENT */}
+        {/* C3. MOBILITY */}
         <Section title="C3. MOBILITY ASSESSMENT" defaultOpen={false}>
           <div className="grid sm:grid-cols-2 gap-4">
             <Select
@@ -1135,31 +1175,13 @@ const RecordVisitPage: React.FC = () => {
             {...register('emotionalComments')}
           />
 
-          <div>
-            <p className="text-sm font-medium text-on-surface mb-2">
-              Financial Difficulty
-            </p>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  value="true"
-                  {...register('financialDifficulty')}
-                  className="h-4 w-4 text-primary"
-                />
-                Yes
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  value="false"
-                  {...register('financialDifficulty')}
-                  className="h-4 w-4 text-primary"
-                />
-                No
-              </label>
-            </div>
-          </div>
+          <BooleanRadio
+            label="Financial Difficulty"
+            value={watch('financialDifficulty')}
+            onChange={(v) =>
+              setValue('financialDifficulty', v as boolean, { shouldDirty: true })
+            }
+          />
           <Textarea
             label="Comments"
             rows={2}
@@ -1169,31 +1191,13 @@ const RecordVisitPage: React.FC = () => {
 
         {/* 10. SPIRITUAL */}
         <Section title="10. SPIRITUAL ASSESSMENT" defaultOpen={false}>
-          <div>
-            <p className="text-sm font-medium text-on-surface mb-2">
-              Spiritual Needs Identified
-            </p>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  value="true"
-                  {...register('spiritualNeeds')}
-                  className="h-4 w-4 text-primary"
-                />
-                Yes
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  value="false"
-                  {...register('spiritualNeeds')}
-                  className="h-4 w-4 text-primary"
-                />
-                No
-              </label>
-            </div>
-          </div>
+          <BooleanRadio
+            label="Spiritual Needs Identified"
+            value={watch('spiritualNeeds')}
+            onChange={(v) =>
+              setValue('spiritualNeeds', v as boolean, { shouldDirty: true })
+            }
+          />
           {watch('spiritualNeeds') && (
             <Textarea
               label="If Yes, specify:"
@@ -1202,31 +1206,13 @@ const RecordVisitPage: React.FC = () => {
             />
           )}
 
-          <div className="mt-4">
-            <p className="text-sm font-medium text-on-surface mb-2">
-              Requested Religious Support
-            </p>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  value="true"
-                  {...register('religiousSupportRequested')}
-                  className="h-4 w-4 text-primary"
-                />
-                Yes
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  value="false"
-                  {...register('religiousSupportRequested')}
-                  className="h-4 w-4 text-primary"
-                />
-                No
-              </label>
-            </div>
-          </div>
+          <BooleanRadio
+            label="Requested Religious Support"
+            value={watch('religiousSupportRequested')}
+            onChange={(v) =>
+              setValue('religiousSupportRequested', v as boolean, { shouldDirty: true })
+            }
+          />
           {watch('religiousSupportRequested') && (
             <Textarea
               label="Specify:"
@@ -1239,64 +1225,42 @@ const RecordVisitPage: React.FC = () => {
         {/* 11. MEDICATION REVIEW */}
         <Section title="11. MEDICATION REVIEW" defaultOpen={false}>
           <div className="grid sm:grid-cols-2 gap-3">
-            <YesNoField
+            <BooleanRadio
               label="Medications available at home?"
-              name="medicationAvailable"
-              register={register}
+              value={watch('medicationAvailable')}
+              onChange={(v) =>
+                setValue('medicationAvailable', v as boolean, { shouldDirty: true })
+              }
             />
-            <YesNoField
+            <BooleanRadio
               label="Taking medications correctly?"
-              name="medicationCorrectlyTaken"
-              register={register}
+              value={watch('medicationCorrectlyTaken')}
+              onChange={(v) =>
+                setValue('medicationCorrectlyTaken', v as boolean, { shouldDirty: true })
+              }
             />
-            <YesNoField
+            <BooleanRadio
               label="Any side effects?"
-              name="medicationSideEffects"
-              register={register}
+              value={watch('medicationSideEffects')}
+              onChange={(v) =>
+                setValue('medicationSideEffects', v as boolean, { shouldDirty: true })
+              }
             />
-            <YesNoField
+            <BooleanRadio
               label="Need medication refill?"
-              name="medicationRefillNeeded"
-              register={register}
+              value={watch('medicationRefillNeeded')}
+              onChange={(v) =>
+                setValue('medicationRefillNeeded', v as boolean, { shouldDirty: true })
+              }
             />
-
-            <div>
-              <p className="text-sm font-medium text-on-surface mb-2">
-                Morphine available?
-              </p>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    name="morphineAvailable"
-                    checked={watch('morphineAvailable') === true}
-                    onChange={() => setValue('morphineAvailable', true)}
-                    className="h-4 w-4 text-primary"
-                  />
-                  Yes
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    name="morphineAvailable"
-                    checked={watch('morphineAvailable') === false}
-                    onChange={() => setValue('morphineAvailable', false)}
-                    className="h-4 w-4 text-primary"
-                  />
-                  No
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    name="morphineAvailable"
-                    checked={watch('morphineAvailable') === null}
-                    onChange={() => setValue('morphineAvailable', null)}
-                    className="h-4 w-4 text-primary"
-                  />
-                  N/A
-                </label>
-              </div>
-            </div>
+            <BooleanRadio
+              label="Morphine available?"
+              value={watch('morphineAvailable')}
+              onChange={(v) =>
+                setValue('morphineAvailable', v, { shouldDirty: true })
+              }
+              allowNull
+            />
           </div>
 
           <Select
@@ -1364,9 +1328,18 @@ const RecordVisitPage: React.FC = () => {
           />
         </Section>
 
-        {/* 12. CAREGIVER */}
+        {/* 12. CAREGIVER — now autofilled */}
         <Section title="12. CAREGIVER ASSESSMENT" defaultOpen={false}>
-          <Input label="Primary Caregiver" {...register('primaryCaregiver')} />
+          <div className="rounded-lg bg-primary/[0.04] border border-primary/20 px-4 py-2.5">
+            <p className="text-xs text-text-secondary leading-relaxed">
+              <strong className="text-primary">Auto-filled</strong> from the
+              patient record. Edit below if the information has changed.
+            </p>
+          </div>
+          <Input
+            label="Primary Caregiver"
+            {...register('primaryCaregiver')}
+          />
           <div className="grid sm:grid-cols-2 gap-4">
             <Input
               label="Relationship"
@@ -1474,31 +1447,13 @@ const RecordVisitPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-4">
-            <p className="text-sm font-medium text-on-surface mb-2">
-              Additional Support Needed
-            </p>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  value="true"
-                  {...register('additionalSupportNeeded')}
-                  className="h-4 w-4 text-primary"
-                />
-                Yes
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  value="false"
-                  {...register('additionalSupportNeeded')}
-                  className="h-4 w-4 text-primary"
-                />
-                No
-              </label>
-            </div>
-          </div>
+          <BooleanRadio
+            label="Additional Support Needed"
+            value={watch('additionalSupportNeeded') as boolean | null}
+            onChange={(v) =>
+              setValue('additionalSupportNeeded', v as boolean, { shouldDirty: true })
+            }
+          />
           {watch('additionalSupportNeeded') && (
             <Textarea
               label="Specify:"
@@ -1546,15 +1501,7 @@ const RecordVisitPage: React.FC = () => {
                   {...register('homeObservations')}
                   className="h-4 w-4 rounded text-primary"
                 />
-                {o === 'AdequateLighting'
-                  ? 'Adequate lighting'
-                  : o === 'Ventilation'
-                    ? 'Ventilation adequate'
-                    : o === 'SafeBed'
-                      ? 'Safe bed arrangement'
-                      : o === 'CleanWater'
-                        ? 'Clean water available'
-                        : 'Sanitation issues'}
+                {o.replace(/([A-Z])/g, ' $1').trim()}
               </label>
             ))}
           </div>
@@ -1588,17 +1535,7 @@ const RecordVisitPage: React.FC = () => {
                   {...register('nursingCareGiven')}
                   className="h-4 w-4 rounded text-primary"
                 />
-                {n === 'Hygiene'
-                  ? 'Patient hygiene care'
-                  : n === 'WoundCare'
-                    ? 'Wound care'
-                    : n === 'MedicationAdmin'
-                      ? 'Medication administration'
-                      : n === 'PositionChange'
-                        ? 'Position change'
-                        : n === 'FeedingAssistance'
-                          ? 'Feeding assistance'
-                          : 'Counseling provided'}
+                {n.replace(/([A-Z])/g, ' $1').trim()}
               </label>
             ))}
           </div>
@@ -1655,17 +1592,7 @@ const RecordVisitPage: React.FC = () => {
                   {...register('referralsMade')}
                   className="h-4 w-4 rounded text-primary"
                 />
-                {r === 'PhysicianReview'
-                  ? 'Physician review'
-                  : r === 'HospitalAdmission'
-                    ? 'Hospital admission'
-                    : r === 'SocialWorker'
-                      ? 'Social worker follow-up'
-                      : r === 'Psychologist'
-                        ? 'Psychologist referral'
-                        : r === 'SpiritualCare'
-                          ? 'Spiritual care support'
-                          : 'Nutrition support'}
+                {r.replace(/([A-Z])/g, ' $1').trim()}
               </label>
             ))}
           </div>
@@ -1751,36 +1678,5 @@ const RecordVisitPage: React.FC = () => {
     </div>
   );
 };
-
-// Small helper for the medication review Yes/No radios
-const YesNoField: React.FC<{
-  label: string;
-  name: any;
-  register: any;
-}> = ({ label, name, register }) => (
-  <div>
-    <p className="text-sm font-medium text-on-surface mb-2">{label}</p>
-    <div className="flex gap-4">
-      <label className="flex items-center gap-2 text-sm cursor-pointer">
-        <input
-          type="radio"
-          value="true"
-          {...register(name)}
-          className="h-4 w-4 text-primary"
-        />
-        Yes
-      </label>
-      <label className="flex items-center gap-2 text-sm cursor-pointer">
-        <input
-          type="radio"
-          value="false"
-          {...register(name)}
-          className="h-4 w-4 text-primary"
-        />
-        No
-      </label>
-    </div>
-  </div>
-);
 
 export default RecordVisitPage;

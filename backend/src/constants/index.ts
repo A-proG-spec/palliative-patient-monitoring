@@ -1,3 +1,5 @@
+import { StaffRole } from "@prisma/client";
+
 // API Response Messages
 export const MESSAGES = {
   // Auth
@@ -75,11 +77,11 @@ export const MESSAGES = {
 
 // User Roles
 export const ROLES = {
-  TEAM_LEADER: 'TeamLeader',
-  PHYSICIAN: 'Physician',
-  NURSE: 'Nurse',
   ADMIN: 'admin',
   STAFF: 'staff',
+  ...Object.fromEntries(
+    Object.values(StaffRole).map((r)=>[r.toUpperCase(),r]),
+  )
 } as const;
 
 // Staff Statuses

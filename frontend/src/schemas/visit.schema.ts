@@ -87,7 +87,7 @@ export const createVisitSchema = z
       .array(
         z.object({
           staffId: optionalString,
-          role: z.enum(['Physician', 'Nurse']),
+          role: z.enum(['Physician', 'Nurse',  'Pharmacist', 'Radiologist',  'LaboratoryTechnician', 'Physiologist', 'Psychiatrist',  'Psychologist',  'SocialWorker',  'SpiritualPerson',  'Nutritionist']),
           name: z.string().min(1, 'Team member name is required'),
           isTeamLeader: z.boolean().optional(),
         }),
