@@ -49,7 +49,7 @@ const registerFormSchema = z
     password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string(),
     role: z.enum(
-      ['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'],
+      [ 'Physician',  'Nurse',  'Pharmacist',  'Radiologist',  'LaboratoryTechnician',  'Physiologist',  'Psychiatrist',  'Psychologist',  'SocialWorker', 'SpiritualPerson', 'Nutritionist'],
       { message: 'Please select a valid role' },
     ),
   })
