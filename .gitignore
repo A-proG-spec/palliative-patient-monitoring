@@ -204,7 +204,6 @@ mongodb-data/
 
 # Dump files
 *.dump
-*.sql
 *.backup
 
 # ============================================
