@@ -22,11 +22,18 @@ import {
 // Keep this list in sync with `registerSchema` (auth.schema.ts).
 // ─────────────────────────────────────────────────────────────
 const STAFF_ROLE_OPTIONS = [
-  { value: 'Physician',            label: 'Physician' },
-  { value: 'Nurse',                label: 'Nurse' },
-  { value: 'Pharmacist',           label: 'Pharmacist' },
-  { value: 'Radiologist',          label: 'Radiologist' },
+  { value: 'Physician', label: 'Physician' },
+  { value: 'Nurse', label: 'Nurse' },
+  { value: 'Pharmacist', label: 'Pharmacist' },
+  { value: 'Radiologist', label: 'Radiologist' },
   { value: 'LaboratoryTechnician', label: 'Laboratory Technician' },
+  { value: 'Physiologist', label: 'Physiologist' },
+  { value: 'Psychiatrist', label: 'Psychiatrist' },
+  { value: 'Psychologist', label: 'Psychologist' },
+  { value: 'SocialWorker', label: 'Social Worker' },
+  { value: 'SpiritualPerson', label: 'Spiritual Person' },
+  { value: 'Nutritionist', label: 'Nutritionist' },
+
 ] as const;
 
 // ─────────────────────────────────────────────────────────────
@@ -36,10 +43,10 @@ const STAFF_ROLE_OPTIONS = [
 const registerFormSchema = z
   .object({
     firstName: z.string().trim().min(1, 'First name is required'),
-    lastName:  z.string().trim().min(1, 'Last name is required'),
-    email:     z.string().email('Invalid email address'),
-    phone:     z.string().min(10, 'Phone number must be at least 10 characters'),
-    password:  z.string().min(8, 'Password must be at least 8 characters'),
+    lastName: z.string().trim().min(1, 'Last name is required'),
+    email: z.string().email('Invalid email address'),
+    phone: z.string().min(10, 'Phone number must be at least 10 characters'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string(),
     role: z.enum(
       ['Physician', 'Nurse', 'Pharmacist', 'Radiologist', 'LaboratoryTechnician'],
