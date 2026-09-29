@@ -598,7 +598,10 @@ export const getLabRequestById = async (labId: string) => {
     id: lab.id,
     patientId: lab.patient.id,
     patientName: `${lab.patient.firstName} ${lab.patient.lastName}`,
-    patientDisplayId: lab.patient.hospitalPatientId,
+    // Prefer the real hospital MRN; fall back to a system-generated ID
+    patientDisplayId:
+      lab.patient.hospitalPatientId ??
+      `PAT-${String(lab.patient.id).padStart(4, '0')}`,
     age: lab.patient.age,
     sex: lab.patient.sex,
 

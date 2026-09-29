@@ -7,13 +7,13 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import type { AdminPatientDetail } from '@/types/admin.types';
 import {
   DISCHARGE_SECTIONS,
   validateDischargeForm,
   useDischargeFormState,
   type DischargeSummary,
   type DischargeSectionKey,
+  type DischargePatientInfo,
 } from '@/hooks/useDischargeFormState';
 import { DischargeSectionNav } from './DischargeSectionNav';
 import { DischargeSectionBody } from './DischargeSectionBody';
@@ -22,7 +22,7 @@ import { DischargeReviewDialog } from './DischargeReviewDialog';
 export type { DischargeSummary } from '@/hooks/useDischargeFormState';
 
 export interface DischargePatientModalProps {
-  patient: AdminPatientDetail;
+  patient: DischargePatientInfo;
   onDischarge: (summary: DischargeSummary) => void;
   onClose: () => void;
   isSubmitting?: boolean;

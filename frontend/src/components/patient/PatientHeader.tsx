@@ -6,6 +6,7 @@ import {
   BarChart2,
   Printer,
   Hospital,
+  LogOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/common/StatusBadge';
@@ -16,7 +17,9 @@ import type { Patient } from '@/types/patient.types';
 interface PatientHeaderProps {
   patient: Patient;
   showAddRecordButton: boolean;
+  showDischargeButton: boolean;
   onAddRecord: () => void;
+  onDischarge: () => void;
   onPrint: () => void;
   isPrinting: boolean;
 }
@@ -24,7 +27,9 @@ interface PatientHeaderProps {
 export const PatientHeader: React.FC<PatientHeaderProps> = ({
   patient,
   showAddRecordButton,
+  showDischargeButton,
   onAddRecord,
+  onDischarge,
   onPrint,
   isPrinting,
 }) => {
@@ -69,6 +74,17 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
             onClick={onAddRecord}
           >
             Add Record
+          </Button>
+        )}
+
+        {showDischargeButton && (
+          <Button
+            variant="destructive"
+            size="sm"
+            leftIcon={<LogOut size={14} />}
+            onClick={onDischarge}
+          >
+            Discharge Patient
           </Button>
         )}
 

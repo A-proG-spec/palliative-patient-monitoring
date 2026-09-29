@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
 import { useReferralDetail } from '@/hooks/useReferrals';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { BackButton } from '@/components/common/BackButton';
@@ -36,12 +36,9 @@ const ReferralDetailPage: React.FC = () => {
         <StatusBadge status={ref.status} type="referral" />
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card padding="md">
-          <CardHeader>
-            <CardTitle className="text-sm">Referral Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1.5 text-sm">
+      <Card padding="md">
+        <div className="divide-y divide-subtle">
+          <Section title="Referral Information">
             <Row label="Type" value={ref.referralType} />
             <Row label="Date" value={formatDate(ref.referralDate)} />
             <Row label="From" value={ref.referringFacility} />
@@ -54,14 +51,9 @@ const ReferralDetailPage: React.FC = () => {
               <Row label="Action Taken" value={ref.actionTaken} />
             )}
             {ref.outcome && <Row label="Outcome" value={ref.outcome} />}
-          </CardContent>
-        </Card>
+          </Section>
 
-        <Card padding="md">
-          <CardHeader>
-            <CardTitle className="text-sm">Clinical Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1.5 text-sm">
+          <Section title="Clinical Information">
             <Row label="Diagnosis" value={ref.primaryDiagnosis} />
             <Row label="Stage" value={ref.diseaseStage} />
             <Row label="PPS" value={`${ref.ppsScore}%`} />
@@ -74,78 +66,72 @@ const ReferralDetailPage: React.FC = () => {
               label="Depression"
               value={`${ref.currentSymptoms.depression}/10`}
             />
-          </CardContent>
-        </Card>
-      </div>
+          </Section>
 
-      <Card padding="md">
-        <CardHeader>
-          <CardTitle className="text-sm">Reasons for Referral</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-1.5">
-            {ref.reasons.map((r) => (
-              <Badge key={r} variant="secondary">
-                {REFERRAL_REASON_LABELS[r] || r}
-              </Badge>
-            ))}
-          </div>
-          {ref.otherReason && (
-            <p className="text-sm text-text-secondary mt-3">
-              <span className="text-text-muted">Other: </span>
-              {ref.otherReason}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {ref.followUpDate && (
-        <Card padding="md">
-          <CardHeader>
-            <CardTitle className="text-sm">Follow-Up</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1.5 text-sm">
-            <Row
-              label="Follow-up Date"
-              value={formatDate(ref.followUpDate)}
-            />
-            {ref.followUpStatus && (
-              <Row label="Status" value={ref.followUpStatus} />
+          <Section title="Reasons for Referral">
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {ref.reasons.map((r) => (
+                <Badge key={r} variant="secondary">
+                  {REFERRAL_REASON_LABELS[r] || r}
+                </Badge>
+              ))}
+            </div>
+            {ref.otherReason && (
+              <Row label="Other" value={ref.otherReason} />
             )}
-          </CardContent>
-        </Card>
-      )}
+          </Section>
 
-      <Card padding="md">
-        <CardHeader>
-          <CardTitle className="text-sm">Staff</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1.5 text-sm">
-          {ref.requestedBy ? (
-            <>
-              <Row label="Requested By" value={ref.requestedBy.name} />
-              {ref.requestedBy.role && (
-                <Row label="Role" value={ref.requestedBy.role} />
+          {ref.followUpDate && (
+            <Section title="Follow-Up">
+              <Row
+                label="Follow-up Date"
+                value={formatDate(ref.followUpDate)}
+              />
+              {ref.followUpStatus && (
+                <Row label="Status" value={ref.followUpStatus} />
               )}
-            </>
-          ) : (
-            <Row label="Requested By" value="—" />
+            </Section>
           )}
-          {ref.approvedBy && (
-            <Row label="Approved By" value={ref.approvedBy.name} />
-          )}
-        </CardContent>
+
+          <Section title="Staff">
+            {ref.requestedBy ? (
+              <>
+                <Row label="Requested By" value={ref.requestedBy.name} />
+                {ref.requestedBy.role && (
+                  <Row label="Role" value={ref.requestedBy.role} />
+                )}
+              </>
+            ) : (
+              <Row label="Requested By" value="—" />
+            )}
+            {ref.approvedBy && (
+              <Row label="Approved By" value={ref.approvedBy.name} />
+            )}
+          </Section>
+        </div>
       </Card>
     </div>
   );
 };
 
+const Section: React.FC<{ title: string; children: React.ReactNode }> = ({
+  title,
+  children,
+}) => (
+  <section className="py-4 first:pt-0 last:pb-0">
+    <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted mb-3">
+      {title}
+    </h2>
+    <div className="space-y-1.5 text-sm">{children}</div>
+  </section>
+);
+
 const Row: React.FC<{ label: string; value: string }> = ({
   label,
   value,
 }) => (
-  <div>
-    <span className="text-text-muted">{label}: </span>
+  <div className="flex">
+    <span className="w-32 shrink-0 text-text-muted">{label}:</span>
     <span className="text-on-surface">{value || '—'}</span>
   </div>
 );

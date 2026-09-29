@@ -46,6 +46,7 @@ import { APP_NAME } from '@/lib/config';
 import {
   hasPermission,
   canAddAnyRecord,
+  canDischarge,
   type StaffRole,
 } from '@/config/permissions';
 import { useToast } from '@/context/ToastContext';
@@ -209,13 +210,17 @@ const PatientDetailPage: React.FC = () => {
   const isAddRecordDisabled = patient.status === 'Discharged';
   const showAddRecordButton =
     canAddAnyRecord(userRole) && !isAddRecordDisabled;
+  const showDischargeButton =
+    canDischarge(user) && patient.status === 'Active';
 
   return (
     <div className="space-y-6 max-w-5xl">
       <PatientHeader
         patient={patient}
         showAddRecordButton={showAddRecordButton}
+        showDischargeButton={showDischargeButton}
         onAddRecord={() => setShowAddRecord(true)}
+        onDischarge={() => navigate(`/patients/${id}/discharge`)}
         onPrint={handlePrint}
         isPrinting={isPrinting}
       />

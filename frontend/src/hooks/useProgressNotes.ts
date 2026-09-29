@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { progressNotesApi } from '@/api/progress-notes';
 import { useToast } from '@/context/ToastContext';
+import type { CreateProgressNoteFormData } from '@/schemas/progress-note.schema';
 
 // ─────────────────────────────────────────────────────────────
 // Row sub-types
@@ -29,7 +30,7 @@ export interface ProgressNoteAdditionalEntry {
 export interface ProgressNoteMDTRow {
   discipline: string;
   reviewIntervention: string;
-  followUpRequired: 'No' | 'Yes' | '';
+  followUpRequired?: 'No' | 'Yes';
 }
 
 export interface ProgressNoteSignature {
@@ -40,7 +41,73 @@ export interface ProgressNoteSignature {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Main document
+// Enum unions — mirror the frontend Zod schema exactly
+// ─────────────────────────────────────────────────────────────
+
+export type SymptomSeverity      = 'None' | 'Mild' | 'Moderate' | 'Severe';
+export type GeneralCondition     = 'Stable' | 'Improving' | 'Deteriorating' | 'Critical' | 'ActivelyDying';
+export type Consciousness        = 'Alert' | 'Drowsy' | 'Confused' | 'Delirious' | 'Unresponsive';
+export type Orientation          = 'Oriented' | 'PartiallyOriented' | 'Disoriented' | 'UnableToAssess';
+export type FunctionalStatus     = 'Independent' | 'RequiresAssistance' | 'Bedbound' | 'FullyDependent';
+export type ResponseToTreatment  = 'Good' | 'Partial' | 'Poor' | 'NotApplicable';
+export type YesNo                = 'Yes' | 'No';
+export type Breathing            = 'Comfortable' | 'MildDistress' | 'ModerateDistress' | 'SevereDistress';
+export type OxygenDelivery       = 'NasalCannula' | 'Mask' | 'Other';
+export type Secretions           = 'None' | 'Mild' | 'Moderate' | 'Excessive';
+export type OralIntake           = 'Good' | 'Reduced' | 'Minimal' | 'None';
+export type UrineOutput          = 'Normal' | 'Reduced' | 'Minimal' | 'UnableToAssess';
+export type BowelMovement        = 'Normal' | 'Constipated' | 'Diarrhea' | 'NoRecentBM';
+export type SkinIntegrity        = 'Intact' | 'Dry' | 'Fragile' | 'Edematous' | 'Other';
+export type Distress             = 'None' | 'Mild' | 'Moderate' | 'Severe';
+export type CodeStatus           = 'FullResuscitation' | 'DNAR' | 'Other';
+export type PRNEffectiveness     = 'Effective' | 'PartiallyEffective' | 'Ineffective';
+export type MedicationSideEffect = 'None' | 'Yes';
+
+export type GoalOfCare =
+  | 'ComfortSymptomControl'
+  | 'QualityOfLife'
+  | 'FunctionalSupport'
+  | 'DiseaseDirectedTreatment'
+  | 'EndOfLifeCare'
+  | 'HomeHospiceCare'
+  | 'Other';
+
+export type NursingCareProvided =
+  | 'PositioningComfortMeasures'
+  | 'PersonalHygiene'
+  | 'OralCare'
+  | 'PressureInjuryPrevention'
+  | 'WoundCare'
+  | 'OxygenTherapy'
+  | 'SymptomMonitoring'
+  | 'MedicationAdministration'
+  | 'NutritionHydrationSupport'
+  | 'EmotionalSupport'
+  | 'FamilyCaregiverEducation'
+  | 'Other';
+
+export type InvestigationPerformed =
+  | 'LaboratoryTests'
+  | 'Imaging'
+  | 'ECGOtherDiagnosticTest'
+  | 'None'
+  | 'Other';
+
+export type MoodBehavior =
+  | 'Calm'
+  | 'Anxious'
+  | 'Fearful'
+  | 'Sad'
+  | 'Depressed'
+  | 'Agitated'
+  | 'Withdrawn';
+
+// ─────────────────────────────────────────────────────────────
+// Main document — the API response shape (fully materialized)
+//
+// This is what the backend returns. Every enum-valued field is
+// either a real enum value or `null` (never `''`), because the
+// service layer converts `undefined` → `null` before Prisma.
 // ─────────────────────────────────────────────────────────────
 
 export interface ProgressNote {
@@ -50,131 +117,131 @@ export interface ProgressNote {
   createdAt: string;
   updatedAt?: string | null;
 
-  // ── Header ──
+  // Header
   attendingClinician: string;
   palliativeCareUnit: string;
   dayOfAdmission?: string | null;
 
-  // ── Section 1: Current Clinical Status ──
-  generalCondition: string;
-  levelOfConsciousness: string;
-  orientation: string;
-  functionalStatus: string;
+  // 1 — Current Clinical Status
+  generalCondition: GeneralCondition | null;
+  levelOfConsciousness: Consciousness | null;
+  orientation: Orientation | null;
+  functionalStatus: FunctionalStatus | null;
   changesSincePreviousReview: string;
 
-  // ── Section 2: Vital Signs ──
+  // 2 — Vitals
   vitals: {
-    temperature: { current: string; previous: string };
-    pulse: { current: string; previous: string };
+    temperature:     { current: string; previous: string };
+    pulse:           { current: string; previous: string };
     respiratoryRate: { current: string; previous: string };
-    bloodPressure: { current: string; previous: string };
-    spo2: { current: string; previous: string };
-    oxygenFlow: { current: string; previous: string };
+    bloodPressure:   { current: string; previous: string };
+    spo2:            { current: string; previous: string };
+    oxygenFlow:      { current: string; previous: string };
   };
   otherRelevantObservations: string;
 
-  // ── Section 3: Symptom Assessment ──
+  // 3 — Symptoms
   symptoms: Record<string, ProgressNoteSymptomRow>;
   painScore: string;
   painLocation: string;
   painCharacter: string;
   currentPainManagement: string;
-  responseToTreatment: string;
-  breakthroughPainEpisodes: string;
+  responseToTreatment: ResponseToTreatment | null;
+  breakthroughPainEpisodes: YesNo | null;
   breakthroughPainFrequency: string;
 
-  // ── Section 4: Respiratory ──
-  breathing: string;
-  oxygenTherapy: string;
-  oxygenDelivery: string;
+  // 4 — Respiratory
+  breathing: Breathing | null;
+  oxygenTherapy: YesNo | null;
+  oxygenDelivery: OxygenDelivery | null;
   oxygenDeliveryOther: string;
-  respiratorySecretions: string;
-  cough: string;
+  respiratorySecretions: Secretions | null;
+  cough: YesNo | null;
   otherRespiratoryFindings: string;
 
-  // ── Section 5: Nutrition & Hydration ──
-  oralIntake: string;
+  // 5 — Nutrition
+  oralIntake: OralIntake | null;
   diet: string;
   fluidIntake: string;
-  feedingAssistance: string;
-  enteralFeeding: string;
-  ivFluids: string;
-  nauseaVomitingAffectingIntake: string;
+  feedingAssistance: YesNo | null;
+  enteralFeeding: YesNo | null;
+  ivFluids: YesNo | null;
+  nauseaVomitingAffectingIntake: YesNo | null;
   nutritionHydrationConcerns: string;
 
-  // ── Section 6: Elimination ──
-  urineOutput: string;
-  urinaryCatheter: string;
-  bowelMovement: string;
+  // 6 — Elimination
+  urineOutput: UrineOutput | null;
+  urinaryCatheter: YesNo | null;
+  bowelMovement: BowelMovement | null;
   lastBowelMovement: string;
   otherEliminationConcerns: string;
 
-  // ── Section 7: Skin & Wound ──
-  skin: string;
+  // 7 — Skin
+  skin: SkinIntegrity | null;
   skinOther: string;
-  pressureInjury: string;
+  pressureInjury: YesNo | null;
   pressureInjuryLocationStage: string;
-  woundCareProvided: string;
+  woundCareProvided: YesNo | null;
   woundPressureInjuryChanges: string;
 
-  // ── Section 8: Psychological / Emotional ──
-  moodBehavior: string[];
-  psychologicalDistress: string;
+  // 8 — Psychological
+  moodBehavior: MoodBehavior[];
+  psychologicalDistress: Distress | null;
   patientsMainConcernsToday: string;
-  counselingPsychologicalSupportProvided: string;
+  counselingPsychologicalSupportProvided: YesNo | null;
 
-  // ── Section 9: Spiritual / Cultural ──
-  spiritualDistressIdentified: string;
+  // 9 — Spiritual
+  spiritualDistressIdentified: YesNo | null;
   patientsSpiritualCulturalConcerns: string;
-  spiritualCareProvided: string;
-  spiritualReferralRequired: string;
+  spiritualCareProvided: YesNo | null;
+  spiritualReferralRequired: YesNo | null;
   spiritualNotes: string;
 
-  // ── Section 10: Family / Caregiver ──
-  familyCaregiverPresent: string;
+  // 10 — Family
+  familyCaregiverPresent: YesNo | null;
   familyCaregiverConcerns: string;
   familyEducationSupportProvided: string;
-  familyMeetingHeld: string;
+  familyMeetingHeld: YesNo | null;
   familyMeetingParticipants: string;
 
-  // ── Section 11: Goals of Care ──
-  currentGoalsOfCare: string[];
+  // 11 — Goals of Care
+  currentGoalsOfCare: GoalOfCare[];
   currentGoalsOfCareOther: string;
-  goalsReviewedToday: string;
-  changeInGoalsIdentified: string;
+  goalsReviewedToday: YesNo | null;
+  changeInGoalsIdentified: YesNo | null;
   patientDecisionMakerPreferences: string;
-  codeStatus: string;
+  codeStatus: CodeStatus | null;
   codeStatusOther: string;
-  advanceCarePlanReviewed: string;
+  advanceCarePlanReviewed: YesNo | null;
 
-  // ── Section 12: Medication Review ──
-  currentMedicationRegimenReviewed: string;
-  changesMade: string;
+  // 12 — Medication Review
+  currentMedicationRegimenReviewed: YesNo | null;
+  changesMade: YesNo | null;
   medications: ProgressNoteMedRow[];
-  prnBreakthroughMedicationUsed: string;
-  prnEffectiveness: string;
-  medicationSideEffects: string;
+  prnBreakthroughMedicationUsed: YesNo | null;
+  prnEffectiveness: PRNEffectiveness | null;
+  medicationSideEffects: MedicationSideEffect | null;
   medicationSideEffectsDetail: string;
 
-  // ── Section 13: Nursing / Supportive Care ──
-  nursingSupportiveCareProvided: string[];
+  // 13 — Nursing
+  nursingSupportiveCareProvided: NursingCareProvided[];
   nursingSupportiveCareOther: string;
   responseToSupportiveCare: string;
 
-  // ── Section 14: Investigations ──
-  investigationsPerformedReviewed: string[];
+  // 14 — Investigations
+  investigationsPerformedReviewed: InvestigationPerformed[];
   investigationsPerformedReviewedOther: string;
   significantResults: string;
   clinicalSignificanceActionTaken: string;
 
-  // ── Section 15: MDT Review ──
+  // 15 — MDT Review
   multidisciplinaryTeamReview: ProgressNoteMDTRow[];
 
-  // ── Section 16: Assessment ──
+  // 16 — Assessment
   overallAssessment: string;
   problemsIdentifiedToday: string[];
 
-  // ── Section 17: Plan ──
+  // 17 — Plan
   symptomManagementPlan: string;
   medicationPlan: string;
   nursingSupportiveCarePlan: string;
@@ -183,16 +250,16 @@ export interface ProgressNote {
   referralsConsultations: string;
   dischargeTransferHospicePlanning: string;
 
-  // ── Section 18: SOAP ──
+  // 18 — SOAP
   soapSubjective: string;
   soapObjective: string;
   soapAssessment: string;
   soapPlan: string;
 
-  // ── Section 19: Additional Progress Notes ──
+  // 19 — Additional Notes
   additionalProgressNotes: ProgressNoteAdditionalEntry[];
 
-  // ── Section 20: Authorization / Signatures ──
+  // 20 — Authorization
   responsibleClinician?: {
     staffId: string;
     name: string;
@@ -215,8 +282,8 @@ export interface ProgressNoteListItem {
   bedNumber?: string;
   attendingClinician: string;
   palliativeCareUnit: string;
-  generalCondition: string;
-  levelOfConsciousness: string;
+  generalCondition: GeneralCondition | null;
+  levelOfConsciousness: Consciousness | null;
   overallAssessment: string;
   soapSubjective: string;
   responsibleClinician: {
@@ -229,8 +296,6 @@ export interface ProgressNoteListItem {
   createdBy: { id: string; name: string; role: string } | null;
   createdAt: string;
   updatedAt?: string | null;
-
-  /** Soft-delete metadata — populated by the `/all` endpoint */
   deletedAt?: string | null;
   deletionReason?: string | null;
 }
@@ -278,6 +343,10 @@ export function useProgressNoteSignatures(patientId: string, noteId: string) {
 
 // ─────────────────────────────────────────────────────────────
 // Mutations
+//
+// The payload is the FLAT shape the backend accepts. The
+// serializer in RecordProgressNotePage converts the frontend's
+// nested form data into that flat shape before calling these.
 // ─────────────────────────────────────────────────────────────
 
 export function useCreateProgressNote(patientId: string) {
@@ -285,15 +354,16 @@ export function useCreateProgressNote(patientId: string) {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: (data: Omit<ProgressNote, 'id' | 'patientId' | 'createdAt'>) =>
+    mutationFn: (data: CreateProgressNoteFormData) =>
       progressNotesApi.create(patientId, data as any),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'progress-notes'] });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'progress-notes'],
+      });
       toast.success('Progress note saved successfully.');
     },
     onError: (error: any) => {
-      const msg =
-        error?.response?.data?.message ?? 'Failed to save progress note.';
+      const msg = error?.response?.data?.message ?? 'Failed to save progress note.';
       toast.error(msg);
     },
   });
@@ -309,17 +379,21 @@ export function useUpdateProgressNote(patientId: string) {
       data,
     }: {
       noteId: string;
-      data: Partial<Omit<ProgressNote, 'id' | 'patientId' | 'createdAt'>>;
+      data: Partial<CreateProgressNoteFormData>;
     }) => progressNotesApi.update(patientId, noteId, data as any),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'progress-notes'] });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'progress-notes'],
+      });
       queryClient.invalidateQueries({
         queryKey: ['patients', patientId, 'progress-notes', variables.noteId],
       });
       toast.success('Progress note updated successfully.');
     },
     onError: (error: any) => {
-      toast.error(error?.response?.data?.message ?? 'Failed to update progress note.');
+      toast.error(
+        error?.response?.data?.message ?? 'Failed to update progress note.',
+      );
     },
   });
 }
@@ -331,7 +405,9 @@ export function useDeleteProgressNote(patientId: string) {
   return useMutation({
     mutationFn: (noteId: string) => progressNotesApi.delete(patientId, noteId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId, 'progress-notes'] });
+      queryClient.invalidateQueries({
+        queryKey: ['patients', patientId, 'progress-notes'],
+      });
       toast.success('Progress note deleted.');
     },
     onError: () => {
@@ -368,11 +444,16 @@ export function useSignProgressNote(patientId: string, noteId: string) {
 
 // ─────────────────────────────────────────────────────────────
 // Helper: build a blank note the backend will accept
+//
+// Returns `CreateProgressNoteFormData` — the exact type React
+// Hook Form uses as its generic. Every enum-valued field is
+// `undefined` (not `''`), and every other field carries the
+// default the UI binds to.
 // ─────────────────────────────────────────────────────────────
 
 export function buildBlankProgressNote(
   attendingClinician: string,
-): Omit<ProgressNote, 'id' | 'patientId' | 'createdAt'> {
+): CreateProgressNoteFormData {
   const SYMPTOM_KEYS = [
     'Pain', 'Shortness of Breath', 'Nausea', 'Vomiting', 'Constipation',
     'Diarrhea', 'Fatigue', 'Anxiety', 'Delirium/Confusion',
@@ -388,25 +469,24 @@ export function buildBlankProgressNote(
 
   return {
     admissionId: undefined,
-    updatedAt: null,
-    dayOfAdmission: null,
 
     attendingClinician,
     palliativeCareUnit: 'Palliative Care Unit',
 
-    generalCondition: '',
-    levelOfConsciousness: '',
-    orientation: '',
-    functionalStatus: '',
+    // ── Enums: undefined, NOT '' ──
+    generalCondition: undefined,
+    levelOfConsciousness: undefined,
+    orientation: undefined,
+    functionalStatus: undefined,
     changesSincePreviousReview: '',
 
     vitals: {
-      temperature: vitalsPair(),
-      pulse: vitalsPair(),
+      temperature:     vitalsPair(),
+      pulse:           vitalsPair(),
       respiratoryRate: vitalsPair(),
-      bloodPressure: vitalsPair(),
-      spo2: vitalsPair(),
-      oxygenFlow: vitalsPair(),
+      bloodPressure:   vitalsPair(),
+      spo2:            vitalsPair(),
+      oxygenFlow:      vitalsPair(),
     },
     otherRelevantObservations: '',
 
@@ -417,74 +497,74 @@ export function buildBlankProgressNote(
     painLocation: '',
     painCharacter: '',
     currentPainManagement: '',
-    responseToTreatment: '',
-    breakthroughPainEpisodes: '',
+    responseToTreatment: undefined,
+    breakthroughPainEpisodes: undefined,
     breakthroughPainFrequency: '',
 
-    breathing: '',
-    oxygenTherapy: '',
-    oxygenDelivery: '',
+    breathing: undefined,
+    oxygenTherapy: undefined,
+    oxygenDelivery: undefined,
     oxygenDeliveryOther: '',
-    respiratorySecretions: '',
-    cough: '',
+    respiratorySecretions: undefined,
+    cough: undefined,
     otherRespiratoryFindings: '',
 
-    oralIntake: '',
+    oralIntake: undefined,
     diet: '',
     fluidIntake: '',
-    feedingAssistance: '',
-    enteralFeeding: '',
-    ivFluids: '',
-    nauseaVomitingAffectingIntake: '',
+    feedingAssistance: undefined,
+    enteralFeeding: undefined,
+    ivFluids: undefined,
+    nauseaVomitingAffectingIntake: undefined,
     nutritionHydrationConcerns: '',
 
-    urineOutput: '',
-    urinaryCatheter: '',
-    bowelMovement: '',
+    urineOutput: undefined,
+    urinaryCatheter: undefined,
+    bowelMovement: undefined,
     lastBowelMovement: '',
     otherEliminationConcerns: '',
 
-    skin: '',
+    skin: undefined,
     skinOther: '',
-    pressureInjury: '',
+    pressureInjury: undefined,
     pressureInjuryLocationStage: '',
-    woundCareProvided: '',
+    woundCareProvided: undefined,
     woundPressureInjuryChanges: '',
 
     moodBehavior: [],
-    psychologicalDistress: '',
+    psychologicalDistress: undefined,
     patientsMainConcernsToday: '',
-    counselingPsychologicalSupportProvided: '',
+    counselingPsychologicalSupportProvided: undefined,
 
-    spiritualDistressIdentified: '',
+    spiritualDistressIdentified: undefined,
     patientsSpiritualCulturalConcerns: '',
-    spiritualCareProvided: '',
-    spiritualReferralRequired: '',
+    spiritualCareProvided: undefined,
+    spiritualReferralRequired: undefined,
     spiritualNotes: '',
 
-    familyCaregiverPresent: '',
+    familyCaregiverPresent: undefined,
     familyCaregiverConcerns: '',
     familyEducationSupportProvided: '',
-    familyMeetingHeld: '',
+    familyMeetingHeld: undefined,
     familyMeetingParticipants: '',
 
     currentGoalsOfCare: [],
     currentGoalsOfCareOther: '',
-    goalsReviewedToday: '',
-    changeInGoalsIdentified: '',
+    goalsReviewedToday: undefined,
+    changeInGoalsIdentified: undefined,
     patientDecisionMakerPreferences: '',
-    codeStatus: '',
+    codeStatus: undefined,
     codeStatusOther: '',
-    advanceCarePlanReviewed: '',
+    advanceCarePlanReviewed: undefined,
 
-    currentMedicationRegimenReviewed: '',
-    changesMade: '',
+    currentMedicationRegimenReviewed: undefined,
+    changesMade: undefined,
     medications: [
       { medicationTreatment: '', dose: '', route: '', frequency: '', reasonResponse: '' },
     ],
-    prnBreakthroughMedicationUsed: '',
-    prnEffectiveness: '',
-    medicationSideEffects: '',
+    prnBreakthroughMedicationUsed: undefined,
+    prnEffectiveness: undefined,
+    medicationSideEffects: undefined,
     medicationSideEffectsDetail: '',
 
     nursingSupportiveCareProvided: [],
@@ -499,7 +579,7 @@ export function buildBlankProgressNote(
     multidisciplinaryTeamReview: MDT_DISCIPLINES.map((d) => ({
       discipline: d,
       reviewIntervention: '',
-      followUpRequired: '' as const,
+      followUpRequired: undefined,
     })),
 
     overallAssessment: '',
@@ -520,9 +600,6 @@ export function buildBlankProgressNote(
 
     additionalProgressNotes: [],
 
-    responsibleClinician: null,
-    signatures: [],
-    allSigned: false,
     facilityStamp: '',
   };
 }

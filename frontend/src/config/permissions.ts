@@ -1,3 +1,4 @@
+// src/config/permissions.ts
 import {
   LayoutDashboard,
   Users,
@@ -6,11 +7,14 @@ import {
   Scan,
   GitBranch,
   ClipboardList,
-  User,
+  User as UserIcon,       // ← renamed to avoid clash with the auth `User` type
   Calendar,
   Heart,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+// NOTE: we no longer need to import `User` from '@/types/auth.types'
+// because `canDischarge` uses structural typing instead. This removes
+// the "Duplicate identifier 'User'" error.
 
 // ── Types ──────────────────────────────────────────────────────────
 export type StaffRole =
@@ -64,8 +68,6 @@ const PERMISSIONS: Record<string, StaffRole[]> = {
 
   // Referrals
   canRequestReferral: ['Physician', 'Nurse'],
-  // NOTE: `canCreateReferral` is an alias used by PatientDetailPage's
-  // AddRecordModal. Keep both so neither call-site breaks.
   canCreateReferral: ['Physician', 'Nurse'],
   canViewReferrals: ['Physician', 'Nurse'],
 
@@ -80,7 +82,10 @@ const PERMISSIONS: Record<string, StaffRole[]> = {
 
   // Hospice Nursing (Nurse-only)
   canRecordHospiceNursing: ['Nurse'],
-  canViewHospiceNursing: ['Nurse','Physician'],
+  canViewHospiceNursing: ['Nurse', 'Physician'],
+
+  // Discharge — Physician + admin only
+  canDischargePatient: ['Physician'],
 };
 
 /**
@@ -93,6 +98,22 @@ export function hasPermission(
   const allowed = PERMISSIONS[permission];
   if (!allowed) return false;
   return allowed.includes(role as StaffRole);
+}
+
+/**
+ * Discharge summaries are available to Physicians and admins only.
+ *
+ * Uses structural typing (not Pick<User, ...>) so it works with:
+ *  - the auth `User` type where `role` is `StaffRole | null | undefined`
+ *  - admin users who don't have a `role` at all
+ *  - a `null` / `undefined` user (returns false)
+ */
+export function canDischarge(
+  user?: { role?: string | null; type?: 'staff' | 'admin' } | null,
+): boolean {
+  if (!user) return false;
+  if (user.type === 'admin') return true;
+  return user.type === 'staff' && user.role === 'Physician';
 }
 
 // ── Sidebar nav items per role ─────────────────────────────────────
@@ -110,10 +131,6 @@ export interface SidebarBadges {
  * in `src/routes/index.tsx`. Sub-resources like Medications, Labs,
  * Imaging, and Referrals do NOT have top-level index pages — they are
  * scoped per-patient and reached from the patient detail page.
- *
- * NOTE: the backend enum value is `LaboratoryTechnician` (long form).
- * Using the short form here causes the switch to fall through to the
- * default nav — the lab tech queue never appears.
  */
 export function getSidebarItems(
   role?: string | null,
@@ -137,7 +154,7 @@ export function getSidebarItems(
           badge: b.medicationPending,
         },
         { label: 'Patients', href: '/patients', icon: Users },
-        { label: 'Profile', href: '/profile', icon: User },
+        { label: 'Profile', href: '/profile', icon: UserIcon },
       ];
 
     case 'LaboratoryTechnician':
@@ -154,7 +171,7 @@ export function getSidebarItems(
           icon: FlaskConical,
           badge: b.labPending,
         },
-        { label: 'Profile', href: '/profile', icon: User },
+        { label: 'Profile', href: '/profile', icon: UserIcon },
       ];
 
     case 'Radiologist':
@@ -171,17 +188,9 @@ export function getSidebarItems(
           icon: Scan,
           badge: b.imagingPending,
         },
-        { label: 'Profile', href: '/profile', icon: User },
+        { label: 'Profile', href: '/profile', icon: UserIcon },
       ];
 
-    // ── Physician / Nurse ──
-    //
-    // Every sub-resource (visits, medications, labs, imaging,
-    // referrals, progress notes, admissions) is scoped to a patient
-    // and reached from the patient detail page's tabs / "Add Record"
-    // modal. There is no top-level index route for any of them, so
-    // the sidebar only links to the two routes that DO exist:
-    // /dashboard and /patients.
     case 'Nurse':
     case 'Physician':
     case 'Nutritionist':
@@ -194,7 +203,7 @@ export function getSidebarItems(
           end: true,
         },
         { label: 'Patients', href: '/patients', icon: Users },
-        { label: 'Profile', href: '/profile', icon: User },
+        { label: 'Profile', href: '/profile', icon: UserIcon },
       ];
   }
 }
@@ -203,7 +212,6 @@ export function getSidebarItems(
  * canAddAnyRecord — returns true if the role can add any patient record
  * (visits, medications, labs, imaging, referrals, admissions,
  * or hospice nursing assessments).
- * Used in PatientDetailPage to decide whether to show action buttons.
  */
 export function canAddAnyRecord(role: StaffRole | string): boolean {
   return (

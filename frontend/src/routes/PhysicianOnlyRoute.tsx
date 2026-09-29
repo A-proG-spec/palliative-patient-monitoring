@@ -1,40 +1,32 @@
-import React from 'react';
+// src/routes/PhysicianOnlyRoute.tsx
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
-import { hasRole } from '@/lib/utils';
-import { PageLoader } from '@/components/common/LoadingSpinner';
 
 /**
- * Route guard that restricts access to Physician role only.
- * Used for patient registration and editing routes.
- * 
- * Handles auth loading state to prevent redirect flash on hard refresh.
+ * Guards routes that only Physicians (and admins) should reach.
+ *
+ * Used for:
+ *   - /patients/new
+ *   - /patients/:id/discharge
  */
-const PhysicianOnlyRoute: React.FC = () => {
-  const { isAuthenticated, user, isInitializing } = useAuthStore();
+export default function PhysicianOnlyRoute() {
+  const { user } = useAuthStore();
 
-  // While auth is loading, show loading state (prevents flash of Unauthorized)
-  if (isInitializing) {
-    return <PageLoader />;
-  }
-
-  // Not authenticated - redirect to login
-  if (!isAuthenticated || !user) {
+  // Not logged in → login
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // Not staff - redirect to unauthorized
-  if (user.type !== 'staff') {
-    return <Navigate to="/unauthorized" replace />;
+  // Admins bypass the role check
+  if (user.type === 'admin') {
+    return <Outlet />;
   }
 
-  // Not a Physician - redirect to unauthorized
-  if (!hasRole(user, 'Physician')) {
-    return <Navigate to="/unauthorized" replace />;
+  // Staff must have the exact Physician role
+  if (user.type === 'staff' && user.role === 'Physician') {
+    return <Outlet />;
   }
 
-  // Physician - allow access
-  return <Outlet />;
-};
-
-export default PhysicianOnlyRoute;
+  // Anyone else → unauthorized
+  return <Navigate to="/unauthorized" replace />;
+}
