@@ -150,7 +150,7 @@ const PatientListPage: React.FC = () => {
       {/* Search + Status + Diagnosis filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <Input
-          placeholder="Search by name, ID, or diagnosis…"
+          placeholder="Search by patient ID…"
           leftIcon={<Search size={15} />}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -190,11 +190,10 @@ const PatientListPage: React.FC = () => {
             <button
               key={field}
               onClick={() => handleSort(field)}
-              className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 transition-colors ${
-                sortField === field
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 transition-colors ${sortField === field
                   ? 'bg-primary-light text-primary font-semibold'
                   : 'hover:bg-surface-low text-text-secondary'
-              }`}
+                }`}
             >
               {labels[field]}
               <SortIcon field={field} current={sortField} dir={sortDir} />
@@ -226,7 +225,7 @@ const PatientListPage: React.FC = () => {
         <EmptyState
           icon={<User size={28} />}
           title="No patients found"
-          description={search || diagnosisFilter ? 'Try a different search or filter.' : 'Register your first patient to get started.'}
+          description={search || diagnosisFilter ? 'Try a different patient ID or filter.' : 'Register your first patient to get started.'}
           actionLabel={canRegisterPatient ? 'Register Patient' : undefined}
           onAction={canRegisterPatient ? () => navigate('/patients/new') : undefined}
         />

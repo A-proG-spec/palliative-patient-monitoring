@@ -10,7 +10,7 @@ export * from './profile.schema';
 export * from './referral.schema';
 export { signVisitSchema, type SignVisitFormData } from './signature.schema';
 export * from './visit.schema';
-export { signProgressNoteSchema, type SignProgressNoteSchema } from './progress-note.schema';
+export { signProgressNoteSchema, type SignProgressNoteFormData } from './signature.schema';
 export * from './pharmacist-assessment.schema';
 export * from './physiotherapy-assessment.schema';
 export * from './family-assessment.schema';

@@ -34,7 +34,7 @@ const AdminPatientListPage: React.FC = () => {
 
       <div className="flex flex-wrap gap-3">
         <Input
-          placeholder="Search by name or ID…"
+          placeholder="Search by patient ID…"
           leftIcon={<Search size={15} />}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}

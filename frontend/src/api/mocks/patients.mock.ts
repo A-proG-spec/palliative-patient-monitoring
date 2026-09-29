@@ -189,10 +189,8 @@ export const mockPatientApi = {
       const q = params.search.toLowerCase();
       filtered = filtered.filter(
         (p) =>
-          p.firstName.toLowerCase().includes(q) ||
-          p.lastName.toLowerCase().includes(q) ||
-          p.primaryDiagnosis.toLowerCase().includes(q) ||
-          p.patientDisplayId?.toLowerCase().includes(q)
+          p.patientDisplayId?.toLowerCase().includes(q) ||
+          p.id.toLowerCase().includes(q)
       );
     }
     const page = params?.page || 1;
