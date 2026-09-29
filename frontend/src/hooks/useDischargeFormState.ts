@@ -1,5 +1,28 @@
+// src/hooks/useDischargeFormState.ts
 import { useCallback, useMemo, useState } from 'react';
-import type { AdminPatientDetail } from '@/types/admin.types';
+
+export interface DischargePatientInfo {
+  firstName: string;
+  lastName: string;
+  patientDisplayId?: string;
+  dateOfBirth?: string;
+  age?: number;
+  sex?: string;
+  address?: string;
+  phone?: string;
+  caregiverName?: string;
+  caregiverPhone?: string;
+  primaryDiagnosis?: string;
+  secondaryDiagnoses?: string[];
+  comorbidities?: string[];
+  createdAt?: string;
+  registeredAt?: string;
+
+  // ✅ ADDED — these were referenced in buildInitialDischargeSummary
+  //    but missing from the interface, causing TS2339.
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+}
 
 // ═══════════════════════════════════════════════════════════
 // Types (kept identical to the previous modal so nothing downstream
@@ -271,7 +294,7 @@ const blankSymptoms = (): Record<string, DischargeSymptomRow> =>
 // Initial value builder
 // ═══════════════════════════════════════════════════════════
 
-export function buildInitialDischargeSummary(patient: AdminPatientDetail): DischargeSummary {
+export function buildInitialDischargeSummary(patient: DischargePatientInfo): DischargeSummary {
   const secDx = [
     ...(patient.secondaryDiagnoses ?? []),
     ...(patient.comorbidities ?? []),
@@ -280,7 +303,7 @@ export function buildInitialDischargeSummary(patient: AdminPatientDetail): Disch
   return {
     hospitalName: 'Yekatit 12 Hospital Medical College',
     palliativeCareUnit: 'Palliative Care Unit',
-    dateOfAdmission: patient.createdAt ? patient.createdAt.slice(0, 10) : '',
+    dateOfAdmission: (patient.createdAt ?? patient.registeredAt)?.slice(0, 10) ?? '',
     dateOfDischarge: today(),
     timeOfDischarge: nowTime(),
     dischargeType: '',
@@ -402,6 +425,7 @@ export function buildInitialDischargeSummary(patient: AdminPatientDetail): Disch
     palliativeCareUnitPhone: '',
     attendingClinician: '',
     attendingClinicianPhone: '',
+    // ✅ These two fields now resolve because we added them to DischargePatientInfo
     emergencyContactInfo: `${patient.emergencyContactName ?? ''} · ${patient.emergencyContactPhone ?? ''}`,
     homeHospiceService: '',
     homeHospiceServicePhone: '',
@@ -443,13 +467,11 @@ function isFilled(value: unknown): boolean {
   if (value === undefined || value === null) return false;
   if (typeof value === 'string') return value.trim().length > 0;
   if (Array.isArray(value)) {
-    // Arrays of empty strings don't count
     return value.some((v) =>
       typeof v === 'string' ? v.trim().length > 0 : Boolean(v),
     );
   }
   if (typeof value === 'object') {
-    // Rows of all-empty cells don't count
     return Object.values(value as Record<string, unknown>).some((v) => {
       if (typeof v === 'string') return v.trim().length > 0;
       if (typeof v === 'object' && v !== null) {
@@ -484,16 +506,12 @@ export function getSectionState(
     return 'complete';
   }
 
-  // No required fields — check for any filled field in this section's range.
-  // We don't have an explicit field→section map, so section state uses the
-  // section label's field list, derived from section-specific keys.
   const someFieldFilled = getSectionFields(def.key).some((f) => isFilled(form[f]));
   return someFieldFilled ? 'complete' : 'empty';
 }
 
 /**
- * Map each section to the fields it owns. This is what lets the sidebar
- * show progress and the "Jump to next incomplete" button work.
+ * Map each section to the fields it owns.
  */
 export function getSectionFields(key: DischargeSectionKey): (keyof DischargeSummary)[] {
   switch (key) {
@@ -537,7 +555,7 @@ export interface UseDischargeFormStateResult {
 }
 
 export function useDischargeFormState(
-  patient: AdminPatientDetail,
+  patient: DischargePatientInfo,
 ): UseDischargeFormStateResult {
   const [form, setForm] = useState<DischargeSummary>(() =>
     buildInitialDischargeSummary(patient),

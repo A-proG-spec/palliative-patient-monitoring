@@ -63,13 +63,6 @@ const CheckboxGroup: React.FC<{
 
 // ── Display helpers ─────────────────────────────────────────────
 
-/**
- * Derive a stable, human-readable patient display ID.
- *
- * Backend returns:
- *   id: number                  — internal PK
- *   hospitalPatientId: string | null — real hospital MRN (only when admitted)
- */
 function getPatientDisplayId(patient: {
   id: number;
   hospitalPatientId?: string | null;
@@ -134,11 +127,7 @@ const RequestReferralPage: React.FC = () => {
   });
 
   // ═══════════════════════════════════════════════════════════════
-  // AUTO-FILL
-  //
-  // Runs once, after the patient query settles. Gate on `isSuccess`
-  // (fires exactly once) with a `hasHydrated` ref guard to avoid
-  // re-firing against a still-loading query.
+  // AUTO-FILL — patient snapshot + latest PPS/KPS
   // ═══════════════════════════════════════════════════════════════
   const hasHydrated = useRef(false);
 
@@ -186,8 +175,7 @@ const RequestReferralPage: React.FC = () => {
       });
     }
 
-    // Latest visit values (PPS/KPS) also flow through setValue so the
-    // submission carries them even when the inputs are read-only.
+    // Latest visit values (PPS/KPS) — send numbers
     setValue('ppsScore', latestPPS, {
       shouldDirty: false,
       shouldValidate: false,
@@ -215,7 +203,24 @@ const RequestReferralPage: React.FC = () => {
       ...payload
     } = merged;
 
-    mutation.mutate(payload as CreateReferralFormData, {
+    // ── Safety: coerce every numeric field to Number ──
+    // This defends against any path where a string sneaks through
+    // (e.g. a `Select` option rendered with `value="8"` and Zod
+    // not mutating req.body on the backend).
+    const safePayload = {
+      ...payload,
+      ppsScore: Number(payload.ppsScore),
+      kpsScore: Number(payload.kpsScore),
+      currentSymptoms: {
+        pain:       Number(payload.currentSymptoms?.pain       ?? 0),
+        dyspnea:    Number(payload.currentSymptoms?.dyspnea    ?? 0),
+        fatigue:    Number(payload.currentSymptoms?.fatigue    ?? 0),
+        anxiety:    Number(payload.currentSymptoms?.anxiety    ?? 0),
+        depression: Number(payload.currentSymptoms?.depression ?? 0),
+      },
+    };
+
+    mutation.mutate(safePayload as CreateReferralFormData, {
       onSuccess: () => navigate(`/patients/${id}`),
     });
   };
@@ -238,11 +243,11 @@ const RequestReferralPage: React.FC = () => {
     : '—';
   const hospitalId = patient?.hospitalPatientId ?? null;
 
-  // Symptom score options (0-10)
+  // Symptom score options — value is a NUMBER, not a string
   const symptomOptions = Array.from({ length: 11 }, (_, i) => ({
-    value: String(i),
+    value: i,
     label: String(i),
-  }));
+  })) as unknown as { value: string; label: string }[];
 
   return (
     <div className="max-w-3xl space-y-5">
@@ -312,7 +317,6 @@ const RequestReferralPage: React.FC = () => {
               readOnly
             />
 
-            {/* Patient ID — display ID derived from id / hospitalPatientId */}
             <Input
               label="Patient ID"
               value={displayId}
@@ -352,7 +356,6 @@ const RequestReferralPage: React.FC = () => {
               readOnly
             />
 
-            {/* Medical Record No. — always present, MRN when set */}
             <div className="sm:col-span-2 space-y-1">
               <Input
                 label="Medical Record No."
@@ -383,7 +386,6 @@ const RequestReferralPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Explicit Hospital ID row — only when set */}
             {hospitalId && (
               <Input
                 label="Hospital ID / MRN"
@@ -491,7 +493,7 @@ const RequestReferralPage: React.FC = () => {
                   : 'No previous visit found'
               }
               error={errors.ppsScore?.message}
-              {...register('ppsScore')}
+              {...register('ppsScore', { valueAsNumber: true })}
             />
             <Input
               label="KPS Score (/100)"
@@ -505,7 +507,7 @@ const RequestReferralPage: React.FC = () => {
                   : 'No previous visit found'
               }
               error={errors.kpsScore?.message}
-              {...register('kpsScore')}
+              {...register('kpsScore', { valueAsNumber: true })}
             />
           </div>
 
@@ -522,7 +524,9 @@ const RequestReferralPage: React.FC = () => {
                   label={symptom.charAt(0).toUpperCase() + symptom.slice(1)}
                   options={symptomOptions}
                   error={(errors.currentSymptoms as any)?.[symptom]?.message}
-                  {...register(`currentSymptoms.${symptom}`)}
+                  {...register(`currentSymptoms.${symptom}`, {
+                    valueAsNumber: true,
+                  })}
                 />
               ))}
             </div>

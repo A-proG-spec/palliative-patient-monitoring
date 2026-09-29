@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '@middlewares/auth.middleware.js';
+import { roleMiddleware } from '@middlewares/role.middleware.js';
 import { validate } from '@middlewares/validate.middleware.js';
 import { createDischargeSummarySchema } from '@schemas/discharge.schema.js';
 import * as dischargeController from '@controllers/discharge.controller.js';
@@ -8,6 +9,7 @@ const router = Router({ mergeParams: true });
 
 // All discharge routes require authentication
 router.use(authMiddleware);
+router.use(roleMiddleware(['Physician', 'admin']));
 
 // ── Create (also flips Patient + Admission to Discharged via transaction) ──
 router.post(

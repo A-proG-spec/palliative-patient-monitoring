@@ -1,145 +1,270 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FlaskConical, AlertCircle } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { EmptyState, ErrorState } from '@/components/common/EmptyState';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { FlaskConical, CheckCircle2, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
+import { Card, CardContent } from '@/components/ui/Card';
+import { StatusBadge } from '@/components/common/StatusBadge';
+import { BackButton } from '@/components/common/BackButton';
+import { PageLoader } from '@/components/common/LoadingSpinner';
+import { ErrorState } from '@/components/common/EmptyState';
 import { formatDate } from '@/lib/utils';
 import { ROUTES } from '@/constants';
-import { useLabQueue } from '@/hooks/useLabQueue';
+import { useLabRequestDetail, useEnterLabResult } from '@/hooks/useLabQueue';
+import { useAuthStore } from '@/store/auth.store';
 
-const getPriorityVariant = (priority: string) => {
-  switch (priority) {
-    case 'Emergency':
-      return 'error' as const;
-    case 'Urgent':
-      return 'warning' as const;
-    default:
-      return 'default' as const;
-  }
-};
+// ═════════════════════════════════════════════════════════════
+// OUTER — reads the URL param and hard-guards it.
+// ═════════════════════════════════════════════════════════════
 
-const LabRequestsPage: React.FC = () => {
+const LabRequestDetailPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { data, isLoading, isError, error, refetch } = useLabQueue();
-
-  if (isLoading) {
+  if (!id || id === 'undefined' || id === 'null' || id.trim().length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <LoadingSpinner size="lg" />
+      <div className="max-w-xl space-y-5">
+        <BackButton to={ROUTES.LAB_REQUESTS} label="Lab Requests" />
+
+        <div className="flex items-start gap-3 rounded-xl border border-error/30 bg-error-bg/20 px-4 py-3.5">
+          <AlertCircle size={18} className="text-error flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-on-surface">
+              Missing lab request ID
+            </p>
+            <p className="text-xs text-text-secondary mt-0.5">
+              The URL is missing a valid lab request identifier. This usually
+              means a link was built incorrectly.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          variant="outline"
+          leftIcon={<ArrowLeft size={14} />}
+          onClick={() => navigate(ROUTES.LAB_REQUESTS)}
+        >
+          Back to Lab Requests
+        </Button>
       </div>
     );
   }
 
-  if (isError) {
-    return (
-      <ErrorState
-        message={
-          error instanceof Error ? error.message : 'An unexpected error occurred'
-        }
-        onRetry={refetch}
-      />
-    );
-  }
+  return <LabRequestDetailContent id={id} />;
+};
 
-  const pendingRequests = data?.items ?? [];
+// ═════════════════════════════════════════════════════════════
+// INNER — receives a guaranteed non-empty `id`.
+// ═════════════════════════════════════════════════════════════
 
-  if (pendingRequests.length === 0) {
-    return (
-      <EmptyState
-        icon={<FlaskConical size={48} />}
-        title="No pending requests"
-        description="There are no lab requests waiting to be processed."
-      />
+const LabRequestDetailContent: React.FC<{ id: string }> = ({ id }) => {
+  const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+
+  const { data: lab, isLoading, error, refetch } = useLabRequestDetail(id);
+  const enterResultMutation = useEnterLabResult();
+
+  const [result, setResult] = useState('');
+  const [performedBy, setPerformedBy] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  // ═══════════════════════════════════════════════════════════
+  // AUTO-FILL "Performed By" with the logged-in user's name
+  //
+  // Fires once on mount when the user is available. If the user
+  // is not yet loaded (rare), it re-fires when they become
+  // available. Does NOT overwrite the field after the user has
+  // edited it — we only set it if it's still empty.
+  // ═══════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!user?.name) return;
+    setPerformedBy((current) => (current.trim().length === 0 ? user.name : current));
+  }, [user?.name]);
+
+  if (isLoading) return <PageLoader />;
+  if (error || !lab) return <ErrorState onRetry={refetch} />;
+
+  const isCompleted = lab.status === 'Completed';
+  const isCancelled = lab.status === 'Cancelled';
+  const canEnterResult = !isCompleted && !isCancelled;
+
+  const handleSubmit = () => {
+    setValidationError(null);
+
+    if (!result.trim()) {
+      setValidationError('Result text is required.');
+      return;
+    }
+
+    if (!id || id === 'undefined') {
+      setValidationError('Invalid lab request ID.');
+      return;
+    }
+
+    enterResultMutation.mutate(
+      {
+        id,
+        data: {
+          result: result.trim(),
+          performedBy: performedBy.trim() || undefined,
+        },
+      },
+      {
+        onSuccess: () => navigate(ROUTES.LAB_REQUESTS),
+      },
     );
-  }
+  };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-on-surface">Lab Requests</h1>
-        <p className="text-sm text-text-muted mt-1">
-          {pendingRequests.length} pending{' '}
-          {pendingRequests.length === 1 ? 'request' : 'requests'}
-        </p>
+    <div className="max-w-2xl space-y-5">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <BackButton to={ROUTES.LAB_REQUESTS} label="Lab Requests" />
+          <div>
+            <h1 className="text-xl font-bold text-on-surface">Lab Request</h1>
+            <p className="text-xs text-text-muted mt-0.5 font-mono">
+              #{lab.id}
+            </p>
+          </div>
+        </div>
+        {lab.status && <StatusBadge status={lab.status} type="lab" />}
       </div>
 
-      <Card padding="none">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="border-b border-border-base bg-surface-low">
-              <tr>
-                {[
-                  'Patient',
-                  'Test',
-                  'Category',
-                  'Requesting Clinician',
-                  'Ordered',
-                  'Priority',
-                  'Status',
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-base">
-              {pendingRequests.map((request) => (
-                <tr
-                  key={request.id}
-                  onClick={() =>
-                    navigate(ROUTES.LAB_REQUEST_DETAIL(String(request.id)))
-                  }
-                  className="hover:bg-surface-low cursor-pointer transition-colors"
-                >
-                  <td className="px-5 py-3.5 text-sm font-medium text-on-surface">
-                    {request.patientName}
-                  </td>
-                  <td className="px-5 py-3.5 text-sm text-text-secondary">
-                    {request.testName}
-                  </td>
-                  <td className="px-5 py-3.5 text-sm text-text-secondary">
-                    {request.category}
-                  </td>
-                  <td className="px-5 py-3.5 text-sm text-text-secondary">
-                    {request.requestingClinician}
-                  </td>
-                  <td className="px-5 py-3.5 text-sm text-text-secondary">
-                    {formatDate(request.dateRequested)}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <Badge variant={getPriorityVariant(request.priority)}>
-                      {request.priority}
-                    </Badge>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <Badge
-                      variant={request.status === 'Ordered' ? 'warning' : 'success'}
-                    >
-                      {request.status}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* ── Cancelled banner ── */}
+      {isCancelled && (
+        <div className="flex items-start gap-3 rounded-xl border border-error/30 bg-error-bg/20 px-4 py-3.5">
+          <AlertCircle size={18} className="text-error flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-on-surface">
+              This lab request was cancelled
+            </p>
+            <p className="text-xs text-text-secondary mt-0.5">
+              No result can be entered for a cancelled request.
+            </p>
+          </div>
         </div>
+      )}
+
+      {/* ── Request details ── */}
+      <Card padding="lg">
+        <CardContent className="space-y-3 text-sm">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-success-bg text-success mb-4">
+            <FlaskConical size={20} />
+          </div>
+
+          {[
+            ['Patient', lab.patientName],
+            ['Patient ID', lab.patientDisplayId ?? '—'],
+            [
+              'Age / Sex',
+              lab.age ? `${lab.age} · ${lab.sex ?? '—'}` : '—',
+            ],
+            ['Test Name', lab.testName],
+            ['Category', lab.category],
+            ['Specimen Type', lab.specimenType ?? '—'],
+            ['Specimen Site', lab.specimenSite ?? '—'],
+            ['Requesting Clinician', lab.requestingClinician],
+            ['Date Ordered', formatDate(lab.dateRequested)],
+            ['Priority', lab.priority],
+            ['Clinical History', lab.clinicalHistory ?? '—'],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="flex gap-2">
+              <span className="text-text-muted min-w-[160px] flex-shrink-0">
+                {label}:
+              </span>
+              <span className="text-on-surface font-medium">
+                {String(value ?? '—')}
+              </span>
+            </div>
+          ))}
+        </CardContent>
       </Card>
 
-      <div className="flex items-start gap-2 p-4 rounded-xl bg-primary-light border border-primary/20">
-        <AlertCircle size={16} className="text-primary flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-on-surface">
-          Click on any request to view details and enter results.
-        </p>
-      </div>
+      {/* ── Enter result form ── */}
+      {canEnterResult && (
+        <Card padding="lg">
+          <p className="text-sm font-semibold text-on-surface mb-3">
+            Enter Result
+          </p>
+          <div className="space-y-4">
+            <Textarea
+              label="Result / Findings *"
+              rows={5}
+              value={result}
+              onChange={(e) => {
+                setResult(e.target.value);
+                if (validationError) setValidationError(null);
+              }}
+              placeholder="Enter lab result…"
+              error={
+                validationError && !result.trim() ? validationError : undefined
+              }
+            />
+
+            <Input
+              label="Performed By"
+              placeholder="Technologist name"
+              value={performedBy}
+              onChange={(e) => setPerformedBy(e.target.value)}
+              hint="Auto-filled from your account — edit if another technologist performed the test"
+            />
+
+            {validationError && result.trim() && (
+              <div className="rounded-lg bg-error-bg border border-error/20 px-3 py-2 text-xs text-error flex items-start gap-2">
+                <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
+                <span>{validationError}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                leftIcon={<CheckCircle2 size={15} />}
+                disabled={!result.trim()}
+                loading={enterResultMutation.isPending}
+                onClick={handleSubmit}
+              >
+                Submit Result
+              </Button>
+              <Button
+                variant="outline"
+                leftIcon={<ArrowLeft size={14} />}
+                onClick={() => navigate(ROUTES.LAB_REQUESTS)}
+                disabled={enterResultMutation.isPending}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Existing result (read-only) ── */}
+      {isCompleted && lab.result && (
+        <Card padding="lg" className="border-l-4 border-l-success">
+          <div className="flex items-start gap-3 mb-3">
+            <CheckCircle2
+              size={18}
+              className="text-success flex-shrink-0 mt-0.5"
+            />
+            <p className="text-sm font-semibold text-on-surface">
+              Result Recorded
+            </p>
+          </div>
+          <div className="bg-surface-low rounded-lg px-4 py-3 text-sm text-on-surface whitespace-pre-wrap">
+            {lab.result}
+          </div>
+          {lab.datePerformed && (
+            <p className="text-xs text-text-muted mt-3">
+              Performed {formatDate(lab.datePerformed)}
+              {lab.performedBy ? ` by ${lab.performedBy}` : ''}
+            </p>
+          )}
+        </Card>
+      )}
     </div>
   );
 };
 
-export default LabRequestsPage;
+export default LabRequestDetailPage;

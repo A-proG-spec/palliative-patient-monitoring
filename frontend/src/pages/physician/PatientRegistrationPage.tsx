@@ -134,14 +134,6 @@ const PatientRegistrationPage: React.FC = () => {
             error={errors.phone?.message}
             {...register('phone')}
           />
-
-          {/* ── Hospital Patient ID (optional) ── */}
-          <Input
-            label="Hospital Patient ID / MRN"
-            placeholder="e.g. Y12-12345"
-            hint="Optional. Only set if the patient already has a hospital record number."
-            {...register('hospitalPatientId', { setValueAs: (v) => (v === '' ? undefined : v) })}
-          />
         </Section>
 
         {/* ═══════════════════════════════════════════════════════

@@ -57,9 +57,10 @@ export function useDischargePatient() {
     },
 
     onError: (error: any) => {
-      const message =
-        error?.response?.data?.message ??
-        'Failed to discharge patient. Please try again.';
+      const message = error?.response?.status === 403
+        ? 'You do not have permission to discharge patients.'
+        : error?.response?.data?.message ??
+          'Failed to discharge patient. Please try again.';
       toast.error(message);
     },
   });

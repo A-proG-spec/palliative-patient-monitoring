@@ -1,3 +1,4 @@
+// src/routes/index.tsx
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { PageLoader } from '@/components/common/LoadingSpinner';
@@ -40,6 +41,9 @@ const AdminPatientDetailPage = lazy(
 );
 const DischargePatientPage = lazy(
   () => import('@/pages/admin/DischargePatientPage'),
+);
+const PhysicianDischargePatientPage = lazy(
+  () => import('@/pages/clinical/DischargePatientPage'),
 );
 const StaffManagementPage = lazy(() => import('@/pages/admin/StaffManagementPage'));
 const StaffPerformanceDetailPage = lazy(
@@ -186,10 +190,6 @@ const S = ({ children }: { children: React.ReactNode }) => (
 // and one under the staff tree — so the same detail/list/form
 // pages work for both audiences. The `prefix` argument lets us
 // generate both sets from a single source of truth.
-//
-// Must return a Fragment (or Route elements), NOT a custom
-// component. React Router only accepts <Route> / <React.Fragment>
-// as children of <Routes> / nested <Route>.
 // ═════════════════════════════════════════════════════════════
 
 const buildAssessmentRoutes = (prefix: string) => (
@@ -352,102 +352,33 @@ const AppRoutes: React.FC = () => (
 
     {/* ═══════════════════════════════════════════════════════════
         Staff Routes
+
+        ⚠️ ORDER MATTERS:
+        All SPECIFIC /patients/:id/* routes are declared ABOVE the
+        generic /patients/:id route. React Router v6 ranks routes
+        but explicit ordering avoids surprises when pathless layout
+        routes (PhysicianOnlyRoute, NurseOnlyRoute, …) sit between
+        concrete siblings.
     ═══════════════════════════════════════════════════════════ */}
     <Route element={<ProtectedRoute role="staff" />}>
       <Route element={<RoleGuard />}>
         <Route element={<DashboardLayout />}>
 
-          {/* Clinical — shared by Physician & Nurse */}
+          {/* ── Top-level ── */}
           <Route path="/dashboard" element={<S><DashboardPage /></S>} />
           <Route path="/patients" element={<S><PatientListPage /></S>} />
-          <Route path="/patients/:id" element={<S><PatientDetailPage /></S>} />
-          <Route
-            path="/patients/:id/summary"
-            element={<S><PatientSummaryPage /></S>}
-          />
-          <Route
-            path="/patients/:id/progress"
-            element={<S><PatientProgressPage /></S>}
-          />
 
-          {/* Visits */}
-          <Route
-            path="/patients/:id/visits"
-            element={<S><RecordVisitPage /></S>}
-          />
-          <Route
-            path="/patients/:id/visits/:visitId"
-            element={<S><VisitDetailPage /></S>}
-          />
-
-          {/* Medications */}
-          <Route
-            path="/patients/:id/medications"
-            element={<S><OrderMedicationPage /></S>}
-          />
-          <Route
-            path="/patients/:id/medications/:medicationId"
-            element={<S><MedicationDetailPage /></S>}
-          />
-
-          {/* Labs */}
-          <Route
-            path="/patients/:id/labs"
-            element={<S><OrderLabPage /></S>}
-          />
-          <Route
-            path="/patients/:id/labs/:labId"
-            element={<S><LabDetailPage /></S>}
-          />
-
-          {/* Imaging */}
-          <Route
-            path="/patients/:id/imaging"
-            element={<S><OrderImagingPage /></S>}
-          />
-          <Route
-            path="/patients/:id/imaging/:imagingId"
-            element={<S><ImagingDetailPage /></S>}
-          />
-
-          {/* Referrals */}
-          <Route
-            path="/patients/:id/referrals"
-            element={<S><RequestReferralPage /></S>}
-          />
-          <Route
-            path="/patients/:id/referrals/:referralId"
-            element={<S><ReferralDetailPage /></S>}
-          />
-
-          {/* Admissions */}
-          <Route
-            path="/patients/:id/admissions"
-            element={<S><RecordAdmissionPage /></S>}
-          />
-          <Route
-            path="/patients/:id/admissions/:admissionId"
-            element={<S><AdmissionDetailPage /></S>}
-          />
-
-          {/* Progress Notes */}
-          <Route
-            path="/patients/:id/progress-note/new"
-            element={<S><RecordProgressNotePage /></S>}
-          />
-          <Route
-            path="/patients/:id/progress-note/:noteId/edit"
-            element={<S><RecordProgressNotePage /></S>}
-          />
-
-          {/* ── All 8 assessment routes ── */}
-          {buildAssessmentRoutes('/patients')}
-
-          {/* ── Physician-only ── */}
+          {/* ═══════════════════════════════════════════════════════
+              Physician-only (MUST be above the generic :id route)
+          ═══════════════════════════════════════════════════════ */}
           <Route element={<PhysicianOnlyRoute />}>
             <Route
               path="/patients/new"
               element={<S><PatientRegistrationPage /></S>}
+            />
+            <Route
+              path="/patients/:id/discharge"
+              element={<S><PhysicianDischargePatientPage /></S>}
             />
           </Route>
 
@@ -462,6 +393,97 @@ const AppRoutes: React.FC = () => (
               element={<S><HospiceNursingDetailPage /></S>}
             />
           </Route>
+
+          {/* ── Visits ── */}
+          <Route
+            path="/patients/:id/visits"
+            element={<S><RecordVisitPage /></S>}
+          />
+          <Route
+            path="/patients/:id/visits/:visitId"
+            element={<S><VisitDetailPage /></S>}
+          />
+
+          {/* ── Medications ── */}
+          <Route
+            path="/patients/:id/medications"
+            element={<S><OrderMedicationPage /></S>}
+          />
+          <Route
+            path="/patients/:id/medications/:medicationId"
+            element={<S><MedicationDetailPage /></S>}
+          />
+
+          {/* ── Labs ── */}
+          <Route
+            path="/patients/:id/labs"
+            element={<S><OrderLabPage /></S>}
+          />
+          <Route
+            path="/patients/:id/labs/:labId"
+            element={<S><LabDetailPage /></S>}
+          />
+
+          {/* ── Imaging ── */}
+          <Route
+            path="/patients/:id/imaging"
+            element={<S><OrderImagingPage /></S>}
+          />
+          <Route
+            path="/patients/:id/imaging/:imagingId"
+            element={<S><ImagingDetailPage /></S>}
+          />
+
+          {/* ── Referrals ── */}
+          <Route
+            path="/patients/:id/referrals"
+            element={<S><RequestReferralPage /></S>}
+          />
+          <Route
+            path="/patients/:id/referrals/:referralId"
+            element={<S><ReferralDetailPage /></S>}
+          />
+
+          {/* ── Admissions ── */}
+          <Route
+            path="/patients/:id/admissions"
+            element={<S><RecordAdmissionPage /></S>}
+          />
+          <Route
+            path="/patients/:id/admissions/:admissionId"
+            element={<S><AdmissionDetailPage /></S>}
+          />
+
+          {/* ── Progress Notes ── */}
+          <Route
+            path="/patients/:id/progress-note/new"
+            element={<S><RecordProgressNotePage /></S>}
+          />
+          <Route
+            path="/patients/:id/progress-note/:noteId/edit"
+            element={<S><RecordProgressNotePage /></S>}
+          />
+
+          {/* ── Summary / Progress ── */}
+          <Route
+            path="/patients/:id/summary"
+            element={<S><PatientSummaryPage /></S>}
+          />
+          <Route
+            path="/patients/:id/progress"
+            element={<S><PatientProgressPage /></S>}
+          />
+
+          {/* ── All 8 assessment route blocks ── */}
+          {buildAssessmentRoutes('/patients')}
+
+          {/* ⚠️ THE GENERIC ROUTE GOES LAST — acts as the fallback
+              for /patients/:id and matches anything under it that
+              wasn't claimed above. */}
+          <Route
+            path="/patients/:id"
+            element={<S><PatientDetailPage /></S>}
+          />
 
           {/* ── Pharmacist queue ── */}
           <Route element={<PharmacistOnlyRoute />}>

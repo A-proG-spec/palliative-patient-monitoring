@@ -1,145 +1,208 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { FlaskConical, CheckCircle2, ArrowLeft } from 'lucide-react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FlaskConical, AlertCircle, RefreshCw } from 'lucide-react';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
-import { Card, CardContent } from '@/components/ui/Card';
-import { StatusBadge } from '@/components/common/StatusBadge';
-import { BackButton } from '@/components/common/BackButton';
-import { PageLoader } from '@/components/common/LoadingSpinner';
-import { ErrorState } from '@/components/common/EmptyState';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { EmptyState, ErrorState } from '@/components/common/EmptyState';
 import { formatDate } from '@/lib/utils';
 import { ROUTES } from '@/constants';
-import {
-  useLabRequestDetail,
-  useEnterLabResult,
-} from '@/hooks/useLabQueue';
+import { useLabQueue } from '@/hooks/useLabQueue';
 
-const LabRequestDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+const getPriorityVariant = (priority: string) => {
+  switch (priority) {
+    case 'Emergency':
+      return 'error' as const;
+    case 'Urgent':
+      return 'warning' as const;
+    default:
+      return 'default' as const;
+  }
+};
+
+const getStatusVariant = (status: string) => {
+  switch (status) {
+    case 'Ordered':
+      return 'warning' as const;
+    case 'Completed':
+      return 'success' as const;
+    case 'Cancelled':
+      return 'error' as const;
+    default:
+      return 'default' as const;
+  }
+};
+
+const LabRequestsPage: React.FC = () => {
   const navigate = useNavigate();
 
-  const { data: lab, isLoading, error, refetch } = useLabRequestDetail(id);
-  const enterResultMutation = useEnterLabResult();
+  const { data, isLoading, isError, error, refetch, isFetching } = useLabQueue();
 
-  const [result, setResult] = useState('');
-  const [performedBy, setPerformedBy] = useState('');
-
-  if (isLoading) return <PageLoader />;
-  if (error || !lab) return <ErrorState onRetry={refetch} />;
-
-  const handleSubmit = () => {
-    if (!id || !result.trim()) return;
-    enterResultMutation.mutate(
-      {
-        id,
-        data: {
-          result: result.trim(),
-          performedBy: performedBy.trim() || undefined,
-        },
-      },
-      {
-        onSuccess: () => navigate(ROUTES.LAB_REQUESTS),
-      },
+  // ── Loading ──
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <LoadingSpinner size="lg" />
+      </div>
     );
+  }
+
+  // ── Error ──
+  if (isError) {
+    return (
+      <ErrorState
+        message={
+          error instanceof Error ? error.message : 'An unexpected error occurred'
+        }
+        onRetry={refetch}
+      />
+    );
+  }
+
+  const pendingRequests = data?.items ?? [];
+
+  // ── Empty ──
+  if (pendingRequests.length === 0) {
+    return (
+      <EmptyState
+        icon={<FlaskConical size={48} />}
+        title="No pending requests"
+        description="There are no lab requests waiting to be processed."
+      />
+    );
+  }
+
+  // ── Row click handler with guard ──
+  const handleRowClick = (request: { id?: number | string | null }) => {
+    // Guard: never navigate with an undefined id
+    if (
+      request.id === undefined ||
+      request.id === null ||
+      String(request.id).length === 0 ||
+      String(request.id) === 'undefined'
+    ) {
+      console.warn('[LabQueue] row is missing a valid id →', request);
+      return;
+    }
+    navigate(ROUTES.LAB_REQUEST_DETAIL(String(request.id)));
   };
 
   return (
-    <div className="max-w-xl space-y-5">
-      <div className="flex items-center gap-3">
-        <BackButton to={ROUTES.LAB_REQUESTS} label="Lab Requests" />
-        <h1 className="text-xl font-bold text-on-surface">Lab Request</h1>
-        {lab.status && <StatusBadge status={lab.status} type="lab" />}
+    <div className="space-y-6">
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-on-surface">Lab Requests</h1>
+          <p className="text-sm text-text-muted mt-1">
+            {pendingRequests.length} pending{' '}
+            {pendingRequests.length === 1 ? 'request' : 'requests'}
+          </p>
+        </div>
+
+        {/* Manual refresh (in addition to the 30s auto-refetch) */}
+        <Button
+          variant="outline"
+          size="sm"
+          leftIcon={<RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />}
+          onClick={() => refetch()}
+          disabled={isFetching}
+        >
+          Refresh
+        </Button>
       </div>
 
-      <Card padding="lg">
-        <CardContent className="space-y-3 text-sm">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-success-bg text-success mb-4">
-            <FlaskConical size={20} />
-          </div>
+      {/* ── Table ── */}
+      <Card padding="none">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="border-b border-border-base bg-surface-low">
+              <tr>
+                {[
+                  'ID',
+                  'Patient',
+                  'Test',
+                  'Category',
+                  'Requesting Clinician',
+                  'Ordered',
+                  'Priority',
+                  'Status',
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider whitespace-nowrap"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-base">
+              {pendingRequests.map((request) => {
+                const hasValidId =
+                  request.id !== undefined &&
+                  request.id !== null &&
+                  String(request.id).length > 0 &&
+                  String(request.id) !== 'undefined';
 
-          {[
-            ['Patient', lab.patientName],
-            ['Patient ID', lab.patientDisplayId ?? '—'],
-            ['Age / Sex', lab.age ? `${lab.age} · ${lab.sex ?? '—'}` : '—'],
-            ['Test Name', lab.testName],
-            ['Category', lab.category],
-            ['Specimen Type', lab.specimenType ?? '—'],
-            ['Specimen Site', lab.specimenSite ?? '—'],
-            ['Requesting Clinician', lab.requestingClinician],
-            ['Date Ordered', formatDate(lab.dateRequested)],
-            ['Priority', lab.priority],
-            ['Clinical History', lab.clinicalHistory ?? '—'],
-          ].map(([label, value]) => (
-            <div key={String(label)} className="flex gap-2">
-              <span className="text-text-muted min-w-[160px] flex-shrink-0">
-                {label}:
-              </span>
-              <span className="text-on-surface font-medium">
-                {String(value ?? '—')}
-              </span>
-            </div>
-          ))}
-        </CardContent>
+                return (
+                  <tr
+                    key={String(request.id ?? Math.random())}
+                    onClick={() => handleRowClick(request)}
+                    className={
+                      hasValidId
+                        ? 'hover:bg-surface-low cursor-pointer transition-colors'
+                        : 'opacity-60 cursor-not-allowed'
+                    }
+                    title={hasValidId ? 'Open request' : 'Missing request id'}
+                  >
+                    <td className="px-5 py-3.5 text-sm font-mono text-text-muted whitespace-nowrap">
+                      #{request.id ?? '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-sm font-medium text-on-surface whitespace-nowrap">
+                      {request.patientName ?? '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-sm text-text-secondary whitespace-nowrap">
+                      {request.testName ?? '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-sm text-text-secondary whitespace-nowrap">
+                      {request.category ?? '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-sm text-text-secondary whitespace-nowrap">
+                      {request.requestingClinician ?? '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-sm text-text-secondary whitespace-nowrap">
+                      {request.dateRequested
+                        ? formatDate(request.dateRequested)
+                        : '—'}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <Badge variant={getPriorityVariant(request.priority)}>
+                        {request.priority ?? '—'}
+                      </Badge>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <Badge variant={getStatusVariant(request.status)}>
+                        {request.status ?? '—'}
+                      </Badge>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
-      {lab.status !== 'Completed' && (
-        <Card padding="lg">
-          <p className="text-sm font-semibold text-on-surface mb-3">
-            Enter Result
-          </p>
-          <div className="space-y-4">
-            <Textarea
-              label="Result / Findings *"
-              rows={5}
-              value={result}
-              onChange={(e) => setResult(e.target.value)}
-              placeholder="Enter lab result…"
-            />
-            <Input
-              label="Performed By (optional)"
-              placeholder="Technologist name"
-              value={performedBy}
-              onChange={(e) => setPerformedBy(e.target.value)}
-            />
-            <div className="flex gap-3">
-              <Button
-                leftIcon={<CheckCircle2 size={15} />}
-                disabled={!result.trim()}
-                loading={enterResultMutation.isPending}
-                onClick={handleSubmit}
-              >
-                Submit Result
-              </Button>
-              <Button
-                variant="outline"
-                leftIcon={<ArrowLeft size={14} />}
-                onClick={() => navigate(ROUTES.LAB_REQUESTS)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {lab.status === 'Completed' && lab.result && (
-        <Card padding="lg" className="border-l-4 border-l-success">
-          <p className="text-sm font-semibold text-on-surface mb-2">Result</p>
-          <p className="text-sm text-text-secondary whitespace-pre-wrap">
-            {lab.result}
-          </p>
-          {lab.datePerformed && (
-            <p className="text-xs text-text-muted mt-3">
-              Performed {formatDate(lab.datePerformed)}
-              {lab.performedBy ? ` by ${lab.performedBy}` : ''}
-            </p>
-          )}
-        </Card>
-      )}
+      {/* ── Info banner ── */}
+      <div className="flex items-start gap-2 p-4 rounded-xl bg-primary-light border border-primary/20">
+        <AlertCircle size={16} className="text-primary flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-on-surface">
+          Click on any request to view details and enter results.
+        </p>
+      </div>
     </div>
   );
 };
 
-export default LabRequestDetailPage;
+export default LabRequestsPage;
