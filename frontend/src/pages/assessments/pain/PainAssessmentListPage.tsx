@@ -12,7 +12,7 @@ const PainAssessmentListPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const isOwner = user?.role === 'Nurse';
+  const canWrite = user?.role === 'Nurse' || user?.role === 'Physician';
 
   const { data: patient, isLoading: pLoading } = usePatient(id!);
   const {
@@ -26,6 +26,7 @@ const PainAssessmentListPage: React.FC = () => {
   const patientLabel = patient
     ? `${patient.firstName} ${patient.lastName} · ${patient.patientDisplayId ?? patient.id}`
     : '—';
+  const canCreate = canWrite && patient?.status === 'Active';
 
   return (
     <AssessmentListShell
@@ -39,7 +40,7 @@ const PainAssessmentListPage: React.FC = () => {
       onRetry={refetch}
       isEmpty={assessments.length === 0}
       emptyMessage="Record the first pain assessment for this patient."
-      canCreate={isOwner}
+      canCreate={canCreate}
     >
       {assessments.map((a) => (
         <button
