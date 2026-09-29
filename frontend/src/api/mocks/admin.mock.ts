@@ -108,9 +108,7 @@ export const mockAdminApi = {
     if (params?.search) {
       const q = params.search.toLowerCase();
       filtered = filtered.filter(
-        (p) =>
-          `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
-          p.patientDisplayId.toLowerCase().includes(q),
+        (p) => p.patientDisplayId.toLowerCase().includes(q) || p.id.toLowerCase().includes(q),
       );
     }
     const page = params?.page || 1;

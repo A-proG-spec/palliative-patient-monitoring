@@ -62,11 +62,16 @@ export const getPatients = async (
 
   if (status) where.status = status;
   if (search) {
-    where.OR = [
-      { firstName: { contains: search, mode: 'insensitive' } },
-      { lastName: { contains: search, mode: 'insensitive' } },
-      { hospitalPatientId: { contains: search, mode: 'insensitive' } },
+    const query = search.trim();
+    const idMatches: any[] = [
+      { hospitalPatientId: { contains: query, mode: 'insensitive' } },
     ];
+    const generatedId = /^PAT-(\d+)$/i.exec(query);
+    const numericId = generatedId?.[1] ?? (/^\d+$/.test(query) ? query : undefined);
+    if (numericId && Number.isSafeInteger(Number(numericId))) {
+      idMatches.push({ id: Number(numericId) });
+    }
+    where.OR = idMatches;
   }
 
   const skip = (page - 1) * limit;

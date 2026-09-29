@@ -152,18 +152,18 @@ function getSectionState(
 // ═════════════════════════════════════════════════════════════
 
 const SYMPTOM_KEYS_TO_FLAT: Record<string, string> = {
-  'Pain':                'pain',
+  'Pain': 'pain',
   'Shortness of Breath': 'shortnessOfBreath',
-  'Nausea':              'nausea',
-  'Vomiting':            'vomiting',
-  'Constipation':        'constipation',
-  'Diarrhea':            'diarrhea',
-  'Fatigue':             'fatigue',
-  'Anxiety':             'anxiety',
-  'Delirium/Confusion':  'delirium',
-  'Insomnia':            'insomania',
-  'Appetite Loss':       'appetiteLoss',
-  'Other':               'other',
+  'Nausea': 'nausea',
+  'Vomiting': 'vomiting',
+  'Constipation': 'constipation',
+  'Diarrhea': 'diarrhea',
+  'Fatigue': 'fatigue',
+  'Anxiety': 'anxiety',
+  'Delirium/Confusion': 'delirium',
+  'Insomnia': 'insomania',
+  'Appetite Loss': 'appetiteLoss',
+  'Other': 'other',
 };
 
 function serializeProgressNoteForApi(
@@ -172,12 +172,12 @@ function serializeProgressNoteForApi(
   const { vitals, symptoms, ...rest } = note;
 
   const flatVitals = {
-    temperature:     vitals?.temperature?.current     ?? '',
-    pulse:           vitals?.pulse?.current           ?? '',
+    temperature: vitals?.temperature?.current ?? '',
+    pulse: vitals?.pulse?.current ?? '',
     respiratoryRate: vitals?.respiratoryRate?.current ?? '',
-    bloodPressure:   vitals?.bloodPressure?.current   ?? '',
-    oxygenFlow:      vitals?.oxygenFlow?.current      ?? '',
-    spO2:            vitals?.spo2?.current            ?? '',
+    bloodPressure: vitals?.bloodPressure?.current ?? '',
+    oxygenFlow: vitals?.oxygenFlow?.current ?? '',
+    spO2: vitals?.spo2?.current ?? '',
   };
 
   const flatSymptoms: Record<string, string> = {};
@@ -468,7 +468,9 @@ const RecordProgressNotePage: React.FC = () => {
       key: K,
       value: CreateProgressNoteFormData[K],
     ) => {
-      setValue(key, value, { shouldDirty: true, shouldValidate: false });
+      // The helper only accepts top-level form keys; RHF's path-value type
+      // cannot correlate that generic key with the corresponding property type.
+      setValue(key, value as never, { shouldDirty: true, shouldValidate: false });
     },
     [setValue],
   );
@@ -591,7 +593,7 @@ const RecordProgressNotePage: React.FC = () => {
           </div>
         </div>
 
-        <ProgressNoteSignatureSection patientId={id!} noteId={savedNoteId} onSigned={() => {}} />
+        <ProgressNoteSignatureSection patientId={id!} noteId={savedNoteId} onSigned={() => { }} />
 
         <div className="flex gap-3 pt-2">
           <Button variant="outline" leftIcon={<ArrowLeft size={14} />} onClick={() => navigate(`/patients/${id}`)}>
@@ -821,10 +823,10 @@ const SectionBody: React.FC<SectionBodyProps> = ({
               placeholder="Select…"
               error={errors.generalCondition?.message}
               options={[
-                { value: 'Stable',        label: 'Stable' },
-                { value: 'Improving',     label: 'Improving' },
+                { value: 'Stable', label: 'Stable' },
+                { value: 'Improving', label: 'Improving' },
                 { value: 'Deteriorating', label: 'Deteriorating' },
-                { value: 'Critical',      label: 'Critical' },
+                { value: 'Critical', label: 'Critical' },
                 { value: 'ActivelyDying', label: 'Actively Dying' },
               ]}
             />
@@ -835,10 +837,10 @@ const SectionBody: React.FC<SectionBodyProps> = ({
               placeholder="Select…"
               error={errors.levelOfConsciousness?.message}
               options={[
-                { value: 'Alert',        label: 'Alert' },
-                { value: 'Drowsy',       label: 'Drowsy' },
-                { value: 'Confused',     label: 'Confused' },
-                { value: 'Delirious',    label: 'Delirious' },
+                { value: 'Alert', label: 'Alert' },
+                { value: 'Drowsy', label: 'Drowsy' },
+                { value: 'Confused', label: 'Confused' },
+                { value: 'Delirious', label: 'Delirious' },
                 { value: 'Unresponsive', label: 'Unresponsive' },
               ]}
             />
@@ -849,10 +851,10 @@ const SectionBody: React.FC<SectionBodyProps> = ({
               placeholder="Select…"
               error={errors.orientation?.message}
               options={[
-                { value: 'Oriented',          label: 'Oriented' },
+                { value: 'Oriented', label: 'Oriented' },
                 { value: 'PartiallyOriented', label: 'Partially Oriented' },
-                { value: 'Disoriented',       label: 'Disoriented' },
-                { value: 'UnableToAssess',    label: 'Unable to Assess' },
+                { value: 'Disoriented', label: 'Disoriented' },
+                { value: 'UnableToAssess', label: 'Unable to Assess' },
               ]}
             />
             <Select
@@ -862,10 +864,10 @@ const SectionBody: React.FC<SectionBodyProps> = ({
               placeholder="Select…"
               error={errors.functionalStatus?.message}
               options={[
-                { value: 'Independent',        label: 'Independent' },
+                { value: 'Independent', label: 'Independent' },
                 { value: 'RequiresAssistance', label: 'Requires Assistance' },
-                { value: 'Bedbound',           label: 'Bedbound' },
-                { value: 'FullyDependent',     label: 'Fully Dependent' },
+                { value: 'Bedbound', label: 'Bedbound' },
+                { value: 'FullyDependent', label: 'Fully Dependent' },
               ]}
             />
           </Grid>
@@ -1003,9 +1005,9 @@ const SectionBody: React.FC<SectionBodyProps> = ({
                 name="responseToTreatment"
                 value={form.responseToTreatment ?? ''}
                 options={[
-                  { value: 'Good',          label: 'Good' },
-                  { value: 'Partial',       label: 'Partial' },
-                  { value: 'Poor',          label: 'Poor' },
+                  { value: 'Good', label: 'Good' },
+                  { value: 'Partial', label: 'Partial' },
+                  { value: 'Poor', label: 'Poor' },
                   { value: 'NotApplicable', label: 'Not Applicable' },
                 ]}
                 error={errors.responseToTreatment?.message}
@@ -1038,10 +1040,10 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             value={form.breathing ?? ''}
             error={errors.breathing?.message}
             options={[
-              { value: 'Comfortable',      label: 'Comfortable' },
-              { value: 'MildDistress',     label: 'Mild Distress' },
+              { value: 'Comfortable', label: 'Comfortable' },
+              { value: 'MildDistress', label: 'Mild Distress' },
               { value: 'ModerateDistress', label: 'Moderate Distress' },
-              { value: 'SevereDistress',   label: 'Severe Distress' },
+              { value: 'SevereDistress', label: 'Severe Distress' },
             ]}
             onChange={(v) => set('breathing', v as any)}
           />
@@ -1056,8 +1058,8 @@ const SectionBody: React.FC<SectionBodyProps> = ({
               error={errors.oxygenDelivery?.message}
               options={[
                 { value: 'NasalCannula', label: 'Nasal Cannula' },
-                { value: 'Mask',         label: 'Mask' },
-                { value: 'Other',        label: 'Other' },
+                { value: 'Mask', label: 'Mask' },
+                { value: 'Other', label: 'Other' },
               ]}
               onChange={(v) => set('oxygenDelivery', v as any)}
             />
@@ -1074,9 +1076,9 @@ const SectionBody: React.FC<SectionBodyProps> = ({
               value={form.respiratorySecretions ?? ''}
               error={errors.respiratorySecretions?.message}
               options={[
-                { value: 'None',      label: 'None' },
-                { value: 'Mild',      label: 'Mild' },
-                { value: 'Moderate',  label: 'Moderate' },
+                { value: 'None', label: 'None' },
+                { value: 'Mild', label: 'Mild' },
+                { value: 'Moderate', label: 'Moderate' },
                 { value: 'Excessive', label: 'Excessive' },
               ]}
               onChange={(v) => set('respiratorySecretions', v as any)}
@@ -1102,10 +1104,10 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             value={form.oralIntake ?? ''}
             error={errors.oralIntake?.message}
             options={[
-              { value: 'Good',    label: 'Good' },
+              { value: 'Good', label: 'Good' },
               { value: 'Reduced', label: 'Reduced' },
               { value: 'Minimal', label: 'Minimal' },
-              { value: 'None',    label: 'None' },
+              { value: 'None', label: 'None' },
             ]}
             onChange={(v) => set('oralIntake', v as any)}
           />
@@ -1147,9 +1149,9 @@ const SectionBody: React.FC<SectionBodyProps> = ({
               value={form.urineOutput ?? ''}
               error={errors.urineOutput?.message}
               options={[
-                { value: 'Normal',         label: 'Normal' },
-                { value: 'Reduced',        label: 'Reduced' },
-                { value: 'Minimal',        label: 'Minimal' },
+                { value: 'Normal', label: 'Normal' },
+                { value: 'Reduced', label: 'Reduced' },
+                { value: 'Minimal', label: 'Minimal' },
                 { value: 'UnableToAssess', label: 'Unable to Assess' },
               ]}
               onChange={(v) => set('urineOutput', v as any)}
@@ -1163,10 +1165,10 @@ const SectionBody: React.FC<SectionBodyProps> = ({
               value={form.bowelMovement ?? ''}
               error={errors.bowelMovement?.message}
               options={[
-                { value: 'Normal',      label: 'Normal' },
+                { value: 'Normal', label: 'Normal' },
                 { value: 'Constipated', label: 'Constipated' },
-                { value: 'Diarrhea',    label: 'Diarrhea' },
-                { value: 'NoRecentBM',  label: 'No Recent BM' },
+                { value: 'Diarrhea', label: 'Diarrhea' },
+                { value: 'NoRecentBM', label: 'No Recent BM' },
               ]}
               onChange={(v) => set('bowelMovement', v as any)}
             />
@@ -1191,11 +1193,11 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             value={form.skin ?? ''}
             error={errors.skin?.message}
             options={[
-              { value: 'Intact',    label: 'Intact' },
-              { value: 'Dry',       label: 'Dry' },
-              { value: 'Fragile',   label: 'Fragile' },
+              { value: 'Intact', label: 'Intact' },
+              { value: 'Dry', label: 'Dry' },
+              { value: 'Fragile', label: 'Fragile' },
               { value: 'Edematous', label: 'Edematous' },
-              { value: 'Other',     label: 'Other' },
+              { value: 'Other', label: 'Other' },
             ]}
             onChange={(v) => set('skin', v as any)}
           />
@@ -1233,12 +1235,12 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             values={form.moodBehavior}
             error={errors.moodBehavior?.message}
             options={[
-              { value: 'Calm',      label: 'Calm' },
-              { value: 'Anxious',   label: 'Anxious' },
-              { value: 'Fearful',   label: 'Fearful' },
-              { value: 'Sad',       label: 'Sad' },
+              { value: 'Calm', label: 'Calm' },
+              { value: 'Anxious', label: 'Anxious' },
+              { value: 'Fearful', label: 'Fearful' },
+              { value: 'Sad', label: 'Sad' },
               { value: 'Depressed', label: 'Depressed' },
-              { value: 'Agitated',  label: 'Agitated' },
+              { value: 'Agitated', label: 'Agitated' },
               { value: 'Withdrawn', label: 'Withdrawn' },
             ]}
             onChange={(v) => set('moodBehavior', v as any)}
@@ -1249,10 +1251,10 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             value={form.psychologicalDistress ?? ''}
             error={errors.psychologicalDistress?.message}
             options={[
-              { value: 'None',     label: 'None' },
-              { value: 'Mild',     label: 'Mild' },
+              { value: 'None', label: 'None' },
+              { value: 'Mild', label: 'Mild' },
               { value: 'Moderate', label: 'Moderate' },
-              { value: 'Severe',   label: 'Severe' },
+              { value: 'Severe', label: 'Severe' },
             ]}
             onChange={(v) => set('psychologicalDistress', v as any)}
           />
@@ -1336,13 +1338,13 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             values={form.currentGoalsOfCare}
             error={errors.currentGoalsOfCare?.message}
             options={[
-              { value: 'ComfortSymptomControl',    label: 'Comfort/Symptom Control' },
-              { value: 'QualityOfLife',            label: 'Quality of Life' },
-              { value: 'FunctionalSupport',        label: 'Functional Support' },
+              { value: 'ComfortSymptomControl', label: 'Comfort/Symptom Control' },
+              { value: 'QualityOfLife', label: 'Quality of Life' },
+              { value: 'FunctionalSupport', label: 'Functional Support' },
               { value: 'DiseaseDirectedTreatment', label: 'Disease-Directed Treatment' },
-              { value: 'EndOfLifeCare',            label: 'End-of-Life Care' },
-              { value: 'HomeHospiceCare',          label: 'Home/Hospice Care' },
-              { value: 'Other',                    label: 'Other' },
+              { value: 'EndOfLifeCare', label: 'End-of-Life Care' },
+              { value: 'HomeHospiceCare', label: 'Home/Hospice Care' },
+              { value: 'Other', label: 'Other' },
             ]}
             onChange={(v) => set('currentGoalsOfCare', v as any)}
           />
@@ -1370,8 +1372,8 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             error={errors.codeStatus?.message}
             options={[
               { value: 'FullResuscitation', label: 'Full Resuscitation' },
-              { value: 'DNAR',              label: 'DNAR/DNR' },
-              { value: 'Other',             label: 'Other / Per Local Policy' },
+              { value: 'DNAR', label: 'DNAR/DNR' },
+              { value: 'Other', label: 'Other / Per Local Policy' },
             ]}
             onChange={(v) => set('codeStatus', v as any)}
           />
@@ -1407,9 +1409,9 @@ const SectionBody: React.FC<SectionBodyProps> = ({
                 value={form.prnEffectiveness ?? ''}
                 error={errors.prnEffectiveness?.message}
                 options={[
-                  { value: 'Effective',          label: 'Effective' },
+                  { value: 'Effective', label: 'Effective' },
                   { value: 'PartiallyEffective', label: 'Partially Effective' },
-                  { value: 'Ineffective',        label: 'Ineffective' },
+                  { value: 'Ineffective', label: 'Ineffective' },
                 ]}
                 onChange={(v) => set('prnEffectiveness', v as any)}
               />
@@ -1421,7 +1423,7 @@ const SectionBody: React.FC<SectionBodyProps> = ({
               error={errors.medicationSideEffects?.message}
               options={[
                 { value: 'None', label: 'None' },
-                { value: 'Yes',  label: 'Yes' },
+                { value: 'Yes', label: 'Yes' },
               ]}
               onChange={(v) => set('medicationSideEffects', v as any)}
             />
@@ -1493,17 +1495,17 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             error={errors.nursingSupportiveCareProvided?.message}
             options={[
               { value: 'PositioningComfortMeasures', label: 'Positioning/Comfort Measures' },
-              { value: 'PersonalHygiene',            label: 'Personal Hygiene' },
-              { value: 'OralCare',                   label: 'Oral Care' },
-              { value: 'PressureInjuryPrevention',   label: 'Pressure-Injury Prevention' },
-              { value: 'WoundCare',                  label: 'Wound Care' },
-              { value: 'OxygenTherapy',              label: 'Oxygen Therapy' },
-              { value: 'SymptomMonitoring',          label: 'Symptom Monitoring' },
-              { value: 'MedicationAdministration',   label: 'Medication Administration' },
-              { value: 'NutritionHydrationSupport',  label: 'Nutrition/Hydration Support' },
-              { value: 'EmotionalSupport',           label: 'Emotional Support' },
-              { value: 'FamilyCaregiverEducation',   label: 'Family/Caregiver Education' },
-              { value: 'Other',                      label: 'Other' },
+              { value: 'PersonalHygiene', label: 'Personal Hygiene' },
+              { value: 'OralCare', label: 'Oral Care' },
+              { value: 'PressureInjuryPrevention', label: 'Pressure-Injury Prevention' },
+              { value: 'WoundCare', label: 'Wound Care' },
+              { value: 'OxygenTherapy', label: 'Oxygen Therapy' },
+              { value: 'SymptomMonitoring', label: 'Symptom Monitoring' },
+              { value: 'MedicationAdministration', label: 'Medication Administration' },
+              { value: 'NutritionHydrationSupport', label: 'Nutrition/Hydration Support' },
+              { value: 'EmotionalSupport', label: 'Emotional Support' },
+              { value: 'FamilyCaregiverEducation', label: 'Family/Caregiver Education' },
+              { value: 'Other', label: 'Other' },
             ]}
             onChange={(v) => set('nursingSupportiveCareProvided', v as any)}
           />
@@ -1528,11 +1530,11 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             values={form.investigationsPerformedReviewed}
             error={errors.investigationsPerformedReviewed?.message}
             options={[
-              { value: 'LaboratoryTests',        label: 'Laboratory Tests' },
-              { value: 'Imaging',                label: 'Imaging' },
+              { value: 'LaboratoryTests', label: 'Laboratory Tests' },
+              { value: 'Imaging', label: 'Imaging' },
               { value: 'ECGOtherDiagnosticTest', label: 'ECG/Other Diagnostic Test' },
-              { value: 'None',                   label: 'None' },
-              { value: 'Other',                  label: 'Other' },
+              { value: 'None', label: 'None' },
+              { value: 'Other', label: 'Other' },
             ]}
             onChange={(v) => set('investigationsPerformedReviewed', v as any)}
           />
