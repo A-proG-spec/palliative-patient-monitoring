@@ -227,7 +227,7 @@ const PatientDetailPage: React.FC = () => {
 
       <PatientDemographics patient={patient} />
 
-      <AssessmentCards patientId={id!} />
+      <AssessmentCards patientId={id!} patientStatus={patient.status} />
 
       <Card padding="none">
         <PatientTabs

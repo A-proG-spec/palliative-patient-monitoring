@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { usePatient } from '@/hooks/usePatients';
@@ -14,6 +14,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
+import { useAuthStore } from '@/store/auth.store';
 
 // ─────────────────────────────────────────────────────────────
 // Small layout helper
@@ -48,6 +49,7 @@ const Grid: React.FC<{ cols?: 2 | 3; children: React.ReactNode }> = ({
 const PainAssessmentFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
   const createMutation = useCreatePainAssessment(id!);
@@ -90,6 +92,10 @@ const PainAssessmentFormPage: React.FC = () => {
 
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
+  const canWrite = user?.role === 'Nurse' || user?.role === 'Physician';
+  if (!canWrite || patient.status === 'Discharged') {
+    return <Navigate to={`/patients/${id}/pain`} replace />;
+  }
 
   const patientLabel = `${patient.firstName} ${patient.lastName} · ${patient.patientDisplayId ?? patient.id}`;
 
