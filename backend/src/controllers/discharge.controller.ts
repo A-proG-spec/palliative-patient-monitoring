@@ -8,7 +8,7 @@ export const createDischargeSummary = asyncHandler(async (req: Request, res: Res
   const result = await dischargeService.createDischargeSummary(
     patientId,
     req.body,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(201, 'Discharge summary saved successfully', result);
 });
@@ -25,7 +25,7 @@ export const finalizeDischargeSummary = asyncHandler(async (req: Request, res: R
   const result = await dischargeService.finalizeDischargeSummary(
     patientId,
     summaryId,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(200, 'Discharge summary finalized', result);
 });

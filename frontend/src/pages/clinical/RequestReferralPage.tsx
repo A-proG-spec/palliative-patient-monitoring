@@ -19,6 +19,8 @@ import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { cn, formatDate } from '@/lib/utils';
 import { REFERRAL_REASON_LABELS, DISEASE_STAGE_LABELS } from '@/constants';
+import { useActingClinician } from '@/hooks/useActingClinician';
+import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 
 // ── Form Section ──────────────────────────────────────────────────
 const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({
@@ -76,6 +78,7 @@ function getPatientDisplayId(patient: {
 const RequestReferralPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const acting = useActingClinician(id!);
   const {
     data: patient,
     isLoading: pLoading,
@@ -209,6 +212,7 @@ const RequestReferralPage: React.FC = () => {
     // not mutating req.body on the backend).
     const safePayload = {
       ...payload,
+      ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}),
       ppsScore: Number(payload.ppsScore),
       kpsScore: Number(payload.kpsScore),
       currentSymptoms: {
@@ -221,7 +225,7 @@ const RequestReferralPage: React.FC = () => {
     };
 
     mutation.mutate(safePayload as CreateReferralFormData, {
-      onSuccess: () => navigate(`/patients/${id}`),
+      onSuccess: () => navigate(acting.patientPath),
     });
   };
 
@@ -253,7 +257,7 @@ const RequestReferralPage: React.FC = () => {
     <div className="max-w-3xl space-y-5">
       {/* ── Header ── */}
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={acting.patientPath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             PALLIATIVE PATIENT REFERRAL FORM
@@ -270,6 +274,7 @@ const RequestReferralPage: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Physician', 'Nurse']} />}
         {/* ── Referral Information ── */}
         <FormSection title="Referral Information">
           <div className="grid sm:grid-cols-2 gap-4">
@@ -592,7 +597,7 @@ const RequestReferralPage: React.FC = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => navigate(`/patients/${id}`)}
+            onClick={() => navigate(acting.patientPath)}
           >
             Cancel
           </Button>

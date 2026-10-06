@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
+import { useActingClinician } from '@/hooks/useActingClinician';
+import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 import { cn } from '@/lib/utils';
 import {
   createImagingSchema,
@@ -61,6 +63,7 @@ const CheckboxGroup: React.FC<{
 const OrderImagingPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const acting = useActingClinician(id!);
   const { data: patient, isLoading: pLoading } = usePatient(id!);
   const orderMutation = useOrderImaging(id!);
 
@@ -181,11 +184,12 @@ const OrderImagingPage: React.FC = () => {
   const onSubmit = (data: CreateImagingFormData) => {
     // Strip empty-string modalityOtherText so backend gets undefined, not ""
     const payload: any = { ...data };
+    if (acting.isAdmin) payload.actingAsStaffId = acting.actingAsStaffId;
     if (!payload.modalityOtherText) delete payload.modalityOtherText;
     if (!payload.bodyRegionOtherText) delete payload.bodyRegionOtherText;
 
     orderMutation.mutate(payload, {
-      onSuccess: () => navigate(`/patients/${id}`),
+      onSuccess: () => navigate(acting.patientPath),
     });
   };
 
@@ -195,7 +199,7 @@ const OrderImagingPage: React.FC = () => {
     <div className="max-w-4xl space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={acting.patientPath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             Clinical Imaging Examination Order Form
@@ -212,6 +216,7 @@ const OrderImagingPage: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Physician', 'Nurse']} />}
         {/* §1 — Patient Information */}
         <FormSection title="1. Patient Information">
           <div className="grid sm:grid-cols-2 gap-4">
@@ -511,7 +516,7 @@ const OrderImagingPage: React.FC = () => {
 
         {/* Submit */}
         <div className="flex gap-3 justify-end pb-8">
-          <Button type="button" variant="outline" onClick={() => navigate(`/patients/${id}`)}>
+          <Button type="button" variant="outline" onClick={() => navigate(acting.patientPath)}>
             Cancel
           </Button>
           <Button type="submit" loading={orderMutation.isPending}>

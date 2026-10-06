@@ -136,7 +136,9 @@ export const ROLE_ASSESSMENTS: Record<string, AssessmentKey[]> = {
 
 export function getAssessmentsForRole(
   role?: StaffRole | string | null,
+  isAdmin = false,
 ): AssessmentDef[] {
+  if (isAdmin) return Object.values(ASSESSMENTS);
   if (!role) return [];
   const keys = ROLE_ASSESSMENTS[role] ?? [];
   return keys.map((k) => ASSESSMENTS[k]);

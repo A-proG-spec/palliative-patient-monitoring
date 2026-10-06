@@ -25,6 +25,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
+import { useActingClinician } from '@/hooks/useActingClinician';
+import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 import { useToast } from '@/context/ToastContext';
 
 // ═════════════════════════════════════════════════════════════
@@ -57,6 +59,7 @@ const MEAL_TYPE_SUGGESTIONS = [
 const NutritionalAssessmentFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const acting = useActingClinician(id!);
   const { toast } = useToast();
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
@@ -104,8 +107,8 @@ const NutritionalAssessmentFormPage: React.FC = () => {
   // Submit
   // ═══════════════════════════════════════════════════════════
   const onSubmit = (data: CreateNutritionalAssessmentFormData) => {
-    createMutation.mutate(data, {
-      onSuccess: () => navigate(`/patients/${id}`),
+    createMutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
+      onSuccess: () => navigate(acting.patientPath),
     });
   };
 
@@ -151,12 +154,13 @@ const NutritionalAssessmentFormPage: React.FC = () => {
     <AssessmentFormShell
       title="Nutritional Assessment"
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
+      backTo={acting.patientPath}
       mode="create"
       isSubmitting={createMutation.isPending}
       onSubmit={handleSubmit(onSubmit, onInvalid)}
-      onCancel={() => navigate(`/patients/${id}`)}
+      onCancel={() => navigate(acting.patientPath)}
     >
+      {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Nutritionist']} />}
       {/* ── 1. Assessment type ── */}
       <Section title="1. Assessment Type">
         <Select

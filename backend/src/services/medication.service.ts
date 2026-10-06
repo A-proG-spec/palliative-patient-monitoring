@@ -1,6 +1,8 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 
 // ─────────────────────────────────────────────────────────────
 // Order medication
@@ -65,10 +67,10 @@ export const getAllMedications = async (
 export const orderMedication = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
@@ -204,11 +206,16 @@ export const updateMedicationStatus = async (
   patientId: string,
   medicationId: string,
   status: 'Ordered' | 'Given',
-  adminId: string | number,
+  actor: Actor,
+  actingAsStaffId?: string | number,
 ) => {
   const pid = toId(patientId, 'patient id');
   const mid = toId(medicationId, 'medication id');
-  const aid = toId(adminId, 'admin id');
+  const staffId = actor.type === 'staff'
+    ? resolveStaffAttribution(actor, actingAsStaffId)
+    : actingAsStaffId !== undefined
+      ? resolveStaffAttribution(actor, actingAsStaffId)
+      : undefined;
 
   if (!['Ordered', 'Given'].includes(status)) {
     throw new ApiError(400, 'Invalid status value');
@@ -222,7 +229,14 @@ export const updateMedicationStatus = async (
 
   const updated = await prisma.medication.update({
     where: { id: mid },
-    data: { status, updatedBy: aid },
+    data: {
+      status,
+      ...(actor.type === 'admin'
+        ? staffId !== undefined
+          ? { updatedByStaffId: staffId }
+          : { updatedBy: actor.id }
+        : { updatedByStaffId: staffId }),
+    },
     include: {
       prescribedByStaff: { select: { id: true, name: true } },
     },
@@ -251,12 +265,12 @@ export const updateMedicationStatus = async (
 export const deleteMedication = async (
   patientId: string,
   medicationId: string,
-  adminId: string | number,
+  actor: Actor,
   reason?: string,
 ) => {
   const pid = toId(patientId, 'patient id');
   const mid = toId(medicationId, 'medication id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const medication = await prisma.medication.findFirst({
     where: { id: mid, patientId: pid },
@@ -289,11 +303,11 @@ export const deleteMedication = async (
 export const restoreMedication = async (
   patientId: string,
   medicationId: string,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const mid = toId(medicationId, 'medication id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const medication = await prisma.medication.findFirst({
     where: { id: mid, patientId: pid },
@@ -431,10 +445,13 @@ export const getMedicationOrderById = async (medicationId: string) => {
 // ─────────────────────────────────────────────────────────────
 export const markMedicationGivenByQueue = async (
   medicationId: string,
-  pharmacistId: string | number,
+  actor: Actor,
+  actingAsStaffId?: string | number,
 ) => {
   const mid = toId(medicationId, 'medication id');
-  const sid = toId(pharmacistId, 'pharmacist id');
+  const sid = actor.type === 'admin' && actingAsStaffId === undefined
+    ? undefined
+    : resolveStaffAttribution(actor, actingAsStaffId);
 
   const existing = await prisma.medication.findUnique({
     where: { id: mid },
@@ -449,8 +466,10 @@ export const markMedicationGivenByQueue = async (
     where: { id: mid },
     data: {
       status: 'Given',
-      updatedByStaffId: sid,   // ← route to the Staff FK
-      // updatedBy stays null — it's for admins
+      ...(actor.type === 'admin' && actingAsStaffId === undefined
+        ? { updatedBy: actor.id }
+        : { updatedByStaffId: sid }),
+      // Admins retain their Admin audit FK unless explicitly acting as Staff.
     },
   });
 

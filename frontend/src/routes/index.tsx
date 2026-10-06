@@ -287,13 +287,20 @@ const AppRoutes: React.FC = () => (
           element={<S><AdminPatientListPage /></S>}
         />
         <Route
-          path="/admin/patients/:patientId"
-          element={<S><AdminPatientDetailPage /></S>}
-        />
-        <Route
           path="/admin/patients/:patientId/discharge"
           element={<S><DischargePatientPage /></S>}
         />
+
+        {/* Admin clinical write routes mirror the staff record forms. */}
+        <Route path="/admin/patients/:id/visits" element={<S><RecordVisitPage /></S>} />
+        <Route path="/admin/patients/:id/medications" element={<S><OrderMedicationPage /></S>} />
+        <Route path="/admin/patients/:id/labs" element={<S><OrderLabPage /></S>} />
+        <Route path="/admin/patients/:id/imaging" element={<S><OrderImagingPage /></S>} />
+        <Route path="/admin/patients/:id/referrals" element={<S><RequestReferralPage /></S>} />
+        <Route path="/admin/patients/:id/admissions" element={<S><RecordAdmissionPage /></S>} />
+        <Route path="/admin/patients/:id/progress-note/new" element={<S><RecordProgressNotePage /></S>} />
+        <Route path="/admin/patients/:id/progress-note/:noteId/edit" element={<S><RecordProgressNotePage /></S>} />
+        <Route path="/admin/patients/:id/hospice-nursing" element={<S><HospiceNursingPage /></S>} />
 
         {/* ── Admin sub-record detail routes ── */}
         <Route
@@ -335,6 +342,12 @@ const AppRoutes: React.FC = () => (
 
         {/* ── Admin assessment routes (mirror of the staff ones) ── */}
         {buildAssessmentRoutes('/admin/patients')}
+
+        {/* Generic patient detail must follow all /:id/* routes. */}
+        <Route
+          path="/admin/patients/:patientId"
+          element={<S><AdminPatientDetailPage /></S>}
+        />
 
         <Route path="/admin/staff" element={<S><StaffManagementPage /></S>} />
         <Route

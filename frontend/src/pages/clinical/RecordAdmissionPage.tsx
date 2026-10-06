@@ -20,6 +20,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { cn, formatDate } from '@/lib/utils';
+import { useActingClinician } from '@/hooks/useActingClinician';
+import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 
 // ── Layout helper ─────────────────────────────────────────────────
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({
@@ -82,6 +84,7 @@ const SYMPTOM_OPTIONS = [
 const RecordAdmissionPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const acting = useActingClinician(id!);
 
   const { data: patient, isLoading: pLoading } = usePatient(id!);
   const { data: refData } = usePatientReferrals(id!, { status: 'Accepted' });
@@ -177,6 +180,7 @@ const RecordAdmissionPage: React.FC = () => {
   }, [selectedReferralId, acceptedReferrals, setValue]);
 
   const onSubmit = (data: CreateAdmissionFormData) => {
+    if (acting.isAdmin && !acting.actingAsStaffId) return;
     // Strip empty optional fields
     const cleaned: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(data)) {
@@ -185,8 +189,8 @@ const RecordAdmissionPage: React.FC = () => {
       cleaned[k] = v;
     }
 
-    mutation.mutate(cleaned as CreateAdmissionFormData, {
-      onSuccess: () => navigate(`/patients/${id}`),
+    mutation.mutate({ ...cleaned, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as CreateAdmissionFormData, {
+      onSuccess: () => navigate(acting.patientPath),
     });
   };
 
@@ -196,7 +200,7 @@ const RecordAdmissionPage: React.FC = () => {
     <div className="max-w-3xl space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={acting.patientPath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             PATIENT ADMISSION FORM
@@ -220,6 +224,7 @@ const RecordAdmissionPage: React.FC = () => {
         className="space-y-4"
         noValidate
       >
+        {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Physician', 'Nurse']} />}
         {/* ═══════════════════════════════════════════════════════════
             Section 1: Patient Identification
         ═══════════════════════════════════════════════════════════ */}

@@ -13,6 +13,7 @@ const symptomSeverity = z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).defau
 
 export const createDischargeSummarySchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // Relationships
     admissionId: z.string().optional(),
 

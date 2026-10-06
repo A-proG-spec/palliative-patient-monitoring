@@ -1,6 +1,8 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 
 
 const patientDisplayId = (p: {
@@ -11,8 +13,8 @@ const patientDisplayId = (p: {
 // ─────────────────────────────────────────────────────────────
 // Register patient
 // ─────────────────────────────────────────────────────────────
-export const registerPatient = async (data: any, staffId: string | number) => {
-  const registeredById = toId(staffId, 'staff id');
+export const registerPatient = async (data: any, actor: Actor) => {
+  const registeredById = resolveStaffAttribution(actor, data.actingAsStaffId);
 
   const staff = await prisma.staff.findUnique({
     where: { id: registeredById },
@@ -159,10 +161,9 @@ export const getPatientById = async (patientId: string) => {
 export const updatePatient = async (
   patientId: string,
   data: any,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const id = toId(patientId, 'patient id');
-  const admin = toId(adminId, 'admin id');
 
   const existing = await prisma.patient.findUnique({
     where: { id },
@@ -184,7 +185,7 @@ export const updatePatient = async (
       updateData[key] = key === 'dateOfBirth' ? new Date(data[key]) : data[key];
     }
   }
-  updateData.updatedBy = admin;
+  if (actor.type === 'admin') updateData.updatedBy = actor.id;
 
   return prisma.patient.update({
     where: { id },

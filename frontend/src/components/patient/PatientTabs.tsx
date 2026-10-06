@@ -16,6 +16,7 @@ interface PatientTabsProps {
   activeTab: PatientTab;
   counts: Record<PatientTab, number>;
   onTabChange: (tab: PatientTab) => void;
+  isAdmin?: boolean;
 }
 
 export const PatientTabs: React.FC<PatientTabsProps> = ({
@@ -23,8 +24,9 @@ export const PatientTabs: React.FC<PatientTabsProps> = ({
   activeTab,
   counts,
   onTabChange,
+  isAdmin = false,
 }) => (
-  <div className="flex border-b border-border-base overflow-x-auto">
+  <div className="flex border-b border-border-base overflow-x-auto" data-admin-view={isAdmin || undefined}>
     {tabs.map((tab) => (
       <button
         key={tab}

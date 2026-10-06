@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useOrderMedication } from '@/hooks/useMedications';
 import { usePatient } from '@/hooks/usePatients';
+import { useActingClinician } from '@/hooks/useActingClinician';
+import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -18,6 +20,7 @@ import {
 const OrderMedicationPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const acting = useActingClinician(id!);
   const { data: patient, isLoading: pLoading } = usePatient(id!);
   const mutation = useOrderMedication(id!);
 
@@ -34,8 +37,8 @@ const OrderMedicationPage: React.FC = () => {
   });
 
   const onSubmit = (data: CreateMedicationFormData) => {
-    mutation.mutate(data, {
-      onSuccess: () => navigate(`/patients/${id}`),
+    mutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
+      onSuccess: () => navigate(acting.patientPath),
     });
   };
 
@@ -44,7 +47,7 @@ const OrderMedicationPage: React.FC = () => {
   return (
     <div className="max-w-xl space-y-5">
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={acting.patientPath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             Order Medication
@@ -68,6 +71,7 @@ const OrderMedicationPage: React.FC = () => {
             className="space-y-4"
             noValidate
           >
+            {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Physician', 'Nurse']} />}
             <Input
               label="Medication Name *"
               placeholder="e.g. Morphine"
@@ -105,7 +109,7 @@ const OrderMedicationPage: React.FC = () => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => navigate(`/patients/${id}`)}
+                onClick={() => navigate(acting.patientPath)}
               >
                 Cancel
               </Button>

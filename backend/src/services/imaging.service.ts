@@ -1,6 +1,8 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 // ─────────────────────────────────────────────────────────────
 // GET ALL imaging orders for a patient
 // ─────────────────────────────────────────────────────────────
@@ -74,10 +76,10 @@ export const getAllImagingOrders = async (
 export const orderImaging = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({
@@ -93,12 +95,14 @@ export const orderImaging = async (
   if (!patient) throw new ApiError(404, 'Patient not found');
   if (!staff) throw new ApiError(404, 'Staff member not found');
 
+  const { actingAsStaffId: _actingAsStaffId, ...orderData } = data;
+
   const order = await prisma.imagingOrder.create({
     data: {
       patientId: pid,
       patientName: `${patient.firstName} ${patient.lastName}`,
       medicalRecordNo: patient.hospitalPatientId,
-      ...data,
+      ...orderData,
       orderedBy: sid,
       status: 'Ordered',
     },
@@ -295,11 +299,10 @@ export const updateImagingReport = async (
   patientId: string,
   imagingId: string,
   reportData: any,
-  adminId: string | number,
+  _actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const oid = toId(imagingId, 'imaging id');
-  const aid = toId(adminId, 'admin id');
 
   const existing = await prisma.imagingOrder.findFirst({
     where: { id: oid, patientId: pid },
@@ -338,11 +341,10 @@ export const recordImagingPerformed = async (
   patientId: string,
   imagingId: string,
   departmentData: any,
-  adminId: string | number,
+  _actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const oid = toId(imagingId, 'imaging id');
-  const aid = toId(adminId, 'admin id');
 
   const existing = await prisma.imagingOrder.findFirst({
     where: { id: oid, patientId: pid },
@@ -381,11 +383,10 @@ export const updateImagingStatus = async (
   patientId: string,
   imagingId: string,
   status: 'Ordered' | 'Completed' | 'Cancelled',
-  adminId: string | number,
+  _actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const oid = toId(imagingId, 'imaging id');
-  const aid = toId(adminId, 'admin id');
 
   const existing = await prisma.imagingOrder.findFirst({
     where: { id: oid, patientId: pid },
@@ -411,12 +412,12 @@ export const updateImagingStatus = async (
 export const deleteImagingOrder = async (
   patientId: string,
   imagingId: string,
-  adminId: string | number,
+  actor: Actor,
   reason?: string,
 ) => {
   const pid = toId(patientId, 'patient id');
   const oid = toId(imagingId, 'imaging id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const order = await prisma.imagingOrder.findFirst({
     where: { id: oid, patientId: pid },
@@ -446,11 +447,11 @@ export const deleteImagingOrder = async (
 export const restoreImagingOrder = async (
   patientId: string,
   imagingId: string,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const oid = toId(imagingId, 'imaging id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const order = await prisma.imagingOrder.findFirst({
     where: { id: oid, patientId: pid },
@@ -597,10 +598,9 @@ export const getImagingOrderDetailForQueue = async (imagingId: string) => {
 export const submitImagingReportFromQueue = async (
   imagingId: string,
   data: { findings: string; impression: string; recommendation?: string },
-  staffId: string | number,
+  _actor: Actor,
 ) => {
   const oid = toId(imagingId, 'imaging id');
-  const sid = toId(staffId, 'staff id');
 
   const order = await prisma.imagingOrder.findUnique({ where: { id: oid } });
   if (!order) throw new ApiError(404, 'Imaging order not found');

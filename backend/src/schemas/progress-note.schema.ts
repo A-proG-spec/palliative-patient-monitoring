@@ -23,6 +23,7 @@ const mdtReviewRowSchema = z.object({
 
 export const createProgressNoteSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // Relationships
     admissionId: z.string().optional(),
 
@@ -195,7 +196,9 @@ export const createProgressNoteSchema = z.object({
 });
 
 export const updateProgressNoteSchema = z.object({
-  body: createProgressNoteSchema.shape.body.partial(),
+  body: createProgressNoteSchema.shape.body.partial().extend({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
+  }),
 });
 
 export const signProgressNoteSchema = z.object({

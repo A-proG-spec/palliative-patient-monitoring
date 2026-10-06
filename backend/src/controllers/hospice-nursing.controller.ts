@@ -12,7 +12,7 @@ export const createHospiceNursingAssessment = asyncHandler(
         const result = await hospiceService.createHospiceNursingAssessment(
             patientId,
             req.body,
-            req.user.id,
+            req.actor,
         );
         return SuccessResponse(201, 'Hospice nursing assessment saved', result);
     },
@@ -53,20 +53,20 @@ export const getHospiceNursingAssessmentById = asyncHandler(
 );
 
 export const getAllHospiceNursingAssessments = asyncHandler(
-  async (req: Request, res: Response) => {
-    const patientId = req.params.patientId as string;
-    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
-    const includeDeleted = req.query.includeDeleted === 'true';
+    async (req: Request, res: Response) => {
+        const patientId = req.params.patientId as string;
+        const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+        const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+        const includeDeleted = req.query.includeDeleted === 'true';
 
-    const result = await hospiceService.getAllHospiceNursingAssessments(
-      patientId,
-      page,
-      limit,
-      includeDeleted,
-    );
-    return SuccessResponse(200, 'OK', result);
-  },
+        const result = await hospiceService.getAllHospiceNursingAssessments(
+            patientId,
+            page,
+            limit,
+            includeDeleted,
+        );
+        return SuccessResponse(200, 'OK', result);
+    },
 );
 // ═════════════════════════════════════════════════════════════
 // UPDATE — admin only (whitelisted fields)
@@ -80,7 +80,7 @@ export const updateHospiceNursingAssessment = asyncHandler(
             patientId,
             assessmentId,
             req.body,
-            req.user.id,
+            req.actor,
         );
         return SuccessResponse(200, 'Hospice nursing assessment updated', result);
     },
@@ -98,7 +98,7 @@ export const deleteHospiceNursingAssessment = asyncHandler(
         const result = await hospiceService.deleteHospiceNursingAssessment(
             patientId,
             assessmentId,
-            req.user.id,
+            req.actor,
             reason,
         );
         return SuccessResponse(200, 'Hospice nursing assessment deleted', result);
@@ -116,7 +116,7 @@ export const restoreHospiceNursingAssessment = asyncHandler(
         const result = await hospiceService.restoreHospiceNursingAssessment(
             patientId,
             assessmentId,
-            req.user.id,
+            req.actor,
         );
         return SuccessResponse(200, 'Hospice nursing assessment restored', result);
     },

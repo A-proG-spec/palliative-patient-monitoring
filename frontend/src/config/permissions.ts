@@ -92,9 +92,12 @@ const PERMISSIONS: Record<string, StaffRole[]> = {
  * Check if a role has a specific permission.
  */
 export function hasPermission(
-  role: StaffRole | string,
+  role: StaffRole | string | null | undefined,
   permission: string,
+  isAdmin = false,
 ): boolean {
+  if (isAdmin) return true;
+  if (!role) return false;
   const allowed = PERMISSIONS[permission];
   if (!allowed) return false;
   return allowed.includes(role as StaffRole);
@@ -213,7 +216,8 @@ export function getSidebarItems(
  * (visits, medications, labs, imaging, referrals, admissions,
  * or hospice nursing assessments).
  */
-export function canAddAnyRecord(role: StaffRole | string): boolean {
+export function canAddAnyRecord(role: StaffRole | string, isAdmin = false): boolean {
+  if (isAdmin) return true;
   return (
     hasPermission(role, 'canRecordVisit') ||
     hasPermission(role, 'canOrderMedication') ||

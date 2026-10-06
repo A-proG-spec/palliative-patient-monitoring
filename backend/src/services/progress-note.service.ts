@@ -2,6 +2,8 @@ import bcrypt from 'bcrypt';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
@@ -35,10 +37,10 @@ const isAllSigned = (signatures: any[]): boolean => {
 export const createProgressNote = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
@@ -495,6 +497,7 @@ export const signProgressNote = async (
   patientId: string,
   noteId: string,
   data: { email: string; password: string; role: 'Physician' | 'Nurse' },
+  _actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const nid = toId(noteId, 'note id');
@@ -597,23 +600,30 @@ export const updateProgressNote = async (
   patientId: string,
   noteId: string,
   data: any,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const nid = toId(noteId, 'note id');
-  const aid = toId(adminId, 'admin id');
+  const aid = actor.id;
 
   const note = await prisma.patientProgressNote.findFirst({
     where: { id: nid, patientId: pid },
   });
   if (!note) throw new ApiError(404, 'Progress note not found');
 
-  if (note.createdBy !== aid) {
+  if (actor.type !== 'admin' && note.createdBy !== aid) {
     throw new ApiError(403, 'You can only edit progress notes you created');
   }
 
   // Strip fields that cannot be updated via this endpoint
-  const blocked = ['signatures', 'responsibleClinicianId', 'createdBy', 'patientId', 'id'];
+  const blocked = [
+    'signatures',
+    'responsibleClinicianId',
+    'createdBy',
+    'patientId',
+    'id',
+    'actingAsStaffId',
+  ];
   const cleanData = { ...data };
   for (const key of blocked) delete cleanData[key];
 
@@ -636,12 +646,12 @@ export const updateProgressNote = async (
 export const deleteProgressNote = async (
   patientId: string,
   noteId: string,
-  adminId: string | number,
+  actor: Actor,
   reason?: string,
 ) => {
   const pid = toId(patientId, 'patient id');
   const nid = toId(noteId, 'note id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const note = await prisma.patientProgressNote.findFirst({
     where: { id: nid, patientId: pid },
@@ -668,11 +678,11 @@ export const deleteProgressNote = async (
 export const restoreProgressNote = async (
   patientId: string,
   noteId: string,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const nid = toId(noteId, 'note id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const note = await prisma.patientProgressNote.findFirst({
     where: { id: nid, patientId: pid },

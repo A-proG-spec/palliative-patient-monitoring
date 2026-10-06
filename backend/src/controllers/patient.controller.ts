@@ -4,7 +4,7 @@ import { SuccessResponse } from '@utils/ApiResponse.js';
 import * as patientService from '@services/patient.service.js';
 
 export const registerPatient = asyncHandler(async (req: Request, res: Response) => {
-  const result = await patientService.registerPatient(req.body, req.user.id);
+  const result = await patientService.registerPatient(req.body, req.actor);
   return SuccessResponse(201, 'Patient registered successfully', result);
 });
 
@@ -29,7 +29,7 @@ export const getPatientById = asyncHandler(async (req: Request, res: Response) =
 // ── Update patient (admin only) ──
 export const updatePatient = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
-  const result = await patientService.updatePatient(patientId, req.body, req.user.id);
+  const result = await patientService.updatePatient(patientId, req.body, req.actor);
   return SuccessResponse(200, 'Patient updated successfully', result);
 });
 

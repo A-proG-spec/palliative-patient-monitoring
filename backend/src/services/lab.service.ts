@@ -1,6 +1,8 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 
 const VALID_STATUSES = ['Ordered', 'Completed', 'Cancelled'] as const;
 const VALID_PRIORITIES = ['Routine', 'Urgent', 'Emergency'] as const;
@@ -138,10 +140,10 @@ export const getAllLabTests = async (
 export const orderLabTest = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({
@@ -329,11 +331,10 @@ export const updateLabResult = async (
   patientId: string,
   labId: string,
   data: any,
-  staffId: string | number,
+  _actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const lid = toId(labId, 'lab id');
-  const sid = toId(staffId, 'staff id');
 
   const labTest = await prisma.laboratoryTest.findFirst({
     where: { id: lid, patientId: pid },
@@ -367,6 +368,7 @@ export const updateLabResult = async (
   delete labResultFields.performedBy;
   delete labResultFields.receivedDate;
   delete labResultFields.receivedTime;
+  delete labResultFields.actingAsStaffId;
 
   // Coerce date strings on LabResult
   for (const key of ['collectedAt', 'reportedAt', 'verifiedAt']) {
@@ -413,11 +415,10 @@ export const updateLabResult = async (
 export const cancelLabTest = async (
   patientId: string,
   labId: string,
-  staffId: string|number,
+  _actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const lid = toId(labId, 'lab id');
-  const sid = toId(staffId, 'staff id');
 
   const labTest = await prisma.laboratoryTest.findFirst({
     where: { id: lid, patientId: pid },
@@ -456,12 +457,12 @@ export const cancelLabTest = async (
 export const deleteLabTest = async (
   patientId: string,
   labId: string,
-  adminId: string|number,
+  actor: Actor,
   reason?: string,
 ) => {
   const pid = toId(patientId, 'patient id');
   const lid = toId(labId, 'lab id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const labTest = await prisma.laboratoryTest.findFirst({
     where: { id: lid, patientId: pid },
@@ -491,11 +492,11 @@ export const deleteLabTest = async (
 export const restoreLabTest = async (
   patientId: string,
   labId: string,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const lid = toId(labId, 'lab id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const labTest = await prisma.laboratoryTest.findFirst({
     where: { id: lid, patientId: pid },
@@ -625,10 +626,9 @@ export const getLabRequestById = async (labId: string) => {
 export const enterLabResultFromQueue = async (
   labId: string,
   data: { result: string; datePerformed?: string; performedBy?: string },
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const lid = toId(labId, 'lab id');
-  const sid = toId(staffId, 'staff id');
 
   const lab = await prisma.laboratoryTest.findUnique({ where: { id: lid } });
   if (!lab) throw new ApiError(404, 'Lab request not found');
@@ -642,7 +642,7 @@ export const enterLabResultFromQueue = async (
       status: 'Completed',
       result: data.result,
       datePerformed: data.datePerformed ? new Date(data.datePerformed) : new Date(),
-      performedBy: data.performedBy ?? null,
+      performedBy: data.performedBy ?? (actor.type === 'staff' ? undefined : null),
     },
   });
 

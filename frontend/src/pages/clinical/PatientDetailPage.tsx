@@ -65,6 +65,7 @@ const PatientDetailPage: React.FC = () => {
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
 
   const userRole = (user?.role ?? '') as StaffRole;
+  const isAdmin = user?.type === 'admin';
 
   // ── Data fetching ──
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
@@ -209,7 +210,7 @@ const PatientDetailPage: React.FC = () => {
 
   const isAddRecordDisabled = patient.status === 'Discharged';
   const showAddRecordButton =
-    canAddAnyRecord(userRole) && !isAddRecordDisabled;
+    canAddAnyRecord(userRole, isAdmin) && !isAddRecordDisabled;
   const showDischargeButton =
     canDischarge(user) && patient.status === 'Active';
 
@@ -227,7 +228,7 @@ const PatientDetailPage: React.FC = () => {
 
       <PatientDemographics patient={patient} />
 
-      <AssessmentCards patientId={id!} patientStatus={patient.status} />
+      <AssessmentCards patientId={id!} patientStatus={patient.status} isAdmin={isAdmin} />
 
       <Card padding="none">
         <PatientTabs
@@ -235,6 +236,7 @@ const PatientDetailPage: React.FC = () => {
           activeTab={activeTab}
           counts={tabCounts}
           onTabChange={setActiveTab}
+          isAdmin={isAdmin}
         />
 
         <div className="p-5">
@@ -282,6 +284,7 @@ const PatientDetailPage: React.FC = () => {
           patientName={`${patient.firstName} ${patient.lastName}`}
           currentLocation={patient.currentLocation}
           userRole={userRole}
+          isAdmin={isAdmin}
           onClose={() => setShowAddRecord(false)}
           onSelect={handleAddRecord}
         />

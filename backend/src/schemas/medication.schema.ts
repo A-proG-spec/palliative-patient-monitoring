@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const createMedicationSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     name: z.string().min(1, 'Medication name is required'),
     dosage: z.string().min(1, 'Dosage is required'),
     frequency: z.string().min(1, 'Frequency is required'),
@@ -12,6 +13,7 @@ export const createMedicationSchema = z.object({
 
 export const updateMedicationStatusSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     status: z.enum(['Ordered', 'Given']),
   }),
 });

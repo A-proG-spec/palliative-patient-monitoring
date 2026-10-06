@@ -1,22 +1,28 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 // ─────────────────────────────────────────────────────────────
 // Create discharge summary — finalizes discharge workflow
 // ─────────────────────────────────────────────────────────────
 export const createDischargeSummary = async (
   patientId: string,
   data: any,
-  staffId: string|number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
-  const patient = await prisma.patient.findUnique({
-    where: { id: pid },
-    select: { id: true, firstName: true, lastName: true },
-  });
+  const [patient, staff] = await Promise.all([
+    prisma.patient.findUnique({
+      where: { id: pid },
+      select: { id: true, firstName: true, lastName: true },
+    }),
+    prisma.staff.findUnique({ where: { id: sid }, select: { id: true } }),
+  ]);
   if (!patient) throw new ApiError(404, 'Patient not found');
+  if (!staff) throw new ApiError(404, 'Staff member not found');
 
   const admissionId = data.admissionId
     ? toId(data.admissionId, 'admission id')
@@ -324,11 +330,11 @@ export const updateDischargeSummary = async (
 export const finalizeDischargeSummary = async (
   patientId: string,
   summaryId: string,
-  adminId: string|number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const sid = toId(summaryId, 'summary id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const summary = await prisma.dischargeSummary.findFirst({
     where: { id: sid, patientId: pid },
@@ -341,7 +347,7 @@ export const finalizeDischargeSummary = async (
 
   const updated = await prisma.dischargeSummary.update({
     where: { id: sid },
-    data: { status: 'Final', updatedBy: aid },
+    data: { status: 'Final', ...(actor.type === 'admin' ? { updatedBy: aid } : {}) },
   });
 
   return { id: updated.id, status: updated.status };

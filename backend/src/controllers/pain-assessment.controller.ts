@@ -12,7 +12,7 @@ export const createPainAssessment = asyncHandler(
     const result = await painService.createPainAssessment(
       patientId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(201, 'Pain assessment saved', result);
   },
@@ -84,7 +84,7 @@ export const updatePainAssessment = asyncHandler(
       patientId,
       assessmentId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Pain assessment updated', result);
   },
@@ -102,7 +102,7 @@ export const deletePainAssessment = asyncHandler(
     const result = await painService.deletePainAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
       reason,
     );
     return SuccessResponse(200, 'Pain assessment deleted', result);
@@ -120,7 +120,7 @@ export const restorePainAssessment = asyncHandler(
     const result = await painService.restorePainAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Pain assessment restored', result);
   },

@@ -1,6 +1,8 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 // ─────────────────────────────────────────────────────────────
 // Safety constants — high risk levels that require a documented
 // reason when deleting, and that trigger a notification on create.
@@ -15,13 +17,13 @@ const toPsychiatryAssessmentDto = (a: any) => ({
   patientId: a.patientId,
   patient: a.patient
     ? {
-        id: a.patient.id,
-        firstName: a.patient.firstName,
-        lastName: a.patient.lastName,
-        age: a.patient.age,
-        sex: a.patient.sex,
-        hospitalPatientId: a.patient.hospitalPatientId,
-      }
+      id: a.patient.id,
+      firstName: a.patient.firstName,
+      lastName: a.patient.lastName,
+      age: a.patient.age,
+      sex: a.patient.sex,
+      hospitalPatientId: a.patient.hospitalPatientId,
+    }
     : null,
 
   assessmentType: a.assessmentType,
@@ -139,10 +141,10 @@ const assertSafeToDelete = (
 export const createPsychiatryAssessment = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({
@@ -346,11 +348,11 @@ export const updatePsychiatryAssessment = async (
   patientId: string,
   assessmentId: string,
   data: any,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const aid = toId(assessmentId, 'assessment id');
-  const adm = toId(adminId, 'admin id');
+  const adm = toId(actor.id, 'admin id');
 
   const existing = await prisma.psychiatryAssessment.findFirst({
     where: { id: aid, patientId: pid },
@@ -385,12 +387,12 @@ export const updatePsychiatryAssessment = async (
 export const deletePsychiatryAssessment = async (
   patientId: string,
   assessmentId: string,
-  adminId: string | number,
+  actor: Actor,
   reason?: string,
 ) => {
   const pid = toId(patientId, 'patient id');
   const aid = toId(assessmentId, 'assessment id');
-  const adm = toId(adminId, 'admin id');
+  const adm = toId(actor.id, 'admin id');
 
   const existing = await prisma.psychiatryAssessment.findFirst({
     where: { id: aid, patientId: pid },
@@ -427,11 +429,11 @@ export const deletePsychiatryAssessment = async (
 export const restorePsychiatryAssessment = async (
   patientId: string,
   assessmentId: string,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const aid = toId(assessmentId, 'assessment id');
-  const adm = toId(adminId, 'admin id');
+  const adm = toId(actor.id, 'admin id');
 
   const existing = await prismaBase.psychiatryAssessment.findFirst({
     where: { id: aid, patientId: pid },

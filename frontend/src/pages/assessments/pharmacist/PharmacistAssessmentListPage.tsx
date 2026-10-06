@@ -7,12 +7,15 @@ import { AssessmentListShell } from '@/components/assessments/AssessmentListShel
 import { AssessmentListRow } from '@/components/assessments/AssessmentListRow';
 import { Badge } from '@/components/ui/Badge';
 import { useAuthStore } from '@/store/auth.store';
+import { patientPath } from '@/lib/clinicalPaths';
 
 const PharmacistAssessmentListPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const isOwner = user?.role === 'Pharmacist';
+  const isAdmin = user?.type === 'admin';
+  const basePath = patientPath(isAdmin, id!);
+  const isOwner = isAdmin || user?.role === 'Pharmacist';
 
   const { data: patient, isLoading: pLoading } = usePatient(id!);
   const { data, isLoading, error, refetch } = usePatientPharmacistAssessments(id!);
@@ -21,25 +24,26 @@ const PharmacistAssessmentListPage: React.FC = () => {
   const patientLabel = patient
     ? `${patient.firstName} ${patient.lastName} · ${patient.patientDisplayId ?? patient.id}`
     : '—';
+  const canCreate = isOwner && patient?.status === 'Active';
 
   return (
     <AssessmentListShell
       title="Pharmacist Assessments"
       subtitle={`${data?.total ?? 0} recorded`}
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
-      onAddClick={() => navigate(`/patients/${id}/pharmacist-assessment/new`)}
+      backTo={basePath}
+      onAddClick={() => navigate(`${basePath}/pharmacist-assessment/new`)}
       isLoading={isLoading || pLoading}
       isError={!!error}
       onRetry={refetch}
       isEmpty={assessments.length === 0}
       emptyMessage="Record the first pharmacist assessment for this patient."
-      canCreate={isOwner}
+      canCreate={canCreate}
     >
       {assessments.map((a) => (
         <AssessmentListRow
           key={a.id}
-          onClick={() => navigate(`/patients/${id}/pharmacist-assessment/${a.id}`)}
+          onClick={() => navigate(`${basePath}/pharmacist-assessment/${a.id}`)}
           icon={<Pill size={18} className="text-green-600" />}
           iconBgClass="bg-green-50"
           date={a.createdAt}

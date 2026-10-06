@@ -39,9 +39,15 @@ export interface User {
   createdAt?: Date;
 }
 
+export interface Actor {
+  id: number;
+  type: 'staff' | 'admin';
+}
+
 export interface AuthenticatedRequest extends Request {
   user: User;
   token: string;
+  actor: Actor;
 }
 
 // ============================================

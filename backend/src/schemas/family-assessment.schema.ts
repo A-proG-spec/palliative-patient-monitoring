@@ -244,6 +244,7 @@ const utilitiesAccessSchema = z
 
 export const createFamilyAssessmentSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // ── Header ──
     assessmentType: z.enum(FAMILY_ASSESSMENT_TYPE_VALUES),
 

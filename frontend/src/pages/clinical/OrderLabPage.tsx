@@ -14,6 +14,8 @@ import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/context/ToastContext';
+import { useActingClinician } from '@/hooks/useActingClinician';
+import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 import {
   createLabSchema,
   type CreateLabFormData,
@@ -41,6 +43,7 @@ const OrderLabPage: React.FC = () => {
   const orderMutation = useOrderLab(id!);
   const { toast } = useToast();
   const user = useAuthStore((s) => s.user);
+  const acting = useActingClinician(id!);
 
   const {
     register,
@@ -168,6 +171,7 @@ const OrderLabPage: React.FC = () => {
 
     const payload = {
       ...data,
+      ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}),
       location: derivedLocation,
       wardClinic:
         data.wardClinic?.trim() ||
@@ -192,7 +196,7 @@ const OrderLabPage: React.FC = () => {
         toast.success(
           'Lab test ordered successfully. You can record the result from the test detail page.',
         );
-        navigate(`/patients/${id}`);
+        navigate(acting.patientPath);
       },
     });
   };
@@ -203,7 +207,7 @@ const OrderLabPage: React.FC = () => {
     <div className="max-w-3xl space-y-5">
       {/* ── Header ── */}
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={acting.patientPath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             CLINICAL LABORATORY ORDER FORM
@@ -221,6 +225,7 @@ const OrderLabPage: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Physician', 'Nurse']} />}
         {/* ── 1. Patient Information (Auto-filled) ── */}
         <FormSection title="1. Patient Information">
           <div className="grid sm:grid-cols-2 gap-4">
@@ -404,7 +409,7 @@ const OrderLabPage: React.FC = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => navigate(`/patients/${id}`)}
+            onClick={() => navigate(acting.patientPath)}
           >
             Cancel
           </Button>

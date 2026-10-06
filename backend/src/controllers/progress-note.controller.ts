@@ -5,7 +5,7 @@ import * as progressNoteService from '@services/progress-note.service.js';
 
 export const createProgressNote = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
-  const result = await progressNoteService.createProgressNote(patientId, req.body, req.user.id);
+  const result = await progressNoteService.createProgressNote(patientId, req.body, req.actor);
   return SuccessResponse(201, 'Progress note saved successfully', result);
 });
 
@@ -48,7 +48,7 @@ export const getProgressNoteById = asyncHandler(async (req: Request, res: Respon
 export const signProgressNote = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const noteId = req.params.noteId as string;
-  const result = await progressNoteService.signProgressNote(patientId, noteId, req.body);
+  const result = await progressNoteService.signProgressNote(patientId, noteId, req.body, req.actor);
   return SuccessResponse(200, 'Progress note signed successfully', result);
 });
 
@@ -66,7 +66,7 @@ export const updateProgressNote = asyncHandler(async (req: Request, res: Respons
     patientId,
     noteId,
     req.body,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(200, 'Progress note updated successfully', result);
 });
@@ -79,7 +79,7 @@ export const deleteProgressNote = asyncHandler(async (req: Request, res: Respons
   const result = await progressNoteService.deleteProgressNote(
     patientId,
     noteId,
-    req.user.id,
+    req.actor,
     reason,
   );
   return SuccessResponse(200, 'Progress note deleted', result);
@@ -92,7 +92,7 @@ export const restoreProgressNote = asyncHandler(async (req: Request, res: Respon
   const result = await progressNoteService.restoreProgressNote(
     patientId,
     noteId,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(200, 'Progress note restored', result);
 });

@@ -23,6 +23,8 @@ import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { EmptyState, ErrorState } from '@/components/common/EmptyState';
 import { formatDate } from '@/lib/utils';
+import { useActingClinician } from '@/hooks/useActingClinician';
+import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 
 // ═════════════════════════════════════════════════════════════
 // Small reusable layout pieces
@@ -198,6 +200,7 @@ const HospiceNursingPage: React.FC = () => {
   const { data, isLoading, error, refetch } = usePatientHospiceAssessments(id!);
   const createMutation = useCreateHospiceAssessment(id!);
   const user = useAuthStore((s) => s.user);
+  const acting = useActingClinician(id!);
 
   const {
     register,
@@ -222,6 +225,7 @@ const HospiceNursingPage: React.FC = () => {
   });
 
   const onSubmit = (formData: CreateHospiceNursingFormData) => {
+    if (acting.isAdmin && !acting.actingAsStaffId) return;
     // Strip empty strings, undefined, null, and empty arrays before
     // sending. Keeps the payload clean and avoids backend "empty
     // string where enum expected" issues.
@@ -232,7 +236,7 @@ const HospiceNursingPage: React.FC = () => {
       cleaned[k] = v;
     }
 
-    createMutation.mutate(cleaned as any, {
+    createMutation.mutate({ ...cleaned, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
       onSuccess: () => {
         reset();
         setMode('list');
@@ -251,7 +255,7 @@ const HospiceNursingPage: React.FC = () => {
       {/* ── Header ── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <BackButton to={`/patients/${id}`} label="Patient" />
+          <BackButton to={acting.patientPath} label="Patient" />
           <div>
             <h1 className="text-xl font-bold text-on-surface">
               Hospice Nursing Assessments

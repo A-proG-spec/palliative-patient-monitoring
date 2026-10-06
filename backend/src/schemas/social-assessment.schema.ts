@@ -258,6 +258,7 @@ const utilitiesAccessSchema = z
 
 export const createSocialAssessmentSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // ── Header ──
     assessmentType: z.enum(SOCIAL_ASSESSMENT_TYPE_VALUES),
 

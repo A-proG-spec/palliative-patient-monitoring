@@ -114,20 +114,20 @@ export const getReports = asyncHandler(async (req: Request, res: Response) => {
 
 export const updateVisit = asyncHandler(async (req: Request, res: Response) => {
   const visitId = req.params.visitId as string;
-  const result = await visitService.updateVisit(visitId, req.body, req.user.id);
+  const result = await visitService.updateVisit(visitId, req.body, req.actor);
   return SuccessResponse(200, 'Visit updated successfully', result);
 });
 
 export const deleteVisit = asyncHandler(async (req: Request, res: Response) => {
   const visitId = req.params.visitId as string;
   const { reason } = req.body;
-  const result = await visitService.deleteVisit(visitId, req.user.id, reason);
+  const result = await visitService.deleteVisit(visitId, req.actor, reason);
   return SuccessResponse(200, 'Visit deleted', result);
 });
 
 export const restoreVisit = asyncHandler(async (req: Request, res: Response) => {
   const visitId = req.params.visitId as string;
-  const result = await visitService.restoreVisit(visitId, req.user.id);
+  const result = await visitService.restoreVisit(visitId, req.actor);
   return SuccessResponse(200, 'Visit restored', result);
 });
 

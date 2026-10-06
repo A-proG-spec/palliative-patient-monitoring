@@ -12,7 +12,7 @@ export const createSpiritualAssessment = asyncHandler(
     const result = await spiritualService.createSpiritualAssessment(
       patientId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(201, 'Spiritual assessment saved', result);
   },
@@ -88,7 +88,7 @@ export const updateSpiritualAssessment = asyncHandler(
       patientId,
       assessmentId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Spiritual assessment updated', result);
   },
@@ -106,7 +106,7 @@ export const deleteSpiritualAssessment = asyncHandler(
     const result = await spiritualService.deleteSpiritualAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
       reason,
     );
     return SuccessResponse(200, 'Spiritual assessment deleted', result);
@@ -124,7 +124,7 @@ export const restoreSpiritualAssessment = asyncHandler(
     const result = await spiritualService.restoreSpiritualAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Spiritual assessment restored', result);
   },

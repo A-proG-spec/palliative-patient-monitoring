@@ -32,6 +32,7 @@ const abnormalFlagEnum = z.enum(['Low', 'High', 'Critical', 'Normal']);
 // ─────────────────────────────────────────────────────────────
 export const createLabSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // ── Section 1: Ordering context ──
     wardClinic: z.string().trim().optional(),
     physicianRequester: z
@@ -75,6 +76,7 @@ export const createLabSchema = z.object({
 // ─────────────────────────────────────────────────────────────
 export const updateLabResultSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // ── Report info ──
     reportNumber: z.string().trim().optional(),
     collectedAt: dateString.optional(),

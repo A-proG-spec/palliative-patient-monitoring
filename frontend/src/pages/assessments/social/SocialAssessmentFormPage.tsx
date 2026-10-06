@@ -23,10 +23,13 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
+import { useActingClinician } from '@/hooks/useActingClinician';
+import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 
 const SocialAssessmentFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const acting = useActingClinician(id!);
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
   const createMutation = useCreateSocialAssessment(id!);
@@ -56,8 +59,8 @@ const SocialAssessmentFormPage: React.FC = () => {
   });
 
   const onSubmit = (data: CreateSocialAssessmentFormData) => {
-    createMutation.mutate(data, {
-      onSuccess: () => navigate(`/patients/${id}`),
+    createMutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
+      onSuccess: () => navigate(acting.patientPath),
     });
   };
 
@@ -76,12 +79,13 @@ const SocialAssessmentFormPage: React.FC = () => {
     <AssessmentFormShell
       title="Social Assessment"
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
+      backTo={acting.patientPath}
       mode="create"
       isSubmitting={createMutation.isPending}
       onSubmit={handleSubmit(onSubmit)}
-      onCancel={() => navigate(`/patients/${id}`)}
+      onCancel={() => navigate(acting.patientPath)}
     >
+      {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['SocialWorker']} />}
       {/* ── 1. Assessment type ── */}
       <Section title="1. Assessment Type">
         <Select

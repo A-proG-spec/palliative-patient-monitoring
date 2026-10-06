@@ -15,6 +15,9 @@ import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
 import { useAuthStore } from '@/store/auth.store';
+import { patientPath } from '@/lib/clinicalPaths';
+import { useActingClinician } from '@/hooks/useActingClinician';
+import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 
 // ─────────────────────────────────────────────────────────────
 // Small layout helper
@@ -50,6 +53,7 @@ const PainAssessmentFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const acting = useActingClinician(id!);
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
   const createMutation = useCreatePainAssessment(id!);
@@ -83,18 +87,18 @@ const PainAssessmentFormPage: React.FC = () => {
   });
 
   const onSubmit = (data: CreatePainAssessmentFormData) => {
-    createMutation.mutate(data, {
+    createMutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
       onSuccess: () => {
-        navigate(`/patients/${id}`);
+        navigate(acting.patientPath);
       },
     });
   };
 
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
-  const canWrite = user?.role === 'Nurse' || user?.role === 'Physician';
+  const canWrite = acting.isAdmin || user?.role === 'Nurse' || user?.role === 'Physician';
   if (!canWrite || patient.status === 'Discharged') {
-    return <Navigate to={`/patients/${id}/pain`} replace />;
+    return <Navigate to={`${acting.patientPath}/pain`} replace />;
   }
 
   const patientLabel = `${patient.firstName} ${patient.lastName} · ${patient.patientDisplayId ?? patient.id}`;
@@ -103,12 +107,13 @@ const PainAssessmentFormPage: React.FC = () => {
     <AssessmentFormShell
       title="Pain Assessment"
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
+      backTo={acting.patientPath}
       mode="create"
       isSubmitting={createMutation.isPending}
       onSubmit={handleSubmit(onSubmit)}
-      onCancel={() => navigate(`/patients/${id}`)}
+      onCancel={() => navigate(acting.patientPath)}
     >
+      {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Nurse', 'Physician']} />}
       {/* ── Section 1: Header ── */}
       <Section title="1. Assessment Type">
         <Select

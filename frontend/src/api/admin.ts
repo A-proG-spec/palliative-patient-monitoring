@@ -150,6 +150,14 @@ export const adminApi = {
       .then((r) => r.data);
   },
 
+  getActiveStaff: (params?: { role?: StaffRole; limit?: number }): Promise<StaffListResponse> => {
+    return apiClient
+      .get<StaffListResponse>('/admin/staff', {
+        params: { status: 'Active', limit: 100, ...params },
+      })
+      .then((r) => r.data);
+  },
+
   getStaffById: (staffId: number | string): Promise<StaffDetail> => {
     return apiClient
       .get<StaffDetail>(`/admin/staff/${staffId}`)

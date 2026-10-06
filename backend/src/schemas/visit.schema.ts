@@ -8,6 +8,7 @@ const staffRoleEnum = z.enum(
 )
 export const createVisitSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // ── Section 2: Visit Details ──
     visitDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
     timeStarted: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format'),

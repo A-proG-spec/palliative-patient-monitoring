@@ -7,12 +7,15 @@ import { AssessmentListShell } from '@/components/assessments/AssessmentListShel
 import { AssessmentListRow } from '@/components/assessments/AssessmentListRow';
 import { Badge } from '@/components/ui/Badge';
 import { useAuthStore } from '@/store/auth.store';
+import { patientPath } from '@/lib/clinicalPaths';
 
 const FamilyAssessmentListPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const isOwner = user?.role === 'SocialWorker';
+  const isAdmin = user?.type === 'admin';
+  const basePath = patientPath(isAdmin, id!);
+  const isOwner = isAdmin || user?.role === 'SocialWorker';
 
   const { data: patient, isLoading: pLoading } = usePatient(id!);
   const { data, isLoading, error, refetch } = usePatientFamilyAssessments(id!);
@@ -21,25 +24,26 @@ const FamilyAssessmentListPage: React.FC = () => {
   const patientLabel = patient
     ? `${patient.firstName} ${patient.lastName} · ${patient.patientDisplayId ?? patient.id}`
     : '—';
+  const canCreate = isOwner && patient?.status === 'Active';
 
   return (
     <AssessmentListShell
       title="Family Assessments"
       subtitle={`${data?.total ?? 0} recorded`}
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
-      onAddClick={() => navigate(`/patients/${id}/family-assessment/new`)}
+      backTo={basePath}
+      onAddClick={() => navigate(`${basePath}/family-assessment/new`)}
       isLoading={isLoading || pLoading}
       isError={!!error}
       onRetry={refetch}
       isEmpty={assessments.length === 0}
       emptyMessage="Record the first family assessment for this patient."
-      canCreate={isOwner}
+      canCreate={canCreate}
     >
       {assessments.map((a) => (
         <AssessmentListRow
           key={a.id}
-          onClick={() => navigate(`/patients/${id}/family-assessment/${a.id}`)}
+          onClick={() => navigate(`${basePath}/family-assessment/${a.id}`)}
           icon={<Users size={18} className="text-orange-600" />}
           iconBgClass="bg-orange-50"
           date={a.createdAt}

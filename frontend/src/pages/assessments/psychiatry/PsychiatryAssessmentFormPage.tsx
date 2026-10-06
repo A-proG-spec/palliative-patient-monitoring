@@ -24,10 +24,13 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
+import { useActingClinician } from '@/hooks/useActingClinician';
+import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 
 const PsychiatryAssessmentFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const acting = useActingClinician(id!);
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
   const createMutation = useCreatePsychiatryAssessment(id!);
@@ -61,8 +64,8 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
   });
 
   const onSubmit = (data: CreatePsychiatryAssessmentFormData) => {
-    createMutation.mutate(data, {
-      onSuccess: () => navigate(`/patients/${id}`),
+    createMutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
+      onSuccess: () => navigate(acting.patientPath),
     });
   };
 
@@ -80,12 +83,13 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
     <AssessmentFormShell
       title="Psychiatry Assessment"
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
+      backTo={acting.patientPath}
       mode="create"
       isSubmitting={createMutation.isPending}
       onSubmit={handleSubmit(onSubmit)}
-      onCancel={() => navigate(`/patients/${id}`)}
+      onCancel={() => navigate(acting.patientPath)}
     >
+      {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Psychologist', 'Psychiatrist']} />}
       {/* ── Safety banner ── */}
       {isHighRisk && (
         <div className="rounded-xl border border-error/30 bg-error-bg px-4 py-3 flex items-start gap-3">

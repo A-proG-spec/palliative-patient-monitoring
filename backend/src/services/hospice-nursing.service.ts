@@ -1,6 +1,8 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 // ─────────────────────────────────────────────────────────────
 // DTO mapper — one place to shape the response
 // ─────────────────────────────────────────────────────────────
@@ -199,10 +201,10 @@ const pickWritable = (data: any) => {
 export const createHospiceNursingAssessment = async (
     patientId: string,
     data: any,
-    staffId: string | number,
+    actor: Actor,
 ) => {
     const pid = toId(patientId, 'patient id');
-    const sid = toId(staffId, 'staff id');
+    const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
     const [patient, staff] = await Promise.all([
         prisma.patient.findUnique({
@@ -260,62 +262,62 @@ export const createHospiceNursingAssessment = async (
 };
 
 export const getAllHospiceNursingAssessments = async (
-  patientId: string,
-  page: number = 1,
-  limit: number = 20,
-  includeDeleted: boolean = false,
+    patientId: string,
+    page: number = 1,
+    limit: number = 20,
+    includeDeleted: boolean = false,
 ) => {
-  const pid = toId(patientId, 'patient id');
-  const client = includeDeleted ? prismaBase : prisma;
+    const pid = toId(patientId, 'patient id');
+    const client = includeDeleted ? prismaBase : prisma;
 
-  const patient = await prisma.patient.findUnique({
-    where: { id: pid },
-    select: { id: true },
-  });
-  if (!patient) throw new ApiError(404, 'Patient not found');
+    const patient = await prisma.patient.findUnique({
+        where: { id: pid },
+        select: { id: true },
+    });
+    if (!patient) throw new ApiError(404, 'Patient not found');
 
-  const skip = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-  const [items, total] = await Promise.all([
-    client.hospiceNursingAssessment.findMany({
-      where: { patientId: pid },
-      orderBy: { assessmentDate: 'desc' },
-      skip,
-      take: limit,
-      include: {
-        assessedByStaff: { select: { id: true, name: true, role: true } },
-      },
-    }),
-    client.hospiceNursingAssessment.count({ where: { patientId: pid } }),
-  ]);
+    const [items, total] = await Promise.all([
+        client.hospiceNursingAssessment.findMany({
+            where: { patientId: pid },
+            orderBy: { assessmentDate: 'desc' },
+            skip,
+            take: limit,
+            include: {
+                assessedByStaff: { select: { id: true, name: true, role: true } },
+            },
+        }),
+        client.hospiceNursingAssessment.count({ where: { patientId: pid } }),
+    ]);
 
-  return {
-    items: items.map((a) => ({
-      id: a.id,
-      patientId: a.patientId,
-      assessmentDate: a.assessmentDate,
-      assessedBy: a.assessedByStaff
-        ? {
-            id: a.assessedByStaff.id,
-            name: a.assessedByStaff.name,
-            role: a.assessedByStaff.role,
-          }
-        : null,
-      levelOfConsciousness: a.levelOfConsciousness,
-      painScore: a.painScore,
-      mobilityStatus: a.mobilityStatus,
-      emotionalStatus: a.emotionalStatus,
-      nurseSummary: a.nurseSummary,
-      createdAt: a.createdAt,
-      updatedAt: a.updatedAt,
-      // Soft-delete metadata
-      deletedAt: a.deletedAt ?? null,
-      deletionReason: a.deletionReason ?? null,
-    })),
-    page,
-    limit,
-    total,
-  };
+    return {
+        items: items.map((a) => ({
+            id: a.id,
+            patientId: a.patientId,
+            assessmentDate: a.assessmentDate,
+            assessedBy: a.assessedByStaff
+                ? {
+                    id: a.assessedByStaff.id,
+                    name: a.assessedByStaff.name,
+                    role: a.assessedByStaff.role,
+                }
+                : null,
+            levelOfConsciousness: a.levelOfConsciousness,
+            painScore: a.painScore,
+            mobilityStatus: a.mobilityStatus,
+            emotionalStatus: a.emotionalStatus,
+            nurseSummary: a.nurseSummary,
+            createdAt: a.createdAt,
+            updatedAt: a.updatedAt,
+            // Soft-delete metadata
+            deletedAt: a.deletedAt ?? null,
+            deletionReason: a.deletionReason ?? null,
+        })),
+        page,
+        limit,
+        total,
+    };
 };
 
 // ═════════════════════════════════════════════════════════════
@@ -425,11 +427,11 @@ export const updateHospiceNursingAssessment = async (
     patientId: string,
     assessmentId: string,
     data: any,
-    adminId: string | number,
+    actor: Actor,
 ) => {
     const pid = toId(patientId, 'patient id');
     const aid = toId(assessmentId, 'assessment id');
-    const adm = toId(adminId, 'admin id');
+    const adm = toId(actor.id, 'admin id');
 
     const existing = await prisma.hospiceNursingAssessment.findFirst({
         where: { id: aid, patientId: pid },
@@ -491,12 +493,12 @@ export const updateHospiceNursingAssessment = async (
 export const deleteHospiceNursingAssessment = async (
     patientId: string,
     assessmentId: string,
-    adminId: string | number,
+    actor: Actor,
     reason?: string,
 ) => {
     const pid = toId(patientId, 'patient id');
     const aid = toId(assessmentId, 'assessment id');
-    const adm = toId(adminId, 'admin id');
+    const adm = toId(actor.id, 'admin id');
 
     const existing = await prisma.hospiceNursingAssessment.findFirst({
         where: { id: aid, patientId: pid },
@@ -533,11 +535,11 @@ export const deleteHospiceNursingAssessment = async (
 export const restoreHospiceNursingAssessment = async (
     patientId: string,
     assessmentId: string,
-    adminId: string | number,
+    actor: Actor,
 ) => {
     const pid = toId(patientId, 'patient id');
     const aid = toId(assessmentId, 'assessment id');
-    const adm = toId(adminId, 'admin id');
+    const adm = toId(actor.id, 'admin id');
 
     const existing = await prismaBase.hospiceNursingAssessment.findFirst({
         where: { id: aid, patientId: pid },

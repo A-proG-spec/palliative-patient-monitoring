@@ -1,16 +1,18 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 // ─────────────────────────────────────────────────────────────
 // Create referral
 // ─────────────────────────────────────────────────────────────
 export const createReferral = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
@@ -195,18 +197,18 @@ export const updateReferral = async (
   patientId: string,
   referralId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const rid = toId(referralId, 'referral id');
-  const sid = toId(staffId, 'staff id');
+  const sid = actor.id;
 
   const referral = await prisma.referral.findFirst({
     where: { id: rid, patientId: pid },
   });
   if (!referral) throw new ApiError(404, 'Referral not found');
 
-  if (referral.requestedBy !== sid) {
+  if (actor.type !== 'admin' && referral.requestedBy !== sid) {
     throw new ApiError(403, 'You can only edit referrals you created');
   }
 

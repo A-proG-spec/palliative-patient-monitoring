@@ -30,6 +30,8 @@ import {
 import { SignatureSection } from '@/components/visits/SignatureSection';
 import { useAuthStore } from '@/store/auth.store';
 import { useToast } from '@/context/ToastContext';
+import { useActingClinician } from '@/hooks/useActingClinician';
+import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 
 // ── Collapsible section wrapper ─────────────────────────────────
 const Section: React.FC<{
@@ -134,6 +136,7 @@ const RecordVisitPage: React.FC = () => {
   const { data: patient, isLoading: patientLoading } = usePatient(id!);
   const recordMutation = useRecordVisit(id!);
   const user = useAuthStore((s) => s.user);
+  const acting = useActingClinician(id!);
   const { toast } = useToast();
 
   const [createdVisitId, setCreatedVisitId] = useState<string | null>(null);
@@ -252,7 +255,8 @@ const RecordVisitPage: React.FC = () => {
   }, [patient, user, appendTeam, setValue, teamFields.length]);
 
   const onSubmit = (data: CreateVisitFormData) => {
-    recordMutation.mutate(data, {
+    if (acting.isAdmin && !acting.actingAsStaffId) return;
+    recordMutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
       onSuccess: (response) => {
         setCreatedVisitId(response.id);
       },
@@ -367,7 +371,7 @@ const RecordVisitPage: React.FC = () => {
   return (
     <div className="max-w-3xl space-y-5">
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={acting.patientPath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             HOME VISIT CHECKLIST
@@ -388,6 +392,7 @@ const RecordVisitPage: React.FC = () => {
         className="space-y-4"
         noValidate
       >
+        {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Physician', 'Nurse']} />}
         {/* 1. PATIENT IDENTIFICATION */}
         <Section title="1. PATIENT IDENTIFICATION">
           <div className="grid md:grid-cols-2 gap-4">

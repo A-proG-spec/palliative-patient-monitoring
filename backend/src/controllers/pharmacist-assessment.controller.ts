@@ -12,7 +12,7 @@ export const createPharmacistAssessment = asyncHandler(
     const result = await pharmacistService.createPharmacistAssessment(
       patientId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(201, 'Pharmacist assessment saved', result);
   },
@@ -88,7 +88,7 @@ export const updatePharmacistAssessment = asyncHandler(
       patientId,
       assessmentId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Pharmacist assessment updated', result);
   },
@@ -106,7 +106,7 @@ export const deletePharmacistAssessment = asyncHandler(
     const result = await pharmacistService.deletePharmacistAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
       reason,
     );
     return SuccessResponse(200, 'Pharmacist assessment deleted', result);
@@ -124,7 +124,7 @@ export const restorePharmacistAssessment = asyncHandler(
     const result = await pharmacistService.restorePharmacistAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Pharmacist assessment restored', result);
   },

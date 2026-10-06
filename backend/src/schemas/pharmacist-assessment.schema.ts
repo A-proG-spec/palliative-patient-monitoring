@@ -177,6 +177,7 @@ const symptomEffectivenessSchema = z
 
 export const createClinicalPharmacistAssessmentSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // ── Header ──
     assessmentType: z.enum(PHARMACIST_ASSESSMENT_TYPE_VALUES),
 

@@ -12,7 +12,7 @@ export const createFamilyAssessment = asyncHandler(
     const result = await familyService.createFamilyAssessment(
       patientId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(201, 'Family assessment saved', result);
   },
@@ -88,7 +88,7 @@ export const updateFamilyAssessment = asyncHandler(
       patientId,
       assessmentId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Family assessment updated', result);
   },
@@ -106,7 +106,7 @@ export const deleteFamilyAssessment = asyncHandler(
     const result = await familyService.deleteFamilyAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
       reason,
     );
     return SuccessResponse(200, 'Family assessment deleted', result);
@@ -124,7 +124,7 @@ export const restoreFamilyAssessment = asyncHandler(
     const result = await familyService.restoreFamilyAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Family assessment restored', result);
   },

@@ -2,6 +2,8 @@ import bcrypt from 'bcrypt';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 import type { StaffRole } from '@prisma/client';
 
 // ─────────────────────────────────────────────────────────────
@@ -117,10 +119,10 @@ export const getAllVisits = async (
 export const recordVisit = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
   const [patient, teamLeader] = await Promise.all([
     prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
@@ -437,7 +439,7 @@ export const getVisitById = async (patientId: string, visitId: string) => {
 export const signVisit = async (
   visitId: string,
   data: { email: string; password: string; role: StaffRole },
-  _currentUserId: string | number,
+  _actor: Actor,
 ) => {
   const vid = toId(visitId, 'visit id');
 
@@ -548,10 +550,10 @@ export const getVisitSignatures = async (visitId: string) => {
 export const updateVisit = async (
   visitId: string,
   data: any,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const vid = toId(visitId, 'visit id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const visit = await prisma.homeVisit.findUnique({
     where: { id: vid },
@@ -599,11 +601,11 @@ export const updateVisit = async (
 // ═════════════════════════════════════════════════════════════
 export const deleteVisit = async (
   visitId: string,
-  adminId: string | number,
+  actor: Actor,
   reason?: string,
 ) => {
   const vid = toId(visitId, 'visit id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const visit = await prisma.homeVisit.findUnique({
     where: { id: vid },
@@ -629,10 +631,10 @@ export const deleteVisit = async (
 // ═════════════════════════════════════════════════════════════
 export const restoreVisit = async (
   visitId: string,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const vid = toId(visitId, 'visit id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const visit = await prisma.homeVisit.findUnique({ where: { id: vid } });
   if (!visit) throw new ApiError(404, 'Visit not found');

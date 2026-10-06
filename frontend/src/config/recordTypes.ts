@@ -23,13 +23,14 @@ export interface RecordType {
   label: string;
   description: string;
   icon: React.ReactNode;
-  route: (id: string) => string;
+  route: (id: string, basePath?: string) => string;
   color?: string;
 }
 
 // ── Visit vs progress-note depends on patient location ──
 export function getVisitRecordType(
   currentLocation: 'Home' | 'ReferredHospital',
+  basePath = '/patients',
 ): RecordType {
   if (currentLocation === 'ReferredHospital') {
     return {
@@ -38,7 +39,7 @@ export function getVisitRecordType(
       description:
         'Record a clinical progress note for a hospitalised or facility-based patient.',
       icon: React.createElement(NotebookPen, { size: 20 }),
-      route: (id) => `/patients/${id}/progress-note/new`,
+      route: (id) => `${basePath}/${id}/progress-note/new`,
       color: 'text-teal-600',
     };
   }
@@ -48,19 +49,19 @@ export function getVisitRecordType(
     description:
       'Record a home visit, vitals, pain assessment, and care observations.',
     icon: React.createElement(ClipboardList, { size: 20 }),
-    route: (id) => `/patients/${id}/visits`,
+    route: (id) => `${basePath}/${id}/visits`,
     color: 'text-blue-600',
   };
 }
 
 // ── Every other record type ──
-export const STATIC_RECORD_TYPES: RecordType[] = [
+export const getStaticRecordTypes = (basePath = '/patients'): RecordType[] => [
   {
     key: 'medication',
     label: 'Medication Order',
     description: 'Order or document a medication for this patient.',
     icon: React.createElement(Pill, { size: 20 }),
-    route: (id) => `/patients/${id}/medications`,
+    route: (id) => `${basePath}/${id}/medications`,
     color: 'text-green-600',
   },
   {
@@ -69,7 +70,7 @@ export const STATIC_RECORD_TYPES: RecordType[] = [
     description:
       'Request a laboratory test (blood, urine, microbiology, etc.).',
     icon: React.createElement(FlaskConical, { size: 20 }),
-    route: (id) => `/patients/${id}/labs`,
+    route: (id) => `${basePath}/${id}/labs`,
     color: 'text-purple-600',
   },
   {
@@ -78,7 +79,7 @@ export const STATIC_RECORD_TYPES: RecordType[] = [
     description:
       'Request imaging examination (X-Ray, CT, MRI, Ultrasound, etc.).',
     icon: React.createElement(Camera, { size: 20 }),
-    route: (id) => `/patients/${id}/imaging`,
+    route: (id) => `${basePath}/${id}/imaging`,
     color: 'text-indigo-600',
   },
   {
@@ -86,7 +87,7 @@ export const STATIC_RECORD_TYPES: RecordType[] = [
     label: 'Referral Request',
     description: 'Submit a referral to another facility or specialist.',
     icon: React.createElement(GitBranch, { size: 20 }),
-    route: (id) => `/patients/${id}/referrals`,
+    route: (id) => `${basePath}/${id}/referrals`,
     color: 'text-orange-600',
   },
   {
@@ -95,7 +96,7 @@ export const STATIC_RECORD_TYPES: RecordType[] = [
     description:
       'Record a hospital admission linked to an accepted referral.',
     icon: React.createElement(Building2, { size: 20 }),
-    route: (id) => `/patients/${id}/admissions`,
+    route: (id) => `${basePath}/${id}/admissions`,
     color: 'text-red-600',
   },
   {
@@ -103,7 +104,7 @@ export const STATIC_RECORD_TYPES: RecordType[] = [
     label: 'Hospice Nursing Assessment',
     description: 'Record a hospice nursing assessment for this patient.',
     icon: React.createElement(Heart, { size: 20 }),
-    route: (id) => `/patients/${id}/hospice-nursing`,
+    route: (id) => `${basePath}/${id}/hospice-nursing`,
     color: 'text-pink-600',
   },
 ];
@@ -113,10 +114,14 @@ export const STATIC_RECORD_TYPES: RecordType[] = [
 // ═════════════════════════════════════════════════════════════
 
 export function filterRecordTypesForRole(
-  role: StaffRole,
+  role: StaffRole | string | null | undefined,
   currentLocation: 'Home' | 'ReferredHospital',
+  isAdmin = false,
+  basePath = '/patients',
 ): RecordType[] {
-  const all = [getVisitRecordType(currentLocation), ...STATIC_RECORD_TYPES];
+  const all = [getVisitRecordType(currentLocation, basePath), ...getStaticRecordTypes(basePath)];
+
+  if (isAdmin) return all;
 
   return all.filter((r) => {
     switch (r.key) {

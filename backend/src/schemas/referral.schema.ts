@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const createReferralSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     referralType: z.enum(['Incoming', 'Outgoing']),
     referralDate: z
       .string()

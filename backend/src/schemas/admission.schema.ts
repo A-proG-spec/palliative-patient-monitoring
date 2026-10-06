@@ -30,6 +30,7 @@ export const ADMISSION_SPIRITUAL_SUPPORT_VALUES = [
 
 export const createAdmissionSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     patientName: z.string().optional(),
     hospitalPatientId: z.string().optional(),
     age: z.number().min(0).max(150).optional(),
@@ -92,6 +93,7 @@ export const createAdmissionSchema = z.object({
 
 export const updateAdmissionSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     dischargeDate: dateString.optional(),
     dischargeReason: optionalEnum(['Improved', 'Deceased'] as const),
     status: z.enum(['Active', 'Discharged']),

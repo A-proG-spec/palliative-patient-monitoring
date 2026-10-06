@@ -260,6 +260,7 @@ const physiotherapyAdlRowSchema = z.object({
 
 export const createPhysiotherapyAssessmentSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // ── Header ──
     assessmentType: z.enum(PHYSIOTHERAPY_ASSESSMENT_TYPE_VALUES),
 

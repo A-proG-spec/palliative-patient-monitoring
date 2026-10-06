@@ -173,6 +173,7 @@ const distressConcernRowSchema = z.object({
 
 export const createSpiritualAssessmentSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // ── Header ──
     assessmentType: z.enum(SPIRITUAL_ASSESSMENT_TYPE_VALUES),
 

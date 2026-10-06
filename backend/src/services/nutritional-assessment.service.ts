@@ -1,6 +1,8 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 // ─────────────────────────────────────────────────────────────
 // DTO mapper
 // ─────────────────────────────────────────────────────────────
@@ -9,13 +11,13 @@ const toNutritionalAssessmentDto = (a: any) => ({
   patientId: a.patientId,
   patient: a.patient
     ? {
-        id: a.patient.id,
-        firstName: a.patient.firstName,
-        lastName: a.patient.lastName,
-        age: a.patient.age,
-        sex: a.patient.sex,
-        hospitalPatientId: a.patient.hospitalPatientId,
-      }
+      id: a.patient.id,
+      firstName: a.patient.firstName,
+      lastName: a.patient.lastName,
+      age: a.patient.age,
+      sex: a.patient.sex,
+      hospitalPatientId: a.patient.hospitalPatientId,
+    }
     : null,
 
   assessmentType: a.assessmentType,
@@ -158,10 +160,10 @@ const pickLabRows = (data: any) => {
 export const createNutritionalAssessment = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
@@ -345,11 +347,11 @@ export const updateNutritionalAssessment = async (
   patientId: string,
   assessmentId: string,
   data: any,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const aid = toId(assessmentId, 'assessment id');
-  const adm = toId(adminId, 'admin id');
+  const adm = toId(actor.id, 'admin id');
 
   const existing = await prisma.nutritionalAssessment.findFirst({
     where: { id: aid, patientId: pid },
@@ -398,12 +400,12 @@ export const updateNutritionalAssessment = async (
 export const deleteNutritionalAssessment = async (
   patientId: string,
   assessmentId: string,
-  adminId: string | number,
+  actor: Actor,
   reason?: string,
 ) => {
   const pid = toId(patientId, 'patient id');
   const aid = toId(assessmentId, 'assessment id');
-  const adm = toId(adminId, 'admin id');
+  const adm = toId(actor.id, 'admin id');
 
   const existing = await prisma.nutritionalAssessment.findFirst({
     where: { id: aid, patientId: pid },
@@ -437,11 +439,11 @@ export const deleteNutritionalAssessment = async (
 export const restoreNutritionalAssessment = async (
   patientId: string,
   assessmentId: string,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const aid = toId(assessmentId, 'assessment id');
-  const adm = toId(adminId, 'admin id');
+  const adm = toId(actor.id, 'admin id');
 
   const existing = await prismaBase.nutritionalAssessment.findFirst({
     where: { id: aid, patientId: pid },

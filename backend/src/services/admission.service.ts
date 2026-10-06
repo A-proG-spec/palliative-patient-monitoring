@@ -1,6 +1,8 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 // ─────────────────────────────────────────────────────────────
 // Record admission
 // ─────────────────────────────────────────────────────────────
@@ -59,16 +61,20 @@ export const getAllAdmissions = async (
 export const recordAdmission = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
-  const patient = await prisma.patient.findUnique({
-    where: { id: pid },
-    select: { id: true, firstName: true, lastName: true, hospitalPatientId: true },
-  });
+  const [patient, staff] = await Promise.all([
+    prisma.patient.findUnique({
+      where: { id: pid },
+      select: { id: true, firstName: true, lastName: true, hospitalPatientId: true },
+    }),
+    prisma.staff.findUnique({ where: { id: sid }, select: { id: true } }),
+  ]);
   if (!patient) throw new ApiError(404, 'Patient not found');
+  if (!staff) throw new ApiError(404, 'Staff member not found');
 
   if (!data.referralId) {
     throw new ApiError(400, 'A referral is required before admission');
@@ -352,11 +358,11 @@ export const updateAdmission = async (
   patientId: string,
   admissionId: string,
   data: any,
-  adminId: string|number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const aid = toId(admissionId, 'admission id');
-  const adm = toId(adminId, 'admin id');
+  const adm = toId(actor.id, 'admin id');
 
   const existing = await prisma.hospitalAdmission.findFirst({
     where: { id: aid, patientId: pid },
@@ -369,7 +375,7 @@ export const updateAdmission = async (
 
   const updateData: any = {
     status: data.status,
-    updatedBy: adm,
+    ...(actor.type === 'admin' ? { updatedBy: adm } : {}),
   };
 
   if (data.status === 'Discharged') {
@@ -400,12 +406,12 @@ export const updateAdmission = async (
 export const deleteAdmission = async (
   patientId: string,
   admissionId: string,
-  adminId: string|number,
+  actor: Actor,
   reason?: string,
 ) => {
   const pid = toId(patientId, 'patient id');
   const aid = toId(admissionId, 'admission id');
-  const adm = toId(adminId, 'admin id');
+  const adm = toId(actor.id, 'admin id');
 
   const admission = await prisma.hospitalAdmission.findFirst({
     where: { id: aid, patientId: pid },
@@ -432,11 +438,11 @@ export const deleteAdmission = async (
 export const restoreAdmission = async (
   patientId: string,
   admissionId: string,
-  adminId: string|number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const aid = toId(admissionId, 'admission id');
-  const adm = toId(adminId, 'admin id');
+  const adm = toId(actor.id, 'admin id');
 
   const admission = await prisma.hospitalAdmission.findFirst({
     where: { id: aid, patientId: pid },

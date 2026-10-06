@@ -75,6 +75,9 @@ import { formatDate, cn } from '@/lib/utils';
 import { DISEASE_STAGE_LABELS as DSL, VISIT_TYPE_LABELS } from '@/constants';
 import type { DischargeSummary } from '@/components/admin/DischargePatientModal';
 import { printDischargeSummary } from '@/lib/printDischargeSummary';
+import { AssessmentCards } from '@/components/patient/AssessmentCards';
+import { AddRecordModal } from '@/components/patient/AddRecordModal';
+import { useAuthStore } from '@/store/auth.store';
 
 // ═══════════════════════════════════════════════════════════
 // RowActions
@@ -278,6 +281,7 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
   const [activeTab, setActiveTab] = useState<Tab>('Visits');
   const [showDischargeSummaryViewer, setShowDischargeSummaryViewer] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
+  const [showAddRecord, setShowAddRecord] = useState(false);
 
   // ── Discharge summary ──
   const locationState =
@@ -288,6 +292,7 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
 
   // ── Primary patient data ──
   const { data: patient, isLoading, error, refetch } = useAdminPatientDetail(patientId);
+  const user = useAuthStore((state) => state.user);
 
   // ── Sub-record data ──
   const { data: visitsData } = usePatientVisits(patientId, { includeDeleted: showDeleted });
@@ -473,6 +478,14 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
           </CardContent>
         </Card>
       </div>
+
+      <AssessmentCards patientId={patientId} patientStatus={patient.status} isAdmin />
+
+      {patient.status === 'Active' && (
+        <div className="flex justify-end">
+          <Button size="sm" onClick={() => setShowAddRecord(true)}>Add Record</Button>
+        </div>
+      )}
 
       {/* ── Tabbed records ── */}
       <Card padding="none">
@@ -1406,6 +1419,20 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
           patientName={`${patient.firstName} ${patient.lastName}`}
           onClose={() => setShowDischargeSummaryViewer(false)}
           onPrint={handlePrintDischargeSummary}
+        />
+      )}
+      {showAddRecord && (
+        <AddRecordModal
+          patientId={patientId}
+          patientName={`${patient.firstName} ${patient.lastName}`}
+          currentLocation={patient.currentLocation}
+          userRole={user?.role}
+          isAdmin
+          onClose={() => setShowAddRecord(false)}
+          onSelect={(path) => {
+            setShowAddRecord(false);
+            navigate(path);
+          }}
         />
       )}
     </div>

@@ -14,10 +14,12 @@ import {
   type AssessmentKey,
 } from '@/config/assessments';
 import { useAuthStore } from '@/store/auth.store';
+import { patientPath } from '@/lib/clinicalPaths';
 
 interface AssessmentCardsProps {
   patientId: string;
   patientStatus: 'Active' | 'Discharged';
+  isAdmin?: boolean;
 }
 
 /**
@@ -34,12 +36,14 @@ interface AssessmentCardsProps {
 export const AssessmentCards: React.FC<AssessmentCardsProps> = ({
   patientId,
   patientStatus,
+  isAdmin = false,
 }) => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const role = user?.role;
+  const isAdminUser = isAdmin || user?.type === 'admin';
 
-  if (!role) return null;
+  if (!role && !isAdminUser) return null;
 
   // Which assessments does this role OWN?
   const owned = new Set<AssessmentKey>(ROLE_ASSESSMENTS[role] ?? []);
@@ -48,7 +52,9 @@ export const AssessmentCards: React.FC<AssessmentCardsProps> = ({
   const isClinicianViewer =
     role === 'Physician' || role === 'Nurse';
 
-  const visible: { def: AssessmentDef; canWrite: boolean }[] = isClinicianViewer
+  const visible: { def: AssessmentDef; canWrite: boolean }[] = isAdminUser
+    ? Object.values(ASSESSMENTS).map((def) => ({ def, canWrite: true }))
+    : isClinicianViewer
     ? Object.values(ASSESSMENTS).map((def) => ({
       def,
       canWrite: def.key === 'pain',
@@ -86,7 +92,7 @@ export const AssessmentCards: React.FC<AssessmentCardsProps> = ({
               <button
                 type="button"
                 onClick={() =>
-                  navigate(`/patients/${patientId}/${def.routeBase}`)
+                  navigate(`${patientPath(isAdminUser, patientId)}/${def.routeBase}`)
                 }
                 className="flex flex-1 min-w-0 items-start gap-3 text-left"
               >
@@ -112,11 +118,11 @@ export const AssessmentCards: React.FC<AssessmentCardsProps> = ({
                   className="text-outline-variant flex-shrink-0 mt-1 group-hover:text-primary transition-colors"
                 />
               </button>
-              {isClinicianViewer && def.key === 'pain' && patientStatus === 'Active' && (
+              {(isAdminUser || (isClinicianViewer && def.key === 'pain')) && patientStatus === 'Active' && (
                 <button
                   type="button"
                   onClick={() =>
-                    navigate(`/patients/${patientId}/${def.routeBase}/new`)
+                    navigate(`${patientPath(isAdminUser, patientId)}/${def.routeBase}/new`)
                   }
                   aria-label={`Add ${def.label}`}
                   className="inline-flex items-center gap-1 rounded-lg border border-primary/30 px-2 py-1.5 text-xs font-medium text-primary hover:bg-primary/5"

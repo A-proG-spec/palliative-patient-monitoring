@@ -7,12 +7,15 @@ import { AssessmentListShell } from '@/components/assessments/AssessmentListShel
 import { AssessmentListRow } from '@/components/assessments/AssessmentListRow';
 import { Badge } from '@/components/ui/Badge';
 import { useAuthStore } from '@/store/auth.store';
+import { patientPath } from '@/lib/clinicalPaths';
 
 const PsychiatryAssessmentListPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const isOwner =
+  const isAdmin = user?.type === 'admin';
+  const basePath = patientPath(isAdmin, id!);
+  const isOwner = isAdmin ||
     user?.role === 'Psychiatrist' || user?.role === 'Psychologist';
 
   const { data: patient, isLoading: pLoading } = usePatient(id!);
@@ -22,25 +25,26 @@ const PsychiatryAssessmentListPage: React.FC = () => {
   const patientLabel = patient
     ? `${patient.firstName} ${patient.lastName} · ${patient.patientDisplayId ?? patient.id}`
     : '—';
+  const canCreate = isOwner && patient?.status === 'Active';
 
   return (
     <AssessmentListShell
       title="Psychiatry Assessments"
       subtitle={`${data?.total ?? 0} recorded`}
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
-      onAddClick={() => navigate(`/patients/${id}/psychiatry-assessment/new`)}
+      backTo={basePath}
+      onAddClick={() => navigate(`${basePath}/psychiatry-assessment/new`)}
       isLoading={isLoading || pLoading}
       isError={!!error}
       onRetry={refetch}
       isEmpty={assessments.length === 0}
       emptyMessage="Record the first psychiatry assessment for this patient."
-      canCreate={isOwner}
+      canCreate={canCreate}
     >
       {assessments.map((a) => (
         <AssessmentListRow
           key={a.id}
-          onClick={() => navigate(`/patients/${id}/psychiatry-assessment/${a.id}`)}
+          onClick={() => navigate(`${basePath}/psychiatry-assessment/${a.id}`)}
           icon={<Brain size={18} className="text-fuchsia-600" />}
           iconBgClass="bg-fuchsia-50"
           date={a.createdAt}

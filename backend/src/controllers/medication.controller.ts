@@ -5,7 +5,7 @@ import * as medicationService from '@services/medication.service.js';
 
 export const orderMedication = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
-  const result = await medicationService.orderMedication(patientId, req.body, req.user.id);
+  const result = await medicationService.orderMedication(patientId, req.body, req.actor);
   return SuccessResponse(201, 'Medication ordered successfully', result);
 });
 export const getAllMedications = asyncHandler(
@@ -50,7 +50,8 @@ export const updateMedicationStatus = asyncHandler(async (req: Request, res: Res
     patientId,
     medicationId,
     status,
-    req.user.id,
+    req.actor,
+    req.body.actingAsStaffId,
   );
   return SuccessResponse(200, 'Medication status updated', result);
 });
@@ -63,7 +64,7 @@ export const deleteMedication = asyncHandler(async (req: Request, res: Response)
   const result = await medicationService.deleteMedication(
     patientId,
     medicationId,
-    req.user.id,
+    req.actor,
     reason,
   );
   return SuccessResponse(200, 'Medication deleted', result);
@@ -76,7 +77,7 @@ export const restoreMedication = asyncHandler(async (req: Request, res: Response
   const result = await medicationService.restoreMedication(
     patientId,
     medicationId,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(200, 'Medication restored', result);
 });
@@ -111,7 +112,8 @@ export const markOrderGiven = asyncHandler(
     const medicationId = req.params.id as string;
     const result = await medicationService.markMedicationGivenByQueue(
       medicationId,
-      req.user.id,
+      req.actor,
+      req.body?.actingAsStaffId,
     );
     return SuccessResponse(200, 'Medication marked as given', result);
   },
