@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -38,7 +38,7 @@ import { ErrorState } from '@/components/common/EmptyState';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/context/ToastContext';
 import ProgressNoteSignatureSection from '@/components/progress-notes/ProgressNoteSignatureSection';
-
+import { usePermissionAccess } from '@/hooks/useRecordAccess';
 // ═════════════════════════════════════════════════════════════
 // Section definitions
 // ═════════════════════════════════════════════════════════════
@@ -424,6 +424,8 @@ const RecordProgressNotePage: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const { toast } = useToast();
 
+  const access = usePermissionAccess('canCreateProgressNote');
+
   const isEditMode = Boolean(noteId);
 
   const { data: patient, isLoading: patientLoading, error: patientError, refetch: refetchPatient } = usePatient(id!);
@@ -468,8 +470,6 @@ const RecordProgressNotePage: React.FC = () => {
       key: K,
       value: CreateProgressNoteFormData[K],
     ) => {
-      // The helper only accepts top-level form keys; RHF's path-value type
-      // cannot correlate that generic key with the corresponding property type.
       setValue(key, value as never, { shouldDirty: true, shouldValidate: false });
     },
     [setValue],
@@ -521,6 +521,10 @@ const RecordProgressNotePage: React.FC = () => {
   if (patientLoading || (isEditMode && noteLoading)) return <PageLoader />;
   if (patientError || !patient) return <ErrorState onRetry={refetchPatient} />;
 
+  // ── Write gate ──
+  if (!access.allowed || patient.status === 'Discharged') {
+    return <Navigate to={`/patients/${id}`} replace />;
+  }
   // ═══════════════════════════════════════════════════════════
   // Submit
   // ═══════════════════════════════════════════════════════════
@@ -529,7 +533,6 @@ const RecordProgressNotePage: React.FC = () => {
   };
 
   const onInvalid = (formErrors: Record<string, any>) => {
-    // Find the first section that contains any error and jump to it
     const errorKeys = Object.keys(formErrors);
 
     const sectionWithError = SECTIONS.find((s) =>
@@ -568,7 +571,6 @@ const RecordProgressNotePage: React.FC = () => {
       setShowConfirm(false);
     }
   };
-
   const handleSubmitClick = handleSubmit(onValid, onInvalid);
 
   const handleBack = () => {
@@ -581,7 +583,6 @@ const RecordProgressNotePage: React.FC = () => {
     return (
       <div className="space-y-5 max-w-4xl">
         <BackButton to={`/patients/${id}`} label={`${patient.firstName} ${patient.lastName}`} />
-
         <div className="rounded-2xl border border-success/30 bg-success-bg/20 px-5 py-4 flex items-start gap-3">
           <CheckCircle2 size={20} className="text-success flex-shrink-0 mt-0.5" />
           <div>
@@ -633,7 +634,6 @@ const RecordProgressNotePage: React.FC = () => {
           </div>
         </div>
       </div>
-
       <div className="flex border border-border-base rounded-2xl bg-surface-lowest overflow-hidden h-[600px]">
         <SectionNav sections={SECTIONS} activeKey={activeKey} states={sectionStates} onSelect={setActiveKey} />
 
@@ -691,7 +691,11 @@ const RecordProgressNotePage: React.FC = () => {
                 onClick={() => setActiveKey(SECTIONS[activeIdx + 1].key)}
               >Next</Button>
             ) : (
-              <Button size="sm" onClick={handleSubmitClick} loading={createNote.isPending || updateNote.isPending}>
+              <Button
+                size="sm"
+                onClick={handleSubmitClick}
+                loading={createNote.isPending || updateNote.isPending}
+              >
                 Save Note
               </Button>
             )}
@@ -701,7 +705,11 @@ const RecordProgressNotePage: React.FC = () => {
 
       <div className="flex items-center justify-end gap-3">
         <Button variant="outline" size="sm" onClick={handleBack}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmitClick} loading={createNote.isPending || updateNote.isPending}>
+        <Button
+          size="sm"
+          onClick={handleSubmitClick}
+          loading={createNote.isPending || updateNote.isPending}
+        >
           {isEditMode ? 'Save Changes' : 'Save Progress Note'}
         </Button>
       </div>
@@ -752,8 +760,7 @@ const RecordProgressNotePage: React.FC = () => {
             </p>
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setShowDiscard(false)}>Keep Editing</Button>
-              <Button variant="destructive" className="flex-1" onClick={() => navigate(`/patients/${id}`)}>Discard</Button>
-            </div>
+              <Button variant="destructive" className="flex-1" onClick={() => navigate(`/patients/${id}`)}>Discard</Button>            </div>
           </div>
         </div>
       )}

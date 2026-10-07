@@ -8,6 +8,16 @@ import {
   DetailSectionRenderer,
   type DetailSectionDef,
 } from '@/components/assessments/AssessmentDetailFields';
+import { PageLoader } from '@/components/common/LoadingSpinner';
+import { ErrorState } from '@/components/common/EmptyState';
+import { patientPath } from '@/lib/clinicalPaths';
+
+// ── Display helper — mirrors the backend's patientDisplayId() ──
+const displayId = (p: {
+  id: number | string;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
 
 const SECTIONS: DetailSectionDef[] = [
   {
@@ -121,37 +131,60 @@ const SECTIONS: DetailSectionDef[] = [
 const FamilyAssessmentDetailPage: React.FC = () => {
   const { id, assessmentId } = useParams<{ id: string; assessmentId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+
+  // ── Subscribe to only `user`, not the whole store ──
+  const user = useAuthStore((s) => s.user);
   const isAdmin = user?.type === 'admin';
-  const isOwner = user?.role === 'SocialWorker';
-  const canManage = isAdmin || isOwner;
+
+  // ── Edit is admin-only. Backend enforces roleMiddleware(['admin'])
+  //    on PATCH/DELETE for family assessments; non-admins get 403. ──
+  const canManage = isAdmin;
 
   const { data: patient } = usePatient(id!);
-  const { data: a, isLoading, error, refetch } = useFamilyAssessment(id!, assessmentId!);
+  const { data: a, isLoading, error, refetch } = useFamilyAssessment(
+    id!,
+    assessmentId!,
+  );
+
+  const basePath = patientPath(isAdmin, id!);
 
   const patientLabel = patient
-    ? `${patient.firstName} ${patient.lastName} · ${patient.patientDisplayId ?? patient.id}`
+    ? `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`
     : '—';
+
+  // ── Early returns so the shell never renders without data ──
+  if (isLoading) return <PageLoader />;
+  if (error || !a) return <ErrorState onRetry={refetch} />;
 
   return (
     <AssessmentDetailShell
       title="Family Assessment"
       patientLabel={patientLabel}
-      createdAt={a?.createdAt ?? ''}
-      createdByName={a?.createdByStaff?.name ?? null}
-      isDeleted={!!a?.deletedAt}
+      createdAt={a.createdAt}
+      createdByName={
+        // DTO shape first, then raw relation, then free-text
+        (a as any)?.enteredBy?.name ??
+        (a as any)?.createdByStaff?.name ??
+        a?.assessorName ??
+        null
+      }
+      isDeleted={!!a.deletedAt}
       isAdmin={isAdmin}
-      backTo={`/patients/${id}/family-assessment`}
-      isLoading={isLoading}
-      isError={!!error}
+      backTo={`${basePath}/family-assessment`}
+      isLoading={false}
+      isError={false}
       onRetry={refetch}
       onPrint={() => window.print()}
-      onEdit={canManage ? () => navigate(`/patients/${id}/family-assessment/${assessmentId}/edit`) : undefined}
+      onEdit={
+        canManage && !a.deletedAt
+          ? () =>
+              navigate(`${basePath}/family-assessment/${assessmentId}/edit`)
+          : undefined
+      }
     >
-      {a &&
-        SECTIONS.map((s) => (
-          <DetailSectionRenderer key={s.title} section={s} data={a as any} />
-        ))}
+      {SECTIONS.map((s) => (
+        <DetailSectionRenderer key={s.title} section={s} data={a as any} />
+      ))}
     </AssessmentDetailShell>
   );
 };

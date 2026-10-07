@@ -1,8 +1,16 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
-import { resolveStaffAttribution } from '@utils/actor.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
 import type { Actor } from '../types/index.js';
+
+const formatEnteredBy = (staff?: any, admin?: any) =>
+  admin
+    ? { id: admin.id, name: admin.name, type: 'admin' as const }
+    : staff
+      ? { id: staff.id, name: staff.name, type: 'staff' as const }
+      : null;
+
 // ─────────────────────────────────────────────────────────────
 // Record admission
 // ─────────────────────────────────────────────────────────────
@@ -33,6 +41,10 @@ export const getAllAdmissions = async (
       orderBy: { admissionDate: 'desc' },
       skip,
       take: limit,
+      include: {
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
     }),
     client.hospitalAdmission.count({ where }),
   ]);
@@ -48,6 +60,7 @@ export const getAllAdmissions = async (
       careTeam: a.careTeam,
       status: a.status,
       dischargeReason: a.dischargeReason,
+      enteredBy: formatEnteredBy(a.createdByStaff, a.createdByAdmin),
       createdAt: a.createdAt,
       deletedAt: a.deletedAt ?? null,
       deletionReason: a.deletionReason ?? null,
@@ -64,17 +77,23 @@ export const recordAdmission = async (
   actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
+  const hasActingAsStaffId = data.actingAsStaffId !== undefined &&
+    data.actingAsStaffId !== null && data.actingAsStaffId !== '';
+  const sid = actor.type === 'staff' || hasActingAsStaffId
+    ? resolveStaffAttribution(actor, data.actingAsStaffId)
+    : undefined;
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({
       where: { id: pid },
       select: { id: true, firstName: true, lastName: true, hospitalPatientId: true },
     }),
-    prisma.staff.findUnique({ where: { id: sid }, select: { id: true } }),
+    sid !== undefined
+      ? prisma.staff.findUnique({ where: { id: sid }, select: { id: true } })
+      : Promise.resolve(null),
   ]);
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (sid !== undefined && !staff) throw new ApiError(404, 'Staff member not found');
 
   if (!data.referralId) {
     throw new ApiError(400, 'A referral is required before admission');
@@ -115,6 +134,7 @@ export const recordAdmission = async (
         diagnosisAtReferral: data.diagnosisAtReferral ?? null,
         referralReason: data.referralReason ?? null,
         referralReasonOther: data.referralReasonOther ?? null,
+        createdByAdminId: adminCreatorId(actor),
 
         admissionDate: new Date(data.admissionDate),
         bedNumber: data.bedNumber,
@@ -156,7 +176,11 @@ export const recordAdmission = async (
         admittedToHospiceUnit: data.admittedToHospiceUnit ?? true,
         status: 'Active',
 
-        createdBy: sid,
+        createdBy: sid ?? null,
+      },
+      include: {
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     });
 
@@ -181,6 +205,7 @@ export const recordAdmission = async (
     bedNumber: admission.bedNumber,
     ward: admission.ward,
     status: admission.status,
+    enteredBy: formatEnteredBy(admission.createdByStaff, admission.createdByAdmin),
     createdAt: admission.createdAt,
   };
 };
@@ -213,6 +238,10 @@ export const getAdmissions = async (
       orderBy: { admissionDate: 'desc' },
       skip,
       take: limit,
+      include: {
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
     }),
     prisma.hospitalAdmission.count({ where }),
   ]);
@@ -228,6 +257,7 @@ export const getAdmissions = async (
       careTeam: a.careTeam,
       status: a.status,
       dischargeReason: a.dischargeReason,
+      enteredBy: formatEnteredBy(a.createdByStaff, a.createdByAdmin),
       createdAt: a.createdAt,
     })),
     page,
@@ -258,6 +288,7 @@ export const getAdmissionById = async (
         },
       },
       createdByStaff: { select: { id: true, name: true, role: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       referral: {
         select: {
           id: true, referralType: true, referralDate: true,
@@ -340,11 +371,7 @@ export const getAdmissionById = async (
     dischargeSummaryId: latestDischarge?.id ?? null,
     dischargeSummaryStatus: latestDischarge?.status ?? null,
 
-    createdBy: {
-      id: admission.createdByStaff.id,
-      name: admission.createdByStaff.name,
-      role: admission.createdByStaff.role,
-    },
+    enteredBy: formatEnteredBy(admission.createdByStaff, admission.createdByAdmin),
 
     createdAt: admission.createdAt,
     updatedAt: admission.updatedAt,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -23,13 +23,31 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
-import { useActingClinician } from '@/hooks/useActingClinician';
-import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
+import { useToast } from '@/context/ToastContext';
+
+// ── Helpers ─────────────────────────────────────────────────────
+const displayId = (p: {
+  id: number | string;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
+
+const toYesNo = (v: boolean | null | undefined): 'Yes' | 'No' | '' =>
+  v === undefined || v === null ? '' : v ? 'Yes' : 'No';
+
+const UTILITY_KEYS = [
+  { key: 'Electricity', label: 'Electricity' },
+  { key: 'WaterSupply', label: 'Water supply' },
+  { key: 'ToiletFacility', label: 'Toilet facility' },
+  { key: 'TelephoneAccess', label: 'Telephone access' },
+] as const;
 
 const SocialAssessmentFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const acting = useActingClinician(id!);
+  const { toast } = useToast();
+
+  const patientPath = `/patients/${id}`;
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
   const createMutation = useCreateSocialAssessment(id!);
@@ -58,36 +76,108 @@ const SocialAssessmentFormPage: React.FC = () => {
     },
   });
 
+  // ── Controlled text for the household members textarea ──
+  const [householdText, setHouseholdText] = useState('');
+
+  const parseHouseholdText = (text: string) => {
+    return text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.split('|').map((s) => s.trim());
+        const [name = '', relationship = '', age = '', occupation = ''] = parts;
+        const parsedAge = age ? Number(age) : undefined;
+        return {
+          name,
+          relationship,
+          age: Number.isFinite(parsedAge) ? parsedAge : undefined,
+          occupation,
+        };
+      });
+  };
+
+  // ═══════════════════════════════════════════════════════════
+  // Submit
+  // ═══════════════════════════════════════════════════════════
   const onSubmit = (data: CreateSocialAssessmentFormData) => {
-    createMutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
-      onSuccess: () => navigate(acting.patientPath),
+    const payload: CreateSocialAssessmentFormData = {
+      ...data,
+      householdMembers: parseHouseholdText(householdText) as any,
+    };
+
+    createMutation.mutate(payload as any, {
+      onSuccess: () => navigate(patientPath),
+      onError: (err: any) => {
+        const message =
+          err?.response?.data?.message ?? 'Failed to save social assessment.';
+        const fieldErrors = err?.response?.data?.errors;
+        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+          toast.error(
+            `${message} — ${fieldErrors
+              .slice(0, 3)
+              .map((e: any) => e.message ?? e.field)
+              .join(', ')}`,
+          );
+        } else {
+          toast.error(message);
+        }
+      },
     });
+  };
+
+  const onInvalid = (formErrors: any) => {
+    const flat: string[] = [];
+    const walk = (obj: any, path = ''): void => {
+      if (!obj || typeof obj !== 'object') return;
+      if ('message' in obj && typeof obj.message === 'string') {
+        flat.push(`${path || 'form'}: ${obj.message}`);
+        return;
+      }
+      for (const [k, v] of Object.entries(obj)) {
+        const next = path ? `${path}.${k}` : k;
+        if (Array.isArray(v)) {
+          v.forEach((item, i) => walk(item, `${next}[${i}]`));
+        } else {
+          walk(v, next);
+        }
+      }
+    };
+    walk(formErrors);
+
+    if (flat.length > 0) {
+      const shown = flat.slice(0, 3).join(' • ');
+      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
+      toast.error(`Save failed — ${shown}${rest}`);
+    } else {
+      toast.error('Save failed — please review the form.');
+    }
   };
 
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
-  const patientLabel = `${patient.firstName} ${patient.lastName} · ${
-    patient.patientDisplayId ?? patient.id
-  }`;
+  const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
 
-  const utilities = watch('utilitiesAccess') ?? {};
+  // ── Utilities JSON bridge ──
+  const utilities = (watch('utilitiesAccess') ?? {}) as Record<string, boolean>;
   const setUtility = (key: string, on: boolean) =>
-    setValue('utilitiesAccess', { ...utilities, [key]: on });
+    setValue('utilitiesAccess', { ...utilities, [key]: on }, {
+      shouldDirty: true,
+    });
 
   return (
     <AssessmentFormShell
       title="Social Assessment"
       patientLabel={patientLabel}
-      backTo={acting.patientPath}
+      backTo={patientPath}
       mode="create"
       isSubmitting={createMutation.isPending}
-      onSubmit={handleSubmit(onSubmit)}
-      onCancel={() => navigate(acting.patientPath)}
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      onCancel={() => navigate(patientPath)}
     >
-      {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['SocialWorker']} />}
-      {/* ── 1. Assessment type ── */}
-      <Section title="1. Assessment Type">
+      {/* ── 1. Assessment info ── */}
+      <Section title="1. Assessment Information">
         <Select
           label="Assessment Type"
           options={[
@@ -95,6 +185,7 @@ const SocialAssessmentFormPage: React.FC = () => {
             { value: 'FollowUp', label: 'Follow-up' },
             { value: 'Reassessment', label: 'Reassessment' },
           ]}
+          placeholder="Select…"
           error={errors.assessmentType?.message}
           {...register('assessmentType')}
         />
@@ -106,30 +197,22 @@ const SocialAssessmentFormPage: React.FC = () => {
           label="Household Size"
           type="number"
           min={1}
-          {...register('householdSize')}
+          error={errors.householdSize?.message}
+          {...register('householdSize', { valueAsNumber: true })}
         />
-        <Textarea
-          label="Household Members"
-          rows={5}
-          placeholder="One per line as: Name | Relationship | Age | Occupation"
-          onChange={(e) => {
-            const rows = e.target.value
-              .split('\n')
-              .map((l) => l.trim())
-              .filter(Boolean)
-              .map((l) => {
-                const [name = '', relationship = '', age = '', occupation = ''] =
-                  l.split('|');
-                return {
-                  name: name.trim(),
-                  relationship: relationship.trim(),
-                  age: age.trim() ? Number(age.trim()) : undefined,
-                  occupation: occupation.trim(),
-                };
-              });
-            setValue('householdMembers', rows as any);
-          }}
-        />
+        <div className="space-y-1.5">
+          <Textarea
+            label="Household Members"
+            rows={5}
+            value={householdText}
+            onChange={(e) => setHouseholdText(e.target.value)}
+            placeholder="One per line as: Name | Relationship | Age | Occupation"
+          />
+          <p className="text-[11px] text-text-muted">
+            Format: <code>Name | Relationship | Age | Occupation</code> — one
+            member per line. Age must be numeric; leave blank if unknown.
+          </p>
+        </div>
       </Section>
 
       {/* ── 3. Living arrangement ── */}
@@ -240,7 +323,9 @@ const SocialAssessmentFormPage: React.FC = () => {
             'LocalNgos',
             'NoSupportAvailable',
           ]}
-          onChange={(v) => setValue('communitySupport', v as any)}
+          onChange={(v) =>
+            setValue('communitySupport', v as any, { shouldDirty: true })
+          }
         />
         <Select
           label="Social Isolation Risk"
@@ -268,7 +353,9 @@ const SocialAssessmentFormPage: React.FC = () => {
             'None',
             'Other',
           ]}
-          onChange={(v) => setValue('incomeSources', v as any)}
+          onChange={(v) =>
+            setValue('incomeSources', v as any, { shouldDirty: true })
+          }
         />
         {watch('incomeSources')?.includes('Other') && (
           <Input
@@ -310,7 +397,9 @@ const SocialAssessmentFormPage: React.FC = () => {
             'CaregiverIncomeLoss',
             'Other',
           ]}
-          onChange={(v) => setValue('financialChallenges', v as any)}
+          onChange={(v) =>
+            setValue('financialChallenges', v as any, { shouldDirty: true })
+          }
         />
         {watch('financialChallenges')?.includes('Other') && (
           <Input
@@ -355,22 +444,20 @@ const SocialAssessmentFormPage: React.FC = () => {
         <div className="space-y-1.5">
           <p className="text-sm font-medium text-on-surface">Utility Access</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
-            {['Electricity', 'WaterSupply', 'ToiletFacility', 'TelephoneAccess'].map(
-              (u) => (
-                <label
-                  key={u}
-                  className="flex items-center gap-2 cursor-pointer text-sm text-on-surface"
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!utilities[u]}
-                    onChange={(e) => setUtility(u, e.target.checked)}
-                    className="h-3.5 w-3.5 rounded text-primary"
-                  />
-                  {u}
-                </label>
-              ),
-            )}
+            {UTILITY_KEYS.map(({ key, label }) => (
+              <label
+                key={key}
+                className="flex items-center gap-2 cursor-pointer text-sm text-on-surface"
+              >
+                <input
+                  type="checkbox"
+                  checked={!!utilities[key]}
+                  onChange={(e) => setUtility(key, e.target.checked)}
+                  className="h-3.5 w-3.5 rounded text-primary"
+                />
+                {label}
+              </label>
+            ))}
           </div>
         </div>
         <Select
@@ -396,21 +483,24 @@ const SocialAssessmentFormPage: React.FC = () => {
             'AmbulanceAccess',
             'NoReliableTransport',
           ]}
-          onChange={(v) => setValue('transportAccess', v as any)}
+          onChange={(v) =>
+            setValue('transportAccess', v as any, { shouldDirty: true })
+          }
         />
-        <Grid cols={2}>
-          <Input
-            label="Distance to Health Facility (km)"
-            type="number"
-            step="0.1"
-            {...register('distanceToHealthFacilityKm')}
-          />
-        </Grid>
+        <Input
+          label="Distance to Health Facility (km)"
+          type="number"
+          step="0.1"
+          error={errors.distanceToHealthFacilityKm?.message}
+          {...register('distanceToHealthFacilityKm', { valueAsNumber: true })}
+        />
         <CheckboxGroup
           label="Transport Challenges"
           values={watch('transportChallenges') ?? []}
           options={['None', 'Financial', 'PhysicalAccess', 'Availability', 'Other']}
-          onChange={(v) => setValue('transportChallenges', v as any)}
+          onChange={(v) =>
+            setValue('transportChallenges', v as any, { shouldDirty: true })
+          }
         />
         {watch('transportChallenges')?.includes('Other') && (
           <Input
@@ -452,20 +542,18 @@ const SocialAssessmentFormPage: React.FC = () => {
 
       {/* ── 10. Cultural & spiritual ── */}
       <Section title="10. Cultural & Spiritual Considerations">
-        <Grid cols={2}>
-          <Select
-            label="Religious Affiliation"
-            options={[
-              { value: 'Orthodox', label: 'Orthodox' },
-              { value: 'Muslim', label: 'Muslim' },
-              { value: 'Protestant', label: 'Protestant' },
-              { value: 'Catholic', label: 'Catholic' },
-              { value: 'Other', label: 'Other' },
-            ]}
-            placeholder="Select…"
-            {...register('religiousAffiliation')}
-          />
-        </Grid>
+        <Select
+          label="Religious Affiliation"
+          options={[
+            { value: 'Orthodox', label: 'Orthodox' },
+            { value: 'Muslim', label: 'Muslim' },
+            { value: 'Protestant', label: 'Protestant' },
+            { value: 'Catholic', label: 'Catholic' },
+            { value: 'Other', label: 'Other' },
+          ]}
+          placeholder="Select…"
+          {...register('religiousAffiliation')}
+        />
         {watch('religiousAffiliation') === 'Other' && (
           <Input
             label="Other religious affiliation"
@@ -475,15 +563,11 @@ const SocialAssessmentFormPage: React.FC = () => {
         <YesNo
           label="Spiritual support available?"
           name="spiritualSupportAvailable"
-          value={
-            watch('spiritualSupportAvailable') === undefined
-              ? ''
-              : watch('spiritualSupportAvailable')
-                ? 'Yes'
-                : 'No'
-          }
+          value={toYesNo(watch('spiritualSupportAvailable'))}
           onChange={(v) =>
-            setValue('spiritualSupportAvailable', v === 'Yes')
+            setValue('spiritualSupportAvailable', v === 'Yes', {
+              shouldDirty: true,
+            })
           }
         />
         <Textarea
@@ -499,29 +583,21 @@ const SocialAssessmentFormPage: React.FC = () => {
           <YesNo
             label="Has legal representative?"
             name="hasLegalRepresentative"
-            value={
-              watch('hasLegalRepresentative') === undefined
-                ? ''
-                : watch('hasLegalRepresentative')
-                  ? 'Yes'
-                  : 'No'
-            }
+            value={toYesNo(watch('hasLegalRepresentative'))}
             onChange={(v) =>
-              setValue('hasLegalRepresentative', v === 'Yes')
+              setValue('hasLegalRepresentative', v === 'Yes', {
+                shouldDirty: true,
+              })
             }
           />
           <YesNo
             label="Advance directives available?"
             name="advanceDirectivesAvailable"
-            value={
-              watch('advanceDirectivesAvailable') === undefined
-                ? ''
-                : watch('advanceDirectivesAvailable')
-                  ? 'Yes'
-                  : 'No'
-            }
+            value={toYesNo(watch('advanceDirectivesAvailable'))}
             onChange={(v) =>
-              setValue('advanceDirectivesAvailable', v === 'Yes')
+              setValue('advanceDirectivesAvailable', v === 'Yes', {
+                shouldDirty: true,
+              })
             }
           />
         </Grid>
@@ -535,7 +611,9 @@ const SocialAssessmentFormPage: React.FC = () => {
             'None',
             'Other',
           ]}
-          onChange={(v) => setValue('legalConcerns', v as any)}
+          onChange={(v) =>
+            setValue('legalConcerns', v as any, { shouldDirty: true })
+          }
         />
         {watch('legalConcerns')?.includes('Other') && (
           <Input
@@ -582,15 +660,11 @@ const SocialAssessmentFormPage: React.FC = () => {
           <YesNo
             label="Family requires support?"
             name="familyRequiresSupport"
-            value={
-              watch('familyRequiresSupport') === undefined
-                ? ''
-                : watch('familyRequiresSupport')
-                  ? 'Yes'
-                  : 'No'
-            }
+            value={toYesNo(watch('familyRequiresSupport'))}
             onChange={(v) =>
-              setValue('familyRequiresSupport', v === 'Yes')
+              setValue('familyRequiresSupport', v === 'Yes', {
+                shouldDirty: true,
+              })
             }
           />
         </Grid>
@@ -612,7 +686,9 @@ const SocialAssessmentFormPage: React.FC = () => {
             'LackOfSocialSupport',
             'Other',
           ]}
-          onChange={(v) => setValue('majorSocialIssues', v as any)}
+          onChange={(v) =>
+            setValue('majorSocialIssues', v as any, { shouldDirty: true })
+          }
         />
         {watch('majorSocialIssues')?.includes('Other') && (
           <Input
@@ -648,7 +724,9 @@ const SocialAssessmentFormPage: React.FC = () => {
             'LegalSupportReferral',
             'Other',
           ]}
-          onChange={(v) => setValue('plannedInterventions', v as any)}
+          onChange={(v) =>
+            setValue('plannedInterventions', v as any, { shouldDirty: true })
+          }
         />
         {watch('plannedInterventions')?.includes('Other') && (
           <Input
@@ -676,7 +754,9 @@ const SocialAssessmentFormPage: React.FC = () => {
             'HighRiskSocialSituation',
             'FollowUpAssessmentRequired',
           ]}
-          onChange={(v) => setValue('assessmentOutcome', v as any)}
+          onChange={(v) =>
+            setValue('assessmentOutcome', v as any, { shouldDirty: true })
+          }
         />
       </Section>
     </AssessmentFormShell>

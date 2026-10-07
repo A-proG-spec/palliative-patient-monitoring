@@ -1,8 +1,16 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
-import { resolveStaffAttribution } from '@utils/actor.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
 import type { Actor } from '../types/index.js';
+
+const formatEnteredBy = (staff?: any, admin?: any) =>
+  admin
+    ? { id: admin.id, name: admin.name, type: 'admin' as const }
+    : staff
+      ? { id: staff.id, name: staff.name, type: 'staff' as const }
+      : null;
+
 // ─────────────────────────────────────────────────────────────
 // Create discharge summary — finalizes discharge workflow
 // ─────────────────────────────────────────────────────────────
@@ -12,25 +20,31 @@ export const createDischargeSummary = async (
   actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
+  const hasActingAsStaffId = data.actingAsStaffId !== undefined &&
+    data.actingAsStaffId !== null && data.actingAsStaffId !== '';
+  const sid = actor.type === 'staff' || hasActingAsStaffId
+    ? resolveStaffAttribution(actor, data.actingAsStaffId)
+    : undefined;
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({
       where: { id: pid },
       select: { id: true, firstName: true, lastName: true },
     }),
-    prisma.staff.findUnique({ where: { id: sid }, select: { id: true } }),
+    sid !== undefined
+      ? prisma.staff.findUnique({ where: { id: sid }, select: { id: true } })
+      : Promise.resolve(null),
   ]);
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (sid !== undefined && !staff) throw new ApiError(404, 'Staff member not found');
 
   const admissionId = data.admissionId
     ? toId(data.admissionId, 'admission id')
     : (await prisma.hospitalAdmission.findFirst({
-        where: { patientId: pid, status: 'Active' },
-        orderBy: { admissionDate: 'desc' },
-        select: { id: true },
-      }))?.id;
+      where: { patientId: pid, status: 'Active' },
+      orderBy: { admissionDate: 'desc' },
+      select: { id: true },
+    }))?.id;
 
   if (admissionId) {
     const existing = await prisma.dischargeSummary.findFirst({
@@ -192,24 +206,28 @@ export const createDischargeSummary = async (
         dischargeNotes: data.dischargeNotes ?? null,
         status: 'Final',
 
-        createdBy: sid,
-
+        createdBy: sid ?? null,
+        createdByAdminId: adminCreatorId(actor),
         // Discharge medications (child rows)
         ...(Array.isArray(data.dischargeMedications) &&
-        data.dischargeMedications.length > 0
+          data.dischargeMedications.length > 0
           ? {
-              dischargeMedications: {
-                create: data.dischargeMedications.map((m: any) => ({
-                  medication: m.medication ?? '',
-                  dose: m.dose ?? '',
-                  route: m.route ?? '',
-                  frequency: m.frequency ?? '',
-                  purpose: m.purpose ?? '',
-                  instructions: m.instructions ?? '',
-                })),
-              },
-            }
+            dischargeMedications: {
+              create: data.dischargeMedications.map((m: any) => ({
+                medication: m.medication ?? '',
+                dose: m.dose ?? '',
+                route: m.route ?? '',
+                frequency: m.frequency ?? '',
+                purpose: m.purpose ?? '',
+                instructions: m.instructions ?? '',
+              })),
+            },
+          }
           : {}),
+      },
+      include: {
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     });
 
@@ -251,6 +269,7 @@ export const createDischargeSummary = async (
     dateOfDischarge: summary.dateOfDischarge,
     dischargeType: summary.dischargeType,
     status: summary.status,
+    enteredBy: formatEnteredBy(summary.createdByStaff, summary.createdByAdmin),
     createdAt: summary.createdAt,
   };
 };
@@ -266,6 +285,7 @@ export const getDischargeSummaryByPatient = async (patientId: string) => {
     orderBy: { createdAt: 'desc' },
     include: {
       createdByStaff: { select: { id: true, name: true, role: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       admission: { select: { id: true, admissionDate: true, ward: true, bedNumber: true } },
       dischargeMedications: true,
     },
@@ -286,6 +306,7 @@ export const getDischargeSummaryByAdmission = async (admissionId: string) => {
     where: { admissionId: aid },
     include: {
       createdByStaff: { select: { id: true, name: true, role: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       dischargeMedications: true,
     },
   });
@@ -309,6 +330,12 @@ export const updateDischargeSummary = async (
 
   const summary = await prisma.dischargeSummary.findFirst({
     where: { id: sid, patientId: pid },
+    include: {
+      createdByStaff: { select: { id: true, name: true, role: true } },
+      createdByAdmin: { select: { id: true, name: true } },
+      admission: { select: { id: true, admissionDate: true, ward: true, bedNumber: true } },
+      dischargeMedications: true,
+    },
   });
   if (!summary) throw new ApiError(404, 'Discharge summary not found');
 
@@ -318,7 +345,12 @@ export const updateDischargeSummary = async (
 
   const updated = await prisma.dischargeSummary.update({
     where: { id: sid },
-  data: { ...data },
+    data: { ...data },
+    include: {
+      createdByStaff: { select: { id: true, name: true, role: true } },
+      createdByAdmin: { select: { id: true, name: true } },
+      dischargeMedications: true,
+    },
   });
 
   return formatSummary(updated);
@@ -376,20 +408,22 @@ export const deleteDischargeSummary = async (
 // ─────────────────────────────────────────────────────────────
 // Helper
 // ─────────────────────────────────────────────────────────────
-const formatSummary = (summary: any) => ({
-  ...summary,
-  id: summary.id,
-  patientId: summary.patientId,
-  admissionId: summary.admissionId,
-  createdBy: summary.createdByStaff
-    ? {
-        id: summary.createdByStaff.id,
-        name: summary.createdByStaff.name,
-        role: summary.createdByStaff.role,
-      }
-    : null,
-  createdByStaff: undefined,
-});
+const formatSummary = (summary: any) => {
+  const {
+    createdBy,
+    createdByAdminId,
+    createdByStaff,
+    createdByAdmin,
+    ...summaryData
+  } = summary;
+  return {
+    ...summaryData,
+    id: summary.id,
+    patientId: summary.patientId,
+    admissionId: summary.admissionId,
+    enteredBy: formatEnteredBy(createdByStaff, createdByAdmin),
+  };
+};
 
 export default {
   createDischargeSummary,

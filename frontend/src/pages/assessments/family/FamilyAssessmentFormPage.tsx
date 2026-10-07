@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,7 +14,6 @@ import { AssessmentFormShell } from '@/components/assessments/AssessmentFormShel
 import {
   Section,
   Grid,
-  YesNo,
   CheckboxGroup,
 } from '@/components/assessments/FormPrimitives';
 
@@ -23,16 +22,22 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
-import { useActingClinician } from '@/hooks/useActingClinician';
-import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
+
+// ── Helpers ──────────────────────────────────────────────────────
+const displayId = (p: {
+  id: number | string;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
 
 const FamilyAssessmentFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const acting = useActingClinician(id!);
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
   const createMutation = useCreateFamilyAssessment(id!);
+
+  const patientPath = `/patients/${id}`;
 
   const {
     register,
@@ -58,47 +63,79 @@ const FamilyAssessmentFormPage: React.FC = () => {
     },
   });
 
+  // ── Household members are entered as raw text and parsed on save.
+  //    We keep the raw text in local state so the user can edit it
+  //    without losing data on re-render.
+  const [householdText, setHouseholdText] = useState('');
+
+  const parseHouseholdText = (text: string) => {
+    return text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.split('|').map((s) => s.trim());
+        const [name = '', age = '', relationship = '', occupation = '', contact = ''] = parts;
+        const parsedAge = age ? Number(age) : undefined;
+        return {
+          name,
+          age: Number.isFinite(parsedAge) ? parsedAge : undefined,
+          relationship,
+          occupation,
+          contact,
+        };
+      });
+  };
+
   const onSubmit = (data: CreateFamilyAssessmentFormData) => {
-    createMutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
-      onSuccess: () => navigate(acting.patientPath),
+    // Parse household text into structured rows right before submit
+    const householdMembers = parseHouseholdText(householdText);
+
+    const payload: CreateFamilyAssessmentFormData = {
+      ...data,
+      householdMembers: householdMembers as any,
+    };
+
+    createMutation.mutate(payload as any, {
+      onSuccess: () => navigate(patientPath),
     });
   };
 
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
-  const patientLabel = `${patient.firstName} ${patient.lastName} · ${
-    patient.patientDisplayId ?? patient.id
-  }`;
+  const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
 
   // Utilities access — JSON map bridging
-  const utilities = watch('utilitiesAccess') ?? {};
+  const utilities = (watch('utilitiesAccess') ?? {}) as Record<string, boolean>;
   const setUtility = (key: string, on: boolean) =>
-    setValue('utilitiesAccess', { ...utilities, [key]: on });
+    setValue('utilitiesAccess', { ...utilities, [key]: on }, { shouldDirty: true });
 
   return (
     <AssessmentFormShell
       title="Family Assessment"
       patientLabel={patientLabel}
-      backTo={acting.patientPath}
+      backTo={patientPath}
       mode="create"
       isSubmitting={createMutation.isPending}
       onSubmit={handleSubmit(onSubmit)}
-      onCancel={() => navigate(acting.patientPath)}
+      onCancel={() => navigate(patientPath)}
     >
-      {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['SocialWorker']} />}
-      {/* ── 1. Assessment type ── */}
-      <Section title="1. Assessment Type">
-        <Select
-          label="Assessment Type"
-          options={[
-            { value: 'Admission', label: 'Admission' },
-            { value: 'FollowUp', label: 'Follow-up' },
-            { value: 'CrisisReview', label: 'Crisis Review' },
-          ]}
-          error={errors.assessmentType?.message}
-          {...register('assessmentType')}
-        />
+      {/* ── 1. Assessment Info ── */}
+      <Section title="1. Assessment Information">
+        <Grid cols={2}>
+          <Select
+            label="Assessment Type"
+            options={[
+              { value: 'Admission', label: 'Admission' },
+              { value: 'FollowUp', label: 'Follow-up' },
+              { value: 'CrisisReview', label: 'Crisis review' },
+            ]}
+            placeholder="Select…"
+            error={errors.assessmentType?.message}
+            {...register('assessmentType')}
+          />
+        </Grid>
       </Section>
 
       {/* ── 2. Family composition ── */}
@@ -108,7 +145,8 @@ const FamilyAssessmentFormPage: React.FC = () => {
             label="Household Size"
             type="number"
             min={1}
-            {...register('householdSize')}
+            error={errors.householdSize?.message}
+            {...register('householdSize', { valueAsNumber: true })}
           />
           <Select
             label="Primary Decision Maker"
@@ -127,29 +165,19 @@ const FamilyAssessmentFormPage: React.FC = () => {
           label="Decision Maker Name"
           {...register('primaryDecisionMakerName')}
         />
-        <Textarea
-          label="Household Members"
-          rows={5}
-          placeholder={`One per line as: Name | Age | Relationship | Occupation | Contact`}
-          onChange={(e) => {
-            const rows = e.target.value
-              .split('\n')
-              .map((l) => l.trim())
-              .filter(Boolean)
-              .map((l) => {
-                const [name = '', age = '', relationship = '', occupation = '', contact = ''] =
-                  l.split('|');
-                return {
-                  name: name.trim(),
-                  age: age.trim() ? Number(age.trim()) : undefined,
-                  relationship: relationship.trim(),
-                  occupation: occupation.trim(),
-                  contact: contact.trim(),
-                };
-              });
-            setValue('householdMembers', rows as any);
-          }}
-        />
+        <div className="space-y-1.5">
+          <Textarea
+            label="Household Members"
+            rows={5}
+            value={householdText}
+            onChange={(e) => setHouseholdText(e.target.value)}
+            placeholder={`One per line as: Name | Age | Relationship | Occupation | Contact`}
+          />
+          <p className="text-[11px] text-text-muted">
+            Format: <code>Name | Age | Relationship | Occupation | Contact</code> — one member per line.
+            Age must be numeric; leave blank if unknown.
+          </p>
+        </div>
       </Section>
 
       {/* ── 3. Primary caregiver ── */}
@@ -167,7 +195,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
           <Input
             label="Age"
             type="number"
-            {...register('primaryCaregiverAge')}
+            min={0}
+            max={150}
+            {...register('primaryCaregiverAge', { valueAsNumber: true })}
           />
           <Input
             label="Phone"
@@ -263,7 +293,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
           label="External Support"
           values={watch('externalSupport') ?? []}
           options={['Community', 'ReligiousInstitution', 'NgoSupport', 'None']}
-          onChange={(v) => setValue('externalSupport', v as any)}
+          onChange={(v) =>
+            setValue('externalSupport', v as any, { shouldDirty: true })
+          }
         />
         <Select
           label="Social Isolation Risk"
@@ -289,7 +321,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'FamilySupport',
             'NoStableIncome',
           ]}
-          onChange={(v) => setValue('incomeSources', v as any)}
+          onChange={(v) =>
+            setValue('incomeSources', v as any, { shouldDirty: true })
+          }
         />
         <Grid cols={2}>
           <Select
@@ -325,7 +359,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'LossOfIncome',
             'CaregiverBurden',
           ]}
-          onChange={(v) => setValue('financialChallenges', v as any)}
+          onChange={(v) =>
+            setValue('financialChallenges', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
@@ -479,7 +515,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'LackOfSupport',
             'LackOfKnowledge',
           ]}
-          onChange={(v) => setValue('burdenFactors', v as any)}
+          onChange={(v) =>
+            setValue('burdenFactors', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
@@ -497,7 +535,7 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'RespiteCare',
             'BereavementPreparation',
           ]}
-          onChange={(v) => setValue('needs', v as any)}
+          onChange={(v) => setValue('needs', v as any, { shouldDirty: true })}
         />
         <CheckboxGroup
           label="Family Strengths"
@@ -510,7 +548,7 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'CommunitySupport',
             'GoodCommunication',
           ]}
-          onChange={(v) => setValue('strengths', v as any)}
+          onChange={(v) => setValue('strengths', v as any, { shouldDirty: true })}
         />
       </Section>
 
@@ -531,7 +569,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'FinancialAssistancePrograms',
             'CommunityVolunteers',
           ]}
-          onChange={(v) => setValue('supportServices', v as any)}
+          onChange={(v) =>
+            setValue('supportServices', v as any, { shouldDirty: true })
+          }
         />
         <Select
           label="Follow-Up Plan"
@@ -548,10 +588,7 @@ const FamilyAssessmentFormPage: React.FC = () => {
 
       {/* ── 14. Summary ── */}
       <Section title="14. Summary & Recommendations">
-        <Input
-          label="Assessor Name"
-          {...register('assessorName')}
-        />
+        <Input label="Assessor Name" {...register('assessorName')} />
         <CheckboxGroup
           label="Assessment Outcome"
           values={watch('assessmentOutcome') ?? []}
@@ -562,7 +599,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'AtRiskFamilySystem',
             'RequiresIntensivePsychosocialSupport',
           ]}
-          onChange={(v) => setValue('assessmentOutcome', v as any)}
+          onChange={(v) =>
+            setValue('assessmentOutcome', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Final Recommendations"
@@ -575,7 +614,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'BereavementPreparationNeeded',
             'MultidisciplinaryFamilyIntervention',
           ]}
-          onChange={(v) => setValue('finalRecommendations', v as any)}
+          onChange={(v) =>
+            setValue('finalRecommendations', v as any, { shouldDirty: true })
+          }
         />
       </Section>
     </AssessmentFormShell>

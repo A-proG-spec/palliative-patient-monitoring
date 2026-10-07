@@ -24,13 +24,24 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
-import { useActingClinician } from '@/hooks/useActingClinician';
-import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
+import { useToast } from '@/context/ToastContext';
+
+// ── Helpers ─────────────────────────────────────────────────────
+const displayId = (p: {
+  id: number | string;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
+
+const toYesNo = (v: boolean | null | undefined): 'Yes' | 'No' | '' =>
+  v === undefined || v === null ? '' : v ? 'Yes' : 'No';
 
 const PsychiatryAssessmentFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const acting = useActingClinician(id!);
+  const { toast } = useToast();
+
+  const patientPath = `/patients/${id}`;
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
   const createMutation = useCreatePsychiatryAssessment(id!);
@@ -63,18 +74,71 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
     },
   });
 
+  // ═══════════════════════════════════════════════════════════
+  // Submit
+  // ═══════════════════════════════════════════════════════════
   const onSubmit = (data: CreatePsychiatryAssessmentFormData) => {
-    createMutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
-      onSuccess: () => navigate(acting.patientPath),
+    createMutation.mutate(data as any, {
+      onSuccess: () => {
+        // Confirm the safety escalation to the user when high risk
+        if (data.suicideRiskLevel === 'High') {
+          toast.success(
+            'High-risk assessment saved — administrators have been notified.',
+          );
+        }
+        navigate(patientPath);
+      },
+      onError: (err: any) => {
+        const message =
+          err?.response?.data?.message ??
+          'Failed to save psychiatry assessment.';
+        const fieldErrors = err?.response?.data?.errors;
+        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+          toast.error(
+            `${message} — ${fieldErrors
+              .slice(0, 3)
+              .map((e: any) => e.message ?? e.field)
+              .join(', ')}`,
+          );
+        } else {
+          toast.error(message);
+        }
+      },
     });
+  };
+
+  const onInvalid = (formErrors: any) => {
+    const flat: string[] = [];
+    const walk = (obj: any, path = ''): void => {
+      if (!obj || typeof obj !== 'object') return;
+      if ('message' in obj && typeof obj.message === 'string') {
+        flat.push(`${path || 'form'}: ${obj.message}`);
+        return;
+      }
+      for (const [k, v] of Object.entries(obj)) {
+        const next = path ? `${path}.${k}` : k;
+        if (Array.isArray(v)) {
+          v.forEach((item, i) => walk(item, `${next}[${i}]`));
+        } else {
+          walk(v, next);
+        }
+      }
+    };
+    walk(formErrors);
+
+    if (flat.length > 0) {
+      const shown = flat.slice(0, 3).join(' • ');
+      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
+      toast.error(`Save failed — ${shown}${rest}`);
+    } else {
+      toast.error('Save failed — please review the form.');
+    }
   };
 
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
-  const patientLabel = `${patient.firstName} ${patient.lastName} · ${
-    patient.patientDisplayId ?? patient.id
-  }`;
+  const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
 
   const suicideRiskLevel = watch('suicideRiskLevel');
   const isHighRisk = suicideRiskLevel === 'High';
@@ -83,16 +147,15 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
     <AssessmentFormShell
       title="Psychiatry Assessment"
       patientLabel={patientLabel}
-      backTo={acting.patientPath}
+      backTo={patientPath}
       mode="create"
       isSubmitting={createMutation.isPending}
-      onSubmit={handleSubmit(onSubmit)}
-      onCancel={() => navigate(acting.patientPath)}
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      onCancel={() => navigate(patientPath)}
     >
-      {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Psychologist', 'Psychiatrist']} />}
-      {/* ── Safety banner ── */}
+      {/* ── High-risk safety banner ── */}
       {isHighRisk && (
-        <div className="rounded-xl border border-error/30 bg-error-bg px-4 py-3 flex items-start gap-3">
+        <div className="rounded-lg border border-error/30 bg-error-bg/40 px-4 py-3 flex items-start gap-3">
           <AlertTriangle
             size={18}
             className="text-error flex-shrink-0 mt-0.5"
@@ -146,13 +209,12 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
             'AdjustmentDisorder',
             'Other',
           ]}
-          onChange={(v) => setValue('currentSymptoms', v as any)}
+          onChange={(v) =>
+            setValue('currentSymptoms', v as any, { shouldDirty: true })
+          }
         />
         {watch('currentSymptoms')?.includes('Other') && (
-          <Input
-            label="Other symptom"
-            {...register('symptomOther')}
-          />
+          <Input label="Other symptom" {...register('symptomOther')} />
         )}
         <Grid cols={2}>
           <Input
@@ -180,7 +242,9 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
           label="Appearance & Behavior"
           values={watch('appearanceBehavior') ?? []}
           options={['Calm', 'Restless', 'Agitated', 'Withdrawn', 'PoorSelfCare']}
-          onChange={(v) => setValue('appearanceBehavior', v as any)}
+          onChange={(v) =>
+            setValue('appearanceBehavior', v as any, { shouldDirty: true })
+          }
         />
         <Grid cols={2}>
           <Select
@@ -231,7 +295,9 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
           label="Thought Process"
           values={watch('thoughtProcess') ?? []}
           options={['Logical', 'Circumstantial', 'Disorganized', 'Tangential']}
-          onChange={(v) => setValue('thoughtProcess', v as any)}
+          onChange={(v) =>
+            setValue('thoughtProcess', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Thought Content"
@@ -244,7 +310,9 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
             'Paranoia',
             'SomaticPreoccupation',
           ]}
-          onChange={(v) => setValue('thoughtContent', v as any)}
+          onChange={(v) =>
+            setValue('thoughtContent', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Perception"
@@ -254,7 +322,9 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
             'AuditoryHallucinations',
             'VisualHallucinations',
           ]}
-          onChange={(v) => setValue('perception', v as any)}
+          onChange={(v) =>
+            setValue('perception', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Cognition"
@@ -265,11 +335,13 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
             'MemoryImpairment',
             'AttentionDeficits',
           ]}
-          onChange={(v) => setValue('cognition', v as any)}
+          onChange={(v) =>
+            setValue('cognition', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
-      {/* ── 4. Suicide risk assessment (safety-critical) ── */}
+      {/* ── 4. Suicide risk assessment ── */}
       <Section title="4. Suicide Risk Assessment">
         <Grid cols={2}>
           <Select
@@ -304,7 +376,9 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
             'ResponsibilityForFamily',
             'SocialSupport',
           ]}
-          onChange={(v) => setValue('protectiveFactors', v as any)}
+          onChange={(v) =>
+            setValue('protectiveFactors', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
@@ -322,7 +396,9 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
             'Delirium',
             'CancerProgression',
           ]}
-          onChange={(v) => setValue('organicCauses', v as any)}
+          onChange={(v) =>
+            setValue('organicCauses', v as any, { shouldDirty: true })
+          }
         />
         <Textarea
           label="Medications Affecting Mental State"
@@ -398,13 +474,12 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
             'MixedAnxietyDepression',
             'Other',
           ]}
-          onChange={(v) => setValue('diagnoses', v as any)}
+          onChange={(v) =>
+            setValue('diagnoses', v as any, { shouldDirty: true })
+          }
         />
         {watch('diagnoses')?.includes('Other') && (
-          <Input
-            label="Other diagnosis"
-            {...register('diagnosisOther')}
-          />
+          <Input label="Other diagnosis" {...register('diagnosisOther')} />
         )}
       </Section>
 
@@ -420,7 +495,9 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
             'SupportiveCounseling',
             'FamilyCounseling',
           ]}
-          onChange={(v) => setValue('immediateInterventions', v as any)}
+          onChange={(v) =>
+            setValue('immediateInterventions', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Pharmacological Plan"
@@ -432,7 +509,9 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
             'SleepMedications',
             'DoseAdjustmentReview',
           ]}
-          onChange={(v) => setValue('pharmacologicalPlan', v as any)}
+          onChange={(v) =>
+            setValue('pharmacologicalPlan', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Non-Pharmacological Plan"
@@ -444,13 +523,17 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
             'MusicTherapy',
             'BehavioralActivation',
           ]}
-          onChange={(v) => setValue('nonPharmacologicalPlan', v as any)}
+          onChange={(v) =>
+            setValue('nonPharmacologicalPlan', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Monitoring Plan"
           values={watch('monitoringPlan') ?? []}
           options={['Daily', 'Weekly', 'AsNeeded']}
-          onChange={(v) => setValue('monitoringPlan', v as any)}
+          onChange={(v) =>
+            setValue('monitoringPlan', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
@@ -470,27 +553,19 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
           <YesNo
             label="Caregiver burnout?"
             name="caregiverBurnout"
-            value={
-              watch('caregiverBurnout') === undefined
-                ? ''
-                : watch('caregiverBurnout')
-                  ? 'Yes'
-                  : 'No'
+            value={toYesNo(watch('caregiverBurnout'))}
+            onChange={(v) =>
+              setValue('caregiverBurnout', v === 'Yes', { shouldDirty: true })
             }
-            onChange={(v) => setValue('caregiverBurnout', v === 'Yes')}
           />
           <YesNo
             label="Family counseling needed?"
             name="familyCounselingNeeded"
-            value={
-              watch('familyCounselingNeeded') === undefined
-                ? ''
-                : watch('familyCounselingNeeded')
-                  ? 'Yes'
-                  : 'No'
-            }
+            value={toYesNo(watch('familyCounselingNeeded'))}
             onChange={(v) =>
-              setValue('familyCounselingNeeded', v === 'Yes')
+              setValue('familyCounselingNeeded', v === 'Yes', {
+                shouldDirty: true,
+              })
             }
           />
         </Grid>
@@ -508,7 +583,9 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
             'RequiresCloseMonitoring',
             'HighRiskSafetyPrecautionsRequired',
           ]}
-          onChange={(v) => setValue('assessmentOutcome', v as any)}
+          onChange={(v) =>
+            setValue('assessmentOutcome', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Final Recommendations"
@@ -520,7 +597,9 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
             'FamilyCounselingRequired',
             'OngoingPsychiatricFollowUp',
           ]}
-          onChange={(v) => setValue('finalRecommendations', v as any)}
+          onChange={(v) =>
+            setValue('finalRecommendations', v as any, { shouldDirty: true })
+          }
         />
       </Section>
     </AssessmentFormShell>

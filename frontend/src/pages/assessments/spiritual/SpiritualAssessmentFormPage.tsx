@@ -23,13 +23,36 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
-import { useActingClinician } from '@/hooks/useActingClinician';
-import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
+import { useToast } from '@/context/ToastContext';
+
+// ── Helpers ─────────────────────────────────────────────────────
+const displayId = (p: {
+  id: number | string;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
+
+const toYesNo = (v: boolean | null | undefined): 'Yes' | 'No' | '' =>
+  v === undefined || v === null ? '' : v ? 'Yes' : 'No';
+
+const DISTRESS_CONCERNS = [
+  'MeaningOfIllness',
+  'FearOfDeath',
+  'FearOfSuffering',
+  'UnfinishedBusiness',
+  'Forgiveness',
+  'RelationshipConflicts',
+  'LossOfHope',
+  'AngerTowardGodHigherPower',
+  'SpiritualIsolation',
+] as const;
 
 const SpiritualAssessmentFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const acting = useActingClinician(id!);
+  const { toast } = useToast();
+
+  const patientPath = `/patients/${id}`;
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
   const createMutation = useCreateSpiritualAssessment(id!);
@@ -55,48 +78,91 @@ const SpiritualAssessmentFormPage: React.FC = () => {
     },
   });
 
+  // ═══════════════════════════════════════════════════════════
+  // Submit
+  // ═══════════════════════════════════════════════════════════
   const onSubmit = (data: CreateSpiritualAssessmentFormData) => {
-    createMutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
-      onSuccess: () => navigate(acting.patientPath),
+    createMutation.mutate(data as any, {
+      onSuccess: () => navigate(patientPath),
+      onError: (err: any) => {
+        const message =
+          err?.response?.data?.message ??
+          'Failed to save spiritual assessment.';
+        const fieldErrors = err?.response?.data?.errors;
+        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+          toast.error(
+            `${message} — ${fieldErrors
+              .slice(0, 3)
+              .map((e: any) => e.message ?? e.field)
+              .join(', ')}`,
+          );
+        } else {
+          toast.error(message);
+        }
+      },
     });
+  };
+
+  const onInvalid = (formErrors: any) => {
+    const flat: string[] = [];
+    const walk = (obj: any, path = ''): void => {
+      if (!obj || typeof obj !== 'object') return;
+      if ('message' in obj && typeof obj.message === 'string') {
+        flat.push(`${path || 'form'}: ${obj.message}`);
+        return;
+      }
+      for (const [k, v] of Object.entries(obj)) {
+        const next = path ? `${path}.${k}` : k;
+        if (Array.isArray(v)) {
+          v.forEach((item, i) => walk(item, `${next}[${i}]`));
+        } else {
+          walk(v, next);
+        }
+      }
+    };
+    walk(formErrors);
+
+    if (flat.length > 0) {
+      const shown = flat.slice(0, 3).join(' • ');
+      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
+      toast.error(`Save failed — ${shown}${rest}`);
+    } else {
+      toast.error('Save failed — please review the form.');
+    }
   };
 
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
-  const patientLabel = `${patient.firstName} ${patient.lastName} · ${
-    patient.patientDisplayId ?? patient.id
-  }`;
+  const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
 
-  // Distress concerns bridge — set of "present" concerns
+  // ── Distress concerns: preserve all rows (both present and absent) ──
+  const currentDistress = watch('distressConcerns') ?? [];
   const distressSet = new Set(
-    (watch('distressConcerns') ?? [])
-      .filter((r) => r.present)
-      .map((r) => r.concern),
+    currentDistress.filter((r) => r.present).map((r) => r.concern),
   );
+
   const toggleDistress = (concern: string) => {
-    const current = new Set(distressSet);
-    if (current.has(concern as any)) current.delete(concern as any);
-    else current.add(concern as any);
-    setValue(
-      'distressConcerns',
-      Array.from(current).map((c) => ({ concern: c as any, present: true })),
-    );
+    const next = DISTRESS_CONCERNS.map((c) => ({
+      concern: c,
+      present: c === concern ? !distressSet.has(c as any) : distressSet.has(c as any),
+    })).filter((row) => row.present); // send only the ones marked present
+
+    setValue('distressConcerns', next as any, { shouldDirty: true });
   };
 
   return (
     <AssessmentFormShell
       title="Spiritual Assessment"
       patientLabel={patientLabel}
-      backTo={acting.patientPath}
+      backTo={patientPath}
       mode="create"
       isSubmitting={createMutation.isPending}
-      onSubmit={handleSubmit(onSubmit)}
-      onCancel={() => navigate(acting.patientPath)}
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      onCancel={() => navigate(patientPath)}
     >
-      {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['SpiritualPerson']} />}
-      {/* ── 1. Assessment type ── */}
-      <Section title="1. Assessment Type">
+      {/* ── 1. Assessment info ── */}
+      <Section title="1. Assessment Information">
         <Select
           label="Assessment Type"
           options={[
@@ -104,6 +170,7 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             { value: 'FollowUp', label: 'Follow-up' },
             { value: 'Reassessment', label: 'Reassessment' },
           ]}
+          placeholder="Select…"
           error={errors.assessmentType?.message}
           {...register('assessmentType')}
         />
@@ -124,7 +191,10 @@ const SpiritualAssessmentFormPage: React.FC = () => {
               { value: 'Catholic', label: 'Catholic' },
               { value: 'TraditionalBelief', label: 'Traditional belief' },
               { value: 'Other', label: 'Other' },
-              { value: 'NoReligiousAffiliation', label: 'No religious affiliation' },
+              {
+                value: 'NoReligiousAffiliation',
+                label: 'No religious affiliation',
+              },
             ]}
             placeholder="Select…"
             {...register('religiousAffiliation')}
@@ -159,10 +229,7 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             placeholder="Select…"
             {...register('activityParticipation')}
           />
-          <Input
-            label="Place of Worship"
-            {...register('placeOfWorship')}
-          />
+          <Input label="Place of Worship" {...register('placeOfWorship')} />
         </Grid>
       </Section>
 
@@ -180,7 +247,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'CommunityMembers',
             'NoSpiritualSupport',
           ]}
-          onChange={(v) => setValue('supportSources', v as any)}
+          onChange={(v) =>
+            setValue('supportSources', v as any, { shouldDirty: true })
+          }
         />
         <Grid cols={3}>
           <Input
@@ -214,14 +283,10 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         <YesNo
           label="Practices to continue?"
           name="practicesToContinue"
-          value={
-            watch('practicesToContinue') === undefined
-              ? ''
-              : watch('practicesToContinue')
-                ? 'Yes'
-                : 'No'
+          value={toYesNo(watch('practicesToContinue'))}
+          onChange={(v) =>
+            setValue('practicesToContinue', v === 'Yes', { shouldDirty: true })
           }
-          onChange={(v) => setValue('practicesToContinue', v === 'Yes')}
         />
         {watch('practicesToContinue') && (
           <Textarea
@@ -233,14 +298,10 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         <YesNo
           label="Rituals to respect?"
           name="ritualsToRespect"
-          value={
-            watch('ritualsToRespect') === undefined
-              ? ''
-              : watch('ritualsToRespect')
-                ? 'Yes'
-                : 'No'
+          value={toYesNo(watch('ritualsToRespect'))}
+          onChange={(v) =>
+            setValue('ritualsToRespect', v === 'Yes', { shouldDirty: true })
           }
-          onChange={(v) => setValue('ritualsToRespect', v === 'Yes')}
         />
         {watch('ritualsToRespect') && (
           <Textarea
@@ -258,19 +319,7 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             Spiritual Distress Concerns
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {(
-              [
-                'MeaningOfIllness',
-                'FearOfDeath',
-                'FearOfSuffering',
-                'UnfinishedBusiness',
-                'Forgiveness',
-                'RelationshipConflicts',
-                'LossOfHope',
-                'AngerTowardGodHigherPower',
-                'SpiritualIsolation',
-              ] as const
-            ).map((concern) => (
+            {DISTRESS_CONCERNS.map((concern) => (
               <label
                 key={concern}
                 className="flex items-center gap-2 cursor-pointer text-sm text-on-surface"
@@ -323,7 +372,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'Music',
             'Other',
           ]}
-          onChange={(v) => setValue('copingMethods', v as any)}
+          onChange={(v) =>
+            setValue('copingMethods', v as any, { shouldDirty: true })
+          }
         />
         {watch('copingMethods')?.includes('Other') && (
           <Input
@@ -358,15 +409,11 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         <YesNo
           label="Family benefits from spiritual support?"
           name="familyBenefitFromSupport"
-          value={
-            watch('familyBenefitFromSupport') === undefined
-              ? ''
-              : watch('familyBenefitFromSupport')
-                ? 'Yes'
-                : 'No'
-          }
+          value={toYesNo(watch('familyBenefitFromSupport'))}
           onChange={(v) =>
-            setValue('familyBenefitFromSupport', v === 'Yes')
+            setValue('familyBenefitFromSupport', v === 'Yes', {
+              shouldDirty: true,
+            })
           }
         />
         <Textarea
@@ -390,7 +437,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'ReligiousMusic',
             'Other',
           ]}
-          onChange={(v) => setValue('preferredEndOfLifeCare', v as any)}
+          onChange={(v) =>
+            setValue('preferredEndOfLifeCare', v as any, { shouldDirty: true })
+          }
         />
         {watch('preferredEndOfLifeCare')?.includes('Other') && (
           <Input
@@ -449,7 +498,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'AcceptanceOfIllness',
             'Other',
           ]}
-          onChange={(v) => setValue('patientStrengths', v as any)}
+          onChange={(v) =>
+            setValue('patientStrengths', v as any, { shouldDirty: true })
+          }
         />
         {watch('patientStrengths')?.includes('Other') && (
           <Input
@@ -479,7 +530,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'ReconciliationSupport',
             'Other',
           ]}
-          onChange={(v) => setValue('identifiedNeeds', v as any)}
+          onChange={(v) =>
+            setValue('identifiedNeeds', v as any, { shouldDirty: true })
+          }
         />
         {watch('identifiedNeeds')?.includes('Other') && (
           <Input
@@ -534,7 +587,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'AdvanceCarePlanning',
             'OngoingSpiritualCare',
           ]}
-          onChange={(v) => setValue('recommendedServices', v as any)}
+          onChange={(v) =>
+            setValue('recommendedServices', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Assessment Outcome"
@@ -547,7 +602,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'FamilySpiritualSupportRequired',
             'BereavementFollowUpRecommended',
           ]}
-          onChange={(v) => setValue('assessmentOutcome', v as any)}
+          onChange={(v) =>
+            setValue('assessmentOutcome', v as any, { shouldDirty: true })
+          }
         />
       </Section>
     </AssessmentFormShell>

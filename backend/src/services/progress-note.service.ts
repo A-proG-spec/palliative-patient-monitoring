@@ -2,8 +2,16 @@ import bcrypt from 'bcrypt';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
-import { resolveStaffAttribution } from '@utils/actor.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
 import type { Actor } from '../types/index.js';
+
+const formatEnteredBy = (staff?: any, admin?: any) =>
+  admin
+    ? { id: admin.id, name: admin.name, type: 'admin' as const }
+    : staff
+      ? { id: staff.id, name: staff.name, type: 'staff' as const }
+      : null;
+
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
@@ -40,18 +48,34 @@ export const createProgressNote = async (
   actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
+  const hasActingAsStaffId = data.actingAsStaffId !== undefined &&
+    data.actingAsStaffId !== null && data.actingAsStaffId !== '';
+  const sid = actor.type === 'staff' || hasActingAsStaffId
+    ? resolveStaffAttribution(actor, data.actingAsStaffId)
+    : undefined;
+  if (sid === undefined && (data.responsibleClinicianId === undefined ||
+    data.responsibleClinicianId === null || data.responsibleClinicianId === '')) {
+    throw new ApiError(400, 'responsibleClinicianId is required when creating a progress note as an admin');
+  }
+  const responsibleClinicianId = sid ?? toId(data.responsibleClinicianId, 'responsible clinician id');
 
-  const [patient, staff] = await Promise.all([
+  const [patient, staff, responsibleClinician] = await Promise.all([
     prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
+    sid !== undefined
+      ? prisma.staff.findUnique({
+        where: { id: sid },
+        select: { id: true, name: true, role: true },
+      })
+      : Promise.resolve(null),
     prisma.staff.findUnique({
-      where: { id: sid },
+      where: { id: responsibleClinicianId },
       select: { id: true, name: true, role: true },
     }),
   ]);
 
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (sid !== undefined && !staff) throw new ApiError(404, 'Staff member not found');
+  if (!responsibleClinician) throw new ApiError(404, 'Responsible clinician not found');
 
   let admissionId: number | null = data.admissionId
     ? toId(data.admissionId, 'admission id')
@@ -72,6 +96,7 @@ export const createProgressNote = async (
       admissionId,
 
       attendingClinician: data.attendingClinician,
+      createdByAdminId: adminCreatorId(actor),
       palliativeCareUnit: data.palliativeCareUnit ?? null,
 
       generalCondition: data.generalCondition ?? null,
@@ -220,10 +245,21 @@ export const createProgressNote = async (
       soapAssessment: data.soapAssessment ?? '',
       soapPlan: data.soapPlan ?? '',
 
-      responsibleClinicianId: sid,
+      responsibleClinicianId,
       facilityStamp: data.facilityStamp ?? '',
 
-      createdBy: sid,
+      createdBy: sid ?? null,
+
+      signatures: {
+        create: {
+          staffId: responsibleClinician.id,
+          name: responsibleClinician.name,
+          role: responsibleClinician.role === 'Physician' || responsibleClinician.role === 'Nurse'
+            ? responsibleClinician.role
+            : 'Reviewer',
+          signedAt: new Date(),
+        },
+      },
 
       // Children
       ...(Array.isArray(data.medications) && data.medications.length > 0
@@ -265,6 +301,11 @@ export const createProgressNote = async (
         }
         : {}),
     },
+    include: {
+      signatures: true,
+      createdByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
+    },
   });
 
   return {
@@ -274,7 +315,8 @@ export const createProgressNote = async (
     attendingClinician: note.attendingClinician,
     generalCondition: note.generalCondition,
     responsibleClinicianId: note.responsibleClinicianId,
-    signatures: [],
+    signatures: formatSignatures(note.signatures),
+    enteredBy: formatEnteredBy(note.createdByStaff, note.createdByAdmin),
     createdAt: note.createdAt,
   };
 };
@@ -312,6 +354,7 @@ export const getAllProgressNotes = async (
       take: limit,
       include: {
         createdByStaff: { select: { id: true, name: true, role: true } },
+        createdByAdmin: { select: { id: true, name: true } },
         responsibleClinician: { select: { id: true, name: true, role: true } },
         admission: {
           select: { id: true, admissionDate: true, ward: true, bedNumber: true },
@@ -341,11 +384,7 @@ export const getAllProgressNotes = async (
       },
       signatures: formatSignatures(n.signatures),
       allSigned: isAllSigned(n.signatures),
-      createdBy: {
-        id: n.createdByStaff.id,
-        name: n.createdByStaff.name,
-        role: n.createdByStaff.role,
-      },
+      enteredBy: formatEnteredBy(n.createdByStaff, n.createdByAdmin),
       createdAt: n.createdAt,
       updatedAt: n.updatedAt,
       deletedAt: n.deletedAt ?? null,
@@ -388,6 +427,7 @@ export const getProgressNotes = async (
       take: limit,
       include: {
         createdByStaff: { select: { id: true, name: true, role: true } },
+        createdByAdmin: { select: { id: true, name: true } },
         responsibleClinician: { select: { id: true, name: true, role: true } },
         admission: { select: { id: true, admissionDate: true, ward: true, bedNumber: true } },
         signatures: true,
@@ -419,11 +459,7 @@ export const getProgressNotes = async (
       signatures: formatSignatures(n.signatures),
       allSigned: isAllSigned(n.signatures),
 
-      createdBy: {
-        id: n.createdByStaff.id,
-        name: n.createdByStaff.name,
-        role: n.createdByStaff.role,
-      },
+      enteredBy: formatEnteredBy(n.createdByStaff, n.createdByAdmin),
 
       createdAt: n.createdAt,
       updatedAt: n.updatedAt,
@@ -448,6 +484,7 @@ export const getProgressNoteById = async (
     where: { id: nid, patientId: pid },
     include: {
       createdByStaff: { select: { id: true, name: true, role: true, email: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       responsibleClinician: { select: { id: true, name: true, role: true, email: true } },
       admission: {
         select: {
@@ -469,8 +506,16 @@ export const getProgressNoteById = async (
       ? computeDayOfAdmission(note.admission.admissionDate, note.createdAt)
       : null;
 
+  const {
+    createdBy,
+    createdByAdminId,
+    createdByStaff,
+    createdByAdmin,
+    ...noteData
+  } = note;
+
   return {
-    ...note,
+    ...noteData,
     dayOfAdmission,
     responsibleClinician: {
       staffId: note.responsibleClinician.id,
@@ -478,13 +523,7 @@ export const getProgressNoteById = async (
       role: note.responsibleClinician.role,
       email: note.responsibleClinician.email,
     },
-    createdBy: {
-      id: note.createdByStaff.id,
-      name: note.createdByStaff.name,
-      role: note.createdByStaff.role,
-      email: note.createdByStaff.email,
-    },
-    createdByStaff: undefined,
+    enteredBy: formatEnteredBy(createdByStaff, createdByAdmin),
     signatures: formatSignatures(note.signatures),
     allSigned: isAllSigned(note.signatures),
   };
@@ -573,6 +612,8 @@ export const getProgressNoteSignatures = async (
   const note = await prisma.patientProgressNote.findFirst({
     where: { id: nid, patientId: pid },
     include: {
+      createdByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       responsibleClinician: { select: { id: true, name: true, role: true } },
       signatures: true,
     },
@@ -582,6 +623,7 @@ export const getProgressNoteSignatures = async (
   return {
     noteId: note.id,
     createdAt: note.createdAt,
+    enteredBy: formatEnteredBy(note.createdByStaff, note.createdByAdmin),
     responsibleClinician: {
       staffId: note.responsibleClinician.id,
       name: note.responsibleClinician.name,
@@ -634,7 +676,7 @@ export const updateProgressNote = async (
 
   const updated = await prisma.patientProgressNote.update({
     where: { id: nid },
-  data: { ...cleanData },
+    data: { ...cleanData },
   });
 
   return { id: updated.id, updatedAt: updated.updatedAt };

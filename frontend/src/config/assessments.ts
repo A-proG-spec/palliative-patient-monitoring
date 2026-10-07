@@ -1,10 +1,4 @@
-import type { ComponentType } from 'react';
 import type { StaffRole } from '@/types/auth.types';
-
-// ═════════════════════════════════════════════════════════════
-// Assessment keys — the canonical identifiers used in routing,
-// query keys, and role mapping.
-// ═════════════════════════════════════════════════════════════
 
 export type AssessmentKey =
   | 'pain'
@@ -18,23 +12,17 @@ export type AssessmentKey =
 
 export interface AssessmentDef {
   key: AssessmentKey;
-  /** Full label used in headers and cards. */
   label: string;
-  /** Short label for tight UI spots (sidebar-ish, badges). */
   shortLabel: string;
-  /** One-line description for card subtitles. */
   description: string;
-  /** URL segment — `/patients/:id/<routeBase>/new` etc. */
   routeBase: string;
-  /** Emoji or icon node — kept simple so we don't import 8 icons here. */
   icon: string;
-  /** Tailwind text color class for the card icon. */
   accentColor: string;
+  /** Permission key that gates write access. */
+  writePermission: string;
+  /** Permission key that gates read access. */
+  viewPermission: string;
 }
-
-// ═════════════════════════════════════════════════════════════
-// Registry — one entry per assessment
-// ═════════════════════════════════════════════════════════════
 
 export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
   pain: {
@@ -45,6 +33,8 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     routeBase: 'pain',
     icon: '🔥',
     accentColor: 'text-red-600',
+    writePermission: 'canWritePainAssessment',
+    viewPermission: 'canViewPainAssessment',
   },
   pharmacist: {
     key: 'pharmacist',
@@ -54,6 +44,8 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     routeBase: 'pharmacist-assessment',
     icon: '💊',
     accentColor: 'text-green-600',
+    writePermission: 'canWritePharmacistAssessment',
+    viewPermission: 'canViewPharmacistAssessment',
   },
   physiotherapy: {
     key: 'physiotherapy',
@@ -63,6 +55,8 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     routeBase: 'physiotherapy-assessment',
     icon: '🦯',
     accentColor: 'text-indigo-600',
+    writePermission: 'canWritePhysiotherapyAssessment',
+    viewPermission: 'canViewPhysiotherapyAssessment',
   },
   family: {
     key: 'family',
@@ -72,6 +66,8 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     routeBase: 'family-assessment',
     icon: '👨‍👩‍👧',
     accentColor: 'text-orange-600',
+    writePermission: 'canWriteFamilyAssessment',
+    viewPermission: 'canViewFamilyAssessment',
   },
   nutritional: {
     key: 'nutritional',
@@ -81,6 +77,8 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     routeBase: 'nutritional-assessment',
     icon: '🥗',
     accentColor: 'text-emerald-600',
+    writePermission: 'canWriteNutritionalAssessment',
+    viewPermission: 'canViewNutritionalAssessment',
   },
   social: {
     key: 'social',
@@ -90,6 +88,8 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     routeBase: 'social-assessment',
     icon: '🏠',
     accentColor: 'text-cyan-600',
+    writePermission: 'canWriteSocialAssessment',
+    viewPermission: 'canViewSocialAssessment',
   },
   spiritual: {
     key: 'spiritual',
@@ -99,6 +99,8 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     routeBase: 'spiritual-assessment',
     icon: '🕊️',
     accentColor: 'text-violet-600',
+    writePermission: 'canWriteSpiritualAssessment',
+    viewPermission: 'canViewSpiritualAssessment',
   },
   psychiatry: {
     key: 'psychiatry',
@@ -108,20 +110,13 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     routeBase: 'psychiatry-assessment',
     icon: '🧠',
     accentColor: 'text-fuchsia-600',
+    writePermission: 'canWritePsychiatryAssessment',
+    viewPermission: 'canViewPsychiatryAssessment',
   },
 };
 
-// ═════════════════════════════════════════════════════════════
-// Role → assessments mapping
-//
-// Drives:
-//   • Which assessment cards appear on the patient detail page
-//   • Which "Add Assessment" buttons show up
-//   • The recent-activity feed on the dashboard
-// ═════════════════════════════════════════════════════════════
-
 export const ROLE_ASSESSMENTS: Record<string, AssessmentKey[]> = {
-  Physician: [],              // add 'pain' if you want physicians to record pain
+  Physician: ['pain'],
   Nurse: ['pain'],
   Pharmacist: ['pharmacist'],
   Physiologist: ['physiotherapy'],
@@ -140,11 +135,9 @@ export function getAssessmentsForRole(
 ): AssessmentDef[] {
   if (isAdmin) return Object.values(ASSESSMENTS);
   if (!role) return [];
-  const keys = ROLE_ASSESSMENTS[role] ?? [];
-  return keys.map((k) => ASSESSMENTS[k]);
+  return (ROLE_ASSESSMENTS[role] ?? []).map((k) => ASSESSMENTS[k]);
 }
 
-/** Convenience — get one assessment def by key. */
 export function getAssessmentDef(key: AssessmentKey): AssessmentDef {
   return ASSESSMENTS[key];
 }

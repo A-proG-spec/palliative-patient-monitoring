@@ -6,6 +6,7 @@ import { usePatientFamilyAssessments } from '@/hooks/useFamilyAssessments';
 import { AssessmentListShell } from '@/components/assessments/AssessmentListShell';
 import { AssessmentListRow } from '@/components/assessments/AssessmentListRow';
 import { Badge } from '@/components/ui/Badge';
+import { useRecordAccess } from '@/hooks/useRecordAccess';
 import { useAuthStore } from '@/store/auth.store';
 import { patientPath } from '@/lib/clinicalPaths';
 
@@ -15,7 +16,8 @@ const FamilyAssessmentListPage: React.FC = () => {
   const { user } = useAuthStore();
   const isAdmin = user?.type === 'admin';
   const basePath = patientPath(isAdmin, id!);
-  const isOwner = isAdmin || user?.role === 'SocialWorker';
+
+  const access = useRecordAccess('familyAssessment');
 
   const { data: patient, isLoading: pLoading } = usePatient(id!);
   const { data, isLoading, error, refetch } = usePatientFamilyAssessments(id!);
@@ -24,7 +26,8 @@ const FamilyAssessmentListPage: React.FC = () => {
   const patientLabel = patient
     ? `${patient.firstName} ${patient.lastName} · ${patient.patientDisplayId ?? patient.id}`
     : '—';
-  const canCreate = isOwner && patient?.status === 'Active';
+
+  const canCreate = access.allowed && patient?.status === 'Active';
 
   return (
     <AssessmentListShell
@@ -48,21 +51,12 @@ const FamilyAssessmentListPage: React.FC = () => {
           iconBgClass="bg-orange-50"
           date={a.createdAt}
           assessmentType={a.assessmentType}
-          badges={
-            a.burdenLevel ? (
-              <Badge
-                variant={
-                  a.burdenLevel === 'Severe' || a.burdenLevel === 'High'
-                    ? 'error'
-                    : a.burdenLevel === 'Moderate'
-                      ? 'warning'
-                      : 'success'
-                }
-              >
-                Burden: {a.burdenLevel}
-              </Badge>
-            ) : null
-          }
+          badges={a.burdenLevel ? (
+            <Badge variant={
+              a.burdenLevel === 'Severe' || a.burdenLevel === 'High' ? 'error'
+              : a.burdenLevel === 'Moderate' ? 'warning' : 'success'
+            }>Burden: {a.burdenLevel}</Badge>
+          ) : null}
           summary={a.assessorName ? `Assessor: ${a.assessorName}` : '—'}
           isDeleted={!!a.deletedAt}
         />

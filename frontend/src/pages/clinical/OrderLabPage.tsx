@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useOrderLab } from '@/hooks/useLabs';
@@ -12,10 +12,10 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
+import { ErrorState } from '@/components/common/EmptyState';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/context/ToastContext';
-import { useActingClinician } from '@/hooks/useActingClinician';
-import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
+import { usePermissionAccess } from '@/hooks/useRecordAccess';
 import {
   createLabSchema,
   type CreateLabFormData,
@@ -39,11 +39,13 @@ const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({
 const OrderLabPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: patient, isLoading: pLoading } = usePatient(id!);
-  const orderMutation = useOrderLab(id!);
-  const { toast } = useToast();
   const user = useAuthStore((s) => s.user);
-  const acting = useActingClinician(id!);
+  const { toast } = useToast();
+
+  const access = usePermissionAccess('canOrderLab');
+
+  const { data: patient, isLoading: pLoading, error, refetch } = usePatient(id!);
+  const orderMutation = useOrderLab(id!);
 
   const {
     register,
@@ -135,10 +137,7 @@ const OrderLabPage: React.FC = () => {
         { value: 'Gram Stain', label: 'Gram Stain' },
         { value: 'AFB', label: 'AFB Examination' },
         { value: 'Fungal', label: 'Fungal Examination' },
-        {
-          value: 'Antimicrobial Susceptibility',
-          label: 'Antimicrobial Susceptibility Testing',
-        },
+        { value: 'Antimicrobial Susceptibility', label: 'Antimicrobial Susceptibility Testing' },
       ],
       Histopathology: [
         { value: 'Histopathology', label: 'Histopathological Examination' },
@@ -171,7 +170,6 @@ const OrderLabPage: React.FC = () => {
 
     const payload = {
       ...data,
-      ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}),
       location: derivedLocation,
       wardClinic:
         data.wardClinic?.trim() ||
@@ -184,7 +182,6 @@ const OrderLabPage: React.FC = () => {
           : data.testName,
     };
 
-    // Remove empty optional fields
     const cleaned: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(payload)) {
       if (v === '' || v === undefined || v === null) continue;
@@ -196,18 +193,24 @@ const OrderLabPage: React.FC = () => {
         toast.success(
           'Lab test ordered successfully. You can record the result from the test detail page.',
         );
-        navigate(acting.patientPath);
+        navigate(`/patients/${id}`);
       },
     });
   };
 
   if (pLoading) return <PageLoader />;
+  if (error || !patient) return <ErrorState onRetry={refetch} />;
+
+  // ── Write gate ──
+  if (!access.allowed || patient.status === 'Discharged') {
+    return <Navigate to={`/patients/${id}`} replace />;
+  }
 
   return (
     <div className="max-w-3xl space-y-5">
       {/* ── Header ── */}
       <div className="flex items-center gap-3">
-        <BackButton to={acting.patientPath} label="Patient" />
+        <BackButton to={`/patients/${id}`} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             CLINICAL LABORATORY ORDER FORM
@@ -215,30 +218,24 @@ const OrderLabPage: React.FC = () => {
           <p className="text-sm text-text-secondary">
             Yekatit 12 Hospital Medical College (Y12HMC)
           </p>
-          {patient && (
-            <p className="text-sm text-text-muted mt-1">
-              {patient.firstName} {patient.lastName} ·{' '}
-              {patient.patientDisplayId}
-            </p>
-          )}
+          <p className="text-sm text-text-muted mt-1">
+            {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
+          </p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
-        {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Physician', 'Nurse']} />}
         {/* ── 1. Patient Information (Auto-filled) ── */}
         <FormSection title="1. Patient Information">
           <div className="grid sm:grid-cols-2 gap-4">
             <Input
               label="Patient Name"
-              value={
-                patient ? `${patient.firstName} ${patient.lastName}` : '—'
-              }
+              value={`${patient.firstName} ${patient.lastName}`}
               disabled
             />
             <Input
               label="Age"
-              value={patient?.age ? `${patient.age} years` : '—'}
+              value={patient.age ? `${patient.age} years` : '—'}
               disabled
             />
             <div>
@@ -247,7 +244,7 @@ const OrderLabPage: React.FC = () => {
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input
                     type="radio"
-                    checked={patient?.sex === 'Male'}
+                    checked={patient.sex === 'Male'}
                     disabled
                     className="h-4 w-4"
                   />
@@ -256,7 +253,7 @@ const OrderLabPage: React.FC = () => {
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input
                     type="radio"
-                    checked={patient?.sex === 'Female'}
+                    checked={patient.sex === 'Female'}
                     disabled
                     className="h-4 w-4"
                   />
@@ -267,7 +264,7 @@ const OrderLabPage: React.FC = () => {
             <Input
               label="Date of Birth"
               value={
-                patient?.dateOfBirth
+                patient.dateOfBirth
                   ? new Date(patient.dateOfBirth).toLocaleDateString()
                   : '—'
               }
@@ -311,10 +308,7 @@ const OrderLabPage: React.FC = () => {
                 { value: 'Urinalysis', label: 'D. Urinalysis' },
                 { value: 'Stool', label: 'E. Stool Examination' },
                 { value: 'Microbiology', label: 'F. Microbiology' },
-                {
-                  value: 'Histopathology',
-                  label: 'G. Histopathology / Cytology',
-                },
+                { value: 'Histopathology', label: 'G. Histopathology / Cytology' },
                 { value: 'Immunology', label: 'H. Immunology / Serology' },
                 { value: 'Cardiac', label: 'I. Cardiac Biomarkers' },
               ]}
@@ -409,7 +403,7 @@ const OrderLabPage: React.FC = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => navigate(acting.patientPath)}
+            onClick={() => navigate(`/patients/${id}`)}
           >
             Cancel
           </Button>

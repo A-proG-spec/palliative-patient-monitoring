@@ -19,8 +19,6 @@ import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { cn, formatDate } from '@/lib/utils';
 import { REFERRAL_REASON_LABELS, DISEASE_STAGE_LABELS } from '@/constants';
-import { useActingClinician } from '@/hooks/useActingClinician';
-import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 
 // ── Form Section ──────────────────────────────────────────────────
 const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({
@@ -64,9 +62,8 @@ const CheckboxGroup: React.FC<{
 );
 
 // ── Display helpers ─────────────────────────────────────────────
-
 function getPatientDisplayId(patient: {
-  id: number;
+  id: number | string;
   hospitalPatientId?: string | null;
 }): string {
   return (
@@ -75,15 +72,17 @@ function getPatientDisplayId(patient: {
   );
 }
 
+// ── Symptom options (strings, not numbers) ──────────────────────
+const SYMPTOM_OPTIONS = Array.from({ length: 11 }, (_, i) => ({
+  value: String(i),
+  label: String(i),
+}));
+
 const RequestReferralPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const acting = useActingClinician(id!);
-  const {
-    data: patient,
-    isLoading: pLoading,
-    isSuccess,
-  } = usePatient(id!);
+
+  const { data: patient, isLoading: pLoading, isSuccess } = usePatient(id!);
   const { data: visitsData } = usePatientVisits(id!, { limit: 1 });
   const latestVisit = visitsData?.items?.[0];
   const mutation = useRequestReferral(id!);
@@ -92,12 +91,13 @@ const RequestReferralPage: React.FC = () => {
   const latestPPS = latestVisit?.ppsScore ?? 0;
   const latestKPS = latestVisit?.kpsScore ?? 0;
 
+  const patientPath = `/patients/${id}`;
+
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
-    getValues,
     watch,
   } = useForm<CreateReferralFormData>({
     resolver: zodResolver(createReferralSchema),
@@ -119,113 +119,59 @@ const RequestReferralPage: React.FC = () => {
       receivingFacility: '',
       contactPerson: '',
       contactNumber: '',
-      // Snapshot defaults — overwritten below once the patient loads
-      patientId: '',
-      patientName: '',
-      hospitalPatientId: '',
-      wardClinic: '',
-      contactNo: '',
-      requestedBy: '',
+      otherReason: '',
     },
   });
 
   // ═══════════════════════════════════════════════════════════════
   // AUTO-FILL — patient snapshot + latest PPS/KPS
+  //
+  // Split into TWO effects:
+  //   1. Patient snapshot — runs once when the patient loads
+  //   2. Visit scores    — runs whenever the latest visit changes
+  //
+  // Combining them into one effect with a single `hasHydrated`
+  // guard meant the visit scores were skipped if the visit query
+  // resolved *after* the patient query.
   // ═══════════════════════════════════════════════════════════════
-  const hasHydrated = useRef(false);
+  const patientHydrated = useRef(false);
 
   useEffect(() => {
-    if (!isSuccess || !patient || hasHydrated.current) return;
-    hasHydrated.current = true;
+    if (!isSuccess || !patient || patientHydrated.current) return;
+    patientHydrated.current = true;
+    // Patient snapshot is rendered directly from `patient` — no
+    // setValue needed for fields the backend doesn't accept.
+  }, [isSuccess, patient]);
 
-    const fullName = `${patient.firstName} ${patient.lastName}`;
-    const mrn =
-      patient.hospitalPatientId ??
-      getPatientDisplayId({
-        id: Number(patient.id),
-        hospitalPatientId: patient.hospitalPatientId,
-      });
-    const ward =
-      patient.currentLocation === 'ReferredHospital'
-        ? 'Palliative Care Ward'
-        : 'Home Care Unit';
-    const contact = patient.phone ?? '';
+  const visitsHydrated = useRef(false);
 
-    setValue('patientId', String(patient.id), {
-      shouldDirty: false,
-      shouldValidate: false,
-    });
-    setValue('patientName', fullName, {
-      shouldDirty: false,
-      shouldValidate: false,
-    });
-    setValue('hospitalPatientId', mrn, {
-      shouldDirty: false,
-      shouldValidate: false,
-    });
-    setValue('wardClinic', ward, {
-      shouldDirty: false,
-      shouldValidate: false,
-    });
-    setValue('contactNo', contact, {
-      shouldDirty: false,
-      shouldValidate: false,
-    });
-    if (user?.name) {
-      setValue('requestedBy', user.name, {
-        shouldDirty: false,
-        shouldValidate: false,
-      });
-    }
+  useEffect(() => {
+    if (!latestVisit || visitsHydrated.current) return;
+    visitsHydrated.current = true;
 
-    // Latest visit values (PPS/KPS) — send numbers
-    setValue('ppsScore', latestPPS, {
-      shouldDirty: false,
-      shouldValidate: false,
-    });
-    setValue('kpsScore', latestKPS, {
-      shouldDirty: false,
-      shouldValidate: false,
-    });
-  }, [isSuccess, patient, user?.name, latestPPS, latestKPS, setValue]);
+    setValue('ppsScore', latestPPS, { shouldDirty: false, shouldValidate: false });
+    setValue('kpsScore', latestKPS, { shouldDirty: false, shouldValidate: false });
+  }, [latestVisit, latestPPS, latestKPS, setValue]);
 
   const onSubmit = (data: CreateReferralFormData) => {
-    // Merge in any autofilled snapshot values that weren't in the
-    // rendered form (safe for disabled/read-only fields).
-    const merged = { ...data, ...getValues() };
-
-    // The backend `createReferralSchema` only accepts these keys.
-    // Strip everything else so validation never surprises us.
-    const {
-      patientId: _pid,
-      patientName: _pn,
-      hospitalPatientId: _hpid,
-      wardClinic: _wc,
-      contactNo: _cn,
-      requestedBy: _rb,
-      ...payload
-    } = merged;
-
-    // ── Safety: coerce every numeric field to Number ──
-    // This defends against any path where a string sneaks through
-    // (e.g. a `Select` option rendered with `value="8"` and Zod
-    // not mutating req.body on the backend).
-    const safePayload = {
-      ...payload,
-      ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}),
-      ppsScore: Number(payload.ppsScore),
-      kpsScore: Number(payload.kpsScore),
+    // ── Coerce every numeric field to Number ──
+    // Defends against selects that emit string values even when
+    // `valueAsNumber` is set.
+    const safePayload: CreateReferralFormData = {
+      ...data,
+      ppsScore: Number(data.ppsScore),
+      kpsScore: Number(data.kpsScore),
       currentSymptoms: {
-        pain:       Number(payload.currentSymptoms?.pain       ?? 0),
-        dyspnea:    Number(payload.currentSymptoms?.dyspnea    ?? 0),
-        fatigue:    Number(payload.currentSymptoms?.fatigue    ?? 0),
-        anxiety:    Number(payload.currentSymptoms?.anxiety    ?? 0),
-        depression: Number(payload.currentSymptoms?.depression ?? 0),
+        pain:       Number(data.currentSymptoms?.pain       ?? 0),
+        dyspnea:    Number(data.currentSymptoms?.dyspnea    ?? 0),
+        fatigue:    Number(data.currentSymptoms?.fatigue    ?? 0),
+        anxiety:    Number(data.currentSymptoms?.anxiety    ?? 0),
+        depression: Number(data.currentSymptoms?.depression ?? 0),
       },
     };
 
-    mutation.mutate(safePayload as CreateReferralFormData, {
-      onSuccess: () => navigate(acting.patientPath),
+    mutation.mutate(safePayload, {
+      onSuccess: () => navigate(patientPath),
     });
   };
 
@@ -233,31 +179,22 @@ const RequestReferralPage: React.FC = () => {
 
   const isSubmitting = mutation.isPending;
 
-  // Live reads so the read-only snapshot inputs stay in sync
-  const patientNameValue = watch('patientName');
-  const hospitalIdValue = watch('hospitalPatientId');
-  const wardValue = watch('wardClinic');
-  const contactValue = watch('contactNo');
-
   const displayId = patient
     ? getPatientDisplayId({
-        id: Number(patient.id),
+        id: patient.id,
         hospitalPatientId: patient.hospitalPatientId,
       })
     : '—';
   const hospitalId = patient?.hospitalPatientId ?? null;
 
-  // Symptom score options — value is a NUMBER, not a string
-  const symptomOptions = Array.from({ length: 11 }, (_, i) => ({
-    value: i,
-    label: String(i),
-  })) as unknown as { value: string; label: string }[];
+  // Live reads for the referral-date field so the picker stays in sync
+  const referralDate = watch('referralDate');
 
   return (
     <div className="max-w-3xl space-y-5">
       {/* ── Header ── */}
       <div className="flex items-center gap-3">
-        <BackButton to={acting.patientPath} label="Patient" />
+        <BackButton to={patientPath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             PALLIATIVE PATIENT REFERRAL FORM
@@ -274,42 +211,40 @@ const RequestReferralPage: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
-        {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Physician', 'Nurse']} />}
         {/* ── Referral Information ── */}
         <FormSection title="Referral Information">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Input
-              label="Date of Referral"
-              type="date"
-              error={errors.referralDate?.message}
-              {...register('referralDate')}
-            />
-            <div>
-              <p className="text-sm font-medium text-on-surface mb-2">
-                Referral Type
-              </p>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    value="Incoming"
-                    {...register('referralType')}
-                    className="h-4 w-4 text-primary"
-                  />
-                  Incoming Referral
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    value="Outgoing"
-                    {...register('referralType')}
-                    className="h-4 w-4 text-primary"
-                  />
-                  Outgoing Referral
-                </label>
-              </div>
+          <div>
+            <p className="text-sm font-medium text-on-surface mb-2">
+              Referral Type
+            </p>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  value="Incoming"
+                  {...register('referralType')}
+                  className="h-4 w-4 text-primary"
+                />
+                Incoming Referral
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  value="Outgoing"
+                  {...register('referralType')}
+                  className="h-4 w-4 text-primary"
+                />
+                Outgoing Referral
+              </label>
             </div>
           </div>
+
+          <Input
+            label="Referral Date"
+            type="date"
+            error={errors.referralDate?.message}
+            {...register('referralDate')}
+          />
         </FormSection>
 
         {/* ── Patient Information (auto-filled, read-only) ── */}
@@ -317,7 +252,9 @@ const RequestReferralPage: React.FC = () => {
           <div className="grid sm:grid-cols-2 gap-4">
             <Input
               label="Full Name"
-              value={patientNameValue || '—'}
+              value={
+                patient ? `${patient.firstName} ${patient.lastName}` : '—'
+              }
               disabled
               readOnly
             />
@@ -338,6 +275,7 @@ const RequestReferralPage: React.FC = () => {
                     type="radio"
                     checked={patient?.sex === 'Male'}
                     disabled
+                    readOnly
                     className="h-4 w-4"
                   />
                   Male
@@ -347,6 +285,7 @@ const RequestReferralPage: React.FC = () => {
                     type="radio"
                     checked={patient?.sex === 'Female'}
                     disabled
+                    readOnly
                     className="h-4 w-4"
                   />
                   Female
@@ -364,7 +303,7 @@ const RequestReferralPage: React.FC = () => {
             <div className="sm:col-span-2 space-y-1">
               <Input
                 label="Medical Record No."
-                value={hospitalIdValue || '—'}
+                value={hospitalId ?? displayId}
                 disabled
                 readOnly
               />
@@ -391,19 +330,13 @@ const RequestReferralPage: React.FC = () => {
               </div>
             </div>
 
-            {hospitalId && (
-              <Input
-                label="Hospital ID / MRN"
-                value={hospitalId}
-                disabled
-                readOnly
-                className="sm:col-span-2"
-              />
-            )}
-
             <Input
               label="Ward / Clinic"
-              value={wardValue || '—'}
+              value={
+                patient?.currentLocation === 'ReferredHospital'
+                  ? 'Palliative Care Ward'
+                  : 'Home Care Unit'
+              }
               disabled
               readOnly
               hint={
@@ -415,7 +348,7 @@ const RequestReferralPage: React.FC = () => {
 
             <Input
               label="Contact No."
-              value={contactValue || '—'}
+              value={patient?.phone || '—'}
               disabled
               readOnly
             />
@@ -527,7 +460,7 @@ const RequestReferralPage: React.FC = () => {
                 <Select
                   key={symptom}
                   label={symptom.charAt(0).toUpperCase() + symptom.slice(1)}
-                  options={symptomOptions}
+                  options={SYMPTOM_OPTIONS}
                   error={(errors.currentSymptoms as any)?.[symptom]?.message}
                   {...register(`currentSymptoms.${symptom}`, {
                     valueAsNumber: true,
@@ -549,7 +482,9 @@ const RequestReferralPage: React.FC = () => {
           />
           {errors.reasons && (
             <p className="text-xs text-error mt-1">
-              {errors.reasons.message as string}
+              {Array.isArray(errors.reasons)
+                ? errors.reasons[0]?.message
+                : (errors.reasons as any)?.message}
             </p>
           )}
           <div className="mt-2">
@@ -597,7 +532,7 @@ const RequestReferralPage: React.FC = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => navigate(acting.patientPath)}
+            onClick={() => navigate(patientPath)}
           >
             Cancel
           </Button>

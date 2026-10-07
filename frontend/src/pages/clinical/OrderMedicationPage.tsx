@@ -1,17 +1,17 @@
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useOrderMedication } from '@/hooks/useMedications';
 import { usePatient } from '@/hooks/usePatients';
-import { useActingClinician } from '@/hooks/useActingClinician';
-import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
+import { ErrorState } from '@/components/common/EmptyState';
+import { usePermissionAccess } from '@/hooks/useRecordAccess';
 import {
   createMedicationSchema,
   type CreateMedicationFormData,
@@ -20,8 +20,10 @@ import {
 const OrderMedicationPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const acting = useActingClinician(id!);
-  const { data: patient, isLoading: pLoading } = usePatient(id!);
+
+  const access = usePermissionAccess('canOrderMedication');
+
+  const { data: patient, isLoading: pLoading, error, refetch } = usePatient(id!);
   const mutation = useOrderMedication(id!);
 
   const {
@@ -37,27 +39,30 @@ const OrderMedicationPage: React.FC = () => {
   });
 
   const onSubmit = (data: CreateMedicationFormData) => {
-    mutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
-      onSuccess: () => navigate(acting.patientPath),
+    mutation.mutate(data, {
+      onSuccess: () => navigate(`/patients/${id}`),
     });
   };
 
   if (pLoading) return <PageLoader />;
+  if (error || !patient) return <ErrorState onRetry={refetch} />;
+
+  // ── Write gate ──
+  if (!access.allowed || patient.status === 'Discharged') {
+    return <Navigate to={`/patients/${id}`} replace />;
+  }
 
   return (
     <div className="max-w-xl space-y-5">
       <div className="flex items-center gap-3">
-        <BackButton to={acting.patientPath} label="Patient" />
+        <BackButton to={`/patients/${id}`} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             Order Medication
           </h1>
-          {patient && (
-            <p className="text-sm text-text-secondary">
-              {patient.firstName} {patient.lastName} ·{' '}
-              {patient.patientDisplayId}
-            </p>
-          )}
+          <p className="text-sm text-text-secondary">
+            {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
+          </p>
         </div>
       </div>
 
@@ -71,7 +76,6 @@ const OrderMedicationPage: React.FC = () => {
             className="space-y-4"
             noValidate
           >
-            {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Physician', 'Nurse']} />}
             <Input
               label="Medication Name *"
               placeholder="e.g. Morphine"
@@ -109,7 +113,7 @@ const OrderMedicationPage: React.FC = () => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => navigate(acting.patientPath)}
+                onClick={() => navigate(`/patients/${id}`)}
               >
                 Cancel
               </Button>

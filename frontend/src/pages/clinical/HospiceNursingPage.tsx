@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Heart, Plus, ChevronRight, ClipboardList } from 'lucide-react';
+
 import { usePatient } from '@/hooks/usePatients';
 import { useAuthStore } from '@/store/auth.store';
 import {
@@ -13,6 +14,7 @@ import {
   createHospiceNursingAssessmentSchema,
   type CreateHospiceNursingFormData,
 } from '@/schemas/hospice-nursing.schema';
+
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -23,11 +25,11 @@ import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { EmptyState, ErrorState } from '@/components/common/EmptyState';
 import { formatDate } from '@/lib/utils';
-import { useActingClinician } from '@/hooks/useActingClinician';
-import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
+import { useToast } from '@/context/ToastContext';
+import { patientPath } from '@/lib/clinicalPaths';
 
 // ═════════════════════════════════════════════════════════════
-// Small reusable layout pieces
+// Layout primitives
 // ═════════════════════════════════════════════════════════════
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({
@@ -74,14 +76,6 @@ const RadioGroup: React.FC<{
   </div>
 );
 
-/**
- * CheckboxGroup
- *
- * `options` holds the raw enum values that must match the backend
- * Prisma enum exactly (e.g. `OrientedToPlace`, not `"Oriented to Place"`).
- * `labels` maps those enum values to human-readable strings for display.
- * When `labels` is omitted, the raw option string is shown.
- */
 const CheckboxGroup: React.FC<{
   label: string;
   values: string[];
@@ -117,12 +111,15 @@ const CheckboxGroup: React.FC<{
   );
 };
 
+// ── Display helper ─────────────────────────────────────────────
+const displayId = (p: {
+  id: number | string;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
+
 // ═════════════════════════════════════════════════════════════
 // Enum label maps
-//
-// Values MUST match the Prisma enums in `schema.prisma`:
-//   HospiceOrientation, HospiceGeneralAppearance,
-//   HospiceNursingDiagnosis
 // ═════════════════════════════════════════════════════════════
 
 const ORIENTATION_OPTIONS = [
@@ -194,13 +191,18 @@ const NURSING_DIAGNOSIS_LABELS: Record<string, string> = {
 const HospiceNursingPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [mode, setMode] = useState<'list' | 'new'>('list');
 
+  // ── Auth ──
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.type === 'admin';
+  const basePath = patientPath(isAdmin, id!);
+
+  // ── Data ──
   const { data: patient, isLoading: patientLoading } = usePatient(id!);
   const { data, isLoading, error, refetch } = usePatientHospiceAssessments(id!);
   const createMutation = useCreateHospiceAssessment(id!);
-  const user = useAuthStore((s) => s.user);
-  const acting = useActingClinician(id!);
 
   const {
     register,
@@ -224,11 +226,21 @@ const HospiceNursingPage: React.FC = () => {
     },
   });
 
+  // Sync assessedByStaffId if the user store hydrates after mount
+  useEffect(() => {
+    if (user?.id) {
+      setValue('assessedByStaffId', String(user.id), {
+        shouldDirty: false,
+        shouldValidate: false,
+      });
+    }
+  }, [user?.id, setValue]);
+
+  // ═══════════════════════════════════════════════════════════
+  // Submit
+  // ═══════════════════════════════════════════════════════════
   const onSubmit = (formData: CreateHospiceNursingFormData) => {
-    if (acting.isAdmin && !acting.actingAsStaffId) return;
-    // Strip empty strings, undefined, null, and empty arrays before
-    // sending. Keeps the payload clean and avoids backend "empty
-    // string where enum expected" issues.
+    // Strip empty strings / undefined / null / empty arrays
     const cleaned: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(formData)) {
       if (v === '' || v === undefined || v === null) continue;
@@ -236,13 +248,67 @@ const HospiceNursingPage: React.FC = () => {
       cleaned[k] = v;
     }
 
-    createMutation.mutate({ ...cleaned, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
+    createMutation.mutate(cleaned as any, {
       onSuccess: () => {
-        reset();
+        reset({
+          assessmentDate: new Date().toISOString().split('T')[0],
+          assessedByStaffId: user?.id ? String(user.id) : undefined,
+          orientation: [],
+          generalAppearance: [],
+          painLocation: [],
+          painCharacteristics: [],
+          painReliefMeasures: [],
+          assistiveDevices: [],
+          nursingDiagnoses: [],
+        });
         setMode('list');
         refetch();
       },
+      onError: (err: any) => {
+        const message =
+          err?.response?.data?.message ??
+          'Failed to save hospice nursing assessment.';
+        const fieldErrors = err?.response?.data?.errors;
+        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+          toast.error(
+            `${message} — ${fieldErrors
+              .slice(0, 3)
+              .map((e: any) => e.message ?? e.field)
+              .join(', ')}`,
+          );
+        } else {
+          toast.error(message);
+        }
+      },
     });
+  };
+
+  const onInvalid = (formErrors: any) => {
+    const flat: string[] = [];
+    const walk = (obj: any, path = ''): void => {
+      if (!obj || typeof obj !== 'object') return;
+      if ('message' in obj && typeof obj.message === 'string') {
+        flat.push(`${path || 'form'}: ${obj.message}`);
+        return;
+      }
+      for (const [k, v] of Object.entries(obj)) {
+        const next = path ? `${path}.${k}` : k;
+        if (Array.isArray(v)) {
+          v.forEach((item, i) => walk(item, `${next}[${i}]`));
+        } else {
+          walk(v, next);
+        }
+      }
+    };
+    walk(formErrors);
+
+    if (flat.length > 0) {
+      const shown = flat.slice(0, 3).join(' • ');
+      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
+      toast.error(`Save failed — ${shown}${rest}`);
+    } else {
+      toast.error('Save failed — please review the form.');
+    }
   };
 
   if (patientLoading || isLoading) return <PageLoader />;
@@ -255,13 +321,13 @@ const HospiceNursingPage: React.FC = () => {
       {/* ── Header ── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <BackButton to={acting.patientPath} label="Patient" />
+          <BackButton to={basePath} label="Patient" />
           <div>
             <h1 className="text-xl font-bold text-on-surface">
               Hospice Nursing Assessments
             </h1>
             <p className="text-sm text-text-muted mt-0.5">
-              {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
+              {patient.firstName} {patient.lastName} · {displayId(patient)}
             </p>
           </div>
         </div>
@@ -296,7 +362,7 @@ const HospiceNursingPage: React.FC = () => {
                   key={a.id}
                   className="flex items-center gap-4 px-5 py-4 hover:bg-surface-low transition-colors cursor-pointer"
                   onClick={() =>
-                    navigate(`/patients/${id}/hospice-nursing/${a.id}`)
+                    navigate(`${basePath}/hospice-nursing/${a.id}`)
                   }
                 >
                   <div className="flex-shrink-0 h-10 w-10 rounded-xl bg-primary-light flex items-center justify-center">
@@ -328,7 +394,7 @@ const HospiceNursingPage: React.FC = () => {
       {/* ═══════════════════════════════════════════════════════ */}
       {mode === 'new' && (
         <form
-          onSubmit={handleSubmit(onSubmit)}
+          onSubmit={handleSubmit(onSubmit, onInvalid)}
           className="space-y-4"
           noValidate
         >
@@ -357,14 +423,18 @@ const HospiceNursingPage: React.FC = () => {
               values={watch('orientation') ?? []}
               options={[...ORIENTATION_OPTIONS]}
               labels={ORIENTATION_LABELS}
-              onChange={(v) => setValue('orientation', v)}
+              onChange={(v) =>
+                setValue('orientation', v, { shouldDirty: true })
+              }
             />
             <CheckboxGroup
               label="General Appearance"
               values={watch('generalAppearance') ?? []}
               options={[...GENERAL_APPEARANCE_OPTIONS]}
               labels={GENERAL_APPEARANCE_LABELS}
-              onChange={(v) => setValue('generalAppearance', v)}
+              onChange={(v) =>
+                setValue('generalAppearance', v, { shouldDirty: true })
+              }
             />
           </Section>
 
@@ -379,35 +449,35 @@ const HospiceNursingPage: React.FC = () => {
               <Input
                 label="Pulse Rate (bpm)"
                 type="number"
-                {...register('pulseRate')}
+                {...register('pulseRate', { valueAsNumber: true })}
               />
               <Input
                 label="Respiratory Rate (/min)"
                 type="number"
-                {...register('respiratoryRate')}
+                {...register('respiratoryRate', { valueAsNumber: true })}
               />
               <Input
                 label="Temperature (°C)"
                 type="number"
                 step="0.1"
-                {...register('temperature')}
+                {...register('temperature', { valueAsNumber: true })}
               />
               <Input
                 label="SpO₂ (%)"
                 type="number"
-                {...register('oxygenSaturation')}
+                {...register('oxygenSaturation', { valueAsNumber: true })}
               />
               <Input
                 label="Weight (kg)"
                 type="number"
                 step="0.1"
-                {...register('weightKg')}
+                {...register('weightKg', { valueAsNumber: true })}
               />
               <Input
                 label="Height (cm)"
                 type="number"
                 step="0.1"
-                {...register('heightCm')}
+                {...register('heightCm', { valueAsNumber: true })}
               />
             </div>
           </Section>
@@ -428,7 +498,16 @@ const HospiceNursingPage: React.FC = () => {
                 { value: 'true', label: 'Yes' },
                 { value: 'false', label: 'No' },
               ]}
-              onChange={(v) => setValue('painPresent', v === 'true')}
+              onChange={(v) => {
+                const present = v === 'true';
+                setValue('painPresent', present, { shouldDirty: true });
+                if (!present) {
+                  setValue('painScore', undefined, { shouldDirty: true });
+                  setValue('painLocation', [], { shouldDirty: true });
+                  setValue('painCharacteristics', [], { shouldDirty: true });
+                  setValue('painLocationOther', '', { shouldDirty: true });
+                }
+              }}
             />
             {watch('painPresent') && (
               <>
@@ -437,7 +516,7 @@ const HospiceNursingPage: React.FC = () => {
                   type="number"
                   min={0}
                   max={10}
-                  {...register('painScore')}
+                  {...register('painScore', { valueAsNumber: true })}
                 />
                 <CheckboxGroup
                   label="Location"
@@ -452,7 +531,9 @@ const HospiceNursingPage: React.FC = () => {
                     'Generalized',
                     'Other',
                   ]}
-                  onChange={(v) => setValue('painLocation', v)}
+                  onChange={(v) =>
+                    setValue('painLocation', v, { shouldDirty: true })
+                  }
                 />
                 <Input
                   label="Other Location"
@@ -470,7 +551,9 @@ const HospiceNursingPage: React.FC = () => {
                     'Intermittent',
                     'Continuous',
                   ]}
-                  onChange={(v) => setValue('painCharacteristics', v)}
+                  onChange={(v) =>
+                    setValue('painCharacteristics', v, { shouldDirty: true })
+                  }
                 />
               </>
             )}
@@ -683,7 +766,20 @@ const HospiceNursingPage: React.FC = () => {
                 { value: 'true', label: 'Yes' },
                 { value: 'false', label: 'No' },
               ]}
-              onChange={(v) => setValue('pressureUlcerPresent', v === 'true')}
+              onChange={(v) => {
+                const present = v === 'true';
+                setValue('pressureUlcerPresent', present, {
+                  shouldDirty: true,
+                });
+                if (!present) {
+                  setValue('pressureUlcerLocation', '', {
+                    shouldDirty: true,
+                  });
+                  setValue('pressureUlcerStage', undefined, {
+                    shouldDirty: true,
+                  });
+                }
+              }}
             />
             {watch('pressureUlcerPresent') && (
               <>
@@ -795,7 +891,10 @@ const HospiceNursingPage: React.FC = () => {
           {/* ── Family & Caregiver ── */}
           <Section title="Family & Caregiver">
             <div className="grid sm:grid-cols-3 gap-4">
-              <Input label="Caregiver Name" {...register('primaryCaregiverName')} />
+              <Input
+                label="Caregiver Name"
+                {...register('primaryCaregiverName')}
+              />
               <Input
                 label="Relationship"
                 {...register('primaryCaregiverRelationship')}
@@ -847,7 +946,9 @@ const HospiceNursingPage: React.FC = () => {
                 { value: 'false', label: 'No' },
               ]}
               onChange={(v) =>
-                setValue('spiritualSupportRequested', v === 'true')
+                setValue('spiritualSupportRequested', v === 'true', {
+                  shouldDirty: true,
+                })
               }
             />
             <Select
@@ -880,12 +981,16 @@ const HospiceNursingPage: React.FC = () => {
               values={watch('nursingDiagnoses') ?? []}
               options={[...NURSING_DIAGNOSIS_OPTIONS]}
               labels={NURSING_DIAGNOSIS_LABELS}
-              onChange={(v) => setValue('nursingDiagnoses', v)}
+              onChange={(v) =>
+                setValue('nursingDiagnoses', v, { shouldDirty: true })
+              }
             />
-            <Input
-              label="Other Diagnosis"
-              {...register('nursingDiagnosesOther')}
-            />
+            {watch('nursingDiagnoses')?.includes('Other') && (
+              <Input
+                label="Other Diagnosis"
+                {...register('nursingDiagnosesOther')}
+              />
+            )}
             <Textarea
               label="Nurse's Summary"
               rows={4}

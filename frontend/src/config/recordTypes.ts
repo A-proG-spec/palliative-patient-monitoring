@@ -1,22 +1,9 @@
 import React from 'react';
 import {
-  ClipboardList,
-  Pill,
-  FlaskConical,
-  GitBranch,
-  Building2,
-  Camera,
-  NotebookPen,
-  Heart,
+  ClipboardList, Pill, FlaskConical, GitBranch, Building2,
+  Camera, NotebookPen, Heart,
 } from 'lucide-react';
-import {
-  hasPermission,
-  type StaffRole,
-} from '@/config/permissions';
-
-// ═════════════════════════════════════════════════════════════
-// Record type descriptor
-// ═════════════════════════════════════════════════════════════
+import { hasPermission, type StaffRole } from '@/config/permissions';
 
 export interface RecordType {
   key: string;
@@ -27,7 +14,6 @@ export interface RecordType {
   color?: string;
 }
 
-// ── Visit vs progress-note depends on patient location ──
 export function getVisitRecordType(
   currentLocation: 'Home' | 'ReferredHospital',
   basePath = '/patients',
@@ -36,8 +22,7 @@ export function getVisitRecordType(
     return {
       key: 'progress-note',
       label: 'Patient Progress Note',
-      description:
-        'Record a clinical progress note for a hospitalised or facility-based patient.',
+      description: 'Record a clinical progress note for a hospitalised patient.',
       icon: React.createElement(NotebookPen, { size: 20 }),
       route: (id) => `${basePath}/${id}/progress-note/new`,
       color: 'text-teal-600',
@@ -46,15 +31,13 @@ export function getVisitRecordType(
   return {
     key: 'visit',
     label: 'Home Visit Record',
-    description:
-      'Record a home visit, vitals, pain assessment, and care observations.',
+    description: 'Record a home visit, vitals, pain assessment, and care observations.',
     icon: React.createElement(ClipboardList, { size: 20 }),
     route: (id) => `${basePath}/${id}/visits`,
     color: 'text-blue-600',
   };
 }
 
-// ── Every other record type ──
 export const getStaticRecordTypes = (basePath = '/patients'): RecordType[] => [
   {
     key: 'medication',
@@ -67,8 +50,7 @@ export const getStaticRecordTypes = (basePath = '/patients'): RecordType[] => [
   {
     key: 'lab',
     label: 'Lab Test Order',
-    description:
-      'Request a laboratory test (blood, urine, microbiology, etc.).',
+    description: 'Request a laboratory test (blood, urine, microbiology, etc.).',
     icon: React.createElement(FlaskConical, { size: 20 }),
     route: (id) => `${basePath}/${id}/labs`,
     color: 'text-purple-600',
@@ -76,8 +58,7 @@ export const getStaticRecordTypes = (basePath = '/patients'): RecordType[] => [
   {
     key: 'imaging',
     label: 'Imaging Order',
-    description:
-      'Request imaging examination (X-Ray, CT, MRI, Ultrasound, etc.).',
+    description: 'Request imaging (X-Ray, CT, MRI, Ultrasound, etc.).',
     icon: React.createElement(Camera, { size: 20 }),
     route: (id) => `${basePath}/${id}/imaging`,
     color: 'text-indigo-600',
@@ -93,8 +74,7 @@ export const getStaticRecordTypes = (basePath = '/patients'): RecordType[] => [
   {
     key: 'admission',
     label: 'Hospital Admission',
-    description:
-      'Record a hospital admission linked to an accepted referral.',
+    description: 'Record a hospital admission linked to an accepted referral.',
     icon: React.createElement(Building2, { size: 20 }),
     route: (id) => `${basePath}/${id}/admissions`,
     color: 'text-red-600',
@@ -108,10 +88,6 @@ export const getStaticRecordTypes = (basePath = '/patients'): RecordType[] => [
     color: 'text-pink-600',
   },
 ];
-
-// ═════════════════════════════════════════════════════════════
-// Filter record types by role permission
-// ═════════════════════════════════════════════════════════════
 
 export function filterRecordTypesForRole(
   role: StaffRole | string | null | undefined,
@@ -139,7 +115,7 @@ export function filterRecordTypesForRole(
       case 'admission':
         return hasPermission(role, 'canRecordAdmission');
       case 'hospice-nursing':
-        return role === 'Nurse';
+        return hasPermission(role, 'canRecordHospiceNursing');
       default:
         return false;
     }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate, Link } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -9,6 +9,7 @@ import {
   ClipboardList,
   CheckCircle2,
   ArrowLeft,
+  ExternalLink,
 } from 'lucide-react';
 import { createVisitSchema, type CreateVisitFormData } from '@/schemas/visit.schema';
 import { useRecordVisit } from '@/hooks/useVisits';
@@ -20,6 +21,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Card } from '@/components/ui/Card';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
+import { ErrorState } from '@/components/common/EmptyState';
 import { cn } from '@/lib/utils';
 import {
   PAIN_LOCATION_LABELS,
@@ -30,15 +32,15 @@ import {
 import { SignatureSection } from '@/components/visits/SignatureSection';
 import { useAuthStore } from '@/store/auth.store';
 import { useToast } from '@/context/ToastContext';
-import { useActingClinician } from '@/hooks/useActingClinician';
-import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
+import { usePermissionAccess } from '@/hooks/useRecordAccess';
 
 // ── Collapsible section wrapper ─────────────────────────────────
 const Section: React.FC<{
   title: string;
   defaultOpen?: boolean;
+  badge?: string;
   children: React.ReactNode;
-}> = ({ title, defaultOpen = true, children }) => {
+}> = ({ title, defaultOpen = true, badge, children }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <Card padding="none">
@@ -47,7 +49,14 @@ const Section: React.FC<{
         className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-surface-low transition-colors"
         onClick={() => setOpen((v) => !v)}
       >
-        <span className="text-sm font-semibold text-on-surface">{title}</span>
+        <span className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-on-surface">{title}</span>
+          {badge && (
+            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold">
+              {badge}
+            </span>
+          )}
+        </span>
         <ChevronDown
           size={16}
           className={cn(
@@ -86,7 +95,7 @@ const CheckboxGroup: React.FC<{
   </div>
 );
 
-// ── True/False radio group that writes a real boolean ───────────
+// ── True/False/N-A radio group ──────────────────────────────────
 const BooleanRadio: React.FC<{
   label: string;
   value: boolean | null | undefined;
@@ -130,13 +139,36 @@ const BooleanRadio: React.FC<{
   </div>
 );
 
+// ── Info banner for fields that live elsewhere ──────────────────
+const RedirectBanner: React.FC<{
+  patientId: string;
+  target: 'hospice-nursing' | 'pain-assessment';
+  children: React.ReactNode;
+}> = ({ patientId, target, children }) => (
+  <div className="rounded-lg bg-surface-low border border-border-base px-4 py-3 text-xs text-text-secondary leading-relaxed flex items-start gap-2">
+    <ExternalLink size={14} className="mt-0.5 flex-shrink-0 text-text-muted" />
+    <div>
+      {children}
+      <div className="mt-1">
+        <Link
+          to={`/patients/${patientId}/${target}`}
+          className="text-primary font-medium hover:underline"
+        >
+          Open the {target === 'hospice-nursing' ? 'Hospice Nursing Assessment' : 'Pain Assessment'} form →
+        </Link>
+      </div>
+    </div>
+  </div>
+);
+
 const RecordVisitPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: patient, isLoading: patientLoading } = usePatient(id!);
+  const access = usePermissionAccess('canRecordVisit');
+
+  const { data: patient, isLoading: patientLoading, error, refetch } = usePatient(id!);
   const recordMutation = useRecordVisit(id!);
   const user = useAuthStore((s) => s.user);
-  const acting = useActingClinician(id!);
   const { toast } = useToast();
 
   const [createdVisitId, setCreatedVisitId] = useState<string | null>(null);
@@ -201,7 +233,6 @@ const RecordVisitPage: React.FC = () => {
       outcome: 'Stable',
       painLocation: [],
       painCharacteristics: [],
-      painReliefMeasures: [],
       symptoms: [],
       educationProvided: [],
       homeObservations: [],
@@ -227,41 +258,40 @@ const RecordVisitPage: React.FC = () => {
 
   // ═══════════════════════════════════════════════════════════════
   // AUTO-FILL
-  //
-  // Runs once the patient loads. Fills:
-  //   • caregiver section (primaryCaregiver, relationship, phone)
-  //   • team leader (name + role)
+  //   • caregiver name (relationship/phone aren't in the visit
+  //     schema, so we skip them)
+  //   • team leader (auto-append once the patient + user are ready)
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!patient) return;
-
-    // Caregiver auto-fill
     setValue('primaryCaregiver', patient.caregiverName ?? '');
-    setValue('caregiverRelationship', patient.caregiverRelation ?? '');
-    setValue('caregiverPhone', patient.caregiverPhone ?? '');
+  }, [patient, setValue]);
 
-    // Auto-register the current user as the first team member
-    // (team leader). This is what was missing and causing the
-    // save button to silently fail — the schema requires
-    // `teamMembers.min(1)`.
-    if (user?.name && teamFields.length === 0) {
-      appendTeam({
-        role: (user.role as 'Physician' | 'Nurse') ?? 'Nurse',
-        name: user.name,
-        isTeamLeader: true,
-        staffId: String(user.id ?? ''),
-      });
-    }
-  }, [patient, user, appendTeam, setValue, teamFields.length]);
+  useEffect(() => {
+    if (!user?.name) return;
+    if (teamFields.length > 0) return; // never re-append
+
+    const role: 'Physician' | 'Nurse' =
+      user.role === 'Physician' || user.role === 'Nurse'
+        ? (user.role as 'Physician' | 'Nurse')
+        : 'Nurse';
+
+    appendTeam({
+      role,
+      name: user.name,
+      isTeamLeader: true,
+      staffId: user.id ? String(user.id) : undefined,
+    });
+    // We intentionally exclude teamFields.length so this runs once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.name, user?.id, user?.role, appendTeam]);
 
   const onSubmit = (data: CreateVisitFormData) => {
-    if (acting.isAdmin && !acting.actingAsStaffId) return;
-    recordMutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
+    recordMutation.mutate(data as any, {
       onSuccess: (response) => {
         setCreatedVisitId(response.id);
       },
       onError: (err: any) => {
-        // Surface backend validation errors instead of silently swallowing
         const message =
           err?.response?.data?.message ?? 'Failed to save visit.';
         const fieldErrors = err?.response?.data?.errors;
@@ -279,8 +309,6 @@ const RecordVisitPage: React.FC = () => {
     });
   };
 
-  // onInvalid: surface ALL validation errors so the user
-  // actually knows why the save button "does nothing".
   const onInvalid = (formErrors: any) => {
     const flat: string[] = [];
     const walk = (obj: any, path = ''): void => {
@@ -303,13 +331,19 @@ const RecordVisitPage: React.FC = () => {
     if (flat.length > 0) {
       const shown = flat.slice(0, 3).join(' • ');
       const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
-      toast.error(`Save failed — ${shown}${rest}`, 8000);
+      toast.error(`Save failed — ${shown}${rest}`);
     } else {
       toast.error('Save failed — please review the form.');
     }
   };
 
   if (patientLoading) return <PageLoader />;
+  if (error || !patient) return <ErrorState onRetry={refetch} />;
+
+  // ── Write gate ──
+  if (!access.allowed || patient.status === 'Discharged') {
+    return <Navigate to={`/patients/${id}`} replace />;
+  }
 
   const adlOptions = [
     { value: 'Independent', label: 'Independent' },
@@ -319,16 +353,16 @@ const RecordVisitPage: React.FC = () => {
 
   const isSubmitting = recordMutation.isPending;
 
-  // ── Derived display values ──
   const displayId =
     patient?.hospitalPatientId ?? patient?.patientDisplayId ?? '—';
+  const patientPath = `/patients/${id}`;
 
-  // ── Saved state — show signature section ──
+  // ── Saved state ──
   if (createdVisitId) {
     return (
       <div className="max-w-3xl space-y-5">
         <div className="flex items-center gap-3">
-          <BackButton to={`/patients/${id}`} label="Patient" />
+          <BackButton to={patientPath} label="Patient" />
         </div>
 
         <div className="rounded-2xl border border-success/30 bg-success-bg/20 px-5 py-4 flex items-start gap-3">
@@ -350,7 +384,7 @@ const RecordVisitPage: React.FC = () => {
           visitId={createdVisitId}
           teamMembers={getValues('teamMembers')}
           onAllSigned={() => {
-            setTimeout(() => navigate(`/patients/${id}`), 1200);
+            setTimeout(() => navigate(patientPath), 1200);
           }}
         />
 
@@ -358,7 +392,7 @@ const RecordVisitPage: React.FC = () => {
           <Button
             variant="outline"
             leftIcon={<ArrowLeft size={14} />}
-            onClick={() => navigate(`/patients/${id}`)}
+            onClick={() => navigate(patientPath)}
           >
             Back to Patient
           </Button>
@@ -371,7 +405,7 @@ const RecordVisitPage: React.FC = () => {
   return (
     <div className="max-w-3xl space-y-5">
       <div className="flex items-center gap-3">
-        <BackButton to={acting.patientPath} label="Patient" />
+        <BackButton to={patientPath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             HOME VISIT CHECKLIST
@@ -392,20 +426,10 @@ const RecordVisitPage: React.FC = () => {
         className="space-y-4"
         noValidate
       >
-        {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Physician', 'Nurse']} />}
-        {/* 1. PATIENT IDENTIFICATION */}
-        <Section title="1. PATIENT IDENTIFICATION">
-          <div className="grid md:grid-cols-2 gap-4">
-            <Input
-              label="Patient Name"
-              value={patient ? `${patient.firstName} ${patient.lastName}` : '—'}
-              disabled
-            />
-            <Input
-              label="Hospital ID / MRN"
-              value={displayId}
-              disabled
-            />
+        {/* 1. PATIENT INFORMATION (read-only) */}
+        <Section title="1. PATIENT INFORMATION">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Input label="Hospital ID / MRN" value={displayId} disabled />
             <Input
               label="Age"
               value={patient?.age ? `${patient.age} years` : '—'}
@@ -416,7 +440,6 @@ const RecordVisitPage: React.FC = () => {
               label="Address (Kebele/Sub-city)"
               value={patient?.address || '—'}
               disabled
-              className="md:col-span-2"
             />
             <Input
               label="Phone Number"
@@ -487,10 +510,19 @@ const RecordVisitPage: React.FC = () => {
                   options={[
                     { value: 'Physician', label: 'Physician' },
                     { value: 'Nurse', label: 'Nurse' },
+                    { value: 'Pharmacist', label: 'Pharmacist' },
+                    { value: 'Radiologist', label: 'Radiologist' },
+                    { value: 'LaboratoryTechnician', label: 'Lab Technician' },
+                    { value: 'Physiologist', label: 'Physiologist' },
+                    { value: 'Psychiatrist', label: 'Psychiatrist' },
+                    { value: 'Psychologist', label: 'Psychologist' },
+                    { value: 'SocialWorker', label: 'Social Worker' },
+                    { value: 'SpiritualPerson', label: 'Spiritual Person' },
+                    { value: 'Nutritionist', label: 'Nutritionist' },
                   ]}
                   placeholder="Role"
                   {...register(`teamMembers.${i}.role`)}
-                  className="w-36"
+                  className="w-40"
                 />
                 <Input
                   placeholder="Staff name"
@@ -553,85 +585,6 @@ const RecordVisitPage: React.FC = () => {
           </div>
         </Section>
 
-        {/* A. GENERAL OBSERVATION */}
-        <Section title="A. GENERAL OBSERVATION">
-          <Select
-            label="Level of Consciousness"
-            options={[
-              { value: 'Alert', label: 'Alert' },
-              { value: 'Drowsy', label: 'Drowsy' },
-              { value: 'Confused', label: 'Confused' },
-              { value: 'Unresponsive', label: 'Unresponsive' },
-              { value: 'Comatose', label: 'Comatose' },
-            ]}
-            placeholder="Select…"
-            {...register('generalObservation.levelOfConsciousness')}
-          />
-
-          <div>
-            <p className="text-sm font-medium text-on-surface mb-2">
-              Orientation
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {(['Person', 'Place', 'Time', 'Disoriented'] as const).map(
-                (opt) => (
-                  <label
-                    key={opt}
-                    className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      value={opt}
-                      {...register('generalObservation.orientation')}
-                      className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary"
-                    />
-                    {opt === 'Person'
-                      ? 'Oriented to Person'
-                      : opt === 'Place'
-                        ? 'Oriented to Place'
-                        : opt === 'Time'
-                          ? 'Oriented to Time'
-                          : 'Disoriented'}
-                  </label>
-                ),
-              )}
-            </div>
-          </div>
-
-          <div>
-            <p className="text-sm font-medium text-on-surface mb-2">
-              General Appearance
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {(
-                [
-                  'Comfortable',
-                  'MildDistress',
-                  'ModerateDistress',
-                  'SevereDistress',
-                  'Cachectic',
-                  'Bedridden',
-                  'WellGroomed',
-                  'PoorHygiene',
-                ] as const
-              ).map((opt) => (
-                <label
-                  key={opt}
-                  className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    value={opt}
-                    {...register('generalObservation.generalAppearance')}
-                    className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary"
-                  />
-                  {opt.replace(/([A-Z])/g, ' $1').trim()}
-                </label>
-              ))}
-            </div>
-          </div>
-        </Section>
-
         {/* 4. VITAL SIGNS */}
         <Section title="4. VITAL SIGNS (IF AVAILABLE)" defaultOpen={false}>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -670,7 +623,9 @@ const RecordVisitPage: React.FC = () => {
             <BooleanRadio
               label="Pain Present"
               value={watch('painPresent')}
-              onChange={(v) => setValue('painPresent', v as boolean, { shouldDirty: true })}
+              onChange={(v) =>
+                setValue('painPresent', v as boolean, { shouldDirty: true })
+              }
             />
             <Input
               label="Pain Score (0–10)"
@@ -739,14 +694,18 @@ const RecordVisitPage: React.FC = () => {
               label="Current Pain Medication"
               value={watch('currentPainMedication')}
               onChange={(v) =>
-                setValue('currentPainMedication', v as boolean, { shouldDirty: true })
+                setValue('currentPainMedication', v as boolean, {
+                  shouldDirty: true,
+                })
               }
             />
             <BooleanRadio
               label="Current Management Effective"
               value={watch('painMedicationEffective')}
               onChange={(v) =>
-                setValue('painMedicationEffective', v as boolean, { shouldDirty: true })
+                setValue('painMedicationEffective', v as boolean, {
+                  shouldDirty: true,
+                })
               }
             />
           </div>
@@ -758,147 +717,11 @@ const RecordVisitPage: React.FC = () => {
             />
           )}
 
-          <div>
-            <p className="text-sm font-medium text-on-surface mb-2">
-              Pain Relief Measures
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {(
-                [
-                  'Analgesics',
-                  'Positioning',
-                  'Massage',
-                  'RelaxationTherapy',
-                  'Other',
-                ] as const
-              ).map((opt) => (
-                <label
-                  key={opt}
-                  className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    value={opt}
-                    {...register('painReliefMeasures')}
-                    className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary"
-                  />
-                  {opt === 'RelaxationTherapy' ? 'Relaxation Therapy' : opt}
-                </label>
-              ))}
-            </div>
-            <Input
-              placeholder="Other: specify"
-              className="mt-2"
-              {...register('painReliefMeasuresOther')}
-            />
-          </div>
-        </Section>
-
-        {/* B1. RESPIRATORY */}
-        <Section title="B1. RESPIRATORY ASSESSMENT" defaultOpen={false}>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Select
-              label="Breathing Pattern"
-              options={[
-                { value: 'Normal', label: 'Normal' },
-                { value: 'Labored', label: 'Labored' },
-                { value: 'Shallow', label: 'Shallow' },
-                { value: 'Rapid', label: 'Rapid' },
-                { value: 'Slow', label: 'Slow' },
-              ]}
-              placeholder="Select…"
-              {...register('respiratory.breathingPattern')}
-            />
-            <Select
-              label="Dyspnea"
-              options={[
-                { value: 'None', label: 'None' },
-                { value: 'Mild', label: 'Mild' },
-                { value: 'Moderate', label: 'Moderate' },
-                { value: 'Severe', label: 'Severe' },
-              ]}
-              placeholder="Select…"
-              {...register('respiratory.dyspnea')}
-            />
-            <Select
-              label="Cough"
-              options={[
-                { value: 'None', label: 'None' },
-                { value: 'Dry', label: 'Dry' },
-                { value: 'Productive', label: 'Productive' },
-              ]}
-              placeholder="Select…"
-              {...register('respiratory.cough')}
-            />
-            <Select
-              label="Sputum"
-              options={[
-                { value: 'None', label: 'None' },
-                { value: 'Clear', label: 'Clear' },
-                { value: 'Yellow', label: 'Yellow' },
-                { value: 'Green', label: 'Green' },
-                { value: 'Bloody', label: 'Bloody' },
-              ]}
-              placeholder="Select…"
-              {...register('respiratory.sputum')}
-            />
-          </div>
-          <BooleanRadio
-            label="Oxygen Therapy"
-            value={watch('respiratory.oxygenTherapy') as boolean | null}
-            onChange={(v) =>
-              setValue('respiratory.oxygenTherapy', v as boolean, { shouldDirty: true })
-            }
-          />
-          {watch('respiratory.oxygenTherapy') === true && (
-            <Input
-              label="Flow Rate (L/min)"
-              placeholder="e.g. 2"
-              {...register('respiratory.oxygenFlowRate')}
-            />
-          )}
-        </Section>
-
-        {/* B2. CARDIOVASCULAR */}
-        <Section title="B2. CARDIOVASCULAR ASSESSMENT" defaultOpen={false}>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Select
-              label="Pulse"
-              options={[
-                { value: 'Regular', label: 'Regular' },
-                { value: 'Irregular', label: 'Irregular' },
-              ]}
-              placeholder="Select…"
-              {...register('cardiovascular.pulseRhythm')}
-            />
-            <Select
-              label="Skin Color"
-              options={[
-                { value: 'Normal', label: 'Normal' },
-                { value: 'Pale', label: 'Pale' },
-                { value: 'Cyanotic', label: 'Cyanotic' },
-                { value: 'Jaundiced', label: 'Jaundiced' },
-              ]}
-              placeholder="Select…"
-              {...register('cardiovascular.skinColor')}
-            />
-            <Select
-              label="Peripheral Edema"
-              options={[
-                { value: 'None', label: 'None' },
-                { value: 'Mild', label: 'Mild' },
-                { value: 'Moderate', label: 'Moderate' },
-                { value: 'Severe', label: 'Severe' },
-              ]}
-              placeholder="Select…"
-              {...register('cardiovascular.peripheralEdema')}
-            />
-            <Input
-              label="Edema Location"
-              placeholder="e.g. bilateral ankles"
-              {...register('cardiovascular.peripheralEdemaLocation')}
-            />
-          </div>
+          <RedirectBanner patientId={id!} target="pain-assessment">
+            Detailed pain characteristics (breakthrough, rescue effectiveness,
+            non-pharmacological methods, barriers) belong to the dedicated
+            Pain Assessment form.
+          </RedirectBanner>
         </Section>
 
         {/* 6. SYMPTOMS */}
@@ -950,10 +773,18 @@ const RecordVisitPage: React.FC = () => {
             </p>
             <div className="space-y-2">
               {(
-                ['feeding', 'bathing', 'dressing', 'toileting', 'mobility'] as const
+                [
+                  'feeding',
+                  'bathing',
+                  'dressing',
+                  'toileting',
+                  'mobility',
+                ] as const
               ).map((act) => (
                 <div key={act} className="flex items-center gap-4">
-                  <p className="text-sm w-24 capitalize flex-shrink-0">{act}</p>
+                  <p className="text-sm w-24 capitalize flex-shrink-0">
+                    {act}
+                  </p>
                   <Select
                     options={adlOptions}
                     {...register(`adl.${act}`)}
@@ -1007,148 +838,6 @@ const RecordVisitPage: React.FC = () => {
           />
         </Section>
 
-        {/* C1. GENITOURINARY */}
-        <Section title="C1. GENITOURINARY ASSESSMENT" defaultOpen={false}>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Select
-              label="Urinary Function"
-              options={[
-                { value: 'Normal', label: 'Normal' },
-                { value: 'Frequency', label: 'Frequency' },
-                { value: 'Retention', label: 'Retention' },
-                { value: 'Incontinence', label: 'Incontinence' },
-                { value: 'Catheterized', label: 'Catheterized' },
-              ]}
-              placeholder="Select…"
-              {...register('genitourinary.urinaryFunction')}
-            />
-            <Select
-              label="Urine Appearance"
-              options={[
-                { value: 'Clear', label: 'Clear' },
-                { value: 'Cloudy', label: 'Cloudy' },
-                { value: 'Bloody', label: 'Bloody' },
-                { value: 'Dark', label: 'Dark' },
-              ]}
-              placeholder="Select…"
-              {...register('genitourinary.urineAppearance')}
-            />
-          </div>
-        </Section>
-
-        {/* C2. SKIN */}
-        <Section title="C2. SKIN ASSESSMENT" defaultOpen={false}>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Select
-              label="Skin Integrity"
-              options={[
-                { value: 'Intact', label: 'Intact' },
-                { value: 'Dry', label: 'Dry' },
-                { value: 'Fragile', label: 'Fragile' },
-                { value: 'WoundPresent', label: 'Wound Present' },
-                { value: 'PressureUlcer', label: 'Pressure Ulcer' },
-              ]}
-              placeholder="Select…"
-              {...register('skin.skinIntegrity')}
-            />
-            <Select
-              label="Pressure Injury Risk"
-              options={[
-                { value: 'Low', label: 'Low' },
-                { value: 'Moderate', label: 'Moderate' },
-                { value: 'High', label: 'High' },
-              ]}
-              placeholder="Select…"
-              {...register('skin.pressureInjuryRisk')}
-            />
-          </div>
-          <BooleanRadio
-            label="Existing Pressure Ulcer"
-            value={watch('skin.pressureUlcerPresent') as boolean | null}
-            onChange={(v) =>
-              setValue('skin.pressureUlcerPresent', v as boolean, { shouldDirty: true })
-            }
-          />
-          {watch('skin.pressureUlcerPresent') === true && (
-            <div className="grid sm:grid-cols-2 gap-4">
-              <Input
-                label="Location"
-                placeholder="e.g. sacrum"
-                {...register('skin.pressureUlcerLocation')}
-              />
-              <Select
-                label="Stage"
-                options={[
-                  { value: 'I', label: 'Stage I' },
-                  { value: 'II', label: 'Stage II' },
-                  { value: 'III', label: 'Stage III' },
-                  { value: 'IV', label: 'Stage IV' },
-                ]}
-                placeholder="Select stage…"
-                {...register('skin.pressureUlcerStage')}
-              />
-            </div>
-          )}
-        </Section>
-
-        {/* C3. MOBILITY */}
-        <Section title="C3. MOBILITY ASSESSMENT" defaultOpen={false}>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Select
-              label="Mobility Status"
-              options={[
-                { value: 'Independent', label: 'Independent' },
-                { value: 'RequiresAssistance', label: 'Requires Assistance' },
-                {
-                  value: 'WheelchairDependent',
-                  label: 'Wheelchair Dependent',
-                },
-                { value: 'Bedridden', label: 'Bedridden' },
-              ]}
-              placeholder="Select…"
-              {...register('mobilityAssessment.mobilityStatus')}
-            />
-            <Select
-              label="Fall Risk"
-              options={[
-                { value: 'Low', label: 'Low' },
-                { value: 'Moderate', label: 'Moderate' },
-                { value: 'High', label: 'High' },
-              ]}
-              placeholder="Select…"
-              {...register('mobilityAssessment.fallRisk')}
-            />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-on-surface mb-2">
-              Assistive Devices
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {(
-                ['None', 'Cane', 'Walker', 'Wheelchair', 'Other'] as const
-              ).map((opt) => (
-                <label
-                  key={opt}
-                  className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    value={opt}
-                    {...register('mobilityAssessment.assistiveDevices')}
-                    className="h-4 w-4 rounded border-border-base text-primary focus:ring-primary"
-                  />
-                  {opt}
-                </label>
-              ))}
-            </div>
-            <Input
-              placeholder="Other: specify"
-              className="mt-2"
-              {...register('mobilityAssessment.assistiveDevicesOther')}
-            />
-          </div>
-        </Section>
-
         {/* 9. PSYCHOSOCIAL */}
         <Section title="9. PSYCHOSOCIAL ASSESSMENT" defaultOpen={false}>
           <div className="grid sm:grid-cols-2 gap-4">
@@ -1184,7 +873,9 @@ const RecordVisitPage: React.FC = () => {
             label="Financial Difficulty"
             value={watch('financialDifficulty')}
             onChange={(v) =>
-              setValue('financialDifficulty', v as boolean, { shouldDirty: true })
+              setValue('financialDifficulty', v as boolean, {
+                shouldDirty: true,
+              })
             }
           />
           <Textarea
@@ -1215,7 +906,9 @@ const RecordVisitPage: React.FC = () => {
             label="Requested Religious Support"
             value={watch('religiousSupportRequested')}
             onChange={(v) =>
-              setValue('religiousSupportRequested', v as boolean, { shouldDirty: true })
+              setValue('religiousSupportRequested', v as boolean, {
+                shouldDirty: true,
+              })
             }
           />
           {watch('religiousSupportRequested') && (
@@ -1234,28 +927,36 @@ const RecordVisitPage: React.FC = () => {
               label="Medications available at home?"
               value={watch('medicationAvailable')}
               onChange={(v) =>
-                setValue('medicationAvailable', v as boolean, { shouldDirty: true })
+                setValue('medicationAvailable', v as boolean, {
+                  shouldDirty: true,
+                })
               }
             />
             <BooleanRadio
               label="Taking medications correctly?"
               value={watch('medicationCorrectlyTaken')}
               onChange={(v) =>
-                setValue('medicationCorrectlyTaken', v as boolean, { shouldDirty: true })
+                setValue('medicationCorrectlyTaken', v as boolean, {
+                  shouldDirty: true,
+                })
               }
             />
             <BooleanRadio
               label="Any side effects?"
               value={watch('medicationSideEffects')}
               onChange={(v) =>
-                setValue('medicationSideEffects', v as boolean, { shouldDirty: true })
+                setValue('medicationSideEffects', v as boolean, {
+                  shouldDirty: true,
+                })
               }
             />
             <BooleanRadio
               label="Need medication refill?"
               value={watch('medicationRefillNeeded')}
               onChange={(v) =>
-                setValue('medicationRefillNeeded', v as boolean, { shouldDirty: true })
+                setValue('medicationRefillNeeded', v as boolean, {
+                  shouldDirty: true,
+                })
               }
             />
             <BooleanRadio
@@ -1333,7 +1034,7 @@ const RecordVisitPage: React.FC = () => {
           />
         </Section>
 
-        {/* 12. CAREGIVER — now autofilled */}
+        {/* 12. CAREGIVER */}
         <Section title="12. CAREGIVER ASSESSMENT" defaultOpen={false}>
           <div className="rounded-lg bg-primary/[0.04] border border-primary/20 px-4 py-2.5">
             <p className="text-xs text-text-secondary leading-relaxed">
@@ -1341,22 +1042,8 @@ const RecordVisitPage: React.FC = () => {
               patient record. Edit below if the information has changed.
             </p>
           </div>
-          <Input
-            label="Primary Caregiver"
-            {...register('primaryCaregiver')}
-          />
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Input
-              label="Relationship"
-              placeholder="e.g. Spouse, Child"
-              {...register('caregiverRelationship')}
-            />
-            <Input
-              label="Phone"
-              placeholder="Contact number"
-              {...register('caregiverPhone')}
-            />
-          </div>
+          <Input label="Primary Caregiver" {...register('primaryCaregiver')} />
+
           <div className="grid sm:grid-cols-2 gap-4">
             <Select
               label="Caregiver Burden"
@@ -1456,7 +1143,9 @@ const RecordVisitPage: React.FC = () => {
             label="Additional Support Needed"
             value={watch('additionalSupportNeeded') as boolean | null}
             onChange={(v) =>
-              setValue('additionalSupportNeeded', v as boolean, { shouldDirty: true })
+              setValue('additionalSupportNeeded', v as boolean, {
+                shouldDirty: true,
+              })
             }
           />
           {watch('additionalSupportNeeded') && (
@@ -1469,10 +1158,7 @@ const RecordVisitPage: React.FC = () => {
         </Section>
 
         {/* 14. HOME ENVIRONMENT */}
-        <Section
-          title="14. HOME ENVIRONMENT ASSESSMENT"
-          defaultOpen={false}
-        >
+        <Section title="14. HOME ENVIRONMENT ASSESSMENT" defaultOpen={false}>
           <Select
             label="Condition of Home"
             options={[
@@ -1671,7 +1357,7 @@ const RecordVisitPage: React.FC = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => navigate(`/patients/${id}`)}
+            onClick={() => navigate(patientPath)}
           >
             Cancel
           </Button>

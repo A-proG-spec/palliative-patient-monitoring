@@ -1,7 +1,7 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
-import { resolveStaffAttribution } from '@utils/actor.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
 import type { Actor } from '../types/index.js';
 // ─────────────────────────────────────────────────────────────
 // Safety constants — high risk levels that require a documented
@@ -72,10 +72,11 @@ const toPsychiatryAssessmentDto = (a: any) => ({
   assessmentOutcome: a.assessmentOutcome,
   finalRecommendations: a.finalRecommendations,
 
-  createdBy: a.createdBy,
-  createdByStaff: a.createdByStaff
-    ? { id: a.createdByStaff.id, name: a.createdByStaff.name }
-    : null,
+  enteredBy: a.createdByAdmin
+    ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+    : a.createdByStaff
+      ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+      : null,
   updatedBy: a.updatedBy,
   updatedByAdmin: a.updatedByAdmin
     ? { id: a.updatedByAdmin.id, name: a.updatedByAdmin.name }
@@ -144,23 +145,28 @@ export const createPsychiatryAssessment = async (
   actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
+  const sid = actor.type === 'admin' && (data.actingAsStaffId === undefined || data.actingAsStaffId === null || data.actingAsStaffId === '')
+    ? undefined
+    : resolveStaffAttribution(actor, data.actingAsStaffId);
 
-  const [patient, staff] = await Promise.all([
-    prisma.patient.findUnique({
-      where: { id: pid },
-      select: { id: true, firstName: true, lastName: true },
-    }),
-    prisma.staff.findUnique({ where: { id: sid }, select: { id: true } }),
-  ]);
+  const patientPromise = prisma.patient.findUnique({
+    where: { id: pid },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  let staffPromise: ReturnType<typeof prisma.staff.findUnique> | undefined;
+  if (sid !== undefined) {
+    staffPromise = prisma.staff.findUnique({ where: { id: sid }, select: { id: true } });
+  }
+  const [patient, staff] = await Promise.all([patientPromise, staffPromise]);
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (sid !== undefined && !staff) throw new ApiError(404, 'Staff member not found');
 
   const assessment = await prisma.$transaction(async (tx) => {
     const created = await tx.psychiatryAssessment.create({
       data: {
         patientId: pid,
-        createdBy: sid,
+        createdBy: sid ?? null,
+        createdByAdminId: adminCreatorId(actor),
         ...pickWritable(data),
       },
       include: {
@@ -171,6 +177,7 @@ export const createPsychiatryAssessment = async (
           },
         },
         createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     });
 
@@ -228,6 +235,7 @@ export const getPsychiatryAssessments = async (
       take: limit,
       include: {
         createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.psychiatryAssessment.count({ where: { patientId: pid } }),
@@ -243,9 +251,11 @@ export const getPsychiatryAssessments = async (
       suicideRiskLevel: a.suicideRiskLevel,
       diagnoses: a.diagnoses,
       assessmentOutcome: a.assessmentOutcome,
-      createdBy: a.createdByStaff
-        ? { id: a.createdByStaff.id, name: a.createdByStaff.name }
-        : null,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
       deletedAt: a.deletedAt,
@@ -284,6 +294,7 @@ export const getAllPsychiatryAssessments = async (
       take: limit,
       include: {
         createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     client.psychiatryAssessment.count({ where: { patientId: pid } }),
@@ -299,9 +310,11 @@ export const getAllPsychiatryAssessments = async (
       suicideRiskLevel: a.suicideRiskLevel,
       diagnoses: a.diagnoses,
       assessmentOutcome: a.assessmentOutcome,
-      createdBy: a.createdByStaff
-        ? { id: a.createdByStaff.id, name: a.createdByStaff.name }
-        : null,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
       deletedAt: a.deletedAt ?? null,
@@ -333,6 +346,7 @@ export const getPsychiatryAssessmentById = async (
         },
       },
       createdByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       updatedByAdmin: { select: { id: true, name: true } },
     },
   });
@@ -374,6 +388,7 @@ export const updatePsychiatryAssessment = async (
         },
       },
       createdByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       updatedByAdmin: { select: { id: true, name: true } },
     },
   });
@@ -474,6 +489,8 @@ export const getDeletedPsychiatryAssessments = async (
       include: {
         patient: { select: { id: true, firstName: true, lastName: true } },
         deletedByAdmin: { select: { id: true, name: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prismaBase.psychiatryAssessment.count({
@@ -488,6 +505,11 @@ export const getDeletedPsychiatryAssessments = async (
       patientName: `${a.patient.firstName} ${a.patient.lastName}`,
       assessmentType: a.assessmentType,
       suicideRiskLevel: a.suicideRiskLevel,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
       deletedAt: a.deletedAt,
       deletedBy: a.deletedByAdmin
         ? { id: a.deletedByAdmin.id, name: a.deletedByAdmin.name }

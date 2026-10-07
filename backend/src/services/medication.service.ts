@@ -1,8 +1,17 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
-import { resolveStaffAttribution } from '@utils/actor.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
 import type { Actor } from '../types/index.js';
+
+const toEnteredBy = (
+  staff?: { id: number; name: string } | null,
+  admin?: { id: number; name: string } | null,
+) => admin
+    ? { id: admin.id, name: admin.name, type: 'admin' as const }
+    : staff
+      ? { id: staff.id, name: staff.name, type: 'staff' as const }
+      : null;
 
 // ─────────────────────────────────────────────────────────────
 // Order medication
@@ -36,6 +45,7 @@ export const getAllMedications = async (
       take: limit,
       include: {
         prescribedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     client.medication.count({ where }),
@@ -50,10 +60,7 @@ export const getAllMedications = async (
       route: m.route,
       administeredAt: m.administeredAt,
       status: m.status,
-      prescribedBy: {
-        id: m.prescribedByStaff.id,
-        name: m.prescribedByStaff.name,
-      },
+      enteredBy: toEnteredBy(m.prescribedByStaff, m.createdByAdmin),
       createdAt: m.createdAt,
       deletedAt: m.deletedAt ?? null,
       deletionReason: m.deletionReason ?? null,
@@ -71,6 +78,9 @@ export const orderMedication = async (
 ) => {
   const pid = toId(patientId, 'patient id');
   const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
+  if (sid === undefined) {
+    throw new ApiError(400, 'actingAsStaffId is required to prescribe medication');
+  }
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
@@ -89,7 +99,12 @@ export const orderMedication = async (
       route: data.route,
       administeredAt: data.administeredAt,
       prescribedBy: sid,
+      createdByAdminId: adminCreatorId(actor),
       status: 'Ordered',
+    },
+    include: {
+      prescribedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -102,7 +117,7 @@ export const orderMedication = async (
     route: medication.route,
     administeredAt: medication.administeredAt,
     status: medication.status,
-    prescribedBy: { id: staff.id, name: staff.name },
+    enteredBy: toEnteredBy(medication.prescribedByStaff, medication.createdByAdmin),
     createdAt: medication.createdAt,
   };
 };
@@ -137,6 +152,7 @@ export const getMedications = async (
       take: limit,
       include: {
         prescribedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.medication.count({ where }),
@@ -151,10 +167,7 @@ export const getMedications = async (
       route: m.route,
       administeredAt: m.administeredAt,
       status: m.status,
-      prescribedBy: {
-        id: m.prescribedByStaff.id,
-        name: m.prescribedByStaff.name,
-      },
+      enteredBy: toEnteredBy(m.prescribedByStaff, m.createdByAdmin),
       createdAt: m.createdAt,
     })),
     page,
@@ -177,6 +190,7 @@ export const getMedicationById = async (
     where: { id: mid, patientId: pid },
     include: {
       prescribedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -191,10 +205,7 @@ export const getMedicationById = async (
     route: medication.route,
     administeredAt: medication.administeredAt,
     status: medication.status,
-    prescribedBy: {
-      id: medication.prescribedByStaff.id,
-      name: medication.prescribedByStaff.name,
-    },
+    enteredBy: toEnteredBy(medication.prescribedByStaff, medication.createdByAdmin),
     createdAt: medication.createdAt,
   };
 };
@@ -239,6 +250,7 @@ export const updateMedicationStatus = async (
     },
     include: {
       prescribedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -251,10 +263,7 @@ export const updateMedicationStatus = async (
     route: updated.route,
     administeredAt: updated.administeredAt,
     status: updated.status,
-    prescribedBy: {
-      id: updated.prescribedByStaff.id,
-      name: updated.prescribedByStaff.name,
-    },
+    enteredBy: toEnteredBy(updated.prescribedByStaff, updated.createdByAdmin),
     updatedAt: updated.updatedAt,
   };
 };
@@ -357,6 +366,7 @@ export const getPendingMedicationOrders = async (
           },
         },
         prescribedByStaff: { select: { id: true, name: true, role: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.medication.count({ where }),
@@ -376,8 +386,7 @@ export const getPendingMedicationOrders = async (
       route: m.route,
       administeredAt: m.administeredAt,
 
-      prescribingClinician: m.prescribedByStaff.name,
-      prescribedById: m.prescribedByStaff.id,
+      enteredBy: toEnteredBy(m.prescribedByStaff, m.createdByAdmin),
 
       dateOrdered: m.createdAt,
       status: m.status,
@@ -409,6 +418,7 @@ export const getMedicationOrderById = async (medicationId: string) => {
         },
       },
       prescribedByStaff: { select: { id: true, name: true, role: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -429,8 +439,7 @@ export const getMedicationOrderById = async (medicationId: string) => {
     route: med.route,
     administeredAt: med.administeredAt,
 
-    prescribingClinician: med.prescribedByStaff.name,
-    prescribedById: med.prescribedByStaff.id,
+    enteredBy: toEnteredBy(med.prescribedByStaff, med.createdByAdmin),
 
     dateOrdered: med.createdAt,
     status: med.status,

@@ -25,16 +25,18 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
-import { useActingClinician } from '@/hooks/useActingClinician';
-import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
 import { useToast } from '@/context/ToastContext';
 
-// ═════════════════════════════════════════════════════════════
-// Enum option lists — mirrors the backend Zod enums exactly.
-// Keep these in sync with `NUTRITION_LAB_TEST_VALUES` etc. in
-// `frontend/src/types/nutritional-assessment.types.ts`.
-// ═════════════════════════════════════════════════════════════
+// ── Helpers ─────────────────────────────────────────────────────
+const displayId = (p: {
+  id: number | string;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
 
+// ═════════════════════════════════════════════════════════════
+// Enum option lists
+// ═════════════════════════════════════════════════════════════
 const LAB_TEST_OPTIONS = [
   { value: 'Hemoglobin', label: 'Hemoglobin' },
   { value: 'Albumin', label: 'Albumin' },
@@ -54,13 +56,19 @@ const MEAL_TYPE_SUGGESTIONS = [
   'Other',
 ];
 
-// ═════════════════════════════════════════════════════════════
+const SEVERITY_OPTIONS = [
+  { value: 'None', label: 'None' },
+  { value: 'Mild', label: 'Mild' },
+  { value: 'Moderate', label: 'Moderate' },
+  { value: 'Severe', label: 'Severe' },
+] as const;
 
 const NutritionalAssessmentFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const acting = useActingClinician(id!);
   const { toast } = useToast();
+
+  const patientPath = `/patients/${id}`;
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
   const createMutation = useCreateNutritionalAssessment(id!);
@@ -88,7 +96,6 @@ const NutritionalAssessmentFormPage: React.FC = () => {
     },
   });
 
-  // ── Row-level field arrays ──
   const dietaryRecallArray = useFieldArray({
     control,
     name: 'dietaryRecall',
@@ -99,7 +106,6 @@ const NutritionalAssessmentFormPage: React.FC = () => {
     name: 'labResults',
   });
 
-  // Live values so the UI re-renders on changes
   const dietaryRecall = watch('dietaryRecall') ?? [];
   const labResults = watch('labResults') ?? [];
 
@@ -107,12 +113,44 @@ const NutritionalAssessmentFormPage: React.FC = () => {
   // Submit
   // ═══════════════════════════════════════════════════════════
   const onSubmit = (data: CreateNutritionalAssessmentFormData) => {
-    createMutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
-      onSuccess: () => navigate(acting.patientPath),
+    // ── Filter out empty dietary-recall rows before submit.
+    //    The backend requires mealType.min(1); blank rows would 400. ──
+    const cleanedDietaryRecall = (data.dietaryRecall ?? []).filter(
+      (r) => (r.mealType ?? '').trim().length > 0,
+    );
+
+    // ── Strip testOther when test isn't 'Other' ──
+    const cleanedLabResults = (data.labResults ?? []).map((r) => ({
+      ...r,
+      testOther: r.test === 'Other' ? r.testOther : undefined,
+    }));
+
+    const payload = {
+      ...data,
+      dietaryRecall: cleanedDietaryRecall,
+      labResults: cleanedLabResults,
+    };
+
+    createMutation.mutate(payload as any, {
+      onSuccess: () => navigate(patientPath),
+      onError: (err: any) => {
+        const message =
+          err?.response?.data?.message ?? 'Failed to save assessment.';
+        const fieldErrors = err?.response?.data?.errors;
+        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+          toast.error(
+            `${message} — ${fieldErrors
+              .slice(0, 3)
+              .map((e: any) => e.message ?? e.field)
+              .join(', ')}`,
+          );
+        } else {
+          toast.error(message);
+        }
+      },
     });
   };
 
-  // ── onInvalid: surface ALL validation errors as a toast ──
   const onInvalid = (formErrors: any) => {
     const flat: string[] = [];
 
@@ -137,7 +175,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
     if (flat.length > 0) {
       const shown = flat.slice(0, 3).join(' • ');
       const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
-      toast.error(`Save failed — ${shown}${rest}`, 8000);
+      toast.error(`Save failed — ${shown}${rest}`);
     } else {
       toast.error('Save failed — please review the form.');
     }
@@ -146,23 +184,24 @@ const NutritionalAssessmentFormPage: React.FC = () => {
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
-  const patientLabel = `${patient.firstName} ${patient.lastName} · ${
-    patient.patientDisplayId ?? patient.id
-  }`;
+  const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
+
+  // ── Convenience for YesNo boolean bridging ──
+  const boolToYesNo = (v: boolean | undefined | null): 'Yes' | 'No' | '' =>
+    v === undefined || v === null ? '' : v ? 'Yes' : 'No';
 
   return (
     <AssessmentFormShell
       title="Nutritional Assessment"
       patientLabel={patientLabel}
-      backTo={acting.patientPath}
+      backTo={patientPath}
       mode="create"
       isSubmitting={createMutation.isPending}
       onSubmit={handleSubmit(onSubmit, onInvalid)}
-      onCancel={() => navigate(acting.patientPath)}
+      onCancel={() => navigate(patientPath)}
     >
-      {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Nutritionist']} />}
-      {/* ── 1. Assessment type ── */}
-      <Section title="1. Assessment Type">
+      {/* ── 1. Assessment info ── */}
+      <Section title="1. Assessment Information">
         <Select
           label="Assessment Type"
           options={[
@@ -170,6 +209,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             { value: 'FollowUp', label: 'Follow-up' },
             { value: 'Reassessment', label: 'Reassessment' },
           ]}
+          placeholder="Select…"
           error={errors.assessmentType?.message}
           {...register('assessmentType')}
         />
@@ -183,35 +223,35 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             type="number"
             step="0.1"
             error={errors.weightKg?.message}
-            {...register('weightKg')}
+            {...register('weightKg', { valueAsNumber: true })}
           />
           <Input
             label="Height (cm)"
             type="number"
             step="0.1"
             error={errors.heightCm?.message}
-            {...register('heightCm')}
+            {...register('heightCm', { valueAsNumber: true })}
           />
           <Input
             label="BMI"
             type="number"
             step="0.1"
             error={errors.bmi?.message}
-            {...register('bmi')}
+            {...register('bmi', { valueAsNumber: true })}
           />
           <Input
             label="MUAC (cm)"
             type="number"
             step="0.1"
             error={errors.muacCm?.message}
-            {...register('muacCm')}
+            {...register('muacCm', { valueAsNumber: true })}
           />
           <Input
             label="Recent Weight Loss (kg)"
             type="number"
             step="0.1"
             error={errors.recentWeightLossKg?.message}
-            {...register('recentWeightLossKg')}
+            {...register('recentWeightLossKg', { valueAsNumber: true })}
           />
           <Input
             label="Weight Loss Period"
@@ -242,28 +282,28 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             type="number"
             step="0.1"
             error={errors.weightSixMonthsAgoKg?.message}
-            {...register('weightSixMonthsAgoKg')}
+            {...register('weightSixMonthsAgoKg', { valueAsNumber: true })}
           />
           <Input
             label="Weight 3 months ago (kg)"
             type="number"
             step="0.1"
             error={errors.weightThreeMonthsAgoKg?.message}
-            {...register('weightThreeMonthsAgoKg')}
+            {...register('weightThreeMonthsAgoKg', { valueAsNumber: true })}
           />
           <Input
             label="Current Weight (kg)"
             type="number"
             step="0.1"
             error={errors.currentWeightKg?.message}
-            {...register('currentWeightKg')}
+            {...register('currentWeightKg', { valueAsNumber: true })}
           />
           <Input
             label="% Weight Loss"
             type="number"
             step="0.1"
             error={errors.percentageWeightLoss?.message}
-            {...register('percentageWeightLoss')}
+            {...register('percentageWeightLoss', { valueAsNumber: true })}
           />
         </Grid>
         <Select
@@ -321,7 +361,9 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             'EarlySatiety',
             'Other',
           ]}
-          onChange={(v) => setValue('appetiteCauses', v as any)}
+          onChange={(v) =>
+            setValue('appetiteCauses', v as any, { shouldDirty: true })
+          }
         />
         {watch('appetiteCauses')?.includes('Other') && (
           <Input
@@ -425,14 +467,10 @@ const NutritionalAssessmentFormPage: React.FC = () => {
         <YesNo
           label="Difficulty Swallowing?"
           name="difficultySwallowing"
-          value={
-            watch('difficultySwallowing') === undefined
-              ? ''
-              : watch('difficultySwallowing')
-                ? 'Yes'
-                : 'No'
+          value={boolToYesNo(watch('difficultySwallowing'))}
+          onChange={(v) =>
+            setValue('difficultySwallowing', v === 'Yes', { shouldDirty: true })
           }
-          onChange={(v) => setValue('difficultySwallowing', v === 'Yes')}
         />
         {watch('difficultySwallowing') && (
           <Textarea
@@ -443,9 +481,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
         )}
       </Section>
 
-      {/* ═══════════════════════════════════════════════════════
-          7. 24-hour dietary recall — ROW EDITOR
-      ═══════════════════════════════════════════════════════ */}
+      {/* ── 7. 24-hour dietary recall ── */}
       <Section title="7. 24-Hour Dietary Recall">
         {dietaryRecall.length === 0 ? (
           <p className="text-xs text-text-muted -mt-2">
@@ -499,7 +535,6 @@ const NutritionalAssessmentFormPage: React.FC = () => {
           </div>
         )}
 
-        {/* Datalist for meal-type autocomplete suggestions */}
         <datalist id="meal-type-suggestions">
           {MEAL_TYPE_SUGGESTIONS.map((m) => (
             <option key={m} value={m} />
@@ -533,84 +568,49 @@ const NutritionalAssessmentFormPage: React.FC = () => {
         <Grid cols={2}>
           <Select
             label="Nausea Severity"
-            options={[
-              { value: 'None', label: 'None' },
-              { value: 'Mild', label: 'Mild' },
-              { value: 'Moderate', label: 'Moderate' },
-              { value: 'Severe', label: 'Severe' },
-            ]}
+            options={SEVERITY_OPTIONS as unknown as { value: string; label: string }[]}
             placeholder="Select…"
             error={errors.nauseaSeverity?.message}
             {...register('nauseaSeverity')}
           />
           <Select
             label="Vomiting Severity"
-            options={[
-              { value: 'None', label: 'None' },
-              { value: 'Mild', label: 'Mild' },
-              { value: 'Moderate', label: 'Moderate' },
-              { value: 'Severe', label: 'Severe' },
-            ]}
+            options={SEVERITY_OPTIONS as unknown as { value: string; label: string }[]}
             placeholder="Select…"
             error={errors.vomitingSeverity?.message}
             {...register('vomitingSeverity')}
           />
           <Select
             label="Constipation Severity"
-            options={[
-              { value: 'None', label: 'None' },
-              { value: 'Mild', label: 'Mild' },
-              { value: 'Moderate', label: 'Moderate' },
-              { value: 'Severe', label: 'Severe' },
-            ]}
+            options={SEVERITY_OPTIONS as unknown as { value: string; label: string }[]}
             placeholder="Select…"
             error={errors.constipationSeverity?.message}
             {...register('constipationSeverity')}
           />
           <Select
             label="Diarrhea Severity"
-            options={[
-              { value: 'None', label: 'None' },
-              { value: 'Mild', label: 'Mild' },
-              { value: 'Moderate', label: 'Moderate' },
-              { value: 'Severe', label: 'Severe' },
-            ]}
+            options={SEVERITY_OPTIONS as unknown as { value: string; label: string }[]}
             placeholder="Select…"
             error={errors.diarrheaSeverity?.message}
             {...register('diarrheaSeverity')}
           />
           <Select
             label="Abdominal Pain Severity"
-            options={[
-              { value: 'None', label: 'None' },
-              { value: 'Mild', label: 'Mild' },
-              { value: 'Moderate', label: 'Moderate' },
-              { value: 'Severe', label: 'Severe' },
-            ]}
+            options={SEVERITY_OPTIONS as unknown as { value: string; label: string }[]}
             placeholder="Select…"
             error={errors.abdominalPainSeverity?.message}
             {...register('abdominalPainSeverity')}
           />
           <Select
             label="Bloating Severity"
-            options={[
-              { value: 'None', label: 'None' },
-              { value: 'Mild', label: 'Mild' },
-              { value: 'Moderate', label: 'Moderate' },
-              { value: 'Severe', label: 'Severe' },
-            ]}
+            options={SEVERITY_OPTIONS as unknown as { value: string; label: string }[]}
             placeholder="Select…"
             error={errors.bloatingSeverity?.message}
             {...register('bloatingSeverity')}
           />
           <Select
             label="Mouth Sores Severity"
-            options={[
-              { value: 'None', label: 'None' },
-              { value: 'Mild', label: 'Mild' },
-              { value: 'Moderate', label: 'Moderate' },
-              { value: 'Severe', label: 'Severe' },
-            ]}
+            options={SEVERITY_OPTIONS as unknown as { value: string; label: string }[]}
             placeholder="Select…"
             error={errors.mouthSoresSeverity?.message}
             {...register('mouthSoresSeverity')}
@@ -658,11 +658,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
         </Grid>
       </Section>
 
-      {/* ═══════════════════════════════════════════════════════
-          10. Lab Results — ROW EDITOR
-          `test` is an enum → hard-constrained via <Select>.
-          `testOther` only appears when test === 'Other'.
-      ═══════════════════════════════════════════════════════ */}
+      {/* ── 10. Lab results ── */}
       <Section title="10. Laboratory Results">
         {labResults.length === 0 ? (
           <p className="text-xs text-text-muted -mt-2">
@@ -785,7 +781,9 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             'LowBmi',
             'FoodInsecurity',
           ]}
-          onChange={(v) => setValue('riskFactors', v as any)}
+          onChange={(v) =>
+            setValue('riskFactors', v as any, { shouldDirty: true })
+          }
         />
         <Select
           label="Overall Nutritional Risk"
@@ -807,41 +805,29 @@ const NutritionalAssessmentFormPage: React.FC = () => {
           <YesNo
             label="Adequate food access?"
             name="adequateFoodAccess"
-            value={
-              watch('adequateFoodAccess') === undefined
-                ? ''
-                : watch('adequateFoodAccess')
-                  ? 'Yes'
-                  : 'No'
+            value={boolToYesNo(watch('adequateFoodAccess'))}
+            onChange={(v) =>
+              setValue('adequateFoodAccess', v === 'Yes', { shouldDirty: true })
             }
-            onChange={(v) => setValue('adequateFoodAccess', v === 'Yes')}
           />
           <YesNo
             label="Financial barriers to nutrition?"
             name="financialBarriersToNutrition"
-            value={
-              watch('financialBarriersToNutrition') === undefined
-                ? ''
-                : watch('financialBarriersToNutrition')
-                  ? 'Yes'
-                  : 'No'
-            }
+            value={boolToYesNo(watch('financialBarriersToNutrition'))}
             onChange={(v) =>
-              setValue('financialBarriersToNutrition', v === 'Yes')
+              setValue('financialBarriersToNutrition', v === 'Yes', {
+                shouldDirty: true,
+              })
             }
           />
           <YesNo
             label="Requires nutritional assistance?"
             name="requiresNutritionalAssistance"
-            value={
-              watch('requiresNutritionalAssistance') === undefined
-                ? ''
-                : watch('requiresNutritionalAssistance')
-                  ? 'Yes'
-                  : 'No'
-            }
+            value={boolToYesNo(watch('requiresNutritionalAssistance'))}
             onChange={(v) =>
-              setValue('requiresNutritionalAssistance', v === 'Yes')
+              setValue('requiresNutritionalAssistance', v === 'Yes', {
+                shouldDirty: true,
+              })
             }
           />
         </Grid>
@@ -862,13 +848,12 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             'WeightLoss',
             'Other',
           ]}
-          onChange={(v) => setValue('diagnoses', v as any)}
+          onChange={(v) =>
+            setValue('diagnoses', v as any, { shouldDirty: true })
+          }
         />
         {watch('diagnoses')?.includes('Other') && (
-          <Input
-            label="Other diagnosis"
-            {...register('diagnosisOther')}
-          />
+          <Input label="Other diagnosis" {...register('diagnosisOther')} />
         )}
       </Section>
 
@@ -894,7 +879,9 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             'SocialSupportReferral',
             'Other',
           ]}
-          onChange={(v) => setValue('interventions', v as any)}
+          onChange={(v) =>
+            setValue('interventions', v as any, { shouldDirty: true })
+          }
         />
         {watch('interventions')?.includes('Other') && (
           <Input
@@ -912,7 +899,9 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             'MonthlyNutritionalReview',
             'Other',
           ]}
-          onChange={(v) => setValue('monitoringPlans', v as any)}
+          onChange={(v) =>
+            setValue('monitoringPlans', v as any, { shouldDirty: true })
+          }
         />
         {watch('monitoringPlans')?.includes('Other') && (
           <Input
@@ -935,7 +924,9 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             'RequiresSpecializedNutritionalSupport',
             'RequiresSocialSupportForNutrition',
           ]}
-          onChange={(v) => setValue('assessmentOutcome', v as any)}
+          onChange={(v) =>
+            setValue('assessmentOutcome', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Final Recommendations"
@@ -948,7 +939,9 @@ const NutritionalAssessmentFormPage: React.FC = () => {
             'HomeBasedNutritionFollowUp',
             'MultidisciplinaryReviewRequired',
           ]}
-          onChange={(v) => setValue('finalRecommendations', v as any)}
+          onChange={(v) =>
+            setValue('finalRecommendations', v as any, { shouldDirty: true })
+          }
         />
       </Section>
     </AssessmentFormShell>

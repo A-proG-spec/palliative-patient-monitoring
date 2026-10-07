@@ -23,13 +23,24 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
-import { useActingClinician } from '@/hooks/useActingClinician';
-import { ActingClinicianPicker } from '@/components/admin/ActingClinicianPicker';
+import { useToast } from '@/context/ToastContext';
+
+// ── Helpers ─────────────────────────────────────────────────────
+const displayId = (p: {
+  id: number | string;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
+
+const toYesNo = (v: boolean | null | undefined): 'Yes' | 'No' | '' =>
+  v === undefined || v === null ? '' : v ? 'Yes' : 'No';
 
 const PharmacistAssessmentFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const acting = useActingClinician(id!);
+  const { toast } = useToast();
+
+  const patientPath = `/patients/${id}`;
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
   const createMutation = useCreatePharmacistAssessment(id!);
@@ -69,20 +80,64 @@ const PharmacistAssessmentFormPage: React.FC = () => {
     },
   });
 
+  // ═══════════════════════════════════════════════════════════
+  // Submit
+  // ═══════════════════════════════════════════════════════════
   const onSubmit = (data: CreatePharmacistAssessmentFormData) => {
-    createMutation.mutate({ ...data, ...(acting.isAdmin ? { actingAsStaffId: acting.actingAsStaffId } : {}) } as any, {
-      onSuccess: () => navigate(acting.patientPath),
+    createMutation.mutate(data as any, {
+      onSuccess: () => navigate(patientPath),
+      onError: (err: any) => {
+        const message =
+          err?.response?.data?.message ??
+          'Failed to save pharmacist assessment.';
+        const fieldErrors = err?.response?.data?.errors;
+        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+          toast.error(
+            `${message} — ${fieldErrors
+              .slice(0, 3)
+              .map((e: any) => e.message ?? e.field)
+              .join(', ')}`,
+          );
+        } else {
+          toast.error(message);
+        }
+      },
     });
   };
 
-  if (isLoading) return <PageLoader />;
-  if (error || !patient) return <ErrorState onRetry={refetch} />;
+  const onInvalid = (formErrors: any) => {
+    const flat: string[] = [];
+    const walk = (obj: any, path = ''): void => {
+      if (!obj || typeof obj !== 'object') return;
+      if ('message' in obj && typeof obj.message === 'string') {
+        flat.push(`${path || 'form'}: ${obj.message}`);
+        return;
+      }
+      for (const [k, v] of Object.entries(obj)) {
+        const next = path ? `${path}.${k}` : k;
+        if (Array.isArray(v)) {
+          v.forEach((item, i) => walk(item, `${next}[${i}]`));
+        } else {
+          walk(v, next);
+        }
+      }
+    };
+    walk(formErrors);
 
-  const patientLabel = `${patient.firstName} ${patient.lastName} · ${
-    patient.patientDisplayId ?? patient.id
-  }`;
+    if (flat.length > 0) {
+      const shown = flat.slice(0, 3).join(' • ');
+      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
+      toast.error(`Save failed — ${shown}${rest}`);
+    } else {
+      toast.error('Save failed — please review the form.');
+    }
+  };
 
-  // Analgesic checkbox bridge (4 separate boolean fields → one visual group)
+  // ── Controlled text state for the medications textarea ──
+  // Prevents the row list from being lost on re-render.
+  const [medicationsText, setMedicationsText] = React.useState('');
+
+  // ── Analgesic bridge: derive array from 4 booleans ──
   const analgesicValues: string[] = [
     ...(watch('analgesicNonOpioids') ? ['Non-opioids'] : []),
     ...(watch('analgesicWeakOpioids') ? ['Weak opioids'] : []),
@@ -90,26 +145,46 @@ const PharmacistAssessmentFormPage: React.FC = () => {
     ...(watch('analgesicAdjuvants') ? ['Adjuvants'] : []),
   ];
 
+  const setAnalgesic = (vals: string[]) => {
+    setValue('analgesicNonOpioids', vals.includes('Non-opioids'), {
+      shouldDirty: true,
+    });
+    setValue('analgesicWeakOpioids', vals.includes('Weak opioids'), {
+      shouldDirty: true,
+    });
+    setValue('analgesicStrongOpioids', vals.includes('Strong opioids'), {
+      shouldDirty: true,
+    });
+    setValue('analgesicAdjuvants', vals.includes('Adjuvants'), {
+      shouldDirty: true,
+    });
+  };
+
+  if (isLoading) return <PageLoader />;
+  if (error || !patient) return <ErrorState onRetry={refetch} />;
+
+  const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
+
   return (
     <AssessmentFormShell
       title="Pharmacist Assessment"
       patientLabel={patientLabel}
-      backTo={acting.patientPath}
+      backTo={patientPath}
       mode="create"
       isSubmitting={createMutation.isPending}
-      onSubmit={handleSubmit(onSubmit)}
-      onCancel={() => navigate(acting.patientPath)}
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      onCancel={() => navigate(patientPath)}
     >
-      {acting.isAdmin && <ActingClinicianPicker value={acting.actingAsStaffId} onChange={acting.setActingAsStaffId} allowedRoles={['Pharmacist']} />}
-      {/* ── 1. Assessment type ── */}
-      <Section title="1. Assessment Type">
+      {/* ── 1. Assessment info ── */}
+      <Section title="1. Assessment Information">
         <Select
           label="Assessment Type"
           options={[
             { value: 'Admission', label: 'Admission' },
             { value: 'FollowUp', label: 'Follow-up' },
-            { value: 'MedicationReview', label: 'Medication Review' },
+            { value: 'MedicationReview', label: 'Medication review' },
           ]}
+          placeholder="Select…"
           error={errors.assessmentType?.message}
           {...register('assessmentType')}
         />
@@ -122,7 +197,8 @@ const PharmacistAssessmentFormPage: React.FC = () => {
             label="Weight (kg)"
             type="number"
             step="0.1"
-            {...register('weightKg')}
+            error={errors.weightKg?.message}
+            {...register('weightKg', { valueAsNumber: true })}
           />
           <Input
             label="Ward / Unit"
@@ -143,8 +219,10 @@ const PharmacistAssessmentFormPage: React.FC = () => {
         <YesNo
           label="OTC / Herbal medicines used?"
           name="otcHerbalUsed"
-          value={watch('otcHerbalUsed') ? 'Yes' : 'No'}
-          onChange={(v) => setValue('otcHerbalUsed', v === 'Yes')}
+          value={toYesNo(watch('otcHerbalUsed'))}
+          onChange={(v) =>
+            setValue('otcHerbalUsed', v === 'Yes', { shouldDirty: true })
+          }
         />
         {watch('otcHerbalUsed') && (
           <Input
@@ -166,8 +244,10 @@ const PharmacistAssessmentFormPage: React.FC = () => {
         <YesNo
           label="History of adverse drug reactions?"
           name="hasAdrHistory"
-          value={watch('hasAdrHistory') ? 'Yes' : 'No'}
-          onChange={(v) => setValue('hasAdrHistory', v === 'Yes')}
+          value={toYesNo(watch('hasAdrHistory'))}
+          onChange={(v) =>
+            setValue('hasAdrHistory', v === 'Yes', { shouldDirty: true })
+          }
         />
         {watch('hasAdrHistory') && (
           <Textarea
@@ -184,12 +264,7 @@ const PharmacistAssessmentFormPage: React.FC = () => {
           label="Analgesics Currently In Use"
           values={analgesicValues}
           options={['Non-opioids', 'Weak opioids', 'Strong opioids', 'Adjuvants']}
-          onChange={(vals) => {
-            setValue('analgesicNonOpioids', vals.includes('Non-opioids'));
-            setValue('analgesicWeakOpioids', vals.includes('Weak opioids'));
-            setValue('analgesicStrongOpioids', vals.includes('Strong opioids'));
-            setValue('analgesicAdjuvants', vals.includes('Adjuvants'));
-          }}
+          onChange={setAnalgesic}
         />
         <Grid cols={2}>
           <Select
@@ -224,7 +299,9 @@ const PharmacistAssessmentFormPage: React.FC = () => {
             'RespiratoryDepression',
             'None',
           ]}
-          onChange={(v) => setValue('opioidSideEffects', v as any)}
+          onChange={(v) =>
+            setValue('opioidSideEffects', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
@@ -248,8 +325,12 @@ const PharmacistAssessmentFormPage: React.FC = () => {
         <YesNo
           label="Drug–Disease Interactions?"
           name="drugDiseaseInteractions"
-          value={watch('drugDiseaseInteractions') ? 'Yes' : 'No'}
-          onChange={(v) => setValue('drugDiseaseInteractions', v === 'Yes')}
+          value={toYesNo(watch('drugDiseaseInteractions'))}
+          onChange={(v) =>
+            setValue('drugDiseaseInteractions', v === 'Yes', {
+              shouldDirty: true,
+            })
+          }
         />
         {watch('drugDiseaseInteractions') && (
           <Textarea
@@ -268,7 +349,9 @@ const PharmacistAssessmentFormPage: React.FC = () => {
             'Steroids',
             'Antiepileptics',
           ]}
-          onChange={(v) => setValue('highRiskMedications', v as any)}
+          onChange={(v) =>
+            setValue('highRiskMedications', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
@@ -319,11 +402,12 @@ const PharmacistAssessmentFormPage: React.FC = () => {
         <Textarea
           label="Medication list"
           rows={5}
-          placeholder={
-            'Morphine | 10mg | Oral | Every 6h | Pain\nLactulose | 15ml | Oral | Twice daily | Constipation'
-          }
+          value={medicationsText}
           onChange={(e) => {
-            const rows = e.target.value
+            const raw = e.target.value;
+            setMedicationsText(raw);
+
+            const rows = raw
               .split('\n')
               .map((l) => l.trim())
               .filter(Boolean)
@@ -338,8 +422,12 @@ const PharmacistAssessmentFormPage: React.FC = () => {
                   indication: indication.trim(),
                 };
               });
-            setValue('currentMedications', rows);
+
+            setValue('currentMedications', rows, { shouldDirty: true });
           }}
+          placeholder={
+            'Morphine | 10mg | Oral | Every 6h | Pain\nLactulose | 15ml | Oral | Twice daily | Constipation'
+          }
         />
       </Section>
 
@@ -348,13 +436,18 @@ const PharmacistAssessmentFormPage: React.FC = () => {
         <YesNo
           label="Suspected ADR?"
           name="suspectedAdr"
-          value={watch('suspectedAdr') ? 'Yes' : 'No'}
-          onChange={(v) => setValue('suspectedAdr', v === 'Yes')}
+          value={toYesNo(watch('suspectedAdr'))}
+          onChange={(v) =>
+            setValue('suspectedAdr', v === 'Yes', { shouldDirty: true })
+          }
         />
         {watch('suspectedAdr') && (
           <>
             <Grid cols={2}>
-              <Input label="Suspected Drug" {...register('suspectedAdrDrug')} />
+              <Input
+                label="Suspected Drug"
+                {...register('suspectedAdrDrug')}
+              />
               <Select
                 label="Severity"
                 options={[
@@ -380,7 +473,9 @@ const PharmacistAssessmentFormPage: React.FC = () => {
                 'SymptomaticTreatment',
                 'ReportedToCommittee',
               ]}
-              onChange={(v) => setValue('adrManagement', v as any)}
+              onChange={(v) =>
+                setValue('adrManagement', v as any, { shouldDirty: true })
+              }
             />
           </>
         )}
@@ -401,8 +496,10 @@ const PharmacistAssessmentFormPage: React.FC = () => {
         <YesNo
           label="On laxatives?"
           name="laxativeUse"
-          value={watch('laxativeUse') ? 'Yes' : 'No'}
-          onChange={(v) => setValue('laxativeUse', v === 'Yes')}
+          value={toYesNo(watch('laxativeUse'))}
+          onChange={(v) =>
+            setValue('laxativeUse', v === 'Yes', { shouldDirty: true })
+          }
         />
         {watch('laxativeUse') && (
           <Input label="Laxative details" {...register('laxativeDetails')} />
@@ -414,8 +511,12 @@ const PharmacistAssessmentFormPage: React.FC = () => {
         <YesNo
           label="Dose adjustment required?"
           name="doseAdjustmentRequired"
-          value={watch('doseAdjustmentRequired') ? 'Yes' : 'No'}
-          onChange={(v) => setValue('doseAdjustmentRequired', v === 'Yes')}
+          value={toYesNo(watch('doseAdjustmentRequired'))}
+          onChange={(v) =>
+            setValue('doseAdjustmentRequired', v === 'Yes', {
+              shouldDirty: true,
+            })
+          }
         />
         {watch('doseAdjustmentRequired') && (
           <CheckboxGroup
@@ -427,7 +528,11 @@ const PharmacistAssessmentFormPage: React.FC = () => {
               'ElderlyDosing',
               'WeightBasedAdjustment',
             ]}
-            onChange={(v) => setValue('doseAdjustmentReasons', v as any)}
+            onChange={(v) =>
+              setValue('doseAdjustmentReasons', v as any, {
+                shouldDirty: true,
+              })
+            }
           />
         )}
       </Section>
@@ -455,7 +560,9 @@ const PharmacistAssessmentFormPage: React.FC = () => {
             'ConstipationPrevention',
             'EndOfLifeMedications',
           ]}
-          onChange={(v) => setValue('counselingTopics', v as any)}
+          onChange={(v) =>
+            setValue('counselingTopics', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
@@ -479,7 +586,9 @@ const PharmacistAssessmentFormPage: React.FC = () => {
             'MonitorSedationLevel',
             'Other',
           ]}
-          onChange={(v) => setValue('medicationPlanActions', v as any)}
+          onChange={(v) =>
+            setValue('medicationPlanActions', v as any, { shouldDirty: true })
+          }
         />
         {watch('medicationPlanActions')?.includes('Other') && (
           <Input
@@ -505,14 +614,20 @@ const PharmacistAssessmentFormPage: React.FC = () => {
           <YesNo
             label="Financial barriers?"
             name="financialBarriers"
-            value={watch('financialBarriers') ? 'Yes' : 'No'}
-            onChange={(v) => setValue('financialBarriers', v === 'Yes')}
+            value={toYesNo(watch('financialBarriers'))}
+            onChange={(v) =>
+              setValue('financialBarriers', v === 'Yes', { shouldDirty: true })
+            }
           />
           <YesNo
             label="Pharmacy intervention?"
             name="pharmacyIntervention"
-            value={watch('pharmacyIntervention') ? 'Yes' : 'No'}
-            onChange={(v) => setValue('pharmacyIntervention', v === 'Yes')}
+            value={toYesNo(watch('pharmacyIntervention'))}
+            onChange={(v) =>
+              setValue('pharmacyIntervention', v === 'Yes', {
+                shouldDirty: true,
+              })
+            }
           />
         </Grid>
       </Section>
@@ -539,7 +654,9 @@ const PharmacistAssessmentFormPage: React.FC = () => {
             'DeprescribingRecommended',
             'OngoingMonitoringRequired',
           ]}
-          onChange={(v) => setValue('summaryFlags', v as any)}
+          onChange={(v) =>
+            setValue('summaryFlags', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Final Recommendations"
@@ -552,7 +669,9 @@ const PharmacistAssessmentFormPage: React.FC = () => {
             'EnhanceSafetyMonitoring',
             'MultidisciplinaryReviewRequired',
           ]}
-          onChange={(v) => setValue('finalRecommendations', v as any)}
+          onChange={(v) =>
+            setValue('finalRecommendations', v as any, { shouldDirty: true })
+          }
         />
       </Section>
     </AssessmentFormShell>

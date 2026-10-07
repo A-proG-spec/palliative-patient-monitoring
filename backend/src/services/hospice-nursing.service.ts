@@ -1,11 +1,17 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
-import { resolveStaffAttribution } from '@utils/actor.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
 import type { Actor } from '../types/index.js';
 // ─────────────────────────────────────────────────────────────
 // DTO mapper — one place to shape the response
 // ─────────────────────────────────────────────────────────────
+const toEnteredBy = (a: any) => a.createdByAdmin
+    ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+    : a.createdByStaff
+        ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+        : null;
+
 const toHospiceDto = (a: any) => ({
     id: a.id,
     patientId: a.patientId,
@@ -124,10 +130,7 @@ const toHospiceDto = (a: any) => ({
     nurseSummary: a.nurseSummary,
 
     // Audit
-    createdBy: a.createdBy,
-    createdByStaff: a.createdByStaff
-        ? { id: a.createdByStaff.id, name: a.createdByStaff.name }
-        : null,
+    enteredBy: toEnteredBy(a),
     updatedBy: a.updatedBy,
     updatedByAdmin: a.updatedByAdmin
         ? { id: a.updatedByAdmin.id, name: a.updatedByAdmin.name }
@@ -204,20 +207,24 @@ export const createHospiceNursingAssessment = async (
     actor: Actor,
 ) => {
     const pid = toId(patientId, 'patient id');
-    const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
+    const sid = actor.type === 'admin' && (data.actingAsStaffId === undefined || data.actingAsStaffId === null || data.actingAsStaffId === '')
+        ? undefined
+        : resolveStaffAttribution(actor, data.actingAsStaffId);
 
-    const [patient, staff] = await Promise.all([
-        prisma.patient.findUnique({
-            where: { id: pid },
-            select: { id: true },
-        }),
-        prisma.staff.findUnique({
+    const patientPromise = prisma.patient.findUnique({
+        where: { id: pid },
+        select: { id: true },
+    });
+    let staffPromise: ReturnType<typeof prisma.staff.findUnique> | undefined;
+    if (sid !== undefined) {
+        staffPromise = prisma.staff.findUnique({
             where: { id: sid },
             select: { id: true },
-        }),
-    ]);
+        });
+    }
+    const [patient, staff] = await Promise.all([patientPromise, staffPromise]);
     if (!patient) throw new ApiError(404, 'Patient not found');
-    if (!staff) throw new ApiError(404, 'Staff member not found');
+    if (sid !== undefined && !staff) throw new ApiError(404, 'Staff member not found');
 
     // Optional admission link — validate it belongs to the same patient
     let hospitalAdmissionId: number | null = null;
@@ -235,7 +242,8 @@ export const createHospiceNursingAssessment = async (
 
     const createData: any = {
         patientId: pid,
-        createdBy: sid,
+        createdBy: sid ?? null,
+        createdByAdminId: adminCreatorId(actor),
         hospitalAdmissionId,
         ...pickWritable(data),
     };
@@ -255,6 +263,7 @@ export const createHospiceNursingAssessment = async (
             },
             assessedByStaff: { select: { id: true, name: true, role: true } },
             createdByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
         },
     });
 
@@ -286,6 +295,8 @@ export const getAllHospiceNursingAssessments = async (
             take: limit,
             include: {
                 assessedByStaff: { select: { id: true, name: true, role: true } },
+                createdByStaff: { select: { id: true, name: true } },
+                createdByAdmin: { select: { id: true, name: true } },
             },
         }),
         client.hospiceNursingAssessment.count({ where: { patientId: pid } }),
@@ -303,6 +314,7 @@ export const getAllHospiceNursingAssessments = async (
                     role: a.assessedByStaff.role,
                 }
                 : null,
+            enteredBy: toEnteredBy(a),
             levelOfConsciousness: a.levelOfConsciousness,
             painScore: a.painScore,
             mobilityStatus: a.mobilityStatus,
@@ -350,6 +362,8 @@ export const getHospiceNursingAssessments = async (
                 assessmentDate: true,
                 assessedByStaffId: true,
                 assessedByStaff: { select: { id: true, name: true, role: true } },
+                createdByStaff: { select: { id: true, name: true } },
+                createdByAdmin: { select: { id: true, name: true } },
                 levelOfConsciousness: true,
                 painScore: true,
                 mobilityStatus: true,
@@ -375,6 +389,7 @@ export const getHospiceNursingAssessments = async (
                     role: a.assessedByStaff.role,
                 }
                 : null,
+            enteredBy: toEnteredBy(a),
             levelOfConsciousness: a.levelOfConsciousness,
             painScore: a.painScore,
             mobilityStatus: a.mobilityStatus,
@@ -411,6 +426,7 @@ export const getHospiceNursingAssessmentById = async (
             },
             assessedByStaff: { select: { id: true, name: true, role: true } },
             createdByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
             updatedByAdmin: { select: { id: true, name: true } },
         },
     });
@@ -480,6 +496,7 @@ export const updateHospiceNursingAssessment = async (
             },
             assessedByStaff: { select: { id: true, name: true, role: true } },
             createdByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
             updatedByAdmin: { select: { id: true, name: true } },
         },
     });
@@ -585,6 +602,8 @@ export const getDeletedHospiceNursingAssessments = async (
                     select: { id: true, firstName: true, lastName: true },
                 },
                 deletedByAdmin: { select: { id: true, name: true } },
+                createdByStaff: { select: { id: true, name: true } },
+                createdByAdmin: { select: { id: true, name: true } },
             },
         }),
         prismaBase.hospiceNursingAssessment.count({
@@ -593,17 +612,21 @@ export const getDeletedHospiceNursingAssessments = async (
     ]);
 
     return {
-        items: items.map((a) => ({
-            id: a.id,
-            patientId: a.patientId,
-            patientName: `${a.patient.firstName} ${a.patient.lastName}`,
-            assessmentDate: a.assessmentDate,
-            deletedAt: a.deletedAt,
-            deletedBy: a.deletedByAdmin
-                ? { id: a.deletedByAdmin.id, name: a.deletedByAdmin.name }
-                : null,
-            deletionReason: a.deletionReason,
-        })),
+        items: items.map((a: any) => {
+            const deletedByAdmin = (a as any).deletedByAdmin as { id: number; name: string } | null;
+            return {
+                id: a.id,
+                patientId: a.patientId,
+                patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+                assessmentDate: a.assessmentDate,
+                enteredBy: toEnteredBy(a),
+                deletedAt: a.deletedAt,
+                deletedBy: deletedByAdmin
+                    ? { id: deletedByAdmin.id, name: deletedByAdmin.name }
+                    : null,
+                deletionReason: a.deletionReason,
+            };
+        }),
         page,
         limit,
         total,

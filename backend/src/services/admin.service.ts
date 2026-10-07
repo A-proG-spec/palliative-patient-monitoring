@@ -159,14 +159,19 @@ export const getDashboardStats = async () => {
     prisma.referral.findMany({
       orderBy: { createdAt: 'desc' },
       take: 5,
-      include: { patient: { select: { firstName: true, lastName: true } } },
+      include: {
+        patient: { select: { firstName: true, lastName: true } },
+        requestedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
     }),
     prisma.homeVisit.findMany({
       orderBy: { visitDate: 'desc' },
       take: 5,
       include: {
         patient: { select: { firstName: true, lastName: true } },
-        createdByStaff: { select: { name: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
   ]);
@@ -192,11 +197,20 @@ export const getDashboardStats = async () => {
       patientName: `${r.patient.firstName} ${r.patient.lastName}`,
       date: r.createdAt,
       status: r.status,
+      enteredBy: r.createdByAdmin
+        ? { id: r.createdByAdmin.id, name: r.createdByAdmin.name, type: 'admin' as const }
+        : r.requestedByStaff
+          ? { id: r.requestedByStaff.id, name: r.requestedByStaff.name, type: 'staff' as const }
+          : null,
     })),
     recentVisits: recentVisits.map((v) => ({
       patientName: `${v.patient.firstName} ${v.patient.lastName}`,
       date: v.visitDate,
-      staff: v.createdByStaff.name,
+      enteredBy: v.createdByAdmin
+        ? { id: v.createdByAdmin.id, name: v.createdByAdmin.name, type: 'admin' as const }
+        : v.createdByStaff
+          ? { id: v.createdByStaff.id, name: v.createdByStaff.name, type: 'staff' as const }
+          : null,
     })),
   };
 };
@@ -273,7 +287,10 @@ export const getPatients = async (
       skip,
       take: limit,
       orderBy: { createdAt: 'desc' },
-      include: { registeredByStaff: { select: { id: true, name: true } } },
+      include: {
+        registeredByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
     }),
     prisma.patient.count({ where }),
   ]);
@@ -291,10 +308,11 @@ export const getPatients = async (
       primaryDiagnosis: p.primaryDiagnosis,
       diseaseStage: p.diseaseStage,
       registeredAt: p.createdAt,
-      registeredBy: {
-        id: p.registeredByStaff.id,
-        name: p.registeredByStaff.name,
-      },
+      enteredBy: p.createdByAdmin
+        ? { id: p.createdByAdmin.id, name: p.createdByAdmin.name, type: 'admin' as const }
+        : p.registeredByStaff
+          ? { id: p.registeredByStaff.id, name: p.registeredByStaff.name, type: 'staff' as const }
+          : null,
     })),
     page,
     limit,
@@ -309,20 +327,65 @@ export const getPatientDetail = async (patientId: string) => {
     where: { id },
     include: {
       registeredByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       visits: {
         orderBy: { visitDate: 'desc' },
         include: {
           createdByStaff: { select: { id: true, name: true } },
-          signatures: true,
+          createdByAdmin: { select: { id: true, name: true } },
         },
       },
-      medications: { orderBy: { createdAt: 'desc' } },
-      labTests: { orderBy: { dateOrdered: 'desc' } },
-      referrals: { orderBy: { createdAt: 'desc' } },
-      admissions: { orderBy: { admissionDate: 'desc' } },
-      imagingOrders: { orderBy: { createdAt: 'desc' } },
-      progressNotes: { orderBy: { createdAt: 'desc' }, take: 20 },
-      dischargeSummaries: { orderBy: { createdAt: 'desc' }, take: 1 },
+      medications: {
+        orderBy: { createdAt: 'desc' },
+        include: {
+          prescribedByStaff: { select: { id: true, name: true } },
+          createdByAdmin: { select: { id: true, name: true } },
+        },
+      },
+      labTests: {
+        orderBy: { dateOrdered: 'desc' },
+        include: {
+          orderedByStaff: { select: { id: true, name: true } },
+          createdByAdmin: { select: { id: true, name: true } },
+        },
+      },
+      referrals: {
+        orderBy: { createdAt: 'desc' },
+        include: {
+          requestedByStaff: { select: { id: true, name: true } },
+          createdByAdmin: { select: { id: true, name: true } },
+        },
+      },
+      admissions: {
+        orderBy: { admissionDate: 'desc' },
+        include: {
+          createdByStaff: { select: { id: true, name: true } },
+          createdByAdmin: { select: { id: true, name: true } },
+        },
+      },
+      imagingOrders: {
+        orderBy: { createdAt: 'desc' },
+        include: {
+          orderedByStaff: { select: { id: true, name: true } },
+          createdByAdmin: { select: { id: true, name: true } },
+        },
+      },
+      progressNotes: {
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        include: {
+          createdByStaff: { select: { id: true, name: true } },
+          createdByAdmin: { select: { id: true, name: true } },
+        },
+      },
+      dischargeSummaries: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        include: {
+          createdByStaff: { select: { id: true, name: true } },
+          createdByAdmin: { select: { id: true, name: true } },
+        },
+      },
     },
   });
 
@@ -353,24 +416,26 @@ export const getPatientDetail = async (patientId: string) => {
     status: patient.status,
     currentLocation: patient.currentLocation,
 
-    registeredBy: {
-      id: patient.registeredByStaff.id,
-      name: patient.registeredByStaff.name,
-    },
+    enteredBy: patient.createdByAdmin
+      ? { id: patient.createdByAdmin.id, name: patient.createdByAdmin.name, type: 'admin' as const }
+      : patient.registeredByStaff
+        ? { id: patient.registeredByStaff.id, name: patient.registeredByStaff.name, type: 'staff' as const }
+        : null,
 
-    visits: patient.visits.map((v) => {
-      const leader = v.signatures.find((s) => s.isTeamLeader);
-      return {
-        id: v.id,
-        visitDate: v.visitDate,
-        visitType: v.visitType,
-        overallStatus: v.overallStatus,
-        outcome: v.outcome,
-        ppsScore: v.ppsScore,
-        kpsScore: v.kpsScore,
-        staff: leader?.name ?? v.createdByStaff.name,
-      };
-    }),
+    visits: patient.visits.map((v) => ({
+      id: v.id,
+      visitDate: v.visitDate,
+      visitType: v.visitType,
+      overallStatus: v.overallStatus,
+      outcome: v.outcome,
+      ppsScore: v.ppsScore,
+      kpsScore: v.kpsScore,
+      enteredBy: v.createdByAdmin
+        ? { id: v.createdByAdmin.id, name: v.createdByAdmin.name, type: 'admin' as const }
+        : v.createdByStaff
+          ? { id: v.createdByStaff.id, name: v.createdByStaff.name, type: 'staff' as const }
+          : null,
+    })),
 
     medications: patient.medications.map((m) => ({
       id: m.id,
@@ -381,6 +446,11 @@ export const getPatientDetail = async (patientId: string) => {
       administeredAt: m.administeredAt,
       status: m.status,
       createdAt: m.createdAt,
+      enteredBy: m.createdByAdmin
+        ? { id: m.createdByAdmin.id, name: m.createdByAdmin.name, type: 'admin' as const }
+        : m.prescribedByStaff
+          ? { id: m.prescribedByStaff.id, name: m.prescribedByStaff.name, type: 'staff' as const }
+          : null,
     })),
 
     labTests: patient.labTests.map((l) => ({
@@ -391,6 +461,11 @@ export const getPatientDetail = async (patientId: string) => {
       result: l.result,
       status: l.status,
       location: l.location,
+      enteredBy: l.createdByAdmin
+        ? { id: l.createdByAdmin.id, name: l.createdByAdmin.name, type: 'admin' as const }
+        : l.orderedByStaff
+          ? { id: l.orderedByStaff.id, name: l.orderedByStaff.name, type: 'staff' as const }
+          : null,
     })),
 
     imagingOrders: patient.imagingOrders.map((o) => ({
@@ -404,6 +479,11 @@ export const getPatientDetail = async (patientId: string) => {
       hasReport: !!(o.findings || o.impression),
       dateOrdered: o.createdAt,
       performedAt: o.performedAt,
+      enteredBy: o.createdByAdmin
+        ? { id: o.createdByAdmin.id, name: o.createdByAdmin.name, type: 'admin' as const }
+        : o.orderedByStaff
+          ? { id: o.orderedByStaff.id, name: o.orderedByStaff.name, type: 'staff' as const }
+          : null,
     })),
 
     progressNotes: patient.progressNotes.map((n) => ({
@@ -415,6 +495,11 @@ export const getPatientDetail = async (patientId: string) => {
       overallAssessment: n.overallAssessment,
       soapSubjective: n.soapSubjective,
       createdAt: n.createdAt,
+      enteredBy: n.createdByAdmin
+        ? { id: n.createdByAdmin.id, name: n.createdByAdmin.name, type: 'admin' as const }
+        : n.createdByStaff
+          ? { id: n.createdByStaff.id, name: n.createdByStaff.name, type: 'staff' as const }
+          : null,
     })),
 
     referrals: patient.referrals.map((r) => ({
@@ -423,6 +508,11 @@ export const getPatientDetail = async (patientId: string) => {
       referralType: r.referralType,
       status: r.status,
       receivingFacility: r.receivingFacility,
+      enteredBy: r.createdByAdmin
+        ? { id: r.createdByAdmin.id, name: r.createdByAdmin.name, type: 'admin' as const }
+        : r.requestedByStaff
+          ? { id: r.requestedByStaff.id, name: r.requestedByStaff.name, type: 'staff' as const }
+          : null,
     })),
 
     admissions: patient.admissions.map((a) => ({
@@ -434,6 +524,11 @@ export const getPatientDetail = async (patientId: string) => {
       admittingPhysician: a.admittingPhysician,
       status: a.status,
       dischargeReason: a.dischargeReason,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
     })),
 
     dischargeSummary: latestDischarge
@@ -447,6 +542,11 @@ export const getPatientDetail = async (patientId: string) => {
         dischargedTo: latestDischarge.dischargedTo,
         status: latestDischarge.status,
         createdAt: latestDischarge.createdAt,
+        enteredBy: latestDischarge.createdByAdmin
+          ? { id: latestDischarge.createdByAdmin.id, name: latestDischarge.createdByAdmin.name, type: 'admin' as const }
+          : latestDischarge.createdByStaff
+            ? { id: latestDischarge.createdByStaff.id, name: latestDischarge.createdByStaff.name, type: 'staff' as const }
+            : null,
       }
       : null,
 
@@ -514,6 +614,8 @@ export const getPendingReferrals = async () => {
           hospitalPatientId: true,
         },
       },
+      requestedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -537,6 +639,11 @@ export const getPendingReferrals = async () => {
     contactPerson: r.contactPerson,
     contactNumber: r.contactNumber,
     status: r.status,
+    enteredBy: r.createdByAdmin
+      ? { id: r.createdByAdmin.id, name: r.createdByAdmin.name, type: 'admin' as const }
+      : r.requestedByStaff
+        ? { id: r.requestedByStaff.id, name: r.requestedByStaff.name, type: 'staff' as const }
+        : null,
     createdAt: r.createdAt,
   }));
 };
@@ -1051,6 +1158,8 @@ export const getStaffActivity = async (
       take: skip + limit,
       include: {
         patient: { select: { id: true, firstName: true, lastName: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.medication.findMany({
@@ -1059,6 +1168,8 @@ export const getStaffActivity = async (
       take: skip + limit,
       include: {
         patient: { select: { id: true, firstName: true, lastName: true } },
+        prescribedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.laboratoryTest.findMany({
@@ -1067,6 +1178,8 @@ export const getStaffActivity = async (
       take: skip + limit,
       include: {
         patient: { select: { id: true, firstName: true, lastName: true } },
+        orderedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.imagingOrder.findMany({
@@ -1075,6 +1188,8 @@ export const getStaffActivity = async (
       take: skip + limit,
       include: {
         patient: { select: { id: true, firstName: true, lastName: true } },
+        orderedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.referral.findMany({
@@ -1083,6 +1198,8 @@ export const getStaffActivity = async (
       take: skip + limit,
       include: {
         patient: { select: { id: true, firstName: true, lastName: true } },
+        requestedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.hospitalAdmission.findMany({
@@ -1091,6 +1208,8 @@ export const getStaffActivity = async (
       take: skip + limit,
       include: {
         patient: { select: { id: true, firstName: true, lastName: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.patientProgressNote.findMany({
@@ -1099,6 +1218,8 @@ export const getStaffActivity = async (
       take: skip + limit,
       include: {
         patient: { select: { id: true, firstName: true, lastName: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
   ]);
@@ -1111,6 +1232,11 @@ export const getStaffActivity = async (
       patientName: `${v.patient.firstName} ${v.patient.lastName}`,
       timestamp: v.createdAt.toISOString(),
       description: `Visit recorded · ${v.visitType}`,
+      enteredBy: v.createdByAdmin
+        ? { id: v.createdByAdmin.id, name: v.createdByAdmin.name, type: 'admin' as const }
+        : v.createdByStaff
+          ? { id: v.createdByStaff.id, name: v.createdByStaff.name, type: 'staff' as const }
+          : null,
     })),
     ...medications.map((m) => ({
       id: `medication-${m.id}`,
@@ -1119,6 +1245,11 @@ export const getStaffActivity = async (
       patientName: `${m.patient.firstName} ${m.patient.lastName}`,
       timestamp: m.createdAt.toISOString(),
       description: `${m.name} · ${m.dosage}`,
+      enteredBy: m.createdByAdmin
+        ? { id: m.createdByAdmin.id, name: m.createdByAdmin.name, type: 'admin' as const }
+        : m.prescribedByStaff
+          ? { id: m.prescribedByStaff.id, name: m.prescribedByStaff.name, type: 'staff' as const }
+          : null,
     })),
     ...labs.map((l) => ({
       id: `lab-${l.id}`,
@@ -1127,6 +1258,11 @@ export const getStaffActivity = async (
       patientName: `${l.patient.firstName} ${l.patient.lastName}`,
       timestamp: l.createdAt.toISOString(),
       description: `${l.testName} · ${l.category}`,
+      enteredBy: l.createdByAdmin
+        ? { id: l.createdByAdmin.id, name: l.createdByAdmin.name, type: 'admin' as const }
+        : l.orderedByStaff
+          ? { id: l.orderedByStaff.id, name: l.orderedByStaff.name, type: 'staff' as const }
+          : null,
     })),
     ...imaging.map((i) => ({
       id: `imaging-${i.id}`,
@@ -1135,6 +1271,11 @@ export const getStaffActivity = async (
       patientName: `${i.patient.firstName} ${i.patient.lastName}`,
       timestamp: i.createdAt.toISOString(),
       description: `${i.modality} · ${i.bodyRegion}`,
+      enteredBy: i.createdByAdmin
+        ? { id: i.createdByAdmin.id, name: i.createdByAdmin.name, type: 'admin' as const }
+        : i.orderedByStaff
+          ? { id: i.orderedByStaff.id, name: i.orderedByStaff.name, type: 'staff' as const }
+          : null,
     })),
     ...referrals.map((r) => ({
       id: `referral-${r.id}`,
@@ -1143,6 +1284,11 @@ export const getStaffActivity = async (
       patientName: `${r.patient.firstName} ${r.patient.lastName}`,
       timestamp: r.createdAt.toISOString(),
       description: `${r.referralType} · ${r.receivingFacility}`,
+      enteredBy: r.createdByAdmin
+        ? { id: r.createdByAdmin.id, name: r.createdByAdmin.name, type: 'admin' as const }
+        : r.requestedByStaff
+          ? { id: r.requestedByStaff.id, name: r.requestedByStaff.name, type: 'staff' as const }
+          : null,
     })),
     ...admissions.map((a) => ({
       id: `admission-${a.id}`,
@@ -1151,6 +1297,11 @@ export const getStaffActivity = async (
       patientName: `${a.patient.firstName} ${a.patient.lastName}`,
       timestamp: a.createdAt.toISOString(),
       description: `${a.ward} · Bed ${a.bedNumber}`,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
     })),
     ...notes.map((n) => ({
       id: `progress_note-${n.id}`,
@@ -1159,6 +1310,11 @@ export const getStaffActivity = async (
       patientName: `${n.patient.firstName} ${n.patient.lastName}`,
       timestamp: n.createdAt.toISOString(),
       description: `Progress note · ${n.generalCondition ?? 'Condition recorded'}`,
+      enteredBy: n.createdByAdmin
+        ? { id: n.createdByAdmin.id, name: n.createdByAdmin.name, type: 'admin' as const }
+        : n.createdByStaff
+          ? { id: n.createdByStaff.id, name: n.createdByStaff.name, type: 'staff' as const }
+          : null,
     })),
   ]
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))

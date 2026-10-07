@@ -1,7 +1,7 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
-import { resolveStaffAttribution } from '@utils/actor.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
 import type { Actor } from '../types/index.js';
 
 
@@ -10,17 +10,29 @@ const patientDisplayId = (p: {
   hospitalPatientId?: string | null;
 }): string =>
   p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
+
+const toEnteredBy = (
+  staff?: { id: number; name: string } | null,
+  admin?: { id: number; name: string } | null,
+) => admin
+    ? { id: admin.id, name: admin.name, type: 'admin' as const }
+    : staff
+      ? { id: staff.id, name: staff.name, type: 'staff' as const }
+      : null;
+
 // ─────────────────────────────────────────────────────────────
 // Register patient
 // ─────────────────────────────────────────────────────────────
 export const registerPatient = async (data: any, actor: Actor) => {
   const registeredById = resolveStaffAttribution(actor, data.actingAsStaffId);
 
-  const staff = await prisma.staff.findUnique({
-    where: { id: registeredById },
-    select: { id: true },
-  });
-  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (registeredById !== undefined) {
+    const staff = await prisma.staff.findUnique({
+      where: { id: registeredById },
+      select: { id: true },
+    });
+    if (!staff) throw new ApiError(404, 'Staff member not found');
+  }
 
   const patient = await prisma.patient.create({
     data: {
@@ -43,11 +55,25 @@ export const registerPatient = async (data: any, actor: Actor) => {
       estimatedPrognosis: data.estimatedPrognosis,
       status: 'Active',
       currentLocation: 'Home',
-      registeredBy: registeredById,
+      registeredBy: registeredById ?? null,
+      createdByAdminId: adminCreatorId(actor),
+    },
+    include: {
+      registeredByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
-  return patient;
+  const patientDto = { ...patient };
+  delete (patientDto as any).registeredBy; // Remove legacy registeredBy field
+  delete (patientDto as any).createdByAdminId; // Remove createdByAdminId field
+  delete (patientDto as any).registeredByStaff;
+  delete (patientDto as any).createdByAdmin;
+
+  return {
+    ...patientDto,
+    enteredBy: toEnteredBy(patient.registeredByStaff, patient.createdByAdmin),
+  };
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -84,6 +110,10 @@ export const getPatients = async (
       skip,
       take: limit,
       orderBy: { createdAt: 'desc' },
+      include: {
+        registeredByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
     }),
     prisma.patient.count({ where }),
   ]);
@@ -101,6 +131,7 @@ export const getPatients = async (
       currentLocation: p.currentLocation,
       primaryDiagnosis: p.primaryDiagnosis,
       diseaseStage: p.diseaseStage,
+      enteredBy: toEnteredBy(p.registeredByStaff, p.createdByAdmin),
       registeredAt: p.createdAt,
     })),
     page,
@@ -118,6 +149,7 @@ export const getPatientById = async (patientId: string) => {
     where: { id },
     include: {
       registeredByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -146,10 +178,7 @@ export const getPatientById = async (patientId: string) => {
     estimatedPrognosis: patient.estimatedPrognosis,
     status: patient.status,
     currentLocation: patient.currentLocation,
-    registeredBy: {
-      id: patient.registeredByStaff.id,
-      name: patient.registeredByStaff.name,
-    },
+    enteredBy: toEnteredBy(patient.registeredByStaff, patient.createdByAdmin),
     createdAt: patient.createdAt,
     updatedAt: patient.updatedAt,
   };
@@ -208,10 +237,13 @@ export const getPatientSummary = async (patientId: string) => {
   const patient = await prisma.patient.findUnique({
     where: { id },
     include: {
+      registeredByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       visits: {
         orderBy: { visitDate: 'desc' },
         include: {
           createdByStaff: { select: { id: true, name: true } },
+          createdByAdmin: { select: { id: true, name: true } },
           signatures: {
             select: {
               staffId: true,
@@ -246,6 +278,7 @@ export const getPatientSummary = async (patientId: string) => {
       sex: patient.sex,
       status: patient.status,
       currentLocation: patient.currentLocation,
+      enteredBy: toEnteredBy(patient.registeredByStaff, patient.createdByAdmin),
     },
     diagnosis: {
       primary: patient.primaryDiagnosis,
@@ -253,18 +286,11 @@ export const getPatientSummary = async (patientId: string) => {
       stage: patient.diseaseStage,
     },
     visits: patient.visits.map((v) => {
-      // Team leader = the staff flagged as leader on a signature row,
-      // falling back to the staff member who created the visit.
-      const leaderSignature = v.signatures.find((s) => s.isTeamLeader);
-      const displayStaff = leaderSignature
-        ? { id: leaderSignature.staffId, name: leaderSignature.name }
-        : { id: v.createdByStaff.id, name: v.createdByStaff.name };
-
       return {
         id: v.id,
         date: v.visitDate,
         outcome: v.outcome,
-        staff: displayStaff,
+        enteredBy: toEnteredBy(v.createdByStaff, v.createdByAdmin),
         signatures: v.signatures,
       };
     }),

@@ -1,11 +1,17 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
-import { resolveStaffAttribution } from '@utils/actor.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
 import type { Actor } from '../types/index.js';
 
 const VALID_STATUSES = ['Ordered', 'Completed', 'Cancelled'] as const;
 const VALID_PRIORITIES = ['Routine', 'Urgent', 'Emergency'] as const;
+const getEnteredBy = (record: any) =>
+  record.createdByAdmin
+    ? { id: record.createdByAdmin.id, name: record.createdByAdmin.name, type: 'admin' as const }
+    : record.orderedByStaff
+      ? { id: record.orderedByStaff.id, name: record.orderedByStaff.name, type: 'staff' as const }
+      : null;
 // ─────────────────────────────────────────────────────────────
 // DTO mappers
 // ─────────────────────────────────────────────────────────────
@@ -47,9 +53,7 @@ const toLabListDto = (lab: any) => ({
   location: lab.location,
   status: lab.status,
 
-  orderedBy: lab.orderedByStaff
-    ? { id: lab.orderedByStaff.id, name: lab.orderedByStaff.name, role: lab.orderedByStaff.role }
-    : null,
+  enteredBy: getEnteredBy(lab),
 
   createdAt: lab.createdAt,
 });
@@ -120,7 +124,8 @@ export const getAllLabTests = async (
             dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
           },
         },
-        orderedByStaff: { select: { id: true, name: true, role: true } },
+        orderedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     client.laboratoryTest.count({ where }),
@@ -150,14 +155,13 @@ export const orderLabTest = async (
       where: { id: pid },
       select: { id: true, currentLocation: true },
     }),
-    prisma.staff.findUnique({
-      where: { id: sid },
-      select: { id: true },
-    }),
+    sid
+      ? prisma.staff.findUnique({ where: { id: sid }, select: { id: true } })
+      : Promise.resolve(null),
   ]);
 
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (sid && !staff) throw new ApiError(404, 'Staff member not found');
 
   if (!data.physicianRequester?.trim()) {
     throw new ApiError(400, 'Physician/Requester is required');
@@ -184,7 +188,8 @@ export const orderLabTest = async (
   const labTest = await prisma.laboratoryTest.create({
     data: {
       patientId: pid,
-      orderedBy: sid,
+      orderedBy: sid ?? null,
+      createdByAdminId: adminCreatorId(actor),
 
       ...(data.hospitalClinic && { hospitalClinic: data.hospitalClinic }),
       ...(data.departmentLaboratory && {
@@ -227,7 +232,8 @@ export const orderLabTest = async (
           dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
         },
       },
-      orderedByStaff: { select: { id: true, name: true, role: true } },
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -277,7 +283,8 @@ export const getLabTests = async (
             dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
           },
         },
-        orderedByStaff: { select: { id: true, name: true, role: true } },
+        orderedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.laboratoryTest.count({ where }),
@@ -310,7 +317,8 @@ export const getLabTestById = async (
           dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
         },
       },
-      orderedByStaff: { select: { id: true, name: true, role: true } },
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       updatedByAdmin: { select: { id: true, name: true } },
       labResult: true,
     },
@@ -400,7 +408,8 @@ export const updateLabResult = async (
           dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
         },
       },
-      orderedByStaff: { select: { id: true, name: true, role: true } },
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       updatedByAdmin: { select: { id: true, name: true } },
       labResult: true,
     },
@@ -434,7 +443,7 @@ export const cancelLabTest = async (
 
   const updated = await prisma.laboratoryTest.update({
     where: { id: lid },
-  data: { status: 'Cancelled' },
+    data: { status: 'Cancelled' },
     include: {
       patient: {
         select: {
@@ -442,7 +451,8 @@ export const cancelLabTest = async (
           dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
         },
       },
-      orderedByStaff: { select: { id: true, name: true, role: true } },
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       updatedByAdmin: { select: { id: true, name: true } },
       labResult: true,
     },
@@ -541,7 +551,8 @@ export const getPendingLabRequests = async (
             hospitalPatientId: true,
           },
         },
-        orderedByStaff: { select: { id: true, name: true, role: true } },
+        orderedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.laboratoryTest.count({ where }),
@@ -560,8 +571,7 @@ export const getPendingLabRequests = async (
       specimenSite: l.specimenSite,
       clinicalHistory: l.clinicalHistory,
 
-      requestingClinician: l.orderedByStaff.name,
-      requestedById: l.orderedByStaff.id,
+      enteredBy: getEnteredBy(l),
 
       priority: l.priority,
       dateRequested: l.dateOrdered,
@@ -589,7 +599,8 @@ export const getLabRequestById = async (labId: string) => {
           hospitalPatientId: true,
         },
       },
-      orderedByStaff: { select: { id: true, name: true, role: true } },
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -612,7 +623,7 @@ export const getLabRequestById = async (labId: string) => {
     specimenSite: lab.specimenSite,
     clinicalHistory: lab.clinicalHistory,
 
-    requestingClinician: lab.orderedByStaff.name,
+    enteredBy: getEnteredBy(lab),
     dateRequested: lab.dateOrdered,
 
     priority: lab.priority,

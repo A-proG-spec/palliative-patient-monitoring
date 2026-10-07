@@ -3,7 +3,8 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import type { NavigateFunction, Location } from 'react-router-dom';
 import {
   XCircle, Phone, MapPin, User, Calendar, FileText, Printer,
-  AlertTriangle, NotebookPen, Trash2, Heart,
+  AlertTriangle, NotebookPen, Trash2, Heart, Plus, ClipboardList,
+  Pill, FlaskConical, Camera, GitBranch, Building2,
 } from 'lucide-react';
 
 import {
@@ -210,6 +211,27 @@ const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
   );
 };
 
+// ═══════════════════════════════════════════════════════════
+// Tab config — each tab can optionally declare an "Add New"
+// action (label + destination path).
+// ═══════════════════════════════════════════════════════════
+
+interface TabActionConfig {
+  label: string;
+  path: (patientId: string) => string;
+}
+
+const TAB_ACTIONS: Partial<Record<string, TabActionConfig>> = {
+  Visits: { label: 'Add Visit', path: (id) => `/admin/patients/${id}/visits` },
+  'Progress Notes': { label: 'Add Progress Note', path: (id) => `/admin/patients/${id}/progress-note/new` },
+  'Hospice Nursing': { label: 'Add Assessment', path: (id) => `/admin/patients/${id}/hospice-nursing` },
+  Medications: { label: 'Order Medication', path: (id) => `/admin/patients/${id}/medications` },
+  Labs: { label: 'Order Lab Test', path: (id) => `/admin/patients/${id}/labs` },
+  Imaging: { label: 'Order Imaging', path: (id) => `/admin/patients/${id}/imaging` },
+  Referrals: { label: 'Request Referral', path: (id) => `/admin/patients/${id}/referrals` },
+  Admissions: { label: 'Record Admission', path: (id) => `/admin/patients/${id}/admissions` },
+};
+
 // ── Tabs ──
 const tabs = [
   'Visits',
@@ -233,8 +255,6 @@ type Tab = typeof tabs[number];
 
 // ═════════════════════════════════════════════════════════════
 // OUTER WRAPPER — reads the URL param and hard-guards it.
-// NEVER calls any hook that depends on `patientId` above the
-// guard. All real work happens in the inner component.
 // ═════════════════════════════════════════════════════════════
 
 const AdminPatientDetailPage: React.FC = () => {
@@ -242,7 +262,6 @@ const AdminPatientDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // HARD GUARD — bail out before any hook that depends on patientId.
   if (!patientId) {
     return (
       <div className="max-w-2xl">
@@ -264,7 +283,7 @@ const AdminPatientDetailPage: React.FC = () => {
 };
 
 // ═════════════════════════════════════════════════════════════
-// INNER COMPONENT — receives a guaranteed non-empty `patientId`.
+// INNER COMPONENT
 // ═════════════════════════════════════════════════════════════
 
 interface PatientDetailContentProps {
@@ -399,6 +418,10 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
     ? formatDate(dischargeSummary.dateOfDischarge)
     : patient.status === 'Discharged' ? 'previously' : null;
 
+  // ── Per-tab "Add New" action ──
+  const currentTabAction = TAB_ACTIONS[activeTab];
+  const isPatientActive = patient.status === 'Active';
+
   return (
     <div className="space-y-6 max-w-5xl">
       {/* ── Header ── */}
@@ -414,16 +437,28 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
           <StatusBadge status={patient.status} type="patient" />
           <StatusBadge status={patient.currentLocation} />
 
-          {patient.status === 'Active' && (
-            <Button
-              variant="outline"
-              size="sm"
-              leftIcon={<AlertTriangle size={14} className="text-warning" />}
-              className="border-warning/50 text-warning hover:bg-warning/10 hover:border-warning"
-              onClick={() => navigate(`/admin/patients/${patientId}/discharge`)}
-            >
-              Discharge Patient
-            </Button>
+          {isPatientActive && (
+            <>
+              {/* Primary action: Add Record */}
+              <Button
+                size="sm"
+                leftIcon={<Plus size={14} />}
+                onClick={() => setShowAddRecord(true)}
+              >
+                Add Record
+              </Button>
+
+              {/* Discharge */}
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<AlertTriangle size={14} className="text-warning" />}
+                className="border-warning/50 text-warning hover:bg-warning/10 hover:border-warning"
+                onClick={() => navigate(`/admin/patients/${patientId}/discharge`)}
+              >
+                Discharge Patient
+              </Button>
+            </>
           )}
 
           {patient.status === 'Discharged' && dischargeSummary && (
@@ -479,16 +514,12 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
         </Card>
       </div>
 
+      {/* ── Assessment cards with write access ── */}
       <AssessmentCards patientId={patientId} patientStatus={patient.status} isAdmin />
 
-      {patient.status === 'Active' && (
-        <div className="flex justify-end">
-          <Button size="sm" onClick={() => setShowAddRecord(true)}>Add Record</Button>
-        </div>
-      )}
-
-      {/* ── Tabbed records ── */}
+      {/* ── Records card with tab strip ── */}
       <Card padding="none">
+        {/* Tab strip + inline Add New for the active tab */}
         <div className="flex items-center justify-between border-b border-border-base">
           <div className="flex overflow-x-auto flex-1">
             {tabs.map((tab) => (
@@ -524,9 +555,23 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
           </label>
         </div>
 
+        {/* Inline Add New button for the current tab */}
+        {currentTabAction && isPatientActive && (
+          <div className="flex justify-end px-5 pt-4">
+            <Button
+              size="sm"
+              variant="outline"
+              leftIcon={<Plus size={13} />}
+              onClick={() => navigate(currentTabAction.path(patientId))}
+            >
+              {currentTabAction.label}
+            </Button>
+          </div>
+        )}
+
         <div className="p-5 overflow-x-auto">
           {/* ═══════════════════════════════════════════════════════
-              Visits — WITH DELETE/RESTORE
+              Visits
           ═══════════════════════════════════════════════════════ */}
           {activeTab === 'Visits' && (
             visitsData?.items?.length ? (
@@ -616,6 +661,10 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
                     ? 'Deleted visits will appear here when present.'
                     : 'No home visits have been recorded for this patient yet.'
                 }
+                {...(isPatientActive && {
+                  actionLabel: 'Record Visit',
+                  onAction: () => navigate(`/admin/patients/${patientId}/visits`),
+                })}
               />
             )
           )}
@@ -704,6 +753,10 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
                     ? 'Deleted progress notes will appear here when present.'
                     : 'Progress notes are recorded for hospitalised patients.'
                 }
+                {...(isPatientActive && {
+                  actionLabel: 'Add Progress Note',
+                  onAction: () => navigate(`/admin/patients/${patientId}/progress-note/new`),
+                })}
               />
             )
           )}
@@ -797,6 +850,10 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
                     ? 'Deleted hospice nursing assessments will appear here when present.'
                     : 'No hospice nursing assessments have been recorded for this patient yet.'
                 }
+                {...(isPatientActive && {
+                  actionLabel: 'Add Assessment',
+                  onAction: () => navigate(`/admin/patients/${patientId}/hospice-nursing`),
+                })}
               />
             )
           )}
@@ -867,6 +924,10 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
                     ? 'Deleted medications will appear here when present.'
                     : 'No medications have been ordered for this patient yet.'
                 }
+                {...(isPatientActive && {
+                  actionLabel: 'Order Medication',
+                  onAction: () => navigate(`/admin/patients/${patientId}/medications`),
+                })}
               />
             )
           )}
@@ -937,6 +998,10 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
                     ? 'Deleted lab tests will appear here when present.'
                     : 'No laboratory tests have been ordered for this patient yet.'
                 }
+                {...(isPatientActive && {
+                  actionLabel: 'Order Lab Test',
+                  onAction: () => navigate(`/admin/patients/${patientId}/labs`),
+                })}
               />
             )
           )}
@@ -1008,6 +1073,10 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
                     ? 'Deleted imaging orders will appear here when present.'
                     : 'No imaging orders have been placed for this patient yet.'
                 }
+                {...(isPatientActive && {
+                  actionLabel: 'Order Imaging',
+                  onAction: () => navigate(`/admin/patients/${patientId}/imaging`),
+                })}
               />
             )
           )}
@@ -1045,6 +1114,10 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
               <EmptyState
                 title="No referrals requested"
                 description="No referrals have been submitted for this patient yet."
+                {...(isPatientActive && {
+                  actionLabel: 'Request Referral',
+                  onAction: () => navigate(`/admin/patients/${patientId}/referrals`),
+                })}
               />
             )
           )}
@@ -1115,12 +1188,16 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
                     ? 'Deleted admissions will appear here when present.'
                     : 'No hospital admissions have been recorded for this patient yet.'
                 }
+                {...(isPatientActive && {
+                  actionLabel: 'Record Admission',
+                  onAction: () => navigate(`/admin/patients/${patientId}/admissions`),
+                })}
               />
             )
           )}
 
           {/* ═══════════════════════════════════════════════════════
-              Pain Assessments
+              Assessment tabs (8 of them — unchanged)
           ═══════════════════════════════════════════════════════ */}
           {activeTab === 'Pain Assessments' && (
             <AssessmentTabPanel
@@ -1158,7 +1235,6 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
             />
           )}
 
-          {/* Pharmacist */}
           {activeTab === 'Pharmacist Assessments' && (
             <AssessmentTabPanel
               items={pharmacistAssessments}
@@ -1195,7 +1271,6 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
             />
           )}
 
-          {/* Physiotherapy */}
           {activeTab === 'Physiotherapy Assessments' && (
             <AssessmentTabPanel
               items={physioAssessments}
@@ -1232,7 +1307,6 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
             />
           )}
 
-          {/* Family */}
           {activeTab === 'Family Assessments' && (
             <AssessmentTabPanel
               items={familyAssessments}
@@ -1263,7 +1337,6 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
             />
           )}
 
-          {/* Nutritional */}
           {activeTab === 'Nutritional Assessments' && (
             <AssessmentTabPanel
               items={nutritionAssessments}
@@ -1300,7 +1373,6 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
             />
           )}
 
-          {/* Social */}
           {activeTab === 'Social Assessments' && (
             <AssessmentTabPanel
               items={socialAssessments}
@@ -1337,7 +1409,6 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
             />
           )}
 
-          {/* Spiritual */}
           {activeTab === 'Spiritual Assessments' && (
             <AssessmentTabPanel
               items={spiritualAssessments}
@@ -1374,7 +1445,6 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
             />
           )}
 
-          {/* Psychiatry */}
           {activeTab === 'Psychiatry Assessments' && (
             <AssessmentTabPanel
               items={psychiatryAssessments}
