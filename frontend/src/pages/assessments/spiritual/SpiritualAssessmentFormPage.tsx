@@ -1,10 +1,14 @@
-import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { usePatient } from '@/hooks/usePatients';
-import { useCreateSpiritualAssessment } from '@/hooks/useSpiritualAssessments';
+import {
+  useCreateSpiritualAssessment,
+  useSpiritualAssessment,
+  useUpdateSpiritualAssessment,
+} from '@/hooks/useSpiritualAssessments';
 import {
   createSpiritualAssessmentSchema,
   type CreateSpiritualAssessmentFormData,
@@ -23,19 +27,65 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
+import { useToast } from '@/context/ToastContext';
+
+// ── Helpers ─────────────────────────────────────────────────────
+const displayId = (p: {
+  id: number | string;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
+
+const toYesNo = (v: boolean | null | undefined): 'Yes' | 'No' | '' =>
+  v === undefined || v === null ? '' : v ? 'Yes' : 'No';
+
+const DISTRESS_CONCERNS = [
+  'MeaningOfIllness',
+  'FearOfDeath',
+  'FearOfSuffering',
+  'UnfinishedBusiness',
+  'Forgiveness',
+  'RelationshipConflicts',
+  'LossOfHope',
+  'AngerTowardGodHigherPower',
+  'SpiritualIsolation',
+] as const;
 
 const SpiritualAssessmentFormPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, assessmentId } = useParams<{
+    id: string;
+    assessmentId?: string;
+  }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const { toast } = useToast();
+
+  // ── Mode detection ──
+  const isEditMode = Boolean(assessmentId);
+
+  // ── Route-aware base path ──
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
+
   const createMutation = useCreateSpiritualAssessment(id!);
+  const updateMutation = useUpdateSpiritualAssessment(id!);
+
+  // ── Fetch existing record only in edit mode ──
+  const { data: existing, isLoading: existingLoading } = useSpiritualAssessment(
+    id!,
+    assessmentId ?? '',
+  );
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<CreateSpiritualAssessmentFormData>({
     resolver: zodResolver(createSpiritualAssessmentSchema),
@@ -52,47 +102,155 @@ const SpiritualAssessmentFormPage: React.FC = () => {
     },
   });
 
-  const onSubmit = (data: CreateSpiritualAssessmentFormData) => {
-    createMutation.mutate(data, {
-      onSuccess: () => navigate(`/patients/${id}`),
+  // ── EDIT: hydrate form from server record ──
+  useEffect(() => {
+    if (!isEditMode || !existing) return;
+
+    reset({
+      assessmentType: existing.assessmentType ?? 'Admission',
+      religiousAffiliation: existing.religiousAffiliation ?? undefined,
+      religiousAffiliationOther:
+        existing.religiousAffiliationOther ?? undefined,
+      faithImportance: existing.faithImportance ?? undefined,
+      activityParticipation: existing.activityParticipation ?? undefined,
+      placeOfWorship: existing.placeOfWorship ?? undefined,
+      supportSources: existing.supportSources ?? [],
+      religiousLeaderName: existing.religiousLeaderName ?? undefined,
+      religiousLeaderOrganization:
+        existing.religiousLeaderOrganization ?? undefined,
+      religiousLeaderPhone: existing.religiousLeaderPhone ?? undefined,
+      lifeMeaningAndPurpose: existing.lifeMeaningAndPurpose ?? undefined,
+      sourcesOfStrength: existing.sourcesOfStrength ?? undefined,
+      practicesToContinue: existing.practicesToContinue ?? undefined,
+      practicesToContinueDetails:
+        existing.practicesToContinueDetails ?? undefined,
+      ritualsToRespect: existing.ritualsToRespect ?? undefined,
+      ritualsToRespectDetails: existing.ritualsToRespectDetails ?? undefined,
+      distressConcerns: (existing.distressConcerns ?? []) as any,
+      spiritualDistressLevel: existing.spiritualDistressLevel ?? undefined,
+      spiritualConcernsDescription:
+        existing.spiritualConcernsDescription ?? undefined,
+      currentHopes: existing.currentHopes ?? undefined,
+      copingMethods: existing.copingMethods ?? [],
+      copingMethodOther: existing.copingMethodOther ?? undefined,
+      feelsAtPeace: existing.feelsAtPeace ?? undefined,
+      familySharesBeliefs: existing.familySharesBeliefs ?? undefined,
+      familyBenefitFromSupport:
+        existing.familyBenefitFromSupport ?? undefined,
+      familySpiritualConcerns: existing.familySpiritualConcerns ?? undefined,
+      preferredEndOfLifeCare: existing.preferredEndOfLifeCare ?? [],
+      preferredEndOfLifeCareOther:
+        existing.preferredEndOfLifeCareOther ?? undefined,
+      preferredPlaceOfCare: existing.preferredPlaceOfCare ?? undefined,
+      preferredPlaceOfCareOther:
+        existing.preferredPlaceOfCareOther ?? undefined,
+      preferredPlaceOfDeath: existing.preferredPlaceOfDeath ?? undefined,
+      religiousPracticesAfterDeath:
+        existing.religiousPracticesAfterDeath ?? undefined,
+      patientStrengths: existing.patientStrengths ?? [],
+      patientStrengthOther: existing.patientStrengthOther ?? undefined,
+      additionalStrengths: existing.additionalStrengths ?? undefined,
+      identifiedNeeds: existing.identifiedNeeds ?? [],
+      identifiedNeedOther: existing.identifiedNeedOther ?? undefined,
+      plannedInterventions: existing.plannedInterventions ?? undefined,
+      followUpSchedule: existing.followUpSchedule ?? undefined,
+      summaryOfAssessment: existing.summaryOfAssessment ?? undefined,
+      providerDistressLevel: existing.providerDistressLevel ?? undefined,
+      recommendedServices: existing.recommendedServices ?? [],
+      assessmentOutcome: existing.assessmentOutcome ?? [],
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, existing?.id]);
+
+  // ── Submit — create OR update depending on mode ──
+  const onSubmit = (data: CreateSpiritualAssessmentFormData) => {
+    const handleSuccess = () => navigate(basePath);
+
+    const handleError = (err: any) => {
+      const status = err?.response?.status;
+      let message =
+        'Could not save the spiritual assessment. Please try again.';
+
+      if (status === 400) {
+        message =
+          'Some fields are missing or invalid. Please review the highlighted fields.';
+      } else if (status === 403) {
+        message = 'You do not have permission to save this assessment.';
+      } else if (status === 404) {
+        message =
+          'Patient or assessment not found. Please refresh and try again.';
+      } else if (status >= 500) {
+        message = 'Server error. Please try again in a moment.';
+      } else if (!err?.response) {
+        message = 'Network error. Please check your connection and try again.';
+      }
+
+      toast.error(message);
+    };
+
+    if (isEditMode && assessmentId) {
+      updateMutation.mutate(
+        { assessmentId, data: data as any },
+        { onSuccess: handleSuccess, onError: handleError },
+      );
+    } else {
+      createMutation.mutate(data as any, {
+        onSuccess: handleSuccess,
+        onError: handleError,
+      });
+    }
   };
 
-  if (isLoading) return <PageLoader />;
-  if (error || !patient) return <ErrorState onRetry={refetch} />;
+  // ── Surface validation errors as a single clean toast ──
+  const onInvalid = (formErrors: any) => {
+    const count = Object.keys(formErrors ?? {}).length;
 
-  const patientLabel = `${patient.firstName} ${patient.lastName} · ${
-    patient.patientDisplayId ?? patient.id
-  }`;
+    if (count === 0) {
+      toast.error('Please review the form and try again.');
+      return;
+    }
 
-  // Distress concerns bridge — set of "present" concerns
-  const distressSet = new Set(
-    (watch('distressConcerns') ?? [])
-      .filter((r) => r.present)
-      .map((r) => r.concern),
-  );
-  const toggleDistress = (concern: string) => {
-    const current = new Set(distressSet);
-    if (current.has(concern as any)) current.delete(concern as any);
-    else current.add(concern as any);
-    setValue(
-      'distressConcerns',
-      Array.from(current).map((c) => ({ concern: c as any, present: true })),
+    toast.error(
+      count === 1
+        ? 'Please fix the highlighted field and try again.'
+        : `Please fix the ${count} highlighted fields and try again.`,
     );
   };
+
+  // ── Loading / error states ──
+  if (isLoading || (isEditMode && existingLoading)) return <PageLoader />;
+  if (error || !patient) return <ErrorState onRetry={refetch} />;
+
+  const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
+
+  const currentDistress = watch('distressConcerns') ?? [];
+  const distressSet = new Set(
+    currentDistress.filter((r) => r.present).map((r) => r.concern),
+  );
+
+  const toggleDistress = (concern: string) => {
+    const next = DISTRESS_CONCERNS.map((c) => ({
+      concern: c,
+      present:
+        c === concern ? !distressSet.has(c as any) : distressSet.has(c as any),
+    })).filter((row) => row.present);
+
+    setValue('distressConcerns', next as any, { shouldDirty: true });
+  };
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   return (
     <AssessmentFormShell
       title="Spiritual Assessment"
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
-      mode="create"
-      isSubmitting={createMutation.isPending}
-      onSubmit={handleSubmit(onSubmit)}
-      onCancel={() => navigate(`/patients/${id}`)}
+      backTo={basePath}
+      mode={isEditMode ? 'edit' : 'create'}
+      isSubmitting={isSubmitting}
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      onCancel={() => navigate(basePath)}
     >
-      {/* ── 1. Assessment type ── */}
-      <Section title="1. Assessment Type">
+      <Section title="1. Assessment Information">
         <Select
           label="Assessment Type"
           options={[
@@ -100,12 +258,12 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             { value: 'FollowUp', label: 'Follow-up' },
             { value: 'Reassessment', label: 'Reassessment' },
           ]}
+          placeholder="Select…"
           error={errors.assessmentType?.message}
           {...register('assessmentType')}
         />
       </Section>
 
-      {/* ── 2. Religious background ── */}
       <Section title="2. Religious Background">
         <Grid cols={2}>
           <Select
@@ -120,7 +278,10 @@ const SpiritualAssessmentFormPage: React.FC = () => {
               { value: 'Catholic', label: 'Catholic' },
               { value: 'TraditionalBelief', label: 'Traditional belief' },
               { value: 'Other', label: 'Other' },
-              { value: 'NoReligiousAffiliation', label: 'No religious affiliation' },
+              {
+                value: 'NoReligiousAffiliation',
+                label: 'No religious affiliation',
+              },
             ]}
             placeholder="Select…"
             {...register('religiousAffiliation')}
@@ -155,14 +316,10 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             placeholder="Select…"
             {...register('activityParticipation')}
           />
-          <Input
-            label="Place of Worship"
-            {...register('placeOfWorship')}
-          />
+          <Input label="Place of Worship" {...register('placeOfWorship')} />
         </Grid>
       </Section>
 
-      {/* ── 3. Spiritual support system ── */}
       <Section title="3. Spiritual Support System">
         <CheckboxGroup
           label="Support Sources"
@@ -176,7 +333,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'CommunityMembers',
             'NoSpiritualSupport',
           ]}
-          onChange={(v) => setValue('supportSources', v as any)}
+          onChange={(v) =>
+            setValue('supportSources', v as any, { shouldDirty: true })
+          }
         />
         <Grid cols={3}>
           <Input
@@ -195,7 +354,6 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         </Grid>
       </Section>
 
-      {/* ── 4. Beliefs & values ── */}
       <Section title="4. Spiritual Beliefs & Values">
         <Textarea
           label="Life Meaning & Purpose"
@@ -210,14 +368,10 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         <YesNo
           label="Practices to continue?"
           name="practicesToContinue"
-          value={
-            watch('practicesToContinue') === undefined
-              ? ''
-              : watch('practicesToContinue')
-                ? 'Yes'
-                : 'No'
+          value={toYesNo(watch('practicesToContinue'))}
+          onChange={(v) =>
+            setValue('practicesToContinue', v === 'Yes', { shouldDirty: true })
           }
-          onChange={(v) => setValue('practicesToContinue', v === 'Yes')}
         />
         {watch('practicesToContinue') && (
           <Textarea
@@ -229,14 +383,10 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         <YesNo
           label="Rituals to respect?"
           name="ritualsToRespect"
-          value={
-            watch('ritualsToRespect') === undefined
-              ? ''
-              : watch('ritualsToRespect')
-                ? 'Yes'
-                : 'No'
+          value={toYesNo(watch('ritualsToRespect'))}
+          onChange={(v) =>
+            setValue('ritualsToRespect', v === 'Yes', { shouldDirty: true })
           }
-          onChange={(v) => setValue('ritualsToRespect', v === 'Yes')}
         />
         {watch('ritualsToRespect') && (
           <Textarea
@@ -247,26 +397,13 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         )}
       </Section>
 
-      {/* ── 5. Distress assessment ── */}
       <Section title="5. Spiritual Distress Assessment">
         <div className="space-y-1.5">
           <p className="text-sm font-medium text-on-surface">
             Spiritual Distress Concerns
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {(
-              [
-                'MeaningOfIllness',
-                'FearOfDeath',
-                'FearOfSuffering',
-                'UnfinishedBusiness',
-                'Forgiveness',
-                'RelationshipConflicts',
-                'LossOfHope',
-                'AngerTowardGodHigherPower',
-                'SpiritualIsolation',
-              ] as const
-            ).map((concern) => (
+            {DISTRESS_CONCERNS.map((concern) => (
               <label
                 key={concern}
                 className="flex items-center gap-2 cursor-pointer text-sm text-on-surface"
@@ -300,7 +437,6 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 6. Hope & coping ── */}
       <Section title="6. Hope & Coping">
         <Textarea
           label="Current Hopes"
@@ -319,7 +455,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'Music',
             'Other',
           ]}
-          onChange={(v) => setValue('copingMethods', v as any)}
+          onChange={(v) =>
+            setValue('copingMethods', v as any, { shouldDirty: true })
+          }
         />
         {watch('copingMethods')?.includes('Other') && (
           <Input
@@ -339,7 +477,6 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 7. Family & spiritual ── */}
       <Section title="7. Family & Spiritual Needs">
         <Select
           label="Family Shares Beliefs"
@@ -354,15 +491,11 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         <YesNo
           label="Family benefits from spiritual support?"
           name="familyBenefitFromSupport"
-          value={
-            watch('familyBenefitFromSupport') === undefined
-              ? ''
-              : watch('familyBenefitFromSupport')
-                ? 'Yes'
-                : 'No'
-          }
+          value={toYesNo(watch('familyBenefitFromSupport'))}
           onChange={(v) =>
-            setValue('familyBenefitFromSupport', v === 'Yes')
+            setValue('familyBenefitFromSupport', v === 'Yes', {
+              shouldDirty: true,
+            })
           }
         />
         <Textarea
@@ -372,7 +505,6 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 8. End-of-life preferences ── */}
       <Section title="8. End-of-Life Preferences">
         <CheckboxGroup
           label="Preferred End-of-Life Care"
@@ -386,7 +518,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'ReligiousMusic',
             'Other',
           ]}
-          onChange={(v) => setValue('preferredEndOfLifeCare', v as any)}
+          onChange={(v) =>
+            setValue('preferredEndOfLifeCare', v as any, { shouldDirty: true })
+          }
         />
         {watch('preferredEndOfLifeCare')?.includes('Other') && (
           <Input
@@ -431,7 +565,6 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 9. Spiritual strengths ── */}
       <Section title="9. Spiritual Strengths">
         <CheckboxGroup
           label="Patient Strengths"
@@ -445,7 +578,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'AcceptanceOfIllness',
             'Other',
           ]}
-          onChange={(v) => setValue('patientStrengths', v as any)}
+          onChange={(v) =>
+            setValue('patientStrengths', v as any, { shouldDirty: true })
+          }
         />
         {watch('patientStrengths')?.includes('Other') && (
           <Input
@@ -460,7 +595,6 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 10. Spiritual care plan ── */}
       <Section title="10. Spiritual Care Plan">
         <CheckboxGroup
           label="Identified Needs"
@@ -475,7 +609,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'ReconciliationSupport',
             'Other',
           ]}
-          onChange={(v) => setValue('identifiedNeeds', v as any)}
+          onChange={(v) =>
+            setValue('identifiedNeeds', v as any, { shouldDirty: true })
+          }
         />
         {watch('identifiedNeeds')?.includes('Other') && (
           <Input
@@ -501,7 +637,6 @@ const SpiritualAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 11. Provider summary ── */}
       <Section title="11. Provider Summary">
         <Textarea
           label="Summary of Assessment"
@@ -530,7 +665,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'AdvanceCarePlanning',
             'OngoingSpiritualCare',
           ]}
-          onChange={(v) => setValue('recommendedServices', v as any)}
+          onChange={(v) =>
+            setValue('recommendedServices', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Assessment Outcome"
@@ -543,7 +680,9 @@ const SpiritualAssessmentFormPage: React.FC = () => {
             'FamilySpiritualSupportRequired',
             'BereavementFollowUpRecommended',
           ]}
-          onChange={(v) => setValue('assessmentOutcome', v as any)}
+          onChange={(v) =>
+            setValue('assessmentOutcome', v as any, { shouldDirty: true })
+          }
         />
       </Section>
     </AssessmentFormShell>

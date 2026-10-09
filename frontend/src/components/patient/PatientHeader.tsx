@@ -1,13 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Plus,
-  FileText,
-  BarChart2,
-  Printer,
-  Hospital,
-  LogOut,
-} from 'lucide-react';
+import { Plus, FileText, BarChart2, Printer, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { BackButton } from '@/components/common/BackButton';
@@ -46,11 +39,8 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
       <div className="flex items-center gap-3">
         <BackButton to="/patients" label="Patients" />
         <div>
-          {/* ID row — display ID + hospital MRN (when set) */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-text-muted font-mono">
-              {displayId}
-            </span>
+            <span className="text-xs text-text-muted font-mono">{displayId}</span>
             {hasHospitalId && (
               <span className="text-[10px] font-mono text-text-muted bg-surface-low border border-border-base rounded px-1.5 py-0.5">
                 MRN: {patient.hospitalPatientId}
@@ -68,11 +58,7 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
         <StatusBadge status={patient.currentLocation} />
 
         {showAddRecordButton && (
-          <Button
-            size="sm"
-            leftIcon={<Plus size={14} />}
-            onClick={onAddRecord}
-          >
+          <Button size="sm" leftIcon={<Plus size={14} />} onClick={onAddRecord}>
             Add Record
           </Button>
         )}
@@ -88,31 +74,15 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
           </Button>
         )}
 
-        <Button
-          variant="outline"
-          size="sm"
-          leftIcon={<FileText size={14} />}
-          onClick={() => navigate(`/patients/${patient.id}/summary`)}
-        >
+        <Button variant="outline" size="sm" leftIcon={<FileText size={14} />} onClick={() => navigate(`/patients/${patient.id}/summary`)}>
           Summary
         </Button>
 
-        <Button
-          variant="outline"
-          size="sm"
-          leftIcon={<BarChart2 size={14} />}
-          onClick={() => navigate(`/patients/${patient.id}/progress`)}
-        >
+        <Button variant="outline" size="sm" leftIcon={<BarChart2 size={14} />} onClick={() => navigate(`/patients/${patient.id}/progress`)}>
           Progress
         </Button>
 
-        <Button
-          variant="outline"
-          size="sm"
-          leftIcon={<Printer size={14} />}
-          loading={isPrinting}
-          onClick={onPrint}
-        >
+        <Button variant="outline" size="sm" leftIcon={<Printer size={14} />} loading={isPrinting} onClick={onPrint}>
           Print History
         </Button>
       </div>

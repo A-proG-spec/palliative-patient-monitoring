@@ -12,7 +12,7 @@ export const createNutritionalAssessment = asyncHandler(
     const result = await nutritionalService.createNutritionalAssessment(
       patientId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(201, 'Nutritional assessment saved', result);
   },
@@ -88,7 +88,7 @@ export const updateNutritionalAssessment = asyncHandler(
       patientId,
       assessmentId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Nutritional assessment updated', result);
   },
@@ -106,7 +106,7 @@ export const deleteNutritionalAssessment = asyncHandler(
     const result = await nutritionalService.deleteNutritionalAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
       reason,
     );
     return SuccessResponse(200, 'Nutritional assessment deleted', result);
@@ -124,7 +124,7 @@ export const restoreNutritionalAssessment = asyncHandler(
     const result = await nutritionalService.restoreNutritionalAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Nutritional assessment restored', result);
   },

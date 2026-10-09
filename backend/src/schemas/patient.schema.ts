@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const createPatientSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     firstName: z.string().min(2, 'First name must be at least 2 characters'),
     lastName: z.string().min(2, 'Last name must be at least 2 characters'),
     age: z.number().min(1, 'Age must be greater than 0').max(150, 'Invalid age'),
@@ -43,6 +44,7 @@ export const getPatientParamsSchema = z.object({
 
 export const updatePatientSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     firstName: z.string().min(2).optional(),
     lastName: z.string().min(2).optional(),
     age: z.number().min(1).max(150).optional(),

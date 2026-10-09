@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { FlaskConical, AlertCircle } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { EmptyState, ErrorState } from '@/components/common/EmptyState';
 import { formatDate } from '@/lib/utils';
-import { QUERY_KEYS, ROUTES } from '@/constants';
+import { QUERY_KEYS } from '@/constants';
 import api from '@/api/client';
 
 // ─────────────────────────────────────────────────────────────
@@ -46,6 +46,12 @@ const fetchLabRequests = async (): Promise<LabRequest[]> => {
 
 const LabRequestsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  // Route-aware patient detail path.
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const patientDetailPath = (patientId: number | string) =>
+    isAdminRoute ? `/admin/patients/${patientId}` : `/patients/${patientId}`;
 
   const {
     data: requests,
@@ -159,9 +165,7 @@ const LabRequestsPage: React.FC = () => {
               {pendingRequests.map((request) => (
                 <tr
                   key={request.id}
-                  onClick={() =>
-                    navigate(ROUTES.LAB_REQUEST_DETAIL(String(request.id)))
-                  }
+                  onClick={() => navigate(patientDetailPath(request.patientId))}
                   className="hover:bg-surface-low cursor-pointer transition-colors"
                 >
                   <td className="px-5 py-3.5 text-sm font-medium text-on-surface">
@@ -203,7 +207,7 @@ const LabRequestsPage: React.FC = () => {
         <div className="flex items-start gap-2 p-4 rounded-xl bg-primary-light border border-primary/20">
           <AlertCircle size={16} className="text-primary flex-shrink-0 mt-0.5" />
           <p className="text-sm text-on-surface">
-            Click on any request to view details and enter results.
+            Click on any request to view the patient record.
           </p>
         </div>
       )}

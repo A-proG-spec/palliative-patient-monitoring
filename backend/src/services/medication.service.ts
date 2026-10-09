@@ -1,9 +1,20 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
+
+const toEnteredBy = (
+  staff?: { id: number; name: string } | null,
+  admin?: { id: number; name: string } | null,
+) => admin
+    ? { id: admin.id, name: admin.name, type: 'admin' as const }
+    : staff
+      ? { id: staff.id, name: staff.name, type: 'staff' as const }
+      : null;
 
 // ─────────────────────────────────────────────────────────────
-// Order medication
+// List all medications for a patient (paginated)
 // ─────────────────────────────────────────────────────────────
 export const getAllMedications = async (
   patientId: string,
@@ -34,6 +45,7 @@ export const getAllMedications = async (
       take: limit,
       include: {
         prescribedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     client.medication.count({ where }),
@@ -48,10 +60,7 @@ export const getAllMedications = async (
       route: m.route,
       administeredAt: m.administeredAt,
       status: m.status,
-      prescribedBy: {
-        id: m.prescribedByStaff.id,
-        name: m.prescribedByStaff.name,
-      },
+      enteredBy: toEnteredBy(m.prescribedByStaff, m.createdByAdmin),
       createdAt: m.createdAt,
       deletedAt: m.deletedAt ?? null,
       deletionReason: m.deletionReason ?? null,
@@ -62,21 +71,45 @@ export const getAllMedications = async (
   };
 };
 
+// ─────────────────────────────────────────────────────────────
+// Order medication
+//
+// Staff  → prescribedBy = their staff id, createdByAdminId = null
+// Admin  → prescribedBy = null,            createdByAdminId = admin.id
+//
+// Admins never need to send `actingAsStaffId`. If they do
+// (e.g. prescribing on behalf of a physician), it is honored —
+// but it is never required.
+// ─────────────────────────────────────────────────────────────
 export const orderMedication = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+
+  const hasActingAsStaffId =
+    data.actingAsStaffId !== undefined &&
+    data.actingAsStaffId !== null &&
+    data.actingAsStaffId !== '';
+
+  // Resolve staff attribution:
+  //   - staff actor    → their own staff id
+  //   - admin + actingAsStaffId → that staff id
+  //   - admin alone    → undefined (no staff attribution)
+  const sid = actor.type === 'staff' || hasActingAsStaffId
+    ? resolveStaffAttribution(actor, data.actingAsStaffId)
+    : undefined;
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
-    prisma.staff.findUnique({ where: { id: sid }, select: { id: true, name: true } }),
+    sid !== undefined
+      ? prisma.staff.findUnique({ where: { id: sid }, select: { id: true, name: true } })
+      : Promise.resolve(null),
   ]);
 
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (sid !== undefined && !staff) throw new ApiError(404, 'Staff member not found');
 
   const medication = await prisma.medication.create({
     data: {
@@ -86,8 +119,13 @@ export const orderMedication = async (
       frequency: data.frequency,
       route: data.route,
       administeredAt: data.administeredAt,
-      prescribedBy: sid,
+      prescribedBy: sid ?? null,
+      createdByAdminId: adminCreatorId(actor),
       status: 'Ordered',
+    },
+    include: {
+      prescribedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -100,13 +138,13 @@ export const orderMedication = async (
     route: medication.route,
     administeredAt: medication.administeredAt,
     status: medication.status,
-    prescribedBy: { id: staff.id, name: staff.name },
+    enteredBy: toEnteredBy(medication.prescribedByStaff, medication.createdByAdmin),
     createdAt: medication.createdAt,
   };
 };
 
 // ─────────────────────────────────────────────────────────────
-// List medications for a patient
+// List medications for a patient (non-paginated variant)
 // ─────────────────────────────────────────────────────────────
 export const getMedications = async (
   patientId: string,
@@ -135,6 +173,7 @@ export const getMedications = async (
       take: limit,
       include: {
         prescribedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.medication.count({ where }),
@@ -149,10 +188,7 @@ export const getMedications = async (
       route: m.route,
       administeredAt: m.administeredAt,
       status: m.status,
-      prescribedBy: {
-        id: m.prescribedByStaff.id,
-        name: m.prescribedByStaff.name,
-      },
+      enteredBy: toEnteredBy(m.prescribedByStaff, m.createdByAdmin),
       createdAt: m.createdAt,
     })),
     page,
@@ -175,6 +211,7 @@ export const getMedicationById = async (
     where: { id: mid, patientId: pid },
     include: {
       prescribedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -189,26 +226,35 @@ export const getMedicationById = async (
     route: medication.route,
     administeredAt: medication.administeredAt,
     status: medication.status,
-    prescribedBy: {
-      id: medication.prescribedByStaff.id,
-      name: medication.prescribedByStaff.name,
-    },
+    enteredBy: toEnteredBy(medication.prescribedByStaff, medication.createdByAdmin),
     createdAt: medication.createdAt,
   };
 };
 
 // ─────────────────────────────────────────────────────────────
-// Update status (Ordered ↔ Given) — records auditor
+// Update status (Ordered ↔ Given)
+//
+// Staff → updatedByStaffId = their staff id
+// Admin → updatedBy = admin id (unless actingAsStaffId is sent)
 // ─────────────────────────────────────────────────────────────
 export const updateMedicationStatus = async (
   patientId: string,
   medicationId: string,
   status: 'Ordered' | 'Given',
-  adminId: string | number,
+  actor: Actor,
+  actingAsStaffId?: string | number,
 ) => {
   const pid = toId(patientId, 'patient id');
   const mid = toId(medicationId, 'medication id');
-  const aid = toId(adminId, 'admin id');
+
+  const hasActingAsStaffId =
+    actingAsStaffId !== undefined &&
+    actingAsStaffId !== null &&
+    actingAsStaffId !== '';
+
+  const sid = actor.type === 'staff' || hasActingAsStaffId
+    ? resolveStaffAttribution(actor, actingAsStaffId)
+    : undefined;
 
   if (!['Ordered', 'Given'].includes(status)) {
     throw new ApiError(400, 'Invalid status value');
@@ -222,9 +268,21 @@ export const updateMedicationStatus = async (
 
   const updated = await prisma.medication.update({
     where: { id: mid },
-    data: { status, updatedBy: aid },
+    data: {
+      status,
+      // Attribute the actor.
+      //   staff → updatedByStaffId = sid
+      //   admin alone → updatedBy = admin.id
+      //   admin + actingAsStaffId → updatedByStaffId = sid
+      ...(actor.type === 'staff'
+        ? { updatedByStaffId: sid }
+        : hasActingAsStaffId
+          ? { updatedByStaffId: sid }
+          : { updatedBy: actor.id }),
+    },
     include: {
       prescribedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -237,10 +295,7 @@ export const updateMedicationStatus = async (
     route: updated.route,
     administeredAt: updated.administeredAt,
     status: updated.status,
-    prescribedBy: {
-      id: updated.prescribedByStaff.id,
-      name: updated.prescribedByStaff.name,
-    },
+    enteredBy: toEnteredBy(updated.prescribedByStaff, updated.createdByAdmin),
     updatedAt: updated.updatedAt,
   };
 };
@@ -251,12 +306,12 @@ export const updateMedicationStatus = async (
 export const deleteMedication = async (
   patientId: string,
   medicationId: string,
-  adminId: string | number,
+  actor: Actor,
   reason?: string,
 ) => {
   const pid = toId(patientId, 'patient id');
   const mid = toId(medicationId, 'medication id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const medication = await prisma.medication.findFirst({
     where: { id: mid, patientId: pid },
@@ -282,18 +337,15 @@ export const deleteMedication = async (
 
 // ─────────────────────────────────────────────────────────────
 // Restore a soft-deleted medication (admin only)
-//
-// Uses prismaBase to bypass the soft-delete extension on read,
-// then update clears the deletedAt fields.
 // ─────────────────────────────────────────────────────────────
 export const restoreMedication = async (
   patientId: string,
   medicationId: string,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const mid = toId(medicationId, 'medication id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const medication = await prisma.medication.findFirst({
     where: { id: mid, patientId: pid },
@@ -343,6 +395,7 @@ export const getPendingMedicationOrders = async (
           },
         },
         prescribedByStaff: { select: { id: true, name: true, role: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.medication.count({ where }),
@@ -362,8 +415,7 @@ export const getPendingMedicationOrders = async (
       route: m.route,
       administeredAt: m.administeredAt,
 
-      prescribingClinician: m.prescribedByStaff.name,
-      prescribedById: m.prescribedByStaff.id,
+      enteredBy: toEnteredBy(m.prescribedByStaff, m.createdByAdmin),
 
       dateOrdered: m.createdAt,
       status: m.status,
@@ -395,6 +447,7 @@ export const getMedicationOrderById = async (medicationId: string) => {
         },
       },
       prescribedByStaff: { select: { id: true, name: true, role: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -415,8 +468,7 @@ export const getMedicationOrderById = async (medicationId: string) => {
     route: med.route,
     administeredAt: med.administeredAt,
 
-    prescribingClinician: med.prescribedByStaff.name,
-    prescribedById: med.prescribedByStaff.id,
+    enteredBy: toEnteredBy(med.prescribedByStaff, med.createdByAdmin),
 
     dateOrdered: med.createdAt,
     status: med.status,
@@ -426,15 +478,24 @@ export const getMedicationOrderById = async (medicationId: string) => {
 // ─────────────────────────────────────────────────────────────
 // Pharmacist queue — mark as Given
 //
-// Reuses the patient-scoped updater but skips the patient guard
-// because the pharmacist already sees the order in their queue.
+// Staff  → updatedByStaffId = their staff id
+// Admin  → updatedBy = admin id (unless actingAsStaffId is sent)
 // ─────────────────────────────────────────────────────────────
 export const markMedicationGivenByQueue = async (
   medicationId: string,
-  pharmacistId: string | number,
+  actor: Actor,
+  actingAsStaffId?: string | number,
 ) => {
   const mid = toId(medicationId, 'medication id');
-  const sid = toId(pharmacistId, 'pharmacist id');
+
+  const hasActingAsStaffId =
+    actingAsStaffId !== undefined &&
+    actingAsStaffId !== null &&
+    actingAsStaffId !== '';
+
+  const sid = actor.type === 'staff' || hasActingAsStaffId
+    ? resolveStaffAttribution(actor, actingAsStaffId)
+    : undefined;
 
   const existing = await prisma.medication.findUnique({
     where: { id: mid },
@@ -449,8 +510,11 @@ export const markMedicationGivenByQueue = async (
     where: { id: mid },
     data: {
       status: 'Given',
-      updatedByStaffId: sid,   // ← route to the Staff FK
-      // updatedBy stays null — it's for admins
+      ...(actor.type === 'staff'
+        ? { updatedByStaffId: sid }
+        : hasActingAsStaffId
+          ? { updatedByStaffId: sid }
+          : { updatedBy: actor.id }),
     },
   });
 

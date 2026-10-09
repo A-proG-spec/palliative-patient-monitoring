@@ -1,9 +1,17 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 
 const VALID_STATUSES = ['Ordered', 'Completed', 'Cancelled'] as const;
 const VALID_PRIORITIES = ['Routine', 'Urgent', 'Emergency'] as const;
+const getEnteredBy = (record: any) =>
+  record.createdByAdmin
+    ? { id: record.createdByAdmin.id, name: record.createdByAdmin.name, type: 'admin' as const }
+    : record.orderedByStaff
+      ? { id: record.orderedByStaff.id, name: record.orderedByStaff.name, type: 'staff' as const }
+      : null;
 // ─────────────────────────────────────────────────────────────
 // DTO mappers
 // ─────────────────────────────────────────────────────────────
@@ -45,9 +53,7 @@ const toLabListDto = (lab: any) => ({
   location: lab.location,
   status: lab.status,
 
-  orderedBy: lab.orderedByStaff
-    ? { id: lab.orderedByStaff.id, name: lab.orderedByStaff.name, role: lab.orderedByStaff.role }
-    : null,
+  enteredBy: getEnteredBy(lab),
 
   createdAt: lab.createdAt,
 });
@@ -118,7 +124,8 @@ export const getAllLabTests = async (
             dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
           },
         },
-        orderedByStaff: { select: { id: true, name: true, role: true } },
+        orderedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     client.laboratoryTest.count({ where }),
@@ -138,24 +145,23 @@ export const getAllLabTests = async (
 export const orderLabTest = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({
       where: { id: pid },
       select: { id: true, currentLocation: true },
     }),
-    prisma.staff.findUnique({
-      where: { id: sid },
-      select: { id: true },
-    }),
+    sid
+      ? prisma.staff.findUnique({ where: { id: sid }, select: { id: true } })
+      : Promise.resolve(null),
   ]);
 
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (sid && !staff) throw new ApiError(404, 'Staff member not found');
 
   if (!data.physicianRequester?.trim()) {
     throw new ApiError(400, 'Physician/Requester is required');
@@ -182,7 +188,8 @@ export const orderLabTest = async (
   const labTest = await prisma.laboratoryTest.create({
     data: {
       patientId: pid,
-      orderedBy: sid,
+      orderedBy: sid ?? null,
+      createdByAdminId: adminCreatorId(actor),
 
       ...(data.hospitalClinic && { hospitalClinic: data.hospitalClinic }),
       ...(data.departmentLaboratory && {
@@ -225,7 +232,8 @@ export const orderLabTest = async (
           dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
         },
       },
-      orderedByStaff: { select: { id: true, name: true, role: true } },
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -275,7 +283,8 @@ export const getLabTests = async (
             dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
           },
         },
-        orderedByStaff: { select: { id: true, name: true, role: true } },
+        orderedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.laboratoryTest.count({ where }),
@@ -308,7 +317,8 @@ export const getLabTestById = async (
           dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
         },
       },
-      orderedByStaff: { select: { id: true, name: true, role: true } },
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       updatedByAdmin: { select: { id: true, name: true } },
       labResult: true,
     },
@@ -329,11 +339,10 @@ export const updateLabResult = async (
   patientId: string,
   labId: string,
   data: any,
-  staffId: string | number,
+  _actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const lid = toId(labId, 'lab id');
-  const sid = toId(staffId, 'staff id');
 
   const labTest = await prisma.laboratoryTest.findFirst({
     where: { id: lid, patientId: pid },
@@ -367,6 +376,7 @@ export const updateLabResult = async (
   delete labResultFields.performedBy;
   delete labResultFields.receivedDate;
   delete labResultFields.receivedTime;
+  delete labResultFields.actingAsStaffId;
 
   // Coerce date strings on LabResult
   for (const key of ['collectedAt', 'reportedAt', 'verifiedAt']) {
@@ -398,7 +408,8 @@ export const updateLabResult = async (
           dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
         },
       },
-      orderedByStaff: { select: { id: true, name: true, role: true } },
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       updatedByAdmin: { select: { id: true, name: true } },
       labResult: true,
     },
@@ -413,11 +424,10 @@ export const updateLabResult = async (
 export const cancelLabTest = async (
   patientId: string,
   labId: string,
-  staffId: string|number,
+  _actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const lid = toId(labId, 'lab id');
-  const sid = toId(staffId, 'staff id');
 
   const labTest = await prisma.laboratoryTest.findFirst({
     where: { id: lid, patientId: pid },
@@ -433,7 +443,7 @@ export const cancelLabTest = async (
 
   const updated = await prisma.laboratoryTest.update({
     where: { id: lid },
-  data: { status: 'Cancelled' },
+    data: { status: 'Cancelled' },
     include: {
       patient: {
         select: {
@@ -441,7 +451,8 @@ export const cancelLabTest = async (
           dateOfBirth: true, hospitalPatientId: true, currentLocation: true,
         },
       },
-      orderedByStaff: { select: { id: true, name: true, role: true } },
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       updatedByAdmin: { select: { id: true, name: true } },
       labResult: true,
     },
@@ -456,12 +467,12 @@ export const cancelLabTest = async (
 export const deleteLabTest = async (
   patientId: string,
   labId: string,
-  adminId: string|number,
+  actor: Actor,
   reason?: string,
 ) => {
   const pid = toId(patientId, 'patient id');
   const lid = toId(labId, 'lab id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const labTest = await prisma.laboratoryTest.findFirst({
     where: { id: lid, patientId: pid },
@@ -491,11 +502,11 @@ export const deleteLabTest = async (
 export const restoreLabTest = async (
   patientId: string,
   labId: string,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const lid = toId(labId, 'lab id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const labTest = await prisma.laboratoryTest.findFirst({
     where: { id: lid, patientId: pid },
@@ -540,7 +551,8 @@ export const getPendingLabRequests = async (
             hospitalPatientId: true,
           },
         },
-        orderedByStaff: { select: { id: true, name: true, role: true } },
+        orderedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.laboratoryTest.count({ where }),
@@ -559,8 +571,7 @@ export const getPendingLabRequests = async (
       specimenSite: l.specimenSite,
       clinicalHistory: l.clinicalHistory,
 
-      requestingClinician: l.orderedByStaff.name,
-      requestedById: l.orderedByStaff.id,
+      enteredBy: getEnteredBy(l),
 
       priority: l.priority,
       dateRequested: l.dateOrdered,
@@ -588,7 +599,8 @@ export const getLabRequestById = async (labId: string) => {
           hospitalPatientId: true,
         },
       },
-      orderedByStaff: { select: { id: true, name: true, role: true } },
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -611,7 +623,7 @@ export const getLabRequestById = async (labId: string) => {
     specimenSite: lab.specimenSite,
     clinicalHistory: lab.clinicalHistory,
 
-    requestingClinician: lab.orderedByStaff.name,
+    enteredBy: getEnteredBy(lab),
     dateRequested: lab.dateOrdered,
 
     priority: lab.priority,
@@ -625,10 +637,9 @@ export const getLabRequestById = async (labId: string) => {
 export const enterLabResultFromQueue = async (
   labId: string,
   data: { result: string; datePerformed?: string; performedBy?: string },
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const lid = toId(labId, 'lab id');
-  const sid = toId(staffId, 'staff id');
 
   const lab = await prisma.laboratoryTest.findUnique({ where: { id: lid } });
   if (!lab) throw new ApiError(404, 'Lab request not found');
@@ -642,7 +653,7 @@ export const enterLabResultFromQueue = async (
       status: 'Completed',
       result: data.result,
       datePerformed: data.datePerformed ? new Date(data.datePerformed) : new Date(),
-      performedBy: data.performedBy ?? null,
+      performedBy: data.performedBy ?? (actor.type === 'staff' ? undefined : null),
     },
   });
 

@@ -9,7 +9,7 @@ import type { LabCategory } from '@prisma/client';
 // ─────────────────────────────────────────────────────────────
 export const orderLabTest = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
-  const result = await labService.orderLabTest(patientId, req.body, req.user.id);
+  const result = await labService.orderLabTest(patientId, req.body, req.actor);
   return SuccessResponse(201, 'Lab test ordered successfully', result);
 });
 export const getAllLabTests = asyncHandler(
@@ -79,7 +79,7 @@ export const updateLabResult = asyncHandler(async (req: Request, res: Response) 
     patientId,
     labId,
     req.body,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(200, 'Lab test result updated', result);
 });
@@ -90,7 +90,7 @@ export const updateLabResult = asyncHandler(async (req: Request, res: Response) 
 export const cancelLabTest = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const labId = req.params.labId as string;
-  const result = await labService.cancelLabTest(patientId, labId, req.user.id);
+  const result = await labService.cancelLabTest(patientId, labId, req.actor);
   return SuccessResponse(200, 'Lab test cancelled', result);
 });
 
@@ -104,7 +104,7 @@ export const deleteLabTest = asyncHandler(async (req: Request, res: Response) =>
   const result = await labService.deleteLabTest(
     patientId,
     labId,
-    req.user.id,
+    req.actor,
     reason,
   );
   return SuccessResponse(200, 'Lab test deleted', result);
@@ -116,7 +116,7 @@ export const deleteLabTest = asyncHandler(async (req: Request, res: Response) =>
 export const restoreLabTest = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
   const labId = req.params.labId as string;
-  const result = await labService.restoreLabTest(patientId, labId, req.user.id);
+  const result = await labService.restoreLabTest(patientId, labId, req.actor);
   return SuccessResponse(200, 'Lab test restored', result);
 });
 
@@ -143,7 +143,7 @@ export const enterResult = asyncHandler(
     const result = await labService.enterLabResultFromQueue(
       labId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Lab result entered', result);
   },

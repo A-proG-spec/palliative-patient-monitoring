@@ -12,7 +12,7 @@ export const createPhysiotherapyAssessment = asyncHandler(
     const result = await physiotherapyService.createPhysiotherapyAssessment(
       patientId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(201, 'Physiotherapy assessment saved', result);
   },
@@ -88,7 +88,7 @@ export const updatePhysiotherapyAssessment = asyncHandler(
       patientId,
       assessmentId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Physiotherapy assessment updated', result);
   },
@@ -106,7 +106,7 @@ export const deletePhysiotherapyAssessment = asyncHandler(
     const result = await physiotherapyService.deletePhysiotherapyAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
       reason,
     );
     return SuccessResponse(200, 'Physiotherapy assessment deleted', result);
@@ -124,7 +124,7 @@ export const restorePhysiotherapyAssessment = asyncHandler(
     const result = await physiotherapyService.restorePhysiotherapyAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Physiotherapy assessment restored', result);
   },

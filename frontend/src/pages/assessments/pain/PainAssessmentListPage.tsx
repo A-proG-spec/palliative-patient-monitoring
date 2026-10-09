@@ -7,12 +7,15 @@ import { AssessmentListShell } from '@/components/assessments/AssessmentListShel
 import { Badge } from '@/components/ui/Badge';
 import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
+import { patientPath } from '@/lib/clinicalPaths';
 
 const PainAssessmentListPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const canWrite = user?.role === 'Nurse' || user?.role === 'Physician';
+  const isAdmin = user?.type === 'admin';
+  const basePath = patientPath(isAdmin, id!);
+  const canWrite = isAdmin || user?.role === 'Nurse' || user?.role === 'Physician';
 
   const { data: patient, isLoading: pLoading } = usePatient(id!);
   const {
@@ -33,8 +36,8 @@ const PainAssessmentListPage: React.FC = () => {
       title="Pain Assessments"
       subtitle={`${data?.total ?? 0} recorded`}
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
-      onAddClick={() => navigate(`/patients/${id}/pain/new`)}
+      backTo={basePath}
+      onAddClick={() => navigate(`${basePath}/pain/new`)}
       isLoading={isLoading || pLoading}
       isError={!!error}
       onRetry={refetch}
@@ -46,7 +49,7 @@ const PainAssessmentListPage: React.FC = () => {
         <button
           key={a.id}
           type="button"
-          onClick={() => navigate(`/patients/${id}/pain/${a.id}`)}
+          onClick={() => navigate(`${basePath}/pain/${a.id}`)}
           className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-surface-low transition-colors"
         >
           <div className="flex-shrink-0 h-10 w-10 rounded-xl bg-red-50 flex items-center justify-center">

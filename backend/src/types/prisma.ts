@@ -41,11 +41,12 @@ export type AdmissionFull = Prisma.HospitalAdmissionGetPayload<
 >;
 
 // ── PatientProgressNote ──
+// NOTE: `responsibleClinician` was removed from the Prisma model;
+// the relation no longer exists, so the include must not reference it.
 export const progressNoteFullInclude = {
   include: {
     patient: true,
     admission: true,
-    responsibleClinician: true,
     createdByStaff: true,
     signatures: true,
     medications: true,

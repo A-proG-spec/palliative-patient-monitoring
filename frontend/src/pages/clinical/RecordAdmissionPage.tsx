@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -19,7 +19,9 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
+import { ErrorState } from '@/components/common/EmptyState';
 import { cn, formatDate } from '@/lib/utils';
+import { usePermissionAccess } from '@/hooks/useRecordAccess';
 
 // ── Layout helper ─────────────────────────────────────────────────
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({
@@ -82,8 +84,17 @@ const SYMPTOM_OPTIONS = [
 const RecordAdmissionPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
-  const { data: patient, isLoading: pLoading } = usePatient(id!);
+  // Route-aware base path. This IS the patient detail route.
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
+
+  const access = usePermissionAccess('canRecordAdmission');
+
+  const { data: patient, isLoading: pLoading, error, refetch } = usePatient(id!);
   const { data: refData } = usePatientReferrals(id!, { status: 'Accepted' });
   const { data: visitsData } = usePatientVisits(id!, { limit: 1 });
   const user = useAuthStore((s) => s.user);
@@ -128,8 +139,6 @@ const RecordAdmissionPage: React.FC = () => {
   useEffect(() => {
     if (!patient) return;
     setValue('patientName', `${patient.firstName} ${patient.lastName}`);
-    // NOTE: hospitalPatientId is intentionally NOT auto-filled —
-    // the admitting physician enters the MRN manually.
     setValue('age', patient.age);
     setValue('sex', patient.sex);
     setValue('dateOfBirth', toDateOnly(patient.dateOfBirth));
@@ -154,13 +163,15 @@ const RecordAdmissionPage: React.FC = () => {
 
   // ── Auto-fill Referring Clinician from the selected referral ──
   //
-  // NOTE: The `referralId` from the HTML <select> is always a STRING,
-  // but the backend returns each referral's `id` as a NUMBER.
-  // Compare with String() on both sides — otherwise `"3" === 3` is false
-  // and the autofill silently does nothing.
+  // The backend computes `requestingClinician` as:
+  //   requestedByStaff.name ?? createdByAdmin.name ?? null
+  // which covers both staff- and admin-created referrals.
   useEffect(() => {
     if (!selectedReferralId) {
-      setValue('referringClinician', '');
+      setValue('referringClinician', '', {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
       return;
     }
 
@@ -168,16 +179,23 @@ const RecordAdmissionPage: React.FC = () => {
       (r) => String(r.id) === String(selectedReferralId),
     );
 
-    if (selectedReferral?.requestedBy?.name) {
-      setValue('referringClinician', selectedReferral.requestedBy.name, {
-        shouldDirty: true,
-        shouldValidate: false,
-      });
-    }
+    if (!selectedReferral) return;
+
+    // Prefer the backend-computed fallback string; fall back to the
+    // individual relations in case the DTO didn't include it.
+    const referrer =
+      (selectedReferral as any).requestingClinician ??
+      (selectedReferral as any).requestedByStaff?.name ??
+      (selectedReferral as any).createdByAdmin?.name ??
+      '';
+
+    setValue('referringClinician', referrer, {
+      shouldDirty: true,
+      shouldValidate: false,
+    });
   }, [selectedReferralId, acceptedReferrals, setValue]);
 
   const onSubmit = (data: CreateAdmissionFormData) => {
-    // Strip empty optional fields
     const cleaned: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(data)) {
       if (v === '' || v === undefined || v === null) continue;
@@ -186,17 +204,23 @@ const RecordAdmissionPage: React.FC = () => {
     }
 
     mutation.mutate(cleaned as CreateAdmissionFormData, {
-      onSuccess: () => navigate(`/patients/${id}`),
+      onSuccess: () => navigate(basePath),
     });
   };
 
   if (pLoading) return <PageLoader />;
+  if (error || !patient) return <ErrorState onRetry={refetch} />;
+
+  // ── Write gate ──
+  if (!access.allowed || patient.status === 'Discharged') {
+    return <Navigate to={basePath} replace />;
+  }
 
   return (
     <div className="max-w-3xl space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={basePath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             PATIENT ADMISSION FORM
@@ -204,12 +228,9 @@ const RecordAdmissionPage: React.FC = () => {
           <p className="text-sm text-text-secondary">
             Yekatit 12 Hospital Medical College (Y12HMC)
           </p>
-          {patient && (
-            <p className="text-sm text-text-muted mt-1">
-              {patient.firstName} {patient.lastName} ·{' '}
-              {patient.patientDisplayId}
-            </p>
-          )}
+          <p className="text-sm text-text-muted mt-1">
+            {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
+          </p>
         </div>
       </div>
 
@@ -220,16 +241,12 @@ const RecordAdmissionPage: React.FC = () => {
         className="space-y-4"
         noValidate
       >
-        {/* ═══════════════════════════════════════════════════════════
-            Section 1: Patient Identification
-        ═══════════════════════════════════════════════════════════ */}
+        {/* Section 1: Patient Identification */}
         <Section title="1. Patient Identification">
           <div className="grid sm:grid-cols-2 gap-4">
             <Input
               label="Patient Name"
-              value={
-                patient ? `${patient.firstName} ${patient.lastName}` : '—'
-              }
+              value={`${patient.firstName} ${patient.lastName}`}
               disabled
             />
             <Input
@@ -240,47 +257,44 @@ const RecordAdmissionPage: React.FC = () => {
             />
             <Input
               label="Age"
-              value={patient?.age ? `${patient.age} years` : '—'}
+              value={patient.age ? `${patient.age} years` : '—'}
               disabled
             />
-            <Input label="Sex" value={patient?.sex || '—'} disabled />
+            <Input label="Sex" value={patient.sex || '—'} disabled />
             <Input
               label="Date of Birth"
               value={
-                patient?.dateOfBirth
+                patient.dateOfBirth
                   ? new Date(patient.dateOfBirth).toLocaleDateString()
                   : '—'
               }
               disabled
             />
-            <Input label="Phone" value={patient?.phone || '—'} disabled />
+            <Input label="Phone" value={patient.phone || '—'} disabled />
             <Input
               label="Address"
-              value={patient?.address || '—'}
+              value={patient.address || '—'}
               disabled
               className="sm:col-span-2"
             />
             <Input
               label="Emergency Contact"
-              value={patient?.emergencyContactName || '—'}
+              value={patient.emergencyContactName || '—'}
               disabled
             />
             <Input
               label="Emergency Phone"
-              value={patient?.emergencyContactPhone || '—'}
+              value={patient.emergencyContactPhone || '—'}
               disabled
             />
           </div>
         </Section>
 
-        {/* ═══════════════════════════════════════════════════════════
-            Section 2: Referral Information
-        ═══════════════════════════════════════════════════════════ */}
+        {/* Section 2: Referral Information */}
         <Section title="2. Referral Information">
           <Select
             label="Linked Referral *"
             options={acceptedReferrals.map((r) => ({
-              // Normalize to string so RHF's string value matches.
               value: String(r.id),
               label: `${r.referralType} · ${r.receivingFacility} · ${new Date(
                 r.referralDate,
@@ -301,10 +315,7 @@ const RecordAdmissionPage: React.FC = () => {
               label="Referred From"
               options={[
                 { value: 'InternalWard', label: 'Internal Ward' },
-                {
-                  value: 'OutpatientDepartment',
-                  label: 'Outpatient Department',
-                },
+                { value: 'OutpatientDepartment', label: 'Outpatient Department' },
                 { value: 'ICU', label: 'ICU' },
                 { value: 'ExternalHospital', label: 'External Hospital' },
                 { value: 'Community', label: 'Community' },
@@ -343,10 +354,7 @@ const RecordAdmissionPage: React.FC = () => {
                 { value: 'EndOfLifeCare', label: 'End-of-Life Care' },
                 { value: 'SymptomControl', label: 'Symptom Control' },
                 { value: 'HomeBasedCare', label: 'Home-Based Care' },
-                {
-                  value: 'PsychosocialSupport',
-                  label: 'Psychosocial Support',
-                },
+                { value: 'PsychosocialSupport', label: 'Psychosocial Support' },
                 { value: 'Other', label: 'Other' },
               ]}
               placeholder="Select reason…"
@@ -362,9 +370,7 @@ const RecordAdmissionPage: React.FC = () => {
           </div>
         </Section>
 
-        {/* ═══════════════════════════════════════════════════════════
-            Admission Details
-        ═══════════════════════════════════════════════════════════ */}
+        {/* Admission Details */}
         <Section title="Admission Details">
           <div className="grid sm:grid-cols-2 gap-4">
             <Input
@@ -402,9 +408,7 @@ const RecordAdmissionPage: React.FC = () => {
           </div>
         </Section>
 
-        {/* ═══════════════════════════════════════════════════════════
-            Section 3: Medical Diagnosis
-        ═══════════════════════════════════════════════════════════ */}
+        {/* Section 3: Medical Diagnosis */}
         <Section title="3. Medical Diagnosis">
           <Input
             label="Primary Diagnosis *"
@@ -454,9 +458,7 @@ const RecordAdmissionPage: React.FC = () => {
           />
         </Section>
 
-        {/* ═══════════════════════════════════════════════════════════
-            Section 4: Palliative Care Eligibility
-        ═══════════════════════════════════════════════════════════ */}
+        {/* Section 4: Palliative Care Eligibility */}
         <Section title="4. Palliative Care Eligibility">
           {hasPriorVisit && (
             <div className="rounded-lg bg-primary/[0.04] border border-primary/20 px-4 py-3">
@@ -516,10 +518,7 @@ const RecordAdmissionPage: React.FC = () => {
             label="Functional Status *"
             options={[
               { value: 'FullyIndependent', label: 'Fully Independent' },
-              {
-                value: 'PartiallyDependent',
-                label: 'Partially Dependent',
-              },
+              { value: 'PartiallyDependent', label: 'Partially Dependent' },
               { value: 'FullyDependent', label: 'Fully Dependent' },
             ]}
             error={errors.functionalStatus?.message}
@@ -527,9 +526,7 @@ const RecordAdmissionPage: React.FC = () => {
           />
         </Section>
 
-        {/* ═══════════════════════════════════════════════════════════
-            Section 5: Pain & Symptom Assessment
-        ═══════════════════════════════════════════════════════════ */}
+        {/* Section 5: Pain & Symptom Assessment */}
         <Section title="5. Pain & Symptom Assessment (Initial)">
           <div className="grid sm:grid-cols-2 gap-4">
             <Input
@@ -558,10 +555,7 @@ const RecordAdmissionPage: React.FC = () => {
               Symptoms Present
             </p>
             <CheckboxGroup
-              options={SYMPTOM_OPTIONS as unknown as {
-                value: string;
-                label: string;
-              }[]}
+              options={SYMPTOM_OPTIONS as unknown as { value: string; label: string }[]}
               name="symptomsPresent"
               register={register}
             />
@@ -577,9 +571,7 @@ const RecordAdmissionPage: React.FC = () => {
           )}
         </Section>
 
-        {/* ═══════════════════════════════════════════════════════════
-            Section 6: Psychosocial Assessment
-        ═══════════════════════════════════════════════════════════ */}
+        {/* Section 6: Psychosocial Assessment */}
         <Section title="6. Psychosocial Assessment">
           <div className="grid sm:grid-cols-2 gap-4">
             <Select
@@ -615,9 +607,7 @@ const RecordAdmissionPage: React.FC = () => {
           />
         </Section>
 
-        {/* ═══════════════════════════════════════════════════════════
-            Section 7: Spiritual Care Needs
-        ═══════════════════════════════════════════════════════════ */}
+        {/* Section 7: Spiritual Care Needs */}
         <Section title="7. Spiritual Care Needs">
           <Checkbox
             label="Spiritual concerns identified"
@@ -647,9 +637,7 @@ const RecordAdmissionPage: React.FC = () => {
           )}
         </Section>
 
-        {/* ═══════════════════════════════════════════════════════════
-            Section 8: Initial Care Plan
-        ═══════════════════════════════════════════════════════════ */}
+        {/* Section 8: Initial Care Plan */}
         <Section title="8. Initial Care Plan">
           <Textarea
             label="Pain Management Plan *"
@@ -693,14 +681,12 @@ const RecordAdmissionPage: React.FC = () => {
           </div>
         </Section>
 
-        {/* ═══════════════════════════════════════════════════════════
-            Submit
-        ═══════════════════════════════════════════════════════════ */}
+        {/* Submit */}
         <div className="flex gap-3 justify-end pb-8">
           <Button
             type="button"
             variant="outline"
-            onClick={() => navigate(`/patients/${id}`)}
+            onClick={() => navigate(basePath)}
           >
             Cancel
           </Button>

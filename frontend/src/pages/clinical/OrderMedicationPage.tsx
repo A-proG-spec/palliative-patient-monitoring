@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useOrderMedication } from '@/hooks/useMedications';
@@ -10,6 +10,8 @@ import { Select } from '@/components/ui/Select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
+import { ErrorState } from '@/components/common/EmptyState';
+import { usePermissionAccess } from '@/hooks/useRecordAccess';
 import {
   createMedicationSchema,
   type CreateMedicationFormData,
@@ -18,7 +20,17 @@ import {
 const OrderMedicationPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: patient, isLoading: pLoading } = usePatient(id!);
+  const { pathname } = useLocation();
+
+  // Route-aware base path. This IS the patient detail route.
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
+
+  const access = usePermissionAccess('canOrderMedication');
+
+  const { data: patient, isLoading: pLoading, error, refetch } = usePatient(id!);
   const mutation = useOrderMedication(id!);
 
   const {
@@ -35,26 +47,30 @@ const OrderMedicationPage: React.FC = () => {
 
   const onSubmit = (data: CreateMedicationFormData) => {
     mutation.mutate(data, {
-      onSuccess: () => navigate(`/patients/${id}`),
+      // Navigate back to the patient detail page (admin or staff aware).
+      onSuccess: () => navigate(basePath),
     });
   };
 
   if (pLoading) return <PageLoader />;
+  if (error || !patient) return <ErrorState onRetry={refetch} />;
+
+  // ── Write gate ──
+  if (!access.allowed || patient.status === 'Discharged') {
+    return <Navigate to={basePath} replace />;
+  }
 
   return (
     <div className="max-w-xl space-y-5">
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={basePath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             Order Medication
           </h1>
-          {patient && (
-            <p className="text-sm text-text-secondary">
-              {patient.firstName} {patient.lastName} ·{' '}
-              {patient.patientDisplayId}
-            </p>
-          )}
+          <p className="text-sm text-text-secondary">
+            {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
+          </p>
         </div>
       </div>
 
@@ -105,7 +121,7 @@ const OrderMedicationPage: React.FC = () => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => navigate(`/patients/${id}`)}
+                onClick={() => navigate(basePath)}
               >
                 Cancel
               </Button>

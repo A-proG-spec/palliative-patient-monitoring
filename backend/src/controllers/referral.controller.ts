@@ -11,7 +11,7 @@ export const requestReferral = asyncHandler(async (req: Request, res: Response) 
   const result = await referralService.createReferral(
     patientId,
     req.body,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(201, 'Referral requested successfully', result);
 });
@@ -51,7 +51,7 @@ export const updateReferral = asyncHandler(async (req: Request, res: Response) =
     patientId,
     referralId,
     req.body,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(200, 'Referral updated successfully', result);
 });

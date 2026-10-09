@@ -213,6 +213,7 @@ const labResultRowSchema = z.object({
 
 export const createNutritionalAssessmentSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // ── Header ──
     assessmentType: z.enum(NUTRITION_ASSESSMENT_TYPE_VALUES),
 

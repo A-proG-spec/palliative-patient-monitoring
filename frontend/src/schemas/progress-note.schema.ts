@@ -27,10 +27,6 @@ export const mdtReviewRowSchema = z.object({
 
 // ═════════════════════════════════════════════════════════════
 // Enum helper
-//
-// Coerces '' → undefined so the form can bind to empty strings
-// without triggering "invalid enum" errors. Prisma receives
-// `undefined` (→ SQL NULL), never "".
 // ═════════════════════════════════════════════════════════════
 
 const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
@@ -61,10 +57,8 @@ const codeStatusEnum          = optionalEnum(['FullResuscitation', 'DNAR', 'Othe
 const prnEffectivenessEnum    = optionalEnum(['Effective', 'PartiallyEffective', 'Ineffective'] as const);
 const medicationSideEffectsEnum = optionalEnum(['None', 'Yes'] as const);
 
-// Symptom severity (per-symptom row)
 const symptomSeverityEnum = z.enum(['None', 'Mild', 'Moderate', 'Severe']).default('None');
 
-// Array-valued enum fields
 const goalsOfCareEnum = z.enum([
   'ComfortSymptomControl',
   'QualityOfLife',
@@ -98,7 +92,6 @@ const investigationEnum = z.enum([
   'Other',
 ]);
 
-// Mood behavior — backend takes any string, no enum constraint
 const moodBehaviorEnum = z.enum([
   'Calm', 'Anxious', 'Fearful', 'Sad', 'Depressed', 'Agitated', 'Withdrawn',
 ]);
@@ -130,10 +123,6 @@ const symptomsSchema = z.record(z.string(), symptomRowSchema);
 
 // ═════════════════════════════════════════════════════════════
 // The full progress-note schema
-//
-// The shape matches the frontend `ProgressNote` type — nested
-// vitals + symptoms — NOT the flat backend shape. The serializer
-// in RecordProgressNotePage flattens it before submission.
 // ═════════════════════════════════════════════════════════════
 
 export const createProgressNoteSchema = z.object({

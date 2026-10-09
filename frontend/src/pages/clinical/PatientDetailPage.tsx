@@ -43,6 +43,8 @@ import { ProgressNoteModal } from '@/components/patient/ProgressNoteModal';
 import { useAuthStore } from '@/store/auth.store';
 import { printPatientReport } from '@/lib/printPatientReport';
 import { APP_NAME } from '@/lib/config';
+
+// ── CHANGED: permission helpers now come from a single place ──
 import {
   hasPermission,
   canAddAnyRecord,
@@ -64,7 +66,10 @@ const PatientDetailPage: React.FC = () => {
   const [isPrinting, setIsPrinting] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
 
+  // ── CHANGED: userRole + isAdmin moved to top so they're available
+  //    for the derived booleans AND the tab-visibility memo below. ──
   const userRole = (user?.role ?? '') as StaffRole;
+  const isAdmin = user?.type === 'admin';
 
   // ── Data fetching ──
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
@@ -88,7 +93,7 @@ const PatientDetailPage: React.FC = () => {
   const { data: psychiatryData } = usePatientPsychiatryAssessments(id!, { limit: 100 });
 
   // ── Derived tab visibility ──
-  const canViewHospice = hasPermission(userRole, 'canViewHospiceNursing');
+  const canViewHospice = hasPermission(userRole, 'canViewHospiceNursing', isAdmin);
 
   const tabs = useMemo<PatientTab[]>(() => {
     const currentLocation = patient?.currentLocation ?? 'Home';
@@ -139,16 +144,24 @@ const PatientDetailPage: React.FC = () => {
     'Admissions': admsData?.total ?? 0,
   };
 
+  // ── ADDED: permission-driven display booleans ──
+  //    (moved here so they sit next to handlePrint / handleAddRecord) ──
+  const isPatientActive = patient.status === 'Active';
+  const showAddRecordButton =
+    isPatientActive && canAddAnyRecord(userRole, isAdmin);
+  const showDischargeButton = canDischarge(user) && isPatientActive;
+
+  // ── ADDED: permission callback passed to <PatientTabs> ──
+  const canDo = (permission: string) =>
+    hasPermission(userRole, permission, isAdmin);
+
   // ═══════════════════════════════════════════════════════════
-  // THE FIX — handlePrint that fetches FULL visit details
+  // handlePrint — fetches FULL visit details before printing
   // ═══════════════════════════════════════════════════════════
   const handlePrint = async () => {
     setIsPrinting(true);
 
     try {
-      // 1. Fetch full details for every visit in parallel.
-      //    The list endpoint returns a light shape — the detail
-      //    endpoint returns vitals, ADL, pain, symptoms, etc.
       const visitIds = (visitsData?.items ?? []).map((v) => String(v.id));
 
       const visitDetails = await Promise.all(
@@ -163,26 +176,20 @@ const PatientDetailPage: React.FC = () => {
         ),
       );
 
-      // 2. Merge list items with their detail records.
       const fullVisits = (visitsData?.items ?? []).map((listItem, i) => ({
         ...listItem,
         ...(visitDetails[i] ?? {}),
       }));
 
-      // 3. Build the complete payload with EVERYTHING.
       printPatientReport({
         patient,
         visits: fullVisits,
-
         medications: medsData?.items ?? [],
         labs: labsData?.items ?? [],
         referrals: refsData?.items ?? [],
         admissions: (admsData?.items ?? []) as unknown as HospitalAdmission[],
-
-        // These were ALL missing before:
         progressNotes: progressNotesData?.items ?? [],
         hospiceNursing: hospiceData?.items ?? [],
-
         painAssessments: painData?.items ?? [],
         pharmacistAssessments: pharmacistData?.items ?? [],
         physiotherapyAssessments: physioData?.items ?? [],
@@ -191,7 +198,6 @@ const PatientDetailPage: React.FC = () => {
         socialAssessments: socialData?.items ?? [],
         spiritualAssessments: spiritualData?.items ?? [],
         psychiatryAssessments: psychiatryData?.items ?? [],
-
         appName: APP_NAME,
       });
     } catch (err) {
@@ -207,12 +213,6 @@ const PatientDetailPage: React.FC = () => {
     navigate(route);
   };
 
-  const isAddRecordDisabled = patient.status === 'Discharged';
-  const showAddRecordButton =
-    canAddAnyRecord(userRole) && !isAddRecordDisabled;
-  const showDischargeButton =
-    canDischarge(user) && patient.status === 'Active';
-
   return (
     <div className="space-y-6 max-w-5xl">
       <PatientHeader
@@ -227,14 +227,24 @@ const PatientDetailPage: React.FC = () => {
 
       <PatientDemographics patient={patient} />
 
-      <AssessmentCards patientId={id!} patientStatus={patient.status} />
+      <AssessmentCards
+        patientId={id!}
+        patientStatus={patient.status}
+        isAdmin={isAdmin}
+      />
 
       <Card padding="none">
+        {/* ── CHANGED: pass the 3 new props to PatientTabs ── */}
         <PatientTabs
           tabs={tabs}
           activeTab={activeTab}
           counts={tabCounts}
           onTabChange={setActiveTab}
+          isAdmin={isAdmin}
+          patientId={id}
+          patientActive={isPatientActive}
+          onAddNew={(path) => navigate(path)}
+          canDo={canDo}
         />
 
         <div className="p-5">
@@ -282,6 +292,7 @@ const PatientDetailPage: React.FC = () => {
           patientName={`${patient.firstName} ${patient.lastName}`}
           currentLocation={patient.currentLocation}
           userRole={userRole}
+          isAdmin={isAdmin}
           onClose={() => setShowAddRecord(false)}
           onSelect={handleAddRecord}
         />

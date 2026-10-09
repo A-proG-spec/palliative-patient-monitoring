@@ -9,10 +9,27 @@ const medRowSchema = z.object({
   instructions: z.string().default(''),
 });
 
-const symptomSeverity = z.enum(['None', 'Mild', 'Moderate', 'Severe', '']).default('');
+// ─────────────────────────────────────────────────────────────
+// Helper — coerce '' / null → undefined so Zod treats blank
+// form fields as "not provided" for optional enums.
+// ─────────────────────────────────────────────────────────────
+const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess(
+    (v) => (v === '' || v === null ? undefined : v),
+    z.enum(values).optional(),
+  );
+
+const symptomSeverity = optionalEnum([
+  'None',
+  'Mild',
+  'Moderate',
+  'Severe',
+] as const);
 
 export const createDischargeSummarySchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
+
     // Relationships
     admissionId: z.string().optional(),
 
@@ -22,10 +39,15 @@ export const createDischargeSummarySchema = z.object({
     dateOfAdmission: z.string().optional(),
     dateOfDischarge: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
     timeOfDischarge: z.string().optional(),
-    dischargeType: z.enum([
-      'PlannedDischarge', 'Transfer', 'DischargeToHome', 'DischargeToHospice',
-      'DischargeToLongTermCare', 'TransferToAnotherHospital', 'Other',
-    ]).optional(),
+    dischargeType: optionalEnum([
+      'PlannedDischarge',
+      'Transfer',
+      'DischargeToHome',
+      'DischargeToHospice',
+      'DischargeToLongTermCare',
+      'TransferToAnotherHospital',
+      'Other',
+    ] as const),
     dischargeTypeOther: z.string().optional(),
 
     // Patient snapshot
@@ -52,11 +74,38 @@ export const createDischargeSummarySchema = z.object({
     importantInvestigations: z.string().optional(),
 
     // 4. Condition at Discharge
-    overallCondition: z.enum(['Stable', 'Improved', 'Unchanged', 'Deteriorating', 'RequiresOngoingPalliativeCare']).optional(),
-    levelOfConsciousness: z.enum(['Alert', 'Drowsy', 'Confused', 'Delirious', 'Unresponsive']).optional(),
-    functionalStatus: z.enum(['Independent', 'RequiresAssistance', 'Bedbound', 'FullyDependent']).optional(),
-    mobility: z.enum(['Independent', 'Assisted', 'Wheelchair', 'Bedbound']).optional(),
-    oralIntake: z.enum(['Adequate', 'Reduced', 'Minimal', 'None']).optional(),
+    overallCondition: optionalEnum([
+      'Stable',
+      'Improved',
+      'Unchanged',
+      'Deteriorating',
+      'RequiresOngoingPalliativeCare',
+    ] as const),
+    levelOfConsciousness: optionalEnum([
+      'Alert',
+      'Drowsy',
+      'Confused',
+      'Delirious',
+      'Unresponsive',
+    ] as const),
+    functionalStatus: optionalEnum([
+      'Independent',
+      'RequiresAssistance',
+      'Bedbound',
+      'FullyDependent',
+    ] as const),
+    mobility: optionalEnum([
+      'Independent',
+      'Assisted',
+      'Wheelchair',
+      'Bedbound',
+    ] as const),
+    oralIntake: optionalEnum([
+      'Adequate',
+      'Reduced',
+      'Minimal',
+      'None',
+    ] as const),
 
     // 5. Vital Signs
     temperature: z.string().optional(),
@@ -88,13 +137,20 @@ export const createDischargeSummarySchema = z.object({
     other: symptomSeverity,
     otherNote: z.string().optional(),
     painScore: z.string().optional(),
-    painControl: z.enum(['WellControlled', 'PartiallyControlled', 'PoorlyControlled']).optional(),
+    painControl: optionalEnum([
+      'WellControlled',
+      'PartiallyControlled',
+      'PoorlyControlled',
+    ] as const),
 
     // 7. Medications
     dischargeMedications: z.array(medRowSchema).optional().default([]),
     prnMedications: z.string().optional(),
     medicationChanges: z.string().optional(),
-    medicationReconciliationCompleted: z.enum(['NotRequired', 'Required']).optional(),
+    medicationReconciliationCompleted: optionalEnum([
+      'NotRequired',
+      'Required',
+    ] as const),
 
     // 8. Symptom Management Instructions
     painManagementInstructions: z.string().optional(),
@@ -105,57 +161,89 @@ export const createDischargeSummarySchema = z.object({
     otherSymptomManagement: z.string().optional(),
 
     // 9. Nutrition
-    diet: z.enum(['Regular', 'Soft', 'Pureed', 'Modified', 'Other']).optional(),
+    diet: optionalEnum([
+      'Regular',
+      'Soft',
+      'Pureed',
+      'Modified',
+      'Other',
+    ] as const),
     dietOther: z.string().optional(),
-    feedingAssistance: z.enum(['NotRequired', 'Required']).optional(),
-    enteralFeeding: z.enum(['NotRequired', 'Required']).optional(),
-    feedingTube: z.enum(['None', 'NG', 'PEG', 'Other']).optional(),
+    feedingAssistance: optionalEnum(['NotRequired', 'Required'] as const),
+    enteralFeeding: optionalEnum(['NotRequired', 'Required'] as const),
+    feedingTube: optionalEnum(['None', 'NG', 'PEG', 'Other'] as const),
     feedingTubeOther: z.string().optional(),
     hydrationInstructions: z.string().optional(),
-    nutritionDietitianFollowUp: z.enum(['NotRequired', 'Required']).optional(),
+    nutritionDietitianFollowUp: optionalEnum(['NotRequired', 'Required'] as const),
 
     // 10. Wound / Skin
-    woundPresent: z.enum(['NotRequired', 'Required']).optional(),
+    woundPresent: optionalEnum(['NotRequired', 'Required'] as const),
     woundLocation: z.string().optional(),
     woundCareInstructions: z.string().optional(),
     dressingChanges: z.string().optional(),
     pressureInjuryPrevention: z.string().optional(),
 
     // 11. Oxygen / Equipment
-    oxygenRequired: z.enum(['NotRequired', 'Required']).optional(),
-    oxygenDeliveryMethod: z.enum(['NasalCannula', 'Mask', 'Other']).optional(),
+    oxygenRequired: optionalEnum(['NotRequired', 'Required'] as const),
+    oxygenDeliveryMethod: optionalEnum([
+      'NasalCannula',
+      'Mask',
+      'Other',
+    ] as const),
     oxygenDeliveryMethodOther: z.string().optional(),
     oxygenFlowRate: z.string().optional(),
     equipmentRequired: z.array(z.string()).optional().default([]),
     equipmentOther: z.string().optional(),
-    equipmentArranged: z.enum(['NotRequired', 'Required']).optional(),
+    equipmentArranged: optionalEnum(['NotRequired', 'Required'] as const),
 
     // 12. Goals of Care
     currentGoalsOfCare: z.array(z.string()).optional().default([]),
     currentGoalsOfCareOther: z.string().optional(),
-    goalsOfCareReviewed: z.enum(['NotRequired', 'Required']).optional(),
+    goalsOfCareReviewed: optionalEnum(['NotRequired', 'Required'] as const),
     patientDecisionMakerPreferences: z.string().optional(),
-    codeStatus: z.enum(['FullResuscitation', 'DNAR', 'Other']).optional(),
+    codeStatus: optionalEnum([
+      'FullResuscitation',
+      'DNAR',
+      'Other',
+    ] as const),
     codeStatusOther: z.string().optional(),
-    advanceCarePlan: z.enum(['NotAvailable', 'Completed', 'Reviewed', 'Updated']).optional(),
+    advanceCarePlan: optionalEnum([
+      'NotAvailable',
+      'Completed',
+      'Reviewed',
+      'Updated',
+    ] as const),
 
     // 13. Destination
-    dischargedTo: z.enum([
-      'Home', 'FamilyCaregiverHome', 'Hospice', 'NursingLongTermCare',
-      'AnotherHospital', 'Other',
-    ]).optional(),
+    dischargedTo: optionalEnum([
+      'Home',
+      'FamilyCaregiverHome',
+      'Hospice',
+      'NursingLongTermCare',
+      'AnotherHospital',
+      'Other',
+    ] as const),
     dischargedToOther: z.string().optional(),
     destinationAddress: z.string().optional(),
-    transport: z.enum(['FamilyPrivateTransport', 'Ambulance', 'MedicalTransport', 'Other']).optional(),
+    transport: optionalEnum([
+      'FamilyPrivateTransport',
+      'Ambulance',
+      'MedicalTransport',
+      'Other',
+    ] as const),
     transportOther: z.string().optional(),
     escortCaregiver: z.string().optional(),
 
     // 14. Home / Hospice
-    homePalliativeCareRequired: z.enum(['NotRequired', 'Required']).optional(),
-    hospiceReferral: z.enum(['No', 'Yes', 'AlreadyEnrolled']).optional(),
-    communityNursingRequired: z.enum(['NotRequired', 'Required']).optional(),
-    homeVisitsRequired: z.enum(['NotRequired', 'Required']).optional(),
-    caregiverSupportRequired: z.enum(['NotRequired', 'Required']).optional(),
+    homePalliativeCareRequired: optionalEnum(['NotRequired', 'Required'] as const),
+    hospiceReferral: optionalEnum([
+      'No',
+      'Yes',
+      'AlreadyEnrolled',
+    ] as const),
+    communityNursingRequired: optionalEnum(['NotRequired', 'Required'] as const),
+    homeVisitsRequired: optionalEnum(['NotRequired', 'Required'] as const),
+    caregiverSupportRequired: optionalEnum(['NotRequired', 'Required'] as const),
     servicesArranged: z.string().optional(),
     responsibleProvider: z.string().optional(),
     responsibleProviderPhone: z.string().optional(),
@@ -163,9 +251,11 @@ export const createDischargeSummarySchema = z.object({
     // 15. Education
     educationTopics: z.array(z.string()).optional().default([]),
     educationOther: z.string().optional(),
-    patientUnderstanding: z.enum([
-      'VerbalizedUnderstanding', 'DemonstratedUnderstanding', 'RequiresFurtherEducation',
-    ]).optional(),
+    patientUnderstanding: optionalEnum([
+      'VerbalizedUnderstanding',
+      'DemonstratedUnderstanding',
+      'RequiresFurtherEducation',
+    ] as const),
     additionalEducationRequired: z.string().optional(),
 
     // 16. Warning Signs
@@ -174,7 +264,7 @@ export const createDischargeSummarySchema = z.object({
     warningSignsSpecificInstructions: z.string().optional(),
 
     // 17. Follow-up
-    palliativeCareFollowUp: z.enum(['NotRequired', 'Required']).optional(),
+    palliativeCareFollowUp: optionalEnum(['NotRequired', 'Required'] as const),
     palliativeCareFollowUpDate: z.string().optional(),
     palliativeCareFollowUpTime: z.string().optional(),
     physicianSpecialistFollowUp: z.string().optional(),
@@ -195,7 +285,7 @@ export const createDischargeSummarySchema = z.object({
     dischargeNotes: z.string().optional(),
 
     // Workflow
-    status: z.enum(['Draft', 'Final']).optional(),
+    status: optionalEnum(['Draft', 'Final'] as const),
   }),
 });
 

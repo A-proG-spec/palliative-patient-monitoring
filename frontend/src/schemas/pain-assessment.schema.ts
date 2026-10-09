@@ -7,7 +7,12 @@ const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
   );
 
 const optionalScore = z.preprocess(
-  (v) => (v === '' || v === undefined || v === null ? undefined : Number(v)),
+  (v) => {
+    if (v === '' || v === undefined || v === null) return undefined;
+    const n = typeof v === 'number' ? v : Number(v);
+    if (Number.isNaN(n)) return undefined;
+    return n;
+  },
   z.number().int().min(0).max(10).optional(),
 );
 
@@ -73,7 +78,7 @@ export const createPainAssessmentSchema = z.object({
     .optional()
     .default([]),
 
-  // Severity
+  // Severity — use the tolerant preprocess here
   currentPainScore: optionalScore,
   worstPainLast24h: optionalScore,
   leastPainLast24h: optionalScore,

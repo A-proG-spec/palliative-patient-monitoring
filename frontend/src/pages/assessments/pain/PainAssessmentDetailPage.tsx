@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { usePatient } from '@/hooks/usePatients';
 import {
   usePainAssessment,
@@ -8,8 +8,6 @@ import {
 import { useAuthStore } from '@/store/auth.store';
 import { AssessmentDetailShell } from '@/components/assessments/AssessmentDetailShell';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { AdminDeleteButton } from '@/components/admin/AdminDeleteButton';
-import { formatDate } from '@/lib/utils';
 
 const Row: React.FC<{ label: string; value?: string | number | null }> = ({
   label,
@@ -54,10 +52,18 @@ const PainAssessmentDetailPage: React.FC = () => {
     assessmentId: string;
   }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { pathname } = useLocation();
+
+  const user = useAuthStore((s) => s.user);
   const isAdmin = user?.type === 'admin';
-  const isOwner = user?.role === 'Nurse';
-  const canManage = isAdmin || isOwner;
+
+  // ── Route-aware base path ──
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
+
+  const canManage = isAdmin;
 
   const { data: patient } = usePatient(id!);
   const { data: a, isLoading, error, refetch } = usePainAssessment(
@@ -69,14 +75,20 @@ const PainAssessmentDetailPage: React.FC = () => {
   const [showDelete, setShowDelete] = useState(false);
 
   const patientLabel = patient
-    ? `${patient.firstName} ${patient.lastName} · ${patient.patientDisplayId ?? patient.id}`
+    ? `${patient.firstName} ${patient.lastName} · ${
+        patient.patientDisplayId ?? patient.id
+      }`
     : '—';
 
   const handleDelete = (reason?: string) => {
     deleteMutation.mutate(
       { assessmentId: assessmentId!, reason },
       {
-        onSuccess: () => navigate(`/patients/${id}/pain`),
+        onSuccess: () => navigate(`${basePath}/pain`),
+        onError: () => {
+          // Stay on the page so the user can retry.
+          setShowDelete(false);
+        },
       },
     );
     setShowDelete(false);
@@ -91,11 +103,15 @@ const PainAssessmentDetailPage: React.FC = () => {
         createdByName={a?.createdByStaff?.name ?? null}
         isDeleted={!!a?.deletedAt}
         isAdmin={isAdmin}
-        backTo={`/patients/${id}/pain`}
+        backTo={`${basePath}/pain`}
         isLoading={isLoading}
         isError={!!error}
         onRetry={refetch}
-        onEdit={canManage ? () => navigate(`/patients/${id}/pain/${assessmentId}/edit`) : undefined}
+        onEdit={
+          canManage
+            ? () => navigate(`${basePath}/pain/${assessmentId}/edit`)
+            : undefined
+        }
         onDelete={canManage ? () => setShowDelete(true) : undefined}
         onPrint={() => window.print()}
       >
@@ -109,11 +125,35 @@ const PainAssessmentDetailPage: React.FC = () => {
                 <Row label="Assessment Type" value={a.assessmentType} />
                 <Row label="Onset" value={a.painOnset ?? '—'} />
                 <Row label="Duration" value={a.painDuration ?? '—'} />
-                <Row label="Current Pain Score" value={a.currentPainScore != null ? `${a.currentPainScore}/10` : undefined} />
-                <Row label="Worst (24h)" value={a.worstPainLast24h != null ? `${a.worstPainLast24h}/10` : undefined} />
-                <Row label="Least (24h)" value={a.leastPainLast24h != null ? `${a.leastPainLast24h}/10` : undefined} />
+                <Row
+                  label="Current Pain Score"
+                  value={
+                    a.currentPainScore != null
+                      ? `${a.currentPainScore}/10`
+                      : undefined
+                  }
+                />
+                <Row
+                  label="Worst (24h)"
+                  value={
+                    a.worstPainLast24h != null
+                      ? `${a.worstPainLast24h}/10`
+                      : undefined
+                  }
+                />
+                <Row
+                  label="Least (24h)"
+                  value={
+                    a.leastPainLast24h != null
+                      ? `${a.leastPainLast24h}/10`
+                      : undefined
+                  }
+                />
                 <Row label="Opioid Use" value={a.opioidUse ?? '—'} />
-                <Row label="Breakthrough Frequency" value={a.breakthroughFrequency ?? '—'} />
+                <Row
+                  label="Breakthrough Frequency"
+                  value={a.breakthroughFrequency ?? '—'}
+                />
               </CardContent>
             </Card>
 
@@ -123,11 +163,20 @@ const PainAssessmentDetailPage: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <ChipList label="Locations" values={a.painLocations ?? []} />
-                <ChipList label="Descriptions" values={a.painDescriptions ?? []} />
+                <ChipList
+                  label="Descriptions"
+                  values={a.painDescriptions ?? []}
+                />
                 <ChipList label="Types" values={a.painType ?? []} />
                 <ChipList label="Patterns" values={a.painPattern ?? []} />
-                <ChipList label="Aggravating Factors" values={a.aggravatingFactors ?? []} />
-                <ChipList label="Relieving Factors" values={a.relievingFactors ?? []} />
+                <ChipList
+                  label="Aggravating Factors"
+                  values={a.aggravatingFactors ?? []}
+                />
+                <ChipList
+                  label="Relieving Factors"
+                  values={a.relievingFactors ?? []}
+                />
               </CardContent>
             </Card>
 
@@ -138,9 +187,18 @@ const PainAssessmentDetailPage: React.FC = () => {
               <CardContent className="text-sm">
                 <ChipList label="Diagnosis" values={a.diagnosis ?? []} />
                 <Row label="Management Goals" value={a.managementGoals} />
-                <ChipList label="Interventions" values={a.interventions ?? []} />
-                <ChipList label="Non-Pharmacological Methods" values={a.nonPharmacologicalMethods ?? []} />
-                <ChipList label="Monitoring Plan" values={a.monitoringPlan ?? []} />
+                <ChipList
+                  label="Interventions"
+                  values={a.interventions ?? []}
+                />
+                <ChipList
+                  label="Non-Pharmacological Methods"
+                  values={a.nonPharmacologicalMethods ?? []}
+                />
+                <ChipList
+                  label="Monitoring Plan"
+                  values={a.monitoringPlan ?? []}
+                />
               </CardContent>
             </Card>
 
@@ -149,8 +207,14 @@ const PainAssessmentDetailPage: React.FC = () => {
                 <CardTitle className="text-sm">Summary</CardTitle>
               </CardHeader>
               <CardContent className="text-sm">
-                <ChipList label="Assessment Outcome" values={a.assessmentOutcome ?? []} />
-                <ChipList label="Final Recommendations" values={a.finalRecommendations ?? []} />
+                <ChipList
+                  label="Assessment Outcome"
+                  values={a.assessmentOutcome ?? []}
+                />
+                <ChipList
+                  label="Final Recommendations"
+                  values={a.finalRecommendations ?? []}
+                />
               </CardContent>
             </Card>
           </>
@@ -158,12 +222,34 @@ const PainAssessmentDetailPage: React.FC = () => {
       </AssessmentDetailShell>
 
       {showDelete && (
-        <AdminDeleteButton
-          resourceLabel="Pain assessment"
-          onConfirm={handleDelete}
-          isPending={deleteMutation.isPending}
-          className="hidden"
-        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/30 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-surface-lowest rounded-2xl border border-border-base shadow-xl p-6">
+            <h2 className="text-lg font-semibold text-on-surface mb-2">
+              Delete this pain assessment?
+            </h2>
+            <p className="text-sm text-text-secondary mb-5">
+              The assessment will be soft-deleted and can be restored later.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDelete(false)}
+                disabled={deleteMutation.isPending}
+                className="flex-1 rounded-xl border border-border-base bg-surface-lowest px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-surface-low transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete()}
+                disabled={deleteMutation.isPending}
+                className="flex-1 rounded-xl bg-error px-4 py-2.5 text-sm font-medium text-white hover:bg-error/90 transition-colors disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

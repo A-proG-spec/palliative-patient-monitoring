@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useOrderImaging } from '@/hooks/useImaging';
@@ -11,7 +11,9 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { BackButton } from '@/components/common/BackButton';
 import { PageLoader } from '@/components/common/LoadingSpinner';
+import { ErrorState } from '@/components/common/EmptyState';
 import { cn } from '@/lib/utils';
+import { usePermissionAccess } from '@/hooks/useRecordAccess';
 import {
   createImagingSchema,
   type CreateImagingFormData,
@@ -61,7 +63,17 @@ const CheckboxGroup: React.FC<{
 const OrderImagingPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: patient, isLoading: pLoading } = usePatient(id!);
+  const { pathname } = useLocation();
+
+  // Route-aware base path. This IS the patient detail route.
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
+
+  const access = usePermissionAccess('canOrderImaging');
+
+  const { data: patient, isLoading: pLoading, error, refetch } = usePatient(id!);
   const orderMutation = useOrderImaging(id!);
 
   const {
@@ -179,23 +191,28 @@ const OrderImagingPage: React.FC = () => {
 
   // ── Submit ──
   const onSubmit = (data: CreateImagingFormData) => {
-    // Strip empty-string modalityOtherText so backend gets undefined, not ""
     const payload: any = { ...data };
     if (!payload.modalityOtherText) delete payload.modalityOtherText;
     if (!payload.bodyRegionOtherText) delete payload.bodyRegionOtherText;
 
     orderMutation.mutate(payload, {
-      onSuccess: () => navigate(`/patients/${id}`),
+      onSuccess: () => navigate(basePath),
     });
   };
 
   if (pLoading) return <PageLoader />;
+  if (error || !patient) return <ErrorState onRetry={refetch} />;
+
+  // ── Write gate ──
+  if (!access.allowed || patient.status === 'Discharged') {
+    return <Navigate to={basePath} replace />;
+  }
 
   return (
     <div className="max-w-4xl space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={basePath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             Clinical Imaging Examination Order Form
@@ -203,11 +220,9 @@ const OrderImagingPage: React.FC = () => {
           <p className="text-sm text-text-secondary">
             Yekatit 12 Hospital Medical College (Y12HMC)
           </p>
-          {patient && (
-            <p className="text-sm text-text-muted mt-1">
-              {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
-            </p>
-          )}
+          <p className="text-sm text-text-muted mt-1">
+            {patient.firstName} {patient.lastName} · {patient.patientDisplayId}
+          </p>
         </div>
       </div>
 
@@ -217,11 +232,15 @@ const OrderImagingPage: React.FC = () => {
           <div className="grid sm:grid-cols-2 gap-4">
             <Input
               label="Patient Name"
-              value={patient ? `${patient.firstName} ${patient.lastName}` : '—'}
+              value={`${patient.firstName} ${patient.lastName}`}
               disabled
             />
-            <Input label="Age" value={patient?.age ? `${patient.age} years` : '—'} disabled />
-            <Input label="Sex" value={patient?.sex || '—'} disabled />
+            <Input
+              label="Age"
+              value={patient.age ? `${patient.age} years` : '—'}
+              disabled
+            />
+            <Input label="Sex" value={patient.sex || '—'} disabled />
           </div>
         </FormSection>
 
@@ -511,7 +530,7 @@ const OrderImagingPage: React.FC = () => {
 
         {/* Submit */}
         <div className="flex gap-3 justify-end pb-8">
-          <Button type="button" variant="outline" onClick={() => navigate(`/patients/${id}`)}>
+          <Button type="button" variant="outline" onClick={() => navigate(basePath)}>
             Cancel
           </Button>
           <Button type="submit" loading={orderMutation.isPending}>

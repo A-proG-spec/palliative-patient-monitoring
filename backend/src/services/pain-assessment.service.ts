@@ -1,6 +1,8 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 // ─────────────────────────────────────────────────────────────
 // DTO mapper
 // ─────────────────────────────────────────────────────────────
@@ -9,13 +11,13 @@ const toPainAssessmentDto = (a: any) => ({
   patientId: a.patientId,
   patient: a.patient
     ? {
-        id: a.patient.id,
-        firstName: a.patient.firstName,
-        lastName: a.patient.lastName,
-        age: a.patient.age,
-        sex: a.patient.sex,
-        hospitalPatientId: a.patient.hospitalPatientId,
-      }
+      id: a.patient.id,
+      firstName: a.patient.firstName,
+      lastName: a.patient.lastName,
+      age: a.patient.age,
+      sex: a.patient.sex,
+      hospitalPatientId: a.patient.hospitalPatientId,
+    }
     : null,
 
   assessmentType: a.assessmentType,
@@ -64,10 +66,11 @@ const toPainAssessmentDto = (a: any) => ({
 
   impacts: a.impacts ?? [],
 
-  createdBy: a.createdBy,
-  createdByStaff: a.createdByStaff
-    ? { id: a.createdByStaff.id, name: a.createdByStaff.name }
-    : null,
+  enteredBy: a.createdByAdmin
+    ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+    : a.createdByStaff
+      ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+      : null,
   updatedBy: a.updatedBy,
   updatedByAdmin: a.updatedByAdmin
     ? { id: a.updatedByAdmin.id, name: a.updatedByAdmin.name }
@@ -119,24 +122,29 @@ const pickImpactRows = (data: any) => {
 export const createPainAssessment = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = actor.type === 'admin' && (data.actingAsStaffId === undefined || data.actingAsStaffId === null || data.actingAsStaffId === '')
+    ? undefined
+    : resolveStaffAttribution(actor, data.actingAsStaffId);
 
-  const [patient, staff] = await Promise.all([
-    prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
-    prisma.staff.findUnique({ where: { id: sid }, select: { id: true } }),
-  ]);
+  const patientPromise = prisma.patient.findUnique({ where: { id: pid }, select: { id: true } });
+  let staffPromise: ReturnType<typeof prisma.staff.findUnique> | undefined;
+  if (sid !== undefined) {
+    staffPromise = prisma.staff.findUnique({ where: { id: sid }, select: { id: true } });
+  }
+  const [patient, staff] = await Promise.all([patientPromise, staffPromise]);
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (sid !== undefined && !staff) throw new ApiError(404, 'Staff member not found');
 
   const impacts = pickImpactRows(data);
 
   const assessment = await prisma.painAssessment.create({
     data: {
       patientId: pid,
-      createdBy: sid,
+      createdBy: sid ?? null,
+      createdByAdminId: adminCreatorId(actor),
       ...pickWritable(data),
       ...(impacts.length > 0 ? { impacts: { create: impacts } } : {}),
     },
@@ -148,6 +156,7 @@ export const createPainAssessment = async (
         },
       },
       createdByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       impacts: true,
     },
   });
@@ -181,6 +190,7 @@ export const getPainAssessments = async (
       take: limit,
       include: {
         createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.painAssessment.count({ where: { patientId: pid } }),
@@ -196,9 +206,11 @@ export const getPainAssessments = async (
       painType: a.painType,
       diagnosis: a.diagnosis,
       assessmentOutcome: a.assessmentOutcome,
-      createdBy: a.createdByStaff
-        ? { id: a.createdByStaff.id, name: a.createdByStaff.name }
-        : null,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
       deletedAt: a.deletedAt,
@@ -237,6 +249,7 @@ export const getAllPainAssessments = async (
       take: limit,
       include: {
         createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     client.painAssessment.count({ where: { patientId: pid } }),
@@ -252,9 +265,11 @@ export const getAllPainAssessments = async (
       painType: a.painType,
       diagnosis: a.diagnosis,
       assessmentOutcome: a.assessmentOutcome,
-      createdBy: a.createdByStaff
-        ? { id: a.createdByStaff.id, name: a.createdByStaff.name }
-        : null,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
       deletedAt: a.deletedAt ?? null,
@@ -286,6 +301,7 @@ export const getPainAssessmentById = async (
         },
       },
       createdByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       updatedByAdmin: { select: { id: true, name: true } },
       impacts: true,
     },
@@ -302,11 +318,11 @@ export const updatePainAssessment = async (
   patientId: string,
   assessmentId: string,
   data: any,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const aid = toId(assessmentId, 'assessment id');
-  const adm = toId(adminId, 'admin id');
+  const adm = toId(actor.id, 'admin id');
 
   const existing = await prisma.painAssessment.findFirst({
     where: { id: aid, patientId: pid },
@@ -335,6 +351,7 @@ export const updatePainAssessment = async (
         },
       },
       createdByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       updatedByAdmin: { select: { id: true, name: true } },
       impacts: true,
     },
@@ -349,12 +366,12 @@ export const updatePainAssessment = async (
 export const deletePainAssessment = async (
   patientId: string,
   assessmentId: string,
-  adminId: string | number,
+  actor: Actor,
   reason?: string,
 ) => {
   const pid = toId(patientId, 'patient id');
   const aid = toId(assessmentId, 'assessment id');
-  const adm = toId(adminId, 'admin id');
+  const adm = toId(actor.id, 'admin id');
 
   const existing = await prisma.painAssessment.findFirst({
     where: { id: aid, patientId: pid },
@@ -388,11 +405,11 @@ export const deletePainAssessment = async (
 export const restorePainAssessment = async (
   patientId: string,
   assessmentId: string,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const aid = toId(assessmentId, 'assessment id');
-  const adm = toId(adminId, 'admin id');
+  const adm = toId(actor.id, 'admin id');
 
   const existing = await prismaBase.painAssessment.findFirst({
     where: { id: aid, patientId: pid },
@@ -433,6 +450,8 @@ export const getDeletedPainAssessments = async (
       include: {
         patient: { select: { id: true, firstName: true, lastName: true } },
         deletedByAdmin: { select: { id: true, name: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prismaBase.painAssessment.count({
@@ -447,6 +466,11 @@ export const getDeletedPainAssessments = async (
       patientName: `${a.patient.firstName} ${a.patient.lastName}`,
       assessmentType: a.assessmentType,
       currentPainScore: a.currentPainScore,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
       deletedAt: a.deletedAt,
       deletedBy: a.deletedByAdmin
         ? { id: a.deletedByAdmin.id, name: a.deletedByAdmin.name }

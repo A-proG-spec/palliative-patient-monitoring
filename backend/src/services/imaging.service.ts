@@ -1,6 +1,14 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
+const getEnteredBy = (record: any) =>
+  record.createdByAdmin
+    ? { id: record.createdByAdmin.id, name: record.createdByAdmin.name, type: 'admin' as const }
+    : record.orderedByStaff
+      ? { id: record.orderedByStaff.id, name: record.orderedByStaff.name, type: 'staff' as const }
+      : null;
 // ─────────────────────────────────────────────────────────────
 // GET ALL imaging orders for a patient
 // ─────────────────────────────────────────────────────────────
@@ -38,7 +46,8 @@ export const getAllImagingOrders = async (
       skip,
       take: limit,
       include: {
-        orderedByStaff: { select: { id: true, name: true, role: true } },
+        orderedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     client.imagingOrder.count({ where }),
@@ -58,10 +67,7 @@ export const getAllImagingOrders = async (
       hasReport: !!(o.findings || o.impression),
       dateOrdered: o.createdAt,
       performedAt: o.performedAt,
-      orderedBy: {
-        id: o.orderedByStaff.id,
-        name: o.orderedByStaff.name,
-      },
+      enteredBy: getEnteredBy(o),
       deletedAt: o.deletedAt ?? null,
       deletionReason: o.deletionReason ?? null,
     })),
@@ -74,33 +80,39 @@ export const getAllImagingOrders = async (
 export const orderImaging = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({
       where: { id: pid },
       select: { id: true, firstName: true, lastName: true, hospitalPatientId: true },
     }),
-    prisma.staff.findUnique({
-      where: { id: sid },
-      select: { id: true, name: true },
-    }),
+    sid
+      ? prisma.staff.findUnique({ where: { id: sid }, select: { id: true, name: true } })
+      : Promise.resolve(null),
   ]);
 
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (sid && !staff) throw new ApiError(404, 'Staff member not found');
+
+  const { actingAsStaffId: _actingAsStaffId, ...orderData } = data;
 
   const order = await prisma.imagingOrder.create({
     data: {
       patientId: pid,
       patientName: `${patient.firstName} ${patient.lastName}`,
       medicalRecordNo: patient.hospitalPatientId,
-      ...data,
-      orderedBy: sid,
+      ...orderData,
+      orderedBy: sid ?? null,
+      createdByAdminId: adminCreatorId(actor),
       status: 'Ordered',
+    },
+    include: {
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -112,7 +124,7 @@ export const orderImaging = async (
     bodyRegion: order.bodyRegion,
     priority: order.priority,
     status: order.status,
-    orderedBy: { id: staff.id, name: staff.name },
+    enteredBy: getEnteredBy(order),
     createdAt: order.createdAt,
   };
 };
@@ -148,7 +160,8 @@ export const getImagingOrders = async (
       skip,
       take: limit,
       include: {
-        orderedByStaff: { select: { id: true, name: true, role: true } },
+        orderedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.imagingOrder.count({ where }),
@@ -168,10 +181,7 @@ export const getImagingOrders = async (
       hasReport: !!(o.findings || o.impression),
       dateOrdered: o.createdAt,
       performedAt: o.performedAt,
-      orderedBy: {
-        id: o.orderedByStaff.id,
-        name: o.orderedByStaff.name,
-      },
+      enteredBy: getEnteredBy(o),
     })),
     page,
     limit,
@@ -198,7 +208,8 @@ export const getImagingOrderById = async (
           dateOfBirth: true, hospitalPatientId: true,
         },
       },
-      orderedByStaff: { select: { id: true, name: true, role: true, email: true } },
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       updatedByAdmin: { select: { id: true, name: true } },
     },
   });
@@ -276,12 +287,7 @@ export const getImagingOrderById = async (
 
     status: order.status,
 
-    orderedBy: {
-      id: order.orderedByStaff.id,
-      name: order.orderedByStaff.name,
-      role: order.orderedByStaff.role,
-      email: order.orderedByStaff.email,
-    },
+    enteredBy: getEnteredBy(order),
 
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
@@ -295,11 +301,10 @@ export const updateImagingReport = async (
   patientId: string,
   imagingId: string,
   reportData: any,
-  adminId: string | number,
+  _actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const oid = toId(imagingId, 'imaging id');
-  const aid = toId(adminId, 'admin id');
 
   const existing = await prisma.imagingOrder.findFirst({
     where: { id: oid, patientId: pid },
@@ -338,11 +343,10 @@ export const recordImagingPerformed = async (
   patientId: string,
   imagingId: string,
   departmentData: any,
-  adminId: string | number,
+  _actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const oid = toId(imagingId, 'imaging id');
-  const aid = toId(adminId, 'admin id');
 
   const existing = await prisma.imagingOrder.findFirst({
     where: { id: oid, patientId: pid },
@@ -381,11 +385,10 @@ export const updateImagingStatus = async (
   patientId: string,
   imagingId: string,
   status: 'Ordered' | 'Completed' | 'Cancelled',
-  adminId: string | number,
+  _actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const oid = toId(imagingId, 'imaging id');
-  const aid = toId(adminId, 'admin id');
 
   const existing = await prisma.imagingOrder.findFirst({
     where: { id: oid, patientId: pid },
@@ -411,12 +414,12 @@ export const updateImagingStatus = async (
 export const deleteImagingOrder = async (
   patientId: string,
   imagingId: string,
-  adminId: string | number,
+  actor: Actor,
   reason?: string,
 ) => {
   const pid = toId(patientId, 'patient id');
   const oid = toId(imagingId, 'imaging id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const order = await prisma.imagingOrder.findFirst({
     where: { id: oid, patientId: pid },
@@ -446,11 +449,11 @@ export const deleteImagingOrder = async (
 export const restoreImagingOrder = async (
   patientId: string,
   imagingId: string,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const oid = toId(imagingId, 'imaging id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const order = await prisma.imagingOrder.findFirst({
     where: { id: oid, patientId: pid },
@@ -505,7 +508,8 @@ export const getPendingImagingOrders = async (
             hospitalPatientId: true,
           },
         },
-        orderedByStaff: { select: { id: true, name: true, role: true } },
+        orderedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.imagingOrder.count({ where }),
@@ -524,8 +528,7 @@ export const getPendingImagingOrders = async (
       provisionalDiagnosis: o.provisionalDiagnosis,
       specialClinicalQuestion: o.specialClinicalQuestion,
 
-      requestingClinician: o.orderedByStaff.name,
-      orderedById: o.orderedByStaff.id,
+      enteredBy: getEnteredBy(o),
 
       priority: o.priority,
       dateOrdered: o.createdAt,
@@ -556,7 +559,8 @@ export const getImagingOrderDetailForQueue = async (imagingId: string) => {
           hospitalPatientId: true,
         },
       },
-      orderedByStaff: { select: { id: true, name: true, role: true } },
+      orderedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -578,7 +582,7 @@ export const getImagingOrderDetailForQueue = async (imagingId: string) => {
     presentingSymptoms: order.presentingSymptoms,
     specialClinicalQuestion: order.specialClinicalQuestion,
 
-    requestingClinician: order.orderedByStaff.name,
+    enteredBy: getEnteredBy(order),
     dateOrdered: order.createdAt,
 
     priority: order.priority,
@@ -597,10 +601,9 @@ export const getImagingOrderDetailForQueue = async (imagingId: string) => {
 export const submitImagingReportFromQueue = async (
   imagingId: string,
   data: { findings: string; impression: string; recommendation?: string },
-  staffId: string | number,
+  _actor: Actor,
 ) => {
   const oid = toId(imagingId, 'imaging id');
-  const sid = toId(staffId, 'staff id');
 
   const order = await prisma.imagingOrder.findUnique({ where: { id: oid } });
   if (!order) throw new ApiError(404, 'Imaging order not found');

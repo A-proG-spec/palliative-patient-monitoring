@@ -1,17 +1,20 @@
-import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useParams, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Textarea } from '../../../components/ui/Textarea';
 
 import { usePatient } from '@/hooks/usePatients';
-import { useCreatePhysiotherapyAssessment } from '@/hooks/usePhysiotherapyAssessments';
+import {
+  useCreatePhysiotherapyAssessment,
+  usePhysiotherapyAssessment,
+  useUpdatePhysiotherapyAssessment,
+} from '@/hooks/usePhysiotherapyAssessments';
 import {
   createPhysiotherapyAssessmentSchema,
   type CreatePhysiotherapyAssessmentFormData,
 } from '@/schemas/physiotherapy-assessment.schema';
 
-import { AssessmentFormShell } from '../../../components/assessments/AssessmentFormShell';
+import { AssessmentFormShell } from '@/components/assessments/AssessmentFormShell';
 import {
   Section,
   Grid,
@@ -20,21 +23,73 @@ import {
 
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
 
+import { useRecordAccess } from '@/hooks/useRecordAccess';
+import { useAuthStore } from '@/store/auth.store';
+import { useToast } from '@/context/ToastContext';
+
+// ── Helpers ─────────────────────────────────────────────────────
+const displayId = (p: {
+  id: number | string;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
+
+const ADL_ACTIVITIES = [
+  { value: 'BedMobility', label: 'Bed Mobility' },
+  { value: 'Feeding', label: 'Feeding' },
+  { value: 'Bathing', label: 'Bathing' },
+  { value: 'Dressing', label: 'Dressing' },
+  { value: 'Toileting', label: 'Toileting' },
+] as const;
+
+const ADL_LEVELS = [
+  { value: 'Independent', label: 'Independent' },
+  { value: 'Assisted', label: 'Assisted' },
+  { value: 'Dependent', label: 'Dependent' },
+] as const;
+
 const PhysiotherapyAssessmentFormPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, assessmentId } = useParams<{
+    id: string;
+    assessmentId?: string;
+  }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const { toast } = useToast();
+
+  // ── Mode detection ──
+  const isEditMode = Boolean(assessmentId);
+
+  // ── Route-aware base path ──
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
+
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.type === 'admin';
+
+  const access = useRecordAccess('physiotherapyAssessment');
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
+
   const createMutation = useCreatePhysiotherapyAssessment(id!);
+  const updateMutation = useUpdatePhysiotherapyAssessment(id!);
+
+  // ── Fetch existing record only in edit mode ──
+  const { data: existing, isLoading: existingLoading } =
+    usePhysiotherapyAssessment(id!, assessmentId ?? '');
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<CreatePhysiotherapyAssessmentFormData>({
     resolver: zodResolver(createPhysiotherapyAssessmentSchema),
@@ -59,45 +114,163 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
     },
   });
 
-  const onSubmit = (data: CreatePhysiotherapyAssessmentFormData) => {
-    createMutation.mutate(data, {
-      onSuccess: () => navigate(`/patients/${id}`),
+  // ═══════════════════════════════════════════════════════════
+  // EDIT: hydrate form from server record
+  // ═══════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!isEditMode || !existing) return;
+
+    reset({
+      assessmentType: existing.assessmentType ?? 'Admission',
+
+      comorbidities: existing.comorbidities ?? [],
+      comorbidityOther: existing.comorbidityOther ?? undefined,
+      generalCondition: existing.generalCondition ?? undefined,
+
+      painLevel: existing.painLevel ?? undefined,
+      painTypes: existing.painTypes ?? [],
+      painTypeOther: existing.painTypeOther ?? undefined,
+      symptoms: existing.symptoms ?? [],
+
+      mobilityStatus: existing.mobilityStatus ?? undefined,
+      transferAbility: existing.transferAbility ?? undefined,
+      walkingAbility: existing.walkingAbility ?? undefined,
+      assistiveDevices: existing.assistiveDevices ?? [],
+      assistiveDeviceOther: existing.assistiveDeviceOther ?? undefined,
+
+      upperLimbStrength: existing.upperLimbStrength ?? undefined,
+      lowerLimbStrength: existing.lowerLimbStrength ?? undefined,
+      rangeOfMotion: existing.rangeOfMotion ?? undefined,
+      jointPainOrStiffness: existing.jointPainOrStiffness ?? undefined,
+      jointPainLocation: existing.jointPainLocation ?? undefined,
+
+      consciousness: existing.consciousness ?? undefined,
+      coordination: existing.coordination ?? undefined,
+      sensoryDeficit: existing.sensoryDeficit ?? undefined,
+      balance: existing.balance ?? undefined,
+
+      breathingPattern: existing.breathingPattern ?? undefined,
+      breathlessnessLevel: existing.breathlessnessLevel ?? undefined,
+      chestExpansion: existing.chestExpansion ?? undefined,
+      respiratoryNeeds: existing.respiratoryNeeds ?? [],
+
+      pressureRisk: existing.pressureRisk ?? undefined,
+      pressureAreas: existing.pressureAreas ?? [],
+      pressureAreaOther: existing.pressureAreaOther ?? undefined,
+      pressurePreventions: existing.pressurePreventions ?? [],
+
+      adl: (existing.adl ?? []) as any,
+
+      fallHistory: existing.fallHistory ?? undefined,
+      fallRiskLevel: existing.fallRiskLevel ?? undefined,
+      fallContributors: existing.fallContributors ?? [],
+
+      diagnosis: existing.diagnosis ?? [],
+      goals: existing.goals ?? undefined,
+      interventions: existing.interventions ?? [],
+      frequency: existing.frequency ?? [],
+      equipment: existing.equipment ?? [],
+      caregiverTrainings: existing.caregiverTrainings ?? [],
+
+      outcome: existing.outcome ?? [],
+      finalRecommendations: existing.finalRecommendations ?? [],
     });
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, existing?.id]);
 
-  if (isLoading) return <PageLoader />;
-  if (error || !patient) return <ErrorState onRetry={refetch} />;
+  // ═══════════════════════════════════════════════════════════
+  // Submit — create OR update depending on mode
+  // ═══════════════════════════════════════════════════════════
+  const onSubmit = (data: CreatePhysiotherapyAssessmentFormData) => {
+    const handleSuccess = () => navigate(basePath);
 
-  const patientLabel = `${patient.firstName} ${patient.lastName} · ${
-    patient.patientDisplayId ?? patient.id
-  }`;
+    const handleError = (err: any) => {
+      const status = err?.response?.status;
+      let message =
+        'Could not save the physiotherapy assessment. Please try again.';
 
-  const currentAdl = watch('adl') ?? [];
+      if (status === 400) {
+        message =
+          'Some fields are missing or invalid. Please review the highlighted fields.';
+      } else if (status === 403) {
+        message = 'You do not have permission to save this assessment.';
+      } else if (status === 404) {
+        message =
+          'Patient or assessment not found. Please refresh and try again.';
+      } else if (status >= 500) {
+        message = 'Server error. Please try again in a moment.';
+      } else if (!err?.response) {
+        message = 'Network error. Please check your connection and try again.';
+      }
 
-  const setAdlLevel = (activity: string, level: string) => {
-    const rest = currentAdl.filter((r) => r.activity !== activity);
-    if (!level) {
-      setValue('adl', rest);
+      toast.error(message);
+    };
+
+    if (isEditMode && assessmentId) {
+      updateMutation.mutate(
+        { assessmentId, data: data as any },
+        { onSuccess: handleSuccess, onError: handleError },
+      );
     } else {
-      setValue('adl', [...rest, { activity, level } as any]);
+      createMutation.mutate(data as any, {
+        onSuccess: handleSuccess,
+        onError: handleError,
+      });
     }
   };
 
-  const getAdlLevel = (activity: string) =>
+  // ── Surface validation errors as a single clean toast ──
+  const onInvalid = (formErrors: any) => {
+    const count = Object.keys(formErrors ?? {}).length;
+
+    if (count === 0) {
+      toast.error('Please review the form and try again.');
+      return;
+    }
+
+    toast.error(
+      count === 1
+        ? 'Please fix the highlighted field and try again.'
+        : `Please fix the ${count} highlighted fields and try again.`,
+    );
+  };
+
+  // ── ADL row editor ──
+  const currentAdl = watch('adl') ?? [];
+
+  const getAdlLevel = (activity: string): string =>
     currentAdl.find((r) => r.activity === activity)?.level ?? '';
+
+  const setAdlLevel = (activity: string, level: string) => {
+    const rest = currentAdl.filter((r) => r.activity !== activity);
+    const next = level ? [...rest, { activity, level } as any] : rest;
+    setValue('adl', next, { shouldDirty: true, shouldValidate: true });
+  };
+
+  // ── Loading / error states ──
+  if (isLoading || (isEditMode && existingLoading)) return <PageLoader />;
+  if (error || !patient) return <ErrorState onRetry={refetch} />;
+
+  // ── Write gate — admin bypasses the record-role check ──
+  if ((!isAdmin && !access.allowed) || patient.status === 'Discharged') {
+    return <Navigate to={`${basePath}/physiotherapy-assessment`} replace />;
+  }
+
+  const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   return (
     <AssessmentFormShell
       title="Physiotherapy Assessment"
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
-      mode="create"
-      isSubmitting={createMutation.isPending}
-      onSubmit={handleSubmit(onSubmit)}
-      onCancel={() => navigate(`/patients/${id}`)}
+      backTo={basePath}
+      mode={isEditMode ? 'edit' : 'create'}
+      isSubmitting={isSubmitting}
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      onCancel={() => navigate(basePath)}
     >
-      {/* ── 1. Assessment type ── */}
-      <Section title="1. Assessment Type">
+      <Section title="1. Assessment Information">
         <Select
           label="Assessment Type"
           options={[
@@ -105,12 +278,12 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             { value: 'FollowUp', label: 'Follow-up' },
             { value: 'Reassessment', label: 'Reassessment' },
           ]}
+          placeholder="Select…"
           error={errors.assessmentType?.message}
           {...register('assessmentType')}
         />
       </Section>
 
-      {/* ── 2. Medical overview ── */}
       <Section title="2. Medical Overview">
         <CheckboxGroup
           label="Comorbidities"
@@ -124,10 +297,15 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'Cancer',
             'Other',
           ]}
-          onChange={(v) => setValue('comorbidities', v as any)}
+          onChange={(v) =>
+            setValue('comorbidities', v as any, { shouldDirty: true })
+          }
         />
         {watch('comorbidities')?.includes('Other') && (
-          <Input label="Other comorbidities" {...register('comorbidityOther')} />
+          <Input
+            label="Other comorbidities"
+            {...register('comorbidityOther')}
+          />
         )}
         <Select
           label="General Condition"
@@ -142,14 +320,14 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 3. Pain & symptoms ── */}
       <Section title="3. Pain & Symptoms">
         <Input
           label="Pain Level (0–10)"
           type="number"
           min={0}
           max={10}
-          {...register('painLevel')}
+          error={errors.painLevel?.message}
+          {...register('painLevel', { valueAsNumber: true })}
         />
         <CheckboxGroup
           label="Pain Types"
@@ -161,7 +339,9 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'Mixed',
             'Other',
           ]}
-          onChange={(v) => setValue('painTypes', v as any)}
+          onChange={(v) =>
+            setValue('painTypes', v as any, { shouldDirty: true })
+          }
         />
         {watch('painTypes')?.includes('Other') && (
           <Input label="Other pain type" {...register('painTypeOther')} />
@@ -177,11 +357,12 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'BalanceProblems',
             'Contractures',
           ]}
-          onChange={(v) => setValue('symptoms', v as any)}
+          onChange={(v) =>
+            setValue('symptoms', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
-      {/* ── 4. Functional mobility ── */}
       <Section title="4. Functional Mobility">
         <Grid cols={2}>
           <Select
@@ -222,7 +403,9 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
           label="Assistive Devices"
           values={watch('assistiveDevices') ?? []}
           options={['None', 'Cane', 'Walker', 'Wheelchair', 'Other']}
-          onChange={(v) => setValue('assistiveDevices', v as any)}
+          onChange={(v) =>
+            setValue('assistiveDevices', v as any, { shouldDirty: true })
+          }
         />
         {watch('assistiveDevices')?.includes('Other') && (
           <Input
@@ -232,7 +415,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         )}
       </Section>
 
-      {/* ── 5. Musculoskeletal ── */}
       <Section title="5. Musculoskeletal Assessment">
         <Grid cols={2}>
           <Input
@@ -240,14 +422,16 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             type="number"
             min={0}
             max={5}
-            {...register('upperLimbStrength')}
+            error={errors.upperLimbStrength?.message}
+            {...register('upperLimbStrength', { valueAsNumber: true })}
           />
           <Input
             label="Lower Limb Strength (0–5)"
             type="number"
             min={0}
             max={5}
-            {...register('lowerLimbStrength')}
+            error={errors.lowerLimbStrength?.message}
+            {...register('lowerLimbStrength', { valueAsNumber: true })}
           />
           <Select
             label="Range of Motion"
@@ -269,10 +453,12 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             {...register('jointPainOrStiffness')}
           />
         </Grid>
-        <Input label="Joint Pain Location" {...register('jointPainLocation')} />
+        <Input
+          label="Joint Pain Location"
+          {...register('jointPainLocation')}
+        />
       </Section>
 
-      {/* ── 6. Neurological ── */}
       <Section title="6. Neurological Assessment">
         <Grid cols={2}>
           <Select
@@ -316,7 +502,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         </Grid>
       </Section>
 
-      {/* ── 7. Respiratory ── */}
       <Section title="7. Respiratory Assessment">
         <Grid cols={2}>
           <Select
@@ -358,11 +543,12 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'ChestPhysiotherapy',
             'PositioningSupport',
           ]}
-          onChange={(v) => setValue('respiratoryNeeds', v as any)}
+          onChange={(v) =>
+            setValue('respiratoryNeeds', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
-      {/* ── 8. Pressure injury ── */}
       <Section title="8. Pressure Injury Risk">
         <Select
           label="Pressure Risk"
@@ -378,10 +564,15 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
           label="Pressure Areas"
           values={watch('pressureAreas') ?? []}
           options={['None', 'Sacrum', 'Heels', 'Hips', 'Other']}
-          onChange={(v) => setValue('pressureAreas', v as any)}
+          onChange={(v) =>
+            setValue('pressureAreas', v as any, { shouldDirty: true })
+          }
         />
         {watch('pressureAreas')?.includes('Other') && (
-          <Input label="Other pressure area" {...register('pressureAreaOther')} />
+          <Input
+            label="Other pressure area"
+            {...register('pressureAreaOther')}
+          />
         )}
         <CheckboxGroup
           label="Prevention Strategies"
@@ -392,51 +583,65 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'SkinCareEducation',
             'PassiveExercises',
           ]}
-          onChange={(v) => setValue('pressurePreventions', v as any)}
+          onChange={(v) =>
+            setValue('pressurePreventions', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
-      {/* ── 9. ADL ── */}
       <Section title="9. Activities of Daily Living">
         <p className="text-xs text-text-muted -mt-2">
           Rate each activity — leave blank if not assessed.
         </p>
         <Grid cols={2}>
-          {(['BedMobility', 'Feeding', 'Bathing', 'Dressing', 'Toileting'] as const).map(
-            (activity) => (
+          {ADL_ACTIVITIES.map(({ value: activity, label }) => (
+            <div key={activity}>
+              <label className="block text-sm font-medium text-on-surface mb-1">
+                {label}
+              </label>
               <Select
-                key={activity}
-                label={activity}
-                options={[
-                  { value: 'Independent', label: 'Independent' },
-                  { value: 'Assisted', label: 'Assisted' },
-                  { value: 'Dependent', label: 'Dependent' },
-                ]}
+                options={
+                  ADL_LEVELS as unknown as { value: string; label: string }[]
+                }
                 placeholder="Select…"
                 value={getAdlLevel(activity)}
                 onChange={(e) => setAdlLevel(activity, e.target.value)}
               />
-            ),
-          )}
+            </div>
+          ))}
         </Grid>
       </Section>
 
-      {/* ── 10. Fall risk ── */}
       <Section title="10. Fall Risk">
         <Grid cols={2}>
-          <Select
-            label="Fall History"
-            options={[
-              { value: '', label: 'Not recorded' },
-              { value: 'true', label: 'Yes' },
-              { value: 'false', label: 'No' },
-            ]}
-            placeholder="Select…"
-            onChange={(e) => {
-              const v = e.target.value;
-              setValue('fallHistory', v === '' ? undefined : v === 'true');
-            }}
-          />
+          <div>
+            <label className="block text-sm font-medium text-on-surface mb-1">
+              Fall History
+            </label>
+            <Select
+              options={[
+                { value: '', label: 'Not recorded' },
+                { value: 'true', label: 'Yes' },
+                { value: 'false', label: 'No' },
+              ]}
+              placeholder="Select…"
+              value={
+                watch('fallHistory') === undefined
+                  ? ''
+                  : watch('fallHistory')
+                    ? 'true'
+                    : 'false'
+              }
+              onChange={(e) => {
+                const v = e.target.value;
+                setValue(
+                  'fallHistory',
+                  v === '' ? undefined : v === 'true',
+                  { shouldDirty: true },
+                );
+              }}
+            />
+          </div>
           <Select
             label="Fall Risk Level"
             options={[
@@ -458,11 +663,12 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'EnvironmentalHazards',
             'PosturalHypotension',
           ]}
-          onChange={(v) => setValue('fallContributors', v as any)}
+          onChange={(v) =>
+            setValue('fallContributors', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
-      {/* ── 11. Diagnosis ── */}
       <Section title="11. Physiotherapy Diagnosis">
         <CheckboxGroup
           label="Diagnoses"
@@ -476,17 +682,14 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'RiskOfContractures',
             'ReducedFunctionalIndependence',
           ]}
-          onChange={(v) => setValue('diagnosis', v as any)}
+          onChange={(v) =>
+            setValue('diagnosis', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
-      {/* ── 12. Care plan ── */}
       <Section title="12. Physiotherapy Care Plan">
-        <Textarea
-          label="Goals"
-          rows={3}
-          {...register('goals')}
-        />
+        <Textarea label="Goals" rows={3} {...register('goals')} />
         <CheckboxGroup
           label="Interventions"
           values={watch('interventions') ?? []}
@@ -501,7 +704,9 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'WalkingAssistance',
             'FamilyCaregiverTraining',
           ]}
-          onChange={(v) => setValue('interventions', v as any)}
+          onChange={(v) =>
+            setValue('interventions', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Frequency"
@@ -512,11 +717,12 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'Weekly',
             'AsTolerated',
           ]}
-          onChange={(v) => setValue('frequency', v as any)}
+          onChange={(v) =>
+            setValue('frequency', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
-      {/* ── 13. Equipment ── */}
       <Section title="13. Equipment Needs">
         <CheckboxGroup
           label="Equipment"
@@ -530,11 +736,12 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'TransferBoard',
             'None',
           ]}
-          onChange={(v) => setValue('equipment', v as any)}
+          onChange={(v) =>
+            setValue('equipment', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
-      {/* ── 14. Caregiver training ── */}
       <Section title="14. Caregiver Training Needs">
         <CheckboxGroup
           label="Training Topics"
@@ -547,11 +754,12 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'PressureSorePrevention',
             'MobilitySupport',
           ]}
-          onChange={(v) => setValue('caregiverTrainings', v as any)}
+          onChange={(v) =>
+            setValue('caregiverTrainings', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
-      {/* ── 15. Summary ── */}
       <Section title="15. Summary & Recommendations">
         <CheckboxGroup
           label="Outcome"
@@ -564,7 +772,9 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'HighRiskForFunctionalDecline',
             'PalliativeComfortFocusedPhysiotherapyRequired',
           ]}
-          onChange={(v) => setValue('outcome', v as any)}
+          onChange={(v) =>
+            setValue('outcome', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Final Recommendations"
@@ -577,7 +787,9 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'CaregiverTraining',
             'MultidisciplinaryHospiceCarePlan',
           ]}
-          onChange={(v) => setValue('finalRecommendations', v as any)}
+          onChange={(v) =>
+            setValue('finalRecommendations', v as any, { shouldDirty: true })
+          }
         />
       </Section>
     </AssessmentFormShell>

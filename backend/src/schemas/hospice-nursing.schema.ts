@@ -16,6 +16,7 @@ const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
 // ─────────────────────────────────────────────────────────────
 export const createHospiceNursingAssessmentSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     hospitalAdmissionId: z.string().optional(),
     assessmentDate: dateString.optional(),
     assessedByStaffId: z.string().optional(),

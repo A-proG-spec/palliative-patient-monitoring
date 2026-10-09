@@ -7,12 +7,15 @@ import { AssessmentListShell } from '@/components/assessments/AssessmentListShel
 import { AssessmentListRow } from '@/components/assessments/AssessmentListRow';
 import { Badge } from '@/components/ui/Badge';
 import { useAuthStore } from '@/store/auth.store';
+import { patientPath } from '@/lib/clinicalPaths';
 
 const SocialAssessmentListPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const isOwner = user?.role === 'SocialWorker';
+  const isAdmin = user?.type === 'admin';
+  const basePath = patientPath(isAdmin, id!);
+  const isOwner = isAdmin || user?.role === 'SocialWorker';
 
   const { data: patient, isLoading: pLoading } = usePatient(id!);
   const { data, isLoading, error, refetch } = usePatientSocialAssessments(id!);
@@ -21,25 +24,26 @@ const SocialAssessmentListPage: React.FC = () => {
   const patientLabel = patient
     ? `${patient.firstName} ${patient.lastName} · ${patient.patientDisplayId ?? patient.id}`
     : '—';
+  const canCreate = isOwner && patient?.status === 'Active';
 
   return (
     <AssessmentListShell
       title="Social Assessments"
       subtitle={`${data?.total ?? 0} recorded`}
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
-      onAddClick={() => navigate(`/patients/${id}/social-assessment/new`)}
+      backTo={basePath}
+      onAddClick={() => navigate(`${basePath}/social-assessment/new`)}
       isLoading={isLoading || pLoading}
       isError={!!error}
       onRetry={refetch}
       isEmpty={assessments.length === 0}
       emptyMessage="Record the first social assessment for this patient."
-      canCreate={isOwner}
+      canCreate={canCreate}
     >
       {assessments.map((a) => (
         <AssessmentListRow
           key={a.id}
-          onClick={() => navigate(`/patients/${id}/social-assessment/${a.id}`)}
+          onClick={() => navigate(`${basePath}/social-assessment/${a.id}`)}
           icon={<Home size={18} className="text-cyan-600" />}
           iconBgClass="bg-cyan-50"
           date={a.createdAt}

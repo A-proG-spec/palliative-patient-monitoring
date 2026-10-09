@@ -8,6 +8,7 @@ const dateTimeString = z.string().datetime({ offset: true }).or(z.string().datet
 
 export const createImagingSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // Section 2: Clinical Information
     provisionalDiagnosis: z.string().optional(),
     presentingSymptoms: z.string().optional(),
@@ -72,6 +73,7 @@ export const createImagingSchema = z.object({
 
 export const updateImagingReportSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     findings: z.string().min(1, 'Findings are required'),
     impression: z.string().min(1, 'Impression is required'),
     recommendation: z.string().optional(),
@@ -81,6 +83,7 @@ export const updateImagingReportSchema = z.object({
 
 export const recordImagingPerformedSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     performedModality: z.string().optional(),
     performedProtocol: z.string().optional(),
     performedContrast: z.enum(['None', 'Administered', 'NotAdministered']).default('None'),
@@ -93,6 +96,7 @@ export const recordImagingPerformedSchema = z.object({
 
 export const updateImagingStatusSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     status: z.enum(['Ordered', 'Completed', 'Cancelled']),
   }),
 });

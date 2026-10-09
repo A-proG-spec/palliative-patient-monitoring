@@ -1,29 +1,43 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
+
+const toEnteredBy = (
+  staff?: { id: number; name: string } | null,
+  admin?: { id: number; name: string } | null,
+) => admin
+    ? { id: admin.id, name: admin.name, type: 'admin' as const }
+    : staff
+      ? { id: staff.id, name: staff.name, type: 'staff' as const }
+      : null;
+
 // ─────────────────────────────────────────────────────────────
 // Create referral
 // ─────────────────────────────────────────────────────────────
 export const createReferral = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
 
-  const [patient, staff] = await Promise.all([
-    prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
-    prisma.staff.findUnique({ where: { id: sid }, select: { id: true } }),
-  ]);
+  const patientPromise = prisma.patient.findUnique({ where: { id: pid }, select: { id: true } });
+  const staffPromise = sid !== undefined
+    ? prisma.staff.findUnique({ where: { id: sid }, select: { id: true } })
+    : Promise.resolve(null);
+  const [patient, staff] = await Promise.all([patientPromise, staffPromise]);
 
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (sid !== undefined && !staff) throw new ApiError(404, 'Staff member not found');
 
   const referral = await prisma.referral.create({
     data: {
       patientId: pid,
-      requestedBy: sid,
+      requestedBy: sid ?? null,
+      createdByAdminId: adminCreatorId(actor),
 
       referralType: data.referralType,
       referralDate: new Date(data.referralDate),
@@ -47,6 +61,8 @@ export const createReferral = async (
     },
     include: {
       patient: { select: { id: true, firstName: true, lastName: true } },
+      requestedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -57,6 +73,21 @@ export const createReferral = async (
     referralType: referral.referralType,
     referralDate: referral.referralDate,
     status: referral.status,
+
+    // ── Requestor / Referrer info (all variants) ──
+    requestedBy: referral.requestedBy,
+    requestedByStaff: referral.requestedByStaff
+      ? { id: referral.requestedByStaff.id, name: referral.requestedByStaff.name }
+      : null,
+    createdByAdmin: referral.createdByAdmin
+      ? { id: referral.createdByAdmin.id, name: referral.createdByAdmin.name }
+      : null,
+    requestingClinician:
+      referral.requestedByStaff?.name ??
+      referral.createdByAdmin?.name ??
+      null,
+
+    enteredBy: toEnteredBy(referral.requestedByStaff, referral.createdByAdmin),
     createdAt: referral.createdAt,
   };
 };
@@ -90,7 +121,8 @@ export const getReferrals = async (
       skip,
       take: limit,
       include: {
-        requestedByStaff: { select: { id: true, name: true, role: true } },
+        requestedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     }),
     prisma.referral.count({ where }),
@@ -111,11 +143,21 @@ export const getReferrals = async (
       receivingFacility: r.receivingFacility,
       status: r.status,
       actionTaken: r.actionTaken,
-      requestedBy: {
-        id: r.requestedByStaff.id,
-        name: r.requestedByStaff.name,
-        role: r.requestedByStaff.role,
-      },
+
+      // ── Requestor / Referrer info (all variants) ──
+      requestedBy: r.requestedBy,
+      requestedByStaff: r.requestedByStaff
+        ? { id: r.requestedByStaff.id, name: r.requestedByStaff.name }
+        : null,
+      createdByAdmin: r.createdByAdmin
+        ? { id: r.createdByAdmin.id, name: r.createdByAdmin.name }
+        : null,
+      requestingClinician:
+        r.requestedByStaff?.name ??
+        r.createdByAdmin?.name ??
+        null,
+
+      enteredBy: toEnteredBy(r.requestedByStaff, r.createdByAdmin),
       createdAt: r.createdAt,
     })),
     page,
@@ -137,7 +179,8 @@ export const getReferralById = async (
   const referral = await prisma.referral.findFirst({
     where: { id: rid, patientId: pid },
     include: {
-      requestedByStaff: { select: { id: true, name: true, role: true } },
+      requestedByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       approvedByAdmin: { select: { id: true, name: true } },
       patient: { select: { id: true, firstName: true, lastName: true } },
     },
@@ -174,11 +217,20 @@ export const getReferralById = async (
     followUpDate: referral.followUpDate,
     followUpStatus: referral.followUpStatus,
 
-    requestedBy: {
-      id: referral.requestedByStaff.id,
-      name: referral.requestedByStaff.name,
-      role: referral.requestedByStaff.role,
-    },
+    // ── Requestor / Referrer info (all variants) ──
+    requestedBy: referral.requestedBy,
+    requestedByStaff: referral.requestedByStaff
+      ? { id: referral.requestedByStaff.id, name: referral.requestedByStaff.name }
+      : null,
+    createdByAdmin: referral.createdByAdmin
+      ? { id: referral.createdByAdmin.id, name: referral.createdByAdmin.name }
+      : null,
+    requestingClinician:
+      referral.requestedByStaff?.name ??
+      referral.createdByAdmin?.name ??
+      null,
+
+    enteredBy: toEnteredBy(referral.requestedByStaff, referral.createdByAdmin),
     approvedBy: referral.approvedByAdmin
       ? { id: referral.approvedByAdmin.id, name: referral.approvedByAdmin.name }
       : null,
@@ -195,18 +247,18 @@ export const updateReferral = async (
   patientId: string,
   referralId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
   const rid = toId(referralId, 'referral id');
-  const sid = toId(staffId, 'staff id');
+  const sid = actor.id;
 
   const referral = await prisma.referral.findFirst({
     where: { id: rid, patientId: pid },
   });
   if (!referral) throw new ApiError(404, 'Referral not found');
 
-  if (referral.requestedBy !== sid) {
+  if (actor.type !== 'admin' && referral.requestedBy !== sid) {
     throw new ApiError(403, 'You can only edit referrals you created');
   }
 

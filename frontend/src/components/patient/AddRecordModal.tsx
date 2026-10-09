@@ -7,6 +7,7 @@ import {
   type RecordType,
 } from '@/config/recordTypes';
 import type { StaffRole } from '@/config/permissions';
+import { patientBasePath } from '@/lib/clinicalPaths';
 
 // ═════════════════════════════════════════════════════════════
 // Single record-type item
@@ -62,7 +63,8 @@ export interface AddRecordModalProps {
   patientId: string;
   patientName: string;
   currentLocation: 'Home' | 'ReferredHospital';
-  userRole: StaffRole;
+  userRole?: StaffRole | string | null;
+  isAdmin?: boolean;
   onClose: () => void;
   onSelect: (route: string) => void;
 }
@@ -72,10 +74,16 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
   patientName,
   currentLocation,
   userRole,
+  isAdmin = false,
   onClose,
   onSelect,
 }) => {
-  const allowedTypes = filterRecordTypesForRole(userRole, currentLocation);
+  const allowedTypes = filterRecordTypesForRole(
+    userRole,
+    currentLocation,
+    isAdmin,
+    patientBasePath(isAdmin),
+  );
 
   const clinicalRecords = allowedTypes.filter((r) =>
     ['visit', 'progress-note', 'medication', 'lab', 'imaging'].includes(r.key),

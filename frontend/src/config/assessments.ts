@@ -1,10 +1,4 @@
-import type { ComponentType } from 'react';
 import type { StaffRole } from '@/types/auth.types';
-
-// ═════════════════════════════════════════════════════════════
-// Assessment keys — the canonical identifiers used in routing,
-// query keys, and role mapping.
-// ═════════════════════════════════════════════════════════════
 
 export type AssessmentKey =
   | 'pain'
@@ -18,23 +12,17 @@ export type AssessmentKey =
 
 export interface AssessmentDef {
   key: AssessmentKey;
-  /** Full label used in headers and cards. */
   label: string;
-  /** Short label for tight UI spots (sidebar-ish, badges). */
   shortLabel: string;
-  /** One-line description for card subtitles. */
   description: string;
-  /** URL segment — `/patients/:id/<routeBase>/new` etc. */
   routeBase: string;
-  /** Emoji or icon node — kept simple so we don't import 8 icons here. */
   icon: string;
-  /** Tailwind text color class for the card icon. */
   accentColor: string;
+  /** Permission key that gates write access. */
+  writePermission: string;
+  /** Permission key that gates read access. */
+  viewPermission: string;
 }
-
-// ═════════════════════════════════════════════════════════════
-// Registry — one entry per assessment
-// ═════════════════════════════════════════════════════════════
 
 export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
   pain: {
@@ -43,8 +31,10 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     shortLabel: 'Pain',
     description: 'Comprehensive pain history, severity, and management plan.',
     routeBase: 'pain',
-    icon: '🔥',
+    icon: '',
     accentColor: 'text-red-600',
+    writePermission: 'canWritePainAssessment',
+    viewPermission: 'canViewPainAssessment',
   },
   pharmacist: {
     key: 'pharmacist',
@@ -52,8 +42,10 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     shortLabel: 'Pharmacist',
     description: 'Medication review, safety, and pharmaceutical care plan.',
     routeBase: 'pharmacist-assessment',
-    icon: '💊',
+    icon: '',
     accentColor: 'text-green-600',
+    writePermission: 'canWritePharmacistAssessment',
+    viewPermission: 'canViewPharmacistAssessment',
   },
   physiotherapy: {
     key: 'physiotherapy',
@@ -61,8 +53,10 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     shortLabel: 'Physiotherapy',
     description: 'Mobility, function, and rehabilitation assessment.',
     routeBase: 'physiotherapy-assessment',
-    icon: '🦯',
+    icon: '',
     accentColor: 'text-indigo-600',
+    writePermission: 'canWritePhysiotherapyAssessment',
+    viewPermission: 'canViewPhysiotherapyAssessment',
   },
   family: {
     key: 'family',
@@ -70,8 +64,10 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     shortLabel: 'Family',
     description: 'Family structure, caregiver burden, and support system.',
     routeBase: 'family-assessment',
-    icon: '👨‍👩‍👧',
+    icon: '',
     accentColor: 'text-orange-600',
+    writePermission: 'canWriteFamilyAssessment',
+    viewPermission: 'canViewFamilyAssessment',
   },
   nutritional: {
     key: 'nutritional',
@@ -79,8 +75,10 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     shortLabel: 'Nutrition',
     description: 'Dietary intake, nutritional status, and care plan.',
     routeBase: 'nutritional-assessment',
-    icon: '🥗',
+    icon: '',
     accentColor: 'text-emerald-600',
+    writePermission: 'canWriteNutritionalAssessment',
+    viewPermission: 'canViewNutritionalAssessment',
   },
   social: {
     key: 'social',
@@ -88,8 +86,10 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     shortLabel: 'Social',
     description: 'Living situation, financial, and social support assessment.',
     routeBase: 'social-assessment',
-    icon: '🏠',
+    icon: '',
     accentColor: 'text-cyan-600',
+    writePermission: 'canWriteSocialAssessment',
+    viewPermission: 'canViewSocialAssessment',
   },
   spiritual: {
     key: 'spiritual',
@@ -97,8 +97,10 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     shortLabel: 'Spiritual',
     description: 'Spiritual beliefs, support needs, and end-of-life preferences.',
     routeBase: 'spiritual-assessment',
-    icon: '🕊️',
+    icon: '',
     accentColor: 'text-violet-600',
+    writePermission: 'canWriteSpiritualAssessment',
+    viewPermission: 'canViewSpiritualAssessment',
   },
   psychiatry: {
     key: 'psychiatry',
@@ -106,22 +108,15 @@ export const ASSESSMENTS: Record<AssessmentKey, AssessmentDef> = {
     shortLabel: 'Psychiatry',
     description: 'Mental state, suicide risk, and psychiatric care plan.',
     routeBase: 'psychiatry-assessment',
-    icon: '🧠',
+    icon: '',
     accentColor: 'text-fuchsia-600',
+    writePermission: 'canWritePsychiatryAssessment',
+    viewPermission: 'canViewPsychiatryAssessment',
   },
 };
 
-// ═════════════════════════════════════════════════════════════
-// Role → assessments mapping
-//
-// Drives:
-//   • Which assessment cards appear on the patient detail page
-//   • Which "Add Assessment" buttons show up
-//   • The recent-activity feed on the dashboard
-// ═════════════════════════════════════════════════════════════
-
 export const ROLE_ASSESSMENTS: Record<string, AssessmentKey[]> = {
-  Physician: [],              // add 'pain' if you want physicians to record pain
+  Physician: ['pain'],
   Nurse: ['pain'],
   Pharmacist: ['pharmacist'],
   Physiologist: ['physiotherapy'],
@@ -136,13 +131,13 @@ export const ROLE_ASSESSMENTS: Record<string, AssessmentKey[]> = {
 
 export function getAssessmentsForRole(
   role?: StaffRole | string | null,
+  isAdmin = false,
 ): AssessmentDef[] {
+  if (isAdmin) return Object.values(ASSESSMENTS);
   if (!role) return [];
-  const keys = ROLE_ASSESSMENTS[role] ?? [];
-  return keys.map((k) => ASSESSMENTS[k]);
+  return (ROLE_ASSESSMENTS[role] ?? []).map((k) => ASSESSMENTS[k]);
 }
 
-/** Convenience — get one assessment def by key. */
 export function getAssessmentDef(key: AssessmentKey): AssessmentDef {
   return ASSESSMENTS[key];
 }

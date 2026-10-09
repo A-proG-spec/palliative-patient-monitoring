@@ -3,9 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  //directUrl = env("DIRECT_URL")
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -2622,27 +2622,45 @@ model Admin {
   updatedAt DateTime @updatedAt
 
   // Relations (existing)
-  approvedReferrals                Referral[]                 @relation("ReferralApprovedBy")
-  staffAssigned                    Staff[]                    @relation("StaffAssignedBy")
-  patientsUpdated                  Patient[]                  @relation("PatientUpdatedBy")
-  visitsUpdated                    HomeVisit[]                @relation("VisitUpdatedBy")
-  visitsDeleted                    HomeVisit[]                @relation("VisitDeletedBy")
-  admissionsUpdated                HospitalAdmission[]        @relation("AdmissionUpdatedBy")
-  admissionsDeleted                HospitalAdmission[]        @relation("AdmissionDeletedBy")
-  imagingUpdated                   ImagingOrder[]             @relation("ImagingUpdatedBy")
-  imagingDeleted                   ImagingOrder[]             @relation("ImagingDeletedBy")
-  labsUpdated                      LaboratoryTest[]           @relation("LabUpdatedBy")
-  labsDeleted                      LaboratoryTest[]           @relation("LabDeletedBy")
-  medicationsUpdated               Medication[]               @relation("MedicationUpdatedBy")
-  medicationsDeleted               Medication[]               @relation("MedicationDeletedBy")
-  progressNotesUpdated             PatientProgressNote[]      @relation("ProgressNoteUpdatedBy")
-  progressNotesDeleted             PatientProgressNote[]      @relation("ProgressNoteDeletedBy")
-  dischargeUpdated                 DischargeSummary[]         @relation("DischargeUpdatedBy")
-  dischargeDeleted                 DischargeSummary[]         @relation("DischargeDeletedBy")
-  staffUpdated                     Staff[]                    @relation("StaffUpdatedBy")
-  staffDeleted                     Staff[]                    @relation("StaffDeletedBy")
-  hospiceNursingAssessments        HospiceNursingAssessment[] @relation("HospiceNursingUpdatedBy")
-  hospiceNursingDeletedAssessments HospiceNursingAssessment[] @relation("HospiceNursingDeletedBy")
+  patientsCreated                  Patient[]                      @relation("PatientCreatedByAdmin")
+  visitsCreated                    HomeVisit[]                    @relation("VisitCreatedByAdmin")
+  medicationsCreated               Medication[]                   @relation("MedicationCreatedByAdmin")
+  labsCreated                      LaboratoryTest[]               @relation("LabCreatedByAdmin")
+  imagingCreated                   ImagingOrder[]                 @relation("ImagingCreatedByAdmin")
+  referralsCreated                 Referral[]                     @relation("ReferralCreatedByAdmin")
+  admissionsCreated                HospitalAdmission[]            @relation("AdmissionCreatedByAdmin")
+  dischargesCreated                DischargeSummary[]             @relation("DischargeCreatedByAdmin")
+  progressNotesCreated             PatientProgressNote[]          @relation("ProgressNoteCreatedByAdmin")
+  hospiceNursingCreated            HospiceNursingAssessment[]     @relation("HospiceNursingCreatedByAdmin")
+  clinicalPharmacistCreated        ClinicalPharmacistAssessment[] @relation("ClinicalPharmacistCreatedByAdmin")
+  physiotherapyCreated             PhysiotherapyAssessment[]      @relation("PhysiotherapyCreatedByAdmin")
+  familyAssessmentsCreated         FamilyAssessment[]             @relation("FamilyAssessmentCreatedByAdmin")
+  nutritionalCreated               NutritionalAssessment[]        @relation("NutritionalCreatedByAdmin")
+  painCreated                      PainAssessment[]               @relation("PainCreatedByAdmin")
+  socialCreated                    SocialAssessment[]             @relation("SocialCreatedByAdmin")
+  spiritualCreated                 SpiritualAssessment[]          @relation("SpiritualCreatedByAdmin")
+  psychiatryCreated                PsychiatryAssessment[]         @relation("PsychiatryCreatedByAdmin")
+  approvedReferrals                Referral[]                     @relation("ReferralApprovedBy")
+  staffAssigned                    Staff[]                        @relation("StaffAssignedBy")
+  patientsUpdated                  Patient[]                      @relation("PatientUpdatedBy")
+  visitsUpdated                    HomeVisit[]                    @relation("VisitUpdatedBy")
+  visitsDeleted                    HomeVisit[]                    @relation("VisitDeletedBy")
+  admissionsUpdated                HospitalAdmission[]            @relation("AdmissionUpdatedBy")
+  admissionsDeleted                HospitalAdmission[]            @relation("AdmissionDeletedBy")
+  imagingUpdated                   ImagingOrder[]                 @relation("ImagingUpdatedBy")
+  imagingDeleted                   ImagingOrder[]                 @relation("ImagingDeletedBy")
+  labsUpdated                      LaboratoryTest[]               @relation("LabUpdatedBy")
+  labsDeleted                      LaboratoryTest[]               @relation("LabDeletedBy")
+  medicationsUpdated               Medication[]                   @relation("MedicationUpdatedBy")
+  medicationsDeleted               Medication[]                   @relation("MedicationDeletedBy")
+  progressNotesUpdated             PatientProgressNote[]          @relation("ProgressNoteUpdatedBy")
+  progressNotesDeleted             PatientProgressNote[]          @relation("ProgressNoteDeletedBy")
+  dischargeUpdated                 DischargeSummary[]             @relation("DischargeUpdatedBy")
+  dischargeDeleted                 DischargeSummary[]             @relation("DischargeDeletedBy")
+  staffUpdated                     Staff[]                        @relation("StaffUpdatedBy")
+  staffDeleted                     Staff[]                        @relation("StaffDeletedBy")
+  hospiceNursingAssessments        HospiceNursingAssessment[]     @relation("HospiceNursingUpdatedBy")
+  hospiceNursingDeletedAssessments HospiceNursingAssessment[]     @relation("HospiceNursingDeletedBy")
 
   // Relations (assessment update/delete audit)
   clinicalPharmacistUpdated ClinicalPharmacistAssessment[] @relation("ClinicalPharmacistUpdatedBy")
@@ -2704,7 +2722,6 @@ model Staff {
   admissionsCreated        HospitalAdmission[]        @relation("AdmissionCreatedBy")
   dischargeCreated         DischargeSummary[]         @relation("DischargeCreatedBy")
   progressNotesCreated     PatientProgressNote[]      @relation("ProgressNoteCreatedBy")
-  progressNotesResponsible PatientProgressNote[]      @relation("ProgressNoteResponsible")
   progressNoteSignatures   ProgressNoteSignature[]
   hospiceNursingCreated    HospiceNursingAssessment[] @relation("HospiceNursingCreatedBy")
   hospiceNursingAssessed   HospiceNursingAssessment[] @relation("HospiceNursingAssessedBy")
@@ -2752,8 +2769,10 @@ model Patient {
   currentLocation       CurrentLocation @default(Home)
   hospitalPatientId     String?
 
-  registeredBy      Int
-  registeredByStaff Staff @relation("PatientRegisteredBy", fields: [registeredBy], references: [id])
+  registeredBy      Int?
+  registeredByStaff Staff? @relation("PatientRegisteredBy", fields: [registeredBy], references: [id])
+  createdByAdminId  Int?
+  createdByAdmin    Admin? @relation("PatientCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -2798,8 +2817,10 @@ model Medication {
   dosage            String
   frequency         String
   route             String
-  prescribedBy      Int
-  prescribedByStaff Staff                    @relation("MedicationPrescribedBy", fields: [prescribedBy], references: [id])
+  prescribedBy      Int?
+  prescribedByStaff Staff?                    @relation("MedicationPrescribedBy", fields: [prescribedBy], references: [id])
+  createdByAdminId  Int?
+  createdByAdmin    Admin?                   @relation("MedicationCreatedByAdmin", fields: [createdByAdminId], references: [id])
   administeredAt    MedicationAdministeredAt
   status            MedicationStatus         @default(Ordered)
 
@@ -2866,8 +2887,10 @@ model Referral {
   followUpDate   DateTime?
   followUpStatus ReferralFollowUpStatus?
 
-  requestedBy      Int
-  requestedByStaff Staff               @relation("ReferralRequestedBy", fields: [requestedBy], references: [id])
+  requestedBy      Int?
+  requestedByStaff Staff?              @relation("ReferralRequestedBy", fields: [requestedBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin?              @relation("ReferralCreatedByAdmin", fields: [createdByAdminId], references: [id])
   approvedBy       Int?
   approvedByAdmin  Admin?              @relation("ReferralApprovedBy", fields: [approvedBy], references: [id])
   admissions       HospitalAdmission[]
@@ -2931,8 +2954,10 @@ model LaboratoryTest {
   performedBy    String?
 
   // Meta
-  orderedBy      Int
-  orderedByStaff Staff @relation("LabOrderedBy", fields: [orderedBy], references: [id])
+  orderedBy        Int?
+  orderedByStaff   Staff? @relation("LabOrderedBy", fields: [orderedBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("LabCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -3181,8 +3206,10 @@ model ImagingOrder {
   status ImagingStatus @default(Ordered)
 
   // Meta
-  orderedBy      Int
-  orderedByStaff Staff @relation("ImagingOrderedBy", fields: [orderedBy], references: [id])
+  orderedBy        Int?
+  orderedByStaff   Staff? @relation("ImagingOrderedBy", fields: [orderedBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("ImagingCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -3275,8 +3302,10 @@ model HospitalAdmission {
   status          AdmissionStatus           @default(Active)
 
   // Meta
-  createdBy      Int
-  createdByStaff Staff @relation("AdmissionCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("AdmissionCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("AdmissionCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -3422,8 +3451,10 @@ model HomeVisit {
   dateOfDeath DateTime?
 
   // Meta
-  createdBy      Int
-  createdByStaff Staff @relation("VisitCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("VisitCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("VisitCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -3646,8 +3677,10 @@ model DischargeSummary {
   status DischargeStatus @default(Final)
 
   // Meta
-  createdBy      Int
-  createdByStaff Staff @relation("DischargeCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("DischargeCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("DischargeCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -3854,14 +3887,13 @@ model PatientProgressNote {
   soapPlan       String? @default("")
 
   // Section 20 — authorization
-  responsibleClinicianId Int
-  responsibleClinician   Staff @relation("ProgressNoteResponsible", fields: [responsibleClinicianId], references: [id])
-
   facilityStamp String? @default("")
 
   // Meta
-  createdBy      Int
-  createdByStaff Staff @relation("ProgressNoteCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("ProgressNoteCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("ProgressNoteCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -3882,7 +3914,6 @@ model PatientProgressNote {
   @@index([patientId, createdAt])
   @@index([admissionId, createdAt])
   @@index([createdBy])
-  @@index([responsibleClinicianId])
 }
 
 // ── ProgressNote child: medications ──
@@ -4053,8 +4084,10 @@ model HospiceNursingAssessment {
   nurseSummary String?
 
   // ── Meta ──
-  createdBy      Int
-  createdByStaff Staff @relation("HospiceNursingCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("HospiceNursingCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("HospiceNursingCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -4158,8 +4191,10 @@ model ClinicalPharmacistAssessment {
   clinicalPharmacistName String?
 
   // Audit
-  createdBy      Int
-  createdByStaff Staff @relation("ClinicalPharmacistCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("ClinicalPharmacistCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("ClinicalPharmacistCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -4263,8 +4298,10 @@ model PhysiotherapyAssessment {
   finalRecommendations PhysiotherapyFinalRecommendation[] @default([])
 
   // Audit
-  createdBy      Int
-  createdByStaff Staff @relation("PhysiotherapyCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("PhysiotherapyCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("PhysiotherapyCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -4375,8 +4412,10 @@ model FamilyAssessment {
   assessorName         String?
 
   // Audit
-  createdBy      Int
-  createdByStaff Staff @relation("FamilyAssessmentCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("FamilyAssessmentCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("FamilyAssessmentCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -4495,8 +4534,10 @@ model NutritionalAssessment {
   finalRecommendations NutritionFinalRecommendation[] @default([])
 
   // Audit
-  createdBy      Int
-  createdByStaff Staff @relation("NutritionalCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("NutritionalCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("NutritionalCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -4607,8 +4648,10 @@ model PainAssessment {
   finalRecommendations PainFinalRecommendation[] @default([])
 
   // Audit
-  createdBy      Int
-  createdByStaff Staff @relation("PainCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("PainCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("PainCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -4723,8 +4766,10 @@ model SocialAssessment {
   assessmentOutcome SocialAssessmentOutcome[] @default([])
 
   // Audit
-  createdBy      Int
-  createdByStaff Staff @relation("SocialCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("SocialCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("SocialCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -4831,8 +4876,10 @@ model SpiritualAssessment {
   assessmentOutcome     SpiritualAssessmentOutcome[]  @default([])
 
   // Audit
-  createdBy      Int
-  createdByStaff Staff @relation("SpiritualCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("SpiritualCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("SpiritualCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -4927,8 +4974,10 @@ model PsychiatryAssessment {
   finalRecommendations PsychiatryFinalRecommendation[] @default([])
 
   // Audit
-  createdBy      Int
-  createdByStaff Staff @relation("PsychiatryCreatedBy", fields: [createdBy], references: [id])
+  createdBy        Int?
+  createdByStaff   Staff? @relation("PsychiatryCreatedBy", fields: [createdBy], references: [id])
+  createdByAdminId Int?
+  createdByAdmin   Admin? @relation("PsychiatryCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

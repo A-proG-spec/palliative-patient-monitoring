@@ -9,7 +9,7 @@ import * as visitService from '@services/visit.service.js';
 
 export const recordVisit = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
-  const result = await visitService.recordVisit(patientId, req.body, req.user.id);
+  const result = await visitService.recordVisit(patientId, req.body, req.actor);
   return SuccessResponse(201, 'Home visit recorded successfully', result);
 });
 
@@ -49,7 +49,7 @@ export const getVisitById = asyncHandler(async (req: Request, res: Response) => 
 
 export const signVisit = asyncHandler(async (req: Request, res: Response) => {
   const visitId = req.params.visitId as string;
-  const result = await visitService.signVisit(visitId, req.body, req.user.id);
+  const result = await visitService.signVisit(visitId, req.body, req.actor);
   return SuccessResponse(200, 'Visit signed successfully', result);
 });
 
@@ -65,20 +65,20 @@ export const getVisitSignatures = asyncHandler(async (req: Request, res: Respons
 
 export const updateVisit = asyncHandler(async (req: Request, res: Response) => {
   const visitId = req.params.visitId as string;
-  const result = await visitService.updateVisit(visitId, req.body, req.user.id);
+  const result = await visitService.updateVisit(visitId, req.body, req.actor);
   return SuccessResponse(200, 'Visit updated successfully', result);
 });
 
 export const deleteVisit = asyncHandler(async (req: Request, res: Response) => {
   const visitId = req.params.visitId as string;
   const { reason } = req.body;
-  const result = await visitService.deleteVisit(visitId, req.user.id, reason);
+  const result = await visitService.deleteVisit(visitId, req.actor, reason);
   return SuccessResponse(200, 'Visit deleted', result);
 });
 
 export const restoreVisit = asyncHandler(async (req: Request, res: Response) => {
   const visitId = req.params.visitId as string;
-  const result = await visitService.restoreVisit(visitId, req.user.id);
+  const result = await visitService.restoreVisit(visitId, req.actor);
   return SuccessResponse(200, 'Visit restored', result);
 });
 

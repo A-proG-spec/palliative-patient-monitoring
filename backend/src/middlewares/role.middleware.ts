@@ -7,8 +7,8 @@ export const roleMiddleware = (allowedRoles: string[]) => {
       throw new ApiError(401, 'Unauthorized');
     }
 
-    // ── Admin bypass (when 'admin' is in the allow list) ──
-    if (req.user.type === 'admin' && allowedRoles.includes('admin')) {
+    // Admins may access protected clinical workflows regardless of staff role.
+    if (req.user.type === 'admin') {
       return next();
     }
 

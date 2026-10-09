@@ -12,7 +12,7 @@ export const createSocialAssessment = asyncHandler(
     const result = await socialService.createSocialAssessment(
       patientId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(201, 'Social assessment saved', result);
   },
@@ -88,7 +88,7 @@ export const updateSocialAssessment = asyncHandler(
       patientId,
       assessmentId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Social assessment updated', result);
   },
@@ -106,7 +106,7 @@ export const deleteSocialAssessment = asyncHandler(
     const result = await socialService.deleteSocialAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
       reason,
     );
     return SuccessResponse(200, 'Social assessment deleted', result);
@@ -124,7 +124,7 @@ export const restoreSocialAssessment = asyncHandler(
     const result = await socialService.restoreSocialAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Social assessment restored', result);
   },

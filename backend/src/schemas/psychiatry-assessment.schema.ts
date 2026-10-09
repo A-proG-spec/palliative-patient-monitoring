@@ -218,6 +218,7 @@ export const PSYCHIATRY_FINAL_RECOMMENDATION_VALUES = [
 
 export const createPsychiatryAssessmentSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // ── Header ──
     assessmentType: z.enum(PSYCHIATRY_ASSESSMENT_TYPE_VALUES),
 

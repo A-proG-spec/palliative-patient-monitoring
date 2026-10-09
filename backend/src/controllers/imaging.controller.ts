@@ -9,7 +9,7 @@ import * as imagingService from '@services/imaging.service.js';
 
 export const orderImaging = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
-  const result = await imagingService.orderImaging(patientId, req.body, req.user.id);
+  const result = await imagingService.orderImaging(patientId, req.body, req.actor);
   return SuccessResponse(201, 'Imaging order submitted successfully', result);
 });
 
@@ -61,7 +61,7 @@ export const updateImagingReport = asyncHandler(async (req: Request, res: Respon
     patientId,
     imagingId,
     req.body,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(200, 'Imaging report saved successfully', result);
 });
@@ -73,7 +73,7 @@ export const recordImagingPerformed = asyncHandler(async (req: Request, res: Res
     patientId,
     imagingId,
     req.body,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(200, 'Imaging department record saved', result);
 });
@@ -86,7 +86,7 @@ export const updateImagingStatus = asyncHandler(async (req: Request, res: Respon
     patientId,
     imagingId,
     status,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(200, 'Imaging status updated', result);
 });
@@ -99,7 +99,7 @@ export const deleteImagingOrder = asyncHandler(async (req: Request, res: Respons
   const result = await imagingService.deleteImagingOrder(
     patientId,
     imagingId,
-    req.user.id,
+    req.actor,
     reason,
   );
   return SuccessResponse(200, 'Imaging order deleted', result);
@@ -112,7 +112,7 @@ export const restoreImagingOrder = asyncHandler(async (req: Request, res: Respon
   const result = await imagingService.restoreImagingOrder(
     patientId,
     imagingId,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(200, 'Imaging order restored', result);
 });
@@ -153,7 +153,7 @@ export const submitReport = asyncHandler(
     const result = await imagingService.submitImagingReportFromQueue(
       imagingId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Imaging report submitted', result);
   },

@@ -7,12 +7,15 @@ import { AssessmentListShell } from '@/components/assessments/AssessmentListShel
 import { AssessmentListRow } from '@/components/assessments/AssessmentListRow';
 import { Badge } from '@/components/ui/Badge';
 import { useAuthStore } from '@/store/auth.store';
+import { patientPath } from '@/lib/clinicalPaths';
 
 const SpiritualAssessmentListPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const isOwner = user?.role === 'SpiritualPerson';
+  const isAdmin = user?.type === 'admin';
+  const basePath = patientPath(isAdmin, id!);
+  const isOwner = isAdmin || user?.role === 'SpiritualPerson';
 
   const { data: patient, isLoading: pLoading } = usePatient(id!);
   const { data, isLoading, error, refetch } = usePatientSpiritualAssessments(id!);
@@ -21,25 +24,26 @@ const SpiritualAssessmentListPage: React.FC = () => {
   const patientLabel = patient
     ? `${patient.firstName} ${patient.lastName} · ${patient.patientDisplayId ?? patient.id}`
     : '—';
+  const canCreate = isOwner && patient?.status === 'Active';
 
   return (
     <AssessmentListShell
       title="Spiritual Assessments"
       subtitle={`${data?.total ?? 0} recorded`}
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
-      onAddClick={() => navigate(`/patients/${id}/spiritual-assessment/new`)}
+      backTo={basePath}
+      onAddClick={() => navigate(`${basePath}/spiritual-assessment/new`)}
       isLoading={isLoading || pLoading}
       isError={!!error}
       onRetry={refetch}
       isEmpty={assessments.length === 0}
       emptyMessage="Record the first spiritual assessment for this patient."
-      canCreate={isOwner}
+      canCreate={canCreate}
     >
       {assessments.map((a) => (
         <AssessmentListRow
           key={a.id}
-          onClick={() => navigate(`/patients/${id}/spiritual-assessment/${a.id}`)}
+          onClick={() => navigate(`${basePath}/spiritual-assessment/${a.id}`)}
           icon={<Heart size={18} className="text-violet-600" />}
           iconBgClass="bg-violet-50"
           date={a.createdAt}

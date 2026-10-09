@@ -2,6 +2,8 @@ import bcrypt from 'bcrypt';
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
+import type { Actor } from '../types/index.js';
 import type { StaffRole } from '@prisma/client';
 
 // ─────────────────────────────────────────────────────────────
@@ -16,6 +18,13 @@ const formatSignatures = (signatures: any[]) =>
     signedAt: s.signedAt,
   }));
 
+const formatEnteredBy = (staff?: any, admin?: any) =>
+  admin
+    ? { id: admin.id, name: admin.name, type: 'admin' as const }
+    : staff
+      ? { id: staff.id, name: staff.name, type: 'staff' as const }
+      : null;
+
 // ─────────────────────────────────────────────────────────────
 // Prisma stores vitals + ADL as flat columns, but the frontend
 // `HomeVisit` type expects them nested:
@@ -29,8 +38,11 @@ const formatSignatures = (signatures: any[]) =>
 const normalizeVisit = (visit: any) => {
   if (!visit) return visit;
 
+  const { createdBy, createdByAdminId, createdByStaff, createdByAdmin, ...visitData } = visit;
+
   return {
-    ...visit,
+    ...visitData,
+    enteredBy: formatEnteredBy(createdByStaff, createdByAdmin),
 
     // Nest vitals
     vitals: {
@@ -84,7 +96,11 @@ export const getAllVisits = async (
       orderBy: { visitDate: 'desc' },
       skip,
       take: limit,
-      include: { signatures: true },
+      include: {
+        signatures: true,
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
     }),
     client.homeVisit.count({ where: { patientId: pid } }),
   ]);
@@ -98,7 +114,7 @@ export const getAllVisits = async (
       outcome: visit.outcome,
       ppsScore: visit.ppsScore,
       kpsScore: visit.kpsScore,
-      createdBy: visit.createdBy,
+      enteredBy: formatEnteredBy(visit.createdByStaff, visit.createdByAdmin),
       signatures: formatSignatures(visit.signatures),
       allSigned: isAllSigned(visit.signatures),
       createdAt: visit.createdAt,
@@ -117,22 +133,28 @@ export const getAllVisits = async (
 export const recordVisit = async (
   patientId: string,
   data: any,
-  staffId: string | number,
+  actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = toId(staffId, 'staff id');
+  const hasActingAsStaffId = data.actingAsStaffId !== undefined &&
+    data.actingAsStaffId !== null && data.actingAsStaffId !== '';
+  const sid = actor.type === 'staff' || hasActingAsStaffId
+    ? resolveStaffAttribution(actor, data.actingAsStaffId)
+    : undefined;
 
   const [patient, teamLeader] = await Promise.all([
     prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
-    prisma.staff.findUnique({
-      where: { id: sid },
-      select: { id: true, name: true, role: true },
-    }),
+    sid !== undefined
+      ? prisma.staff.findUnique({
+        where: { id: sid },
+        select: { id: true, name: true, role: true },
+      })
+      : Promise.resolve(null),
   ]);
 
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!teamLeader) throw new ApiError(404, 'Team leader not found');
-  if (!teamLeader.role) {
+  if (sid !== undefined && !teamLeader) throw new ApiError(404, 'Team leader not found');
+  if (teamLeader && !teamLeader.role) {
     throw new ApiError(
       400,
       'Your account has no assigned role. Ask an admin to assign one before recording visits.',
@@ -167,13 +189,15 @@ export const recordVisit = async (
   // object literal which worked by accident (the second block
   // overwrote the first). This approach avoids that fragility
   // entirely.
-  const teamLeaderSignature = {
-    staffId: sid,
-    name: teamLeader.name,
-    role: teamLeader.role,        // ← the real StaffRole
-    isTeamLeader: true,
-    signedAt: new Date(),
-  };
+  const teamLeaderSignature = teamLeader
+    ? {
+      staffId: teamLeader.id,
+      name: teamLeader.name,
+      role: teamLeader.role,
+      isTeamLeader: true,
+      signedAt: new Date(),
+    }
+    : null;
 
   const additionalSignatures = (Array.isArray(data.teamMembers)
     ? data.teamMembers
@@ -191,7 +215,7 @@ export const recordVisit = async (
   const visit = await prisma.homeVisit.create({
     data: {
       patientId: pid,
-
+      createdByAdminId: adminCreatorId(actor),
       visitDate: new Date(data.visitDate),
       timeStarted: data.timeStarted,
       timeEnded: data.timeEnded,
@@ -299,12 +323,12 @@ export const recordVisit = async (
       dateOfDeath: data.dateOfDeath ? new Date(data.dateOfDeath) : null,
 
       // audit
-      createdBy: sid,
+      createdBy: sid ?? null,
 
       // ONE signature block — the writer is the team leader, then
       // any additional team members, all with their real role.
       signatures: {
-        create: [teamLeaderSignature, ...additionalSignatures],
+        create: [...(teamLeaderSignature ? [teamLeaderSignature] : []), ...additionalSignatures],
       },
 
       // Current medications (child rows)
@@ -325,6 +349,8 @@ export const recordVisit = async (
     include: {
       signatures: true,
       currentMedications: true,
+      createdByStaff: { select: { id: true, name: true } },
+      createdByAdmin: { select: { id: true, name: true } },
     },
   });
 
@@ -333,7 +359,7 @@ export const recordVisit = async (
     patientId: visit.patientId,
     visitDate: visit.visitDate,
     outcome: visit.outcome,
-    createdBy: visit.createdBy,
+    enteredBy: formatEnteredBy(visit.createdByStaff, visit.createdByAdmin),
     signatures: formatSignatures(visit.signatures),
     currentMedications: visit.currentMedications,
     createdAt: visit.createdAt,
@@ -364,7 +390,11 @@ export const getVisits = async (
       orderBy: { visitDate: 'desc' },
       skip,
       take: limit,
-      include: { signatures: true },
+      include: {
+        signatures: true,
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
     }),
     prisma.homeVisit.count({ where: { patientId: pid } }),
   ]);
@@ -378,7 +408,7 @@ export const getVisits = async (
       outcome: visit.outcome,
       ppsScore: visit.ppsScore,
       kpsScore: visit.kpsScore,
-      createdBy: visit.createdBy,
+      enteredBy: formatEnteredBy(visit.createdByStaff, visit.createdByAdmin),
       signatures: formatSignatures(visit.signatures),
       allSigned: isAllSigned(visit.signatures),
       createdAt: visit.createdAt,
@@ -400,6 +430,7 @@ export const getVisitById = async (patientId: string, visitId: string) => {
     where: { id: vid, patientId: pid },
     include: {
       createdByStaff: { select: { id: true, name: true, role: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       signatures: true,
       currentMedications: true,
     },
@@ -411,13 +442,7 @@ export const getVisitById = async (patientId: string, visitId: string) => {
 
   return {
     ...normalizeVisit(visit),
-    createdByStaff: visit.createdByStaff
-      ? {
-        id: visit.createdByStaff.id,
-        name: visit.createdByStaff.name,
-        role: visit.createdByStaff.role,
-      }
-      : null,
+    enteredBy: formatEnteredBy(visit.createdByStaff, visit.createdByAdmin),
     teamLeader: leaderSignature
       ? {
         staffId: leaderSignature.staffId,
@@ -437,7 +462,7 @@ export const getVisitById = async (patientId: string, visitId: string) => {
 export const signVisit = async (
   visitId: string,
   data: { email: string; password: string; role: StaffRole },
-  _currentUserId: string | number,
+  _actor: Actor,
 ) => {
   const vid = toId(visitId, 'visit id');
 
@@ -512,6 +537,7 @@ export const getVisitSignatures = async (visitId: string) => {
     where: { id: vid },
     include: {
       createdByStaff: { select: { id: true, name: true, role: true } },
+      createdByAdmin: { select: { id: true, name: true } },
       signatures: true,
     },
   });
@@ -522,6 +548,7 @@ export const getVisitSignatures = async (visitId: string) => {
   return {
     visitId: visit.id,
     visitDate: visit.visitDate,
+    enteredBy: formatEnteredBy(visit.createdByStaff, visit.createdByAdmin),
     teamLeader: leaderSignature
       ? {
         staffId: leaderSignature.staffId,
@@ -548,10 +575,10 @@ export const getVisitSignatures = async (visitId: string) => {
 export const updateVisit = async (
   visitId: string,
   data: any,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const vid = toId(visitId, 'visit id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const visit = await prisma.homeVisit.findUnique({
     where: { id: vid },
@@ -599,11 +626,11 @@ export const updateVisit = async (
 // ═════════════════════════════════════════════════════════════
 export const deleteVisit = async (
   visitId: string,
-  adminId: string | number,
+  actor: Actor,
   reason?: string,
 ) => {
   const vid = toId(visitId, 'visit id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const visit = await prisma.homeVisit.findUnique({
     where: { id: vid },
@@ -629,10 +656,10 @@ export const deleteVisit = async (
 // ═════════════════════════════════════════════════════════════
 export const restoreVisit = async (
   visitId: string,
-  adminId: string | number,
+  actor: Actor,
 ) => {
   const vid = toId(visitId, 'visit id');
-  const aid = toId(adminId, 'admin id');
+  const aid = toId(actor.id, 'admin id');
 
   const visit = await prisma.homeVisit.findUnique({ where: { id: vid } });
   if (!visit) throw new ApiError(404, 'Visit not found');

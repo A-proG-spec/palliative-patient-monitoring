@@ -1,10 +1,15 @@
-import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { usePatient } from '@/hooks/usePatients';
-import { useCreateFamilyAssessment } from '@/hooks/useFamilyAssessments';
+import {
+  useCreateFamilyAssessment,
+  useFamilyAssessment,
+  useUpdateFamilyAssessment,
+} from '@/hooks/useFamilyAssessments';
+import { useAuthStore } from '@/store/auth.store';
 import {
   createFamilyAssessmentSchema,
   type CreateFamilyAssessmentFormData,
@@ -14,7 +19,6 @@ import { AssessmentFormShell } from '@/components/assessments/AssessmentFormShel
 import {
   Section,
   Grid,
-  YesNo,
   CheckboxGroup,
 } from '@/components/assessments/FormPrimitives';
 
@@ -23,19 +27,59 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
+import { useToast } from '@/context/ToastContext';
+
+// ── Helpers ──────────────────────────────────────────────────────
+const displayId = (p: {
+  id: number | string;
+  hospitalPatientId?: string | null;
+}): string =>
+  p.hospitalPatientId ?? `PAT-${String(p.id).padStart(4, '0')}`;
+
+type HouseholdMemberRow = {
+  name: string;
+  age: string;
+  relationship: string;
+  occupation: string;
+  contact: string;
+};
 
 const FamilyAssessmentFormPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, assessmentId } = useParams<{
+    id: string;
+    assessmentId?: string;
+  }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const { toast } = useToast();
+
+  // ── Mode detection ──
+  const isEditMode = Boolean(assessmentId);
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
+  const { user } = useAuthStore();
+
   const createMutation = useCreateFamilyAssessment(id!);
+  const updateMutation = useUpdateFamilyAssessment(id!);
+
+  // ── Fetch existing record only in edit mode ──
+  const { data: existing, isLoading: existingLoading } = useFamilyAssessment(
+    id!,
+    assessmentId ?? '',
+  );
+
+  // ── Route-aware base path ──
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<CreateFamilyAssessmentFormData>({
     resolver: zodResolver(createFamilyAssessmentSchema),
@@ -55,46 +99,237 @@ const FamilyAssessmentFormPage: React.FC = () => {
     },
   });
 
-  const onSubmit = (data: CreateFamilyAssessmentFormData) => {
-    createMutation.mutate(data, {
-      onSuccess: () => navigate(`/patients/${id}`),
+  const [householdMembers, setHouseholdMembers] = useState<HouseholdMemberRow[]>([]);
+
+  const addHouseholdMember = () =>
+    setHouseholdMembers((prev) => [
+      ...prev,
+      { name: '', age: '', relationship: '', occupation: '', contact: '' },
+    ]);
+
+  const updateHouseholdMember = (
+    index: number,
+    field: keyof HouseholdMemberRow,
+    value: string,
+  ) =>
+    setHouseholdMembers((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, [field]: value } : m)),
+    );
+
+  const removeHouseholdMember = (index: number) =>
+    setHouseholdMembers((prev) => prev.filter((_, i) => i !== index));
+
+  // ── EDIT: hydrate form + household members from server ──
+  useEffect(() => {
+    if (!isEditMode || !existing) return;
+
+    reset({
+      assessmentType: existing.assessmentType ?? 'Admission',
+      householdSize: existing.householdSize ?? undefined,
+      primaryDecisionMaker: existing.primaryDecisionMaker ?? undefined,
+      primaryDecisionMakerName: existing.primaryDecisionMakerName ?? undefined,
+      primaryCaregiverName: existing.primaryCaregiverName ?? undefined,
+      primaryCaregiverRelationship:
+        existing.primaryCaregiverRelationship ?? undefined,
+      primaryCaregiverAge: existing.primaryCaregiverAge ?? undefined,
+      primaryCaregiverPhone: existing.primaryCaregiverPhone ?? undefined,
+      secondaryCaregiverName: existing.secondaryCaregiverName ?? undefined,
+      secondaryCaregiverRelationship:
+        existing.secondaryCaregiverRelationship ?? undefined,
+      secondaryCaregiverPhone: existing.secondaryCaregiverPhone ?? undefined,
+      caregiverAvailability: existing.caregiverAvailability ?? undefined,
+      physicalAbility: existing.physicalAbility ?? undefined,
+      emotionalReadiness: existing.emotionalReadiness ?? undefined,
+      knowledgeOfIllness: existing.knowledgeOfIllness ?? undefined,
+      internalSupport: existing.internalSupport ?? undefined,
+      externalSupport: existing.externalSupport ?? [],
+      socialIsolationRisk: existing.socialIsolationRisk ?? undefined,
+      incomeSources: existing.incomeSources ?? [],
+      monthlyIncomeLevel: existing.monthlyIncomeLevel ?? undefined,
+      financialBurden: existing.financialBurden ?? undefined,
+      financialChallenges: existing.financialChallenges ?? [],
+      housingType: existing.housingType ?? undefined,
+      housingTypeOther: existing.housingTypeOther ?? undefined,
+      homeEnvironment: existing.homeEnvironment ?? undefined,
+      utilitiesAccess: (existing as any).utilitiesAccess ?? {},
+      copingAbility: existing.copingAbility ?? undefined,
+      familyEmotionalStatus: existing.familyEmotionalStatus ?? undefined,
+      anticipatoryGrief: existing.anticipatoryGrief ?? undefined,
+      religiousAffiliation: existing.religiousAffiliation ?? undefined,
+      religiousAffiliationOther: existing.religiousAffiliationOther ?? undefined,
+      palliativeCareAcceptance: existing.palliativeCareAcceptance ?? undefined,
+      culturalBeliefsAffectingCare:
+        existing.culturalBeliefsAffectingCare ?? undefined,
+      burdenLevel: existing.burdenLevel ?? undefined,
+      burdenFactors: existing.burdenFactors ?? [],
+      needs: existing.needs ?? [],
+      strengths: existing.strengths ?? [],
+      plannedInterventions: existing.plannedInterventions ?? undefined,
+      supportServices: existing.supportServices ?? [],
+      followUpPlan: existing.followUpPlan ?? undefined,
+      assessorName: existing.assessorName ?? undefined,
+      assessmentOutcome: existing.assessmentOutcome ?? [],
+      finalRecommendations: existing.finalRecommendations ?? [],
     });
+
+    // Hydrate the shadow household-members state from the server record.
+    const serverMembers = ((existing as any).householdMembers ?? []) as Array<{
+      name?: string;
+      age?: number;
+      relationship?: string;
+      occupation?: string;
+      contact?: string;
+    }>;
+
+    setHouseholdMembers(
+      serverMembers.map((m) => ({
+        name: m.name ?? '',
+        age: m.age != null ? String(m.age) : '',
+        relationship: m.relationship ?? '',
+        occupation: m.occupation ?? '',
+        contact: m.contact ?? '',
+      })),
+    );
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, existing?.id]);
+
+  // ── Autofill: Assessor ← current user · Primary Caregiver ← patient ──
+  // Only run on CREATE. In edit mode we must not clobber saved values.
+  useEffect(() => {
+    if (isEditMode) return;
+    if (!patient) return;
+
+    const autofill: Partial<CreateFamilyAssessmentFormData> = {};
+
+    if (user?.name) {
+      autofill.assessorName = user.name;
+    }
+    if (patient.caregiverName) {
+      autofill.primaryCaregiverName = patient.caregiverName;
+    }
+    if (patient.caregiverRelation) {
+      autofill.primaryCaregiverRelationship = patient.caregiverRelation;
+    }
+    if (patient.caregiverPhone) {
+      autofill.primaryCaregiverPhone = patient.caregiverPhone;
+    }
+
+    if (Object.keys(autofill).length > 0) {
+      reset((prev) => ({ ...prev, ...autofill }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient?.id, user?.id, isEditMode]);
+
+  // ── Submit ──
+  const onSubmit = (data: CreateFamilyAssessmentFormData) => {
+    const parsedHouseholdMembers = householdMembers
+      .filter((m) => m.name.trim() || m.relationship.trim())
+      .map((m) => {
+        const parsedAge = m.age ? Number(m.age) : undefined;
+        return {
+          name: m.name.trim() || undefined,
+          age: Number.isFinite(parsedAge) ? parsedAge : undefined,
+          relationship: m.relationship.trim() || undefined,
+          occupation: m.occupation.trim() || undefined,
+          contact: m.contact.trim() || undefined,
+        };
+      });
+
+    const payload: CreateFamilyAssessmentFormData = {
+      ...data,
+      householdMembers: parsedHouseholdMembers as any,
+    };
+
+    const handleError = (err: any) => {
+      const status = err?.response?.status;
+      let message =
+        'Could not save the family assessment. Please try again.';
+
+      if (status === 400) {
+        message =
+          'Some fields are missing or invalid. Please review the highlighted fields.';
+      } else if (status === 403) {
+        message = 'You do not have permission to save this assessment.';
+      } else if (status === 404) {
+        message = 'Patient or assessment not found. Please refresh and try again.';
+      } else if (status >= 500) {
+        message = 'Server error. Please try again in a moment.';
+      } else if (!err?.response) {
+        message = 'Network error. Please check your connection and try again.';
+      }
+
+      toast.error(message);
+    };
+
+    if (isEditMode && assessmentId) {
+      updateMutation.mutate(
+        { assessmentId, data: payload as any },
+        {
+          onSuccess: () => navigate(basePath),
+          onError: handleError,
+        },
+      );
+    } else {
+      createMutation.mutate(payload as any, {
+        onSuccess: () => navigate(basePath),
+        onError: handleError,
+      });
+    }
   };
 
-  if (isLoading) return <PageLoader />;
+  const onInvalid = (formErrors: any) => {
+    const count = Object.keys(formErrors ?? {}).length;
+
+    if (count === 0) {
+      toast.error('Please review the form and try again.');
+      return;
+    }
+
+    toast.error(
+      count === 1
+        ? 'Please fix the highlighted field and try again.'
+        : `Please fix the ${count} highlighted fields and try again.`,
+    );
+  };
+
+  // ── Loading / error states ──
+  if (isLoading || (isEditMode && existingLoading)) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
-  const patientLabel = `${patient.firstName} ${patient.lastName} · ${
-    patient.patientDisplayId ?? patient.id
-  }`;
+  const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
 
-  // Utilities access — JSON map bridging
-  const utilities = watch('utilitiesAccess') ?? {};
+  const utilities = (watch('utilitiesAccess') ?? {}) as Record<string, boolean>;
   const setUtility = (key: string, on: boolean) =>
-    setValue('utilitiesAccess', { ...utilities, [key]: on });
+    setValue('utilitiesAccess', { ...utilities, [key]: on }, { shouldDirty: true });
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   return (
     <AssessmentFormShell
       title="Family Assessment"
       patientLabel={patientLabel}
-      backTo={`/patients/${id}`}
-      mode="create"
-      isSubmitting={createMutation.isPending}
-      onSubmit={handleSubmit(onSubmit)}
-      onCancel={() => navigate(`/patients/${id}`)}
+      backTo={basePath}
+      mode={isEditMode ? 'edit' : 'create'}
+      isSubmitting={isSubmitting}
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      onCancel={() => navigate(basePath)}
     >
-      {/* ── 1. Assessment type ── */}
-      <Section title="1. Assessment Type">
-        <Select
-          label="Assessment Type"
-          options={[
-            { value: 'Admission', label: 'Admission' },
-            { value: 'FollowUp', label: 'Follow-up' },
-            { value: 'CrisisReview', label: 'Crisis Review' },
-          ]}
-          error={errors.assessmentType?.message}
-          {...register('assessmentType')}
-        />
+      {/* ── 1. Assessment Info ── */}
+      <Section title="1. Assessment Information">
+        <Grid cols={2}>
+          <Select
+            label="Assessment Type"
+            options={[
+              { value: 'Admission', label: 'Admission' },
+              { value: 'FollowUp', label: 'Follow-up' },
+              { value: 'CrisisReview', label: 'Crisis review' },
+            ]}
+            placeholder="Select…"
+            error={errors.assessmentType?.message}
+            {...register('assessmentType')}
+          />
+        </Grid>
       </Section>
 
       {/* ── 2. Family composition ── */}
@@ -104,7 +339,8 @@ const FamilyAssessmentFormPage: React.FC = () => {
             label="Household Size"
             type="number"
             min={1}
-            {...register('householdSize')}
+            error={errors.householdSize?.message}
+            {...register('householdSize', { valueAsNumber: true })}
           />
           <Select
             label="Primary Decision Maker"
@@ -123,29 +359,95 @@ const FamilyAssessmentFormPage: React.FC = () => {
           label="Decision Maker Name"
           {...register('primaryDecisionMakerName')}
         />
-        <Textarea
-          label="Household Members"
-          rows={5}
-          placeholder={`One per line as: Name | Age | Relationship | Occupation | Contact`}
-          onChange={(e) => {
-            const rows = e.target.value
-              .split('\n')
-              .map((l) => l.trim())
-              .filter(Boolean)
-              .map((l) => {
-                const [name = '', age = '', relationship = '', occupation = '', contact = ''] =
-                  l.split('|');
-                return {
-                  name: name.trim(),
-                  age: age.trim() ? Number(age.trim()) : undefined,
-                  relationship: relationship.trim(),
-                  occupation: occupation.trim(),
-                  contact: contact.trim(),
-                };
-              });
-            setValue('householdMembers', rows as any);
-          }}
-        />
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-on-surface">
+              Household Members
+            </p>
+            <button
+              type="button"
+              onClick={addHouseholdMember}
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
+            >
+              <span aria-hidden>+</span> Add Member
+            </button>
+          </div>
+
+          {householdMembers.length === 0 && (
+            <p className="text-[11px] text-text-muted italic">
+              No household members added yet. Click "Add Member" to begin.
+            </p>
+          )}
+
+          {householdMembers.map((member, index) => (
+            <div
+              key={index}
+              className="rounded-lg border border-border bg-surface p-3 space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-text-muted">
+                  Member #{index + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeHouseholdMember(index)}
+                  className="text-xs text-red-600 hover:text-red-700 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+
+              <Grid cols={2}>
+                <Input
+                  label="Name"
+                  value={member.name}
+                  onChange={(e) =>
+                    updateHouseholdMember(index, 'name', e.target.value)
+                  }
+                  placeholder="e.g. Almaz Tesfaye"
+                />
+                <Input
+                  label="Age"
+                  type="number"
+                  min={0}
+                  max={150}
+                  value={member.age}
+                  onChange={(e) =>
+                    updateHouseholdMember(index, 'age', e.target.value)
+                  }
+                  placeholder="e.g. 34"
+                />
+                <Input
+                  label="Relationship"
+                  value={member.relationship}
+                  onChange={(e) =>
+                    updateHouseholdMember(index, 'relationship', e.target.value)
+                  }
+                  placeholder="e.g. Daughter"
+                />
+                <Input
+                  label="Occupation"
+                  value={member.occupation}
+                  onChange={(e) =>
+                    updateHouseholdMember(index, 'occupation', e.target.value)
+                  }
+                  placeholder="e.g. Teacher"
+                />
+              </Grid>
+
+              <Input
+                label="Contact"
+                type="tel"
+                value={member.contact}
+                onChange={(e) =>
+                  updateHouseholdMember(index, 'contact', e.target.value)
+                }
+                placeholder="e.g. +251911234567"
+              />
+            </div>
+          ))}
+        </div>
       </Section>
 
       {/* ── 3. Primary caregiver ── */}
@@ -159,11 +461,6 @@ const FamilyAssessmentFormPage: React.FC = () => {
             label="Relationship"
             placeholder="e.g. Daughter, Spouse"
             {...register('primaryCaregiverRelationship')}
-          />
-          <Input
-            label="Age"
-            type="number"
-            {...register('primaryCaregiverAge')}
           />
           <Input
             label="Phone"
@@ -259,7 +556,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
           label="External Support"
           values={watch('externalSupport') ?? []}
           options={['Community', 'ReligiousInstitution', 'NgoSupport', 'None']}
-          onChange={(v) => setValue('externalSupport', v as any)}
+          onChange={(v) =>
+            setValue('externalSupport', v as any, { shouldDirty: true })
+          }
         />
         <Select
           label="Social Isolation Risk"
@@ -285,7 +584,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'FamilySupport',
             'NoStableIncome',
           ]}
-          onChange={(v) => setValue('incomeSources', v as any)}
+          onChange={(v) =>
+            setValue('incomeSources', v as any, { shouldDirty: true })
+          }
         />
         <Grid cols={2}>
           <Select
@@ -321,7 +622,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'LossOfIncome',
             'CaregiverBurden',
           ]}
-          onChange={(v) => setValue('financialChallenges', v as any)}
+          onChange={(v) =>
+            setValue('financialChallenges', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
@@ -475,7 +778,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'LackOfSupport',
             'LackOfKnowledge',
           ]}
-          onChange={(v) => setValue('burdenFactors', v as any)}
+          onChange={(v) =>
+            setValue('burdenFactors', v as any, { shouldDirty: true })
+          }
         />
       </Section>
 
@@ -493,7 +798,7 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'RespiteCare',
             'BereavementPreparation',
           ]}
-          onChange={(v) => setValue('needs', v as any)}
+          onChange={(v) => setValue('needs', v as any, { shouldDirty: true })}
         />
         <CheckboxGroup
           label="Family Strengths"
@@ -506,7 +811,7 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'CommunitySupport',
             'GoodCommunication',
           ]}
-          onChange={(v) => setValue('strengths', v as any)}
+          onChange={(v) => setValue('strengths', v as any, { shouldDirty: true })}
         />
       </Section>
 
@@ -527,7 +832,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'FinancialAssistancePrograms',
             'CommunityVolunteers',
           ]}
-          onChange={(v) => setValue('supportServices', v as any)}
+          onChange={(v) =>
+            setValue('supportServices', v as any, { shouldDirty: true })
+          }
         />
         <Select
           label="Follow-Up Plan"
@@ -544,10 +851,7 @@ const FamilyAssessmentFormPage: React.FC = () => {
 
       {/* ── 14. Summary ── */}
       <Section title="14. Summary & Recommendations">
-        <Input
-          label="Assessor Name"
-          {...register('assessorName')}
-        />
+        <Input label="Assessor Name" {...register('assessorName')} />
         <CheckboxGroup
           label="Assessment Outcome"
           values={watch('assessmentOutcome') ?? []}
@@ -558,7 +862,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'AtRiskFamilySystem',
             'RequiresIntensivePsychosocialSupport',
           ]}
-          onChange={(v) => setValue('assessmentOutcome', v as any)}
+          onChange={(v) =>
+            setValue('assessmentOutcome', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Final Recommendations"
@@ -571,7 +877,9 @@ const FamilyAssessmentFormPage: React.FC = () => {
             'BereavementPreparationNeeded',
             'MultidisciplinaryFamilyIntervention',
           ]}
-          onChange={(v) => setValue('finalRecommendations', v as any)}
+          onChange={(v) =>
+            setValue('finalRecommendations', v as any, { shouldDirty: true })
+          }
         />
       </Section>
     </AssessmentFormShell>

@@ -19,31 +19,41 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { formatRelativeTime, formatDate } from '@/lib/utils';
 
 // ── Admin stat card ──────────────────────────────────────────────
+// Matches the Reports page KPI card style.
 const AdminStatCard: React.FC<{
   icon: React.ReactNode;
   label: string;
   value: number;
-  accent?: string;
+  subtitle?: string;
+  isPrimary?: boolean;
   onClick?: () => void;
-}> = ({ icon, label, value, accent = 'text-primary', onClick }) => (
+}> = ({ icon, label, value, subtitle, isPrimary = false, onClick }) => (
   <div
     onClick={onClick}
     className={`
-      relative overflow-hidden rounded-2xl border border-border-base bg-surface-lowest p-5 shadow-card transition-all
-      ${onClick ? 'cursor-pointer hover:shadow-card-hover hover:-translate-y-0.5' : ''}
+      p-5 rounded-2xl transition-all
+      ${isPrimary
+        ? 'bg-[#4D73D9] text-white shadow-lg shadow-[#4D73D9]/20'
+        : 'bg-card border border-border text-on-surface shadow-sm'}
+      ${onClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5' : ''}
     `}
   >
-    {/* Decorative accent stripe — solid primary so it stays visible in dark mode */}
-    <div className="absolute top-0 left-0 h-1 w-full bg-primary opacity-70" />
-    <div className="flex items-center gap-4 pt-1">
-      <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-primary-light ${accent}`}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-2xl font-bold text-on-surface">{value}</p>
-        <p className="text-xs text-text-muted">{label}</p>
-      </div>
+    <div className="flex items-center justify-between">
+      <span className={`text-xs font-medium ${isPrimary ? 'text-white/80' : 'text-text-secondary'}`}>
+        {label}
+      </span>
+      <span className={isPrimary ? 'text-white/80' : 'text-text-muted'}>{icon}</span>
     </div>
+
+    <div className="mt-3">
+      <span className="text-3xl font-extrabold tracking-tight">{value}</span>
+    </div>
+
+    {subtitle && (
+      <p className={`text-[11px] mt-2 ${isPrimary ? 'text-white/70' : 'text-text-muted'}`}>
+        {subtitle}
+      </p>
+    )}
   </div>
 );
 
@@ -58,7 +68,6 @@ const AdminSection: React.FC<{
   noPadding?: boolean;
 }> = ({ icon, title, badge, badgeVariant = 'primary', action, children, noPadding }) => (
   <div className="rounded-2xl border border-border-base bg-surface-lowest shadow-card overflow-hidden">
-    {/* Section header — flat surface so it reads on both themes */}
     <div className="flex items-center justify-between px-5 py-4 border-b border-border-base bg-surface-low">
       <div className="flex items-center gap-2.5">
         <span className="text-primary">{icon}</span>
@@ -125,17 +134,51 @@ const AdminDashboardPage: React.FC = () => {
 
       {/* ── Stats strip ── */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <AdminStatCard icon={<Users size={20} />}        label="Total Patients"    value={stats?.totalPatients ?? 0}       onClick={() => navigate('/admin/patients')} />
-        <AdminStatCard icon={<CheckCircle2 size={20} />} label="Active Patients"   value={stats?.activePatients ?? 0}      accent="text-success" onClick={() => navigate('/admin/patients')} />
-        <AdminStatCard icon={<Hospital size={20} />}     label="Hospitalized"      value={stats?.hospitalizedPatients ?? 0} accent="text-warning" />
-        <AdminStatCard icon={<UserX size={20} />}        label="Discharged"        value={stats?.dischargedPatients ?? 0}  accent="text-text-muted" />
-        <AdminStatCard icon={<GitBranch size={20} />}    label="Pending Referrals" value={stats?.pendingReferrals ?? 0}    accent="text-warning" onClick={() => navigate('/admin/referrals')} />
-        <AdminStatCard icon={<UserCheck size={20} />}    label="Pending Staff"     value={stats?.pendingStaff ?? 0}        accent="text-primary" onClick={() => navigate('/admin/staff')} />
+        <AdminStatCard
+          icon={<Users size={18} />}
+          label="Total Patients"
+          value={stats?.totalPatients ?? 0}
+          subtitle="All registered patients"
+          isPrimary
+          onClick={() => navigate('/admin/patients')}
+        />
+        <AdminStatCard
+          icon={<CheckCircle2 size={18} />}
+          label="Active Patients"
+          value={stats?.activePatients ?? 0}
+          subtitle="Currently active"
+          onClick={() => navigate('/admin/patients')}
+        />
+        <AdminStatCard
+          icon={<Hospital size={18} />}
+          label="Hospitalized"
+          value={stats?.hospitalizedPatients ?? 0}
+          subtitle="In patient care"
+        />
+        <AdminStatCard
+          icon={<UserX size={18} />}
+          label="Discharged"
+          value={stats?.dischargedPatients ?? 0}
+          subtitle="Completed treatment"
+        />
+        <AdminStatCard
+          icon={<GitBranch size={18} />}
+          label="Pending Referrals"
+          value={stats?.pendingReferrals ?? 0}
+          subtitle="Awaiting approval"
+          onClick={() => navigate('/admin/referrals')}
+        />
+        <AdminStatCard
+          icon={<UserCheck size={18} />}
+          label="Pending Staff"
+          value={stats?.pendingStaff ?? 0}
+          subtitle="Awaiting approval"
+          onClick={() => navigate('/admin/staff')}
+        />
       </div>
 
       {/* ── 2-col: Notifications + Recent Referrals ── */}
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Notifications — Admin only */}
         <AdminSection
           icon={<Bell size={16} />}
           title="Notifications"
@@ -174,7 +217,6 @@ const AdminDashboardPage: React.FC = () => {
           </div>
         </AdminSection>
 
-        {/* Recent referrals */}
         <AdminSection
           icon={<GitBranch size={16} />}
           title="Recent Referrals"

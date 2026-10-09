@@ -204,6 +204,7 @@ const painImpactRowSchema = z.object({
 
 export const createPainAssessmentSchema = z.object({
   body: z.object({
+    actingAsStaffId: z.coerce.number().int().positive().optional(),
     // ── Header ──
     assessmentType: z.enum(PAIN_ASSESSMENT_TYPE_VALUES),
 

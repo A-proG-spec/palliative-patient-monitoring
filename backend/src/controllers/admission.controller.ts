@@ -5,7 +5,7 @@ import * as admissionService from '@services/admission.service.js';
 
 export const recordAdmission = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
-  const result = await admissionService.recordAdmission(patientId, req.body, req.user.id);
+  const result = await admissionService.recordAdmission(patientId, req.body, req.actor);
   return SuccessResponse(201, 'Admission recorded successfully', result);
 });
 
@@ -51,7 +51,7 @@ export const updateAdmission = asyncHandler(async (req: Request, res: Response) 
     patientId,
     admissionId,
     req.body,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(200, 'Admission updated successfully', result);
 });
@@ -64,7 +64,7 @@ export const deleteAdmission = asyncHandler(async (req: Request, res: Response) 
   const result = await admissionService.deleteAdmission(
     patientId,
     admissionId,
-    req.user.id,
+    req.actor,
     reason,
   );
   return SuccessResponse(200, 'Admission deleted', result);
@@ -77,7 +77,7 @@ export const restoreAdmission = asyncHandler(async (req: Request, res: Response)
   const result = await admissionService.restoreAdmission(
     patientId,
     admissionId,
-    req.user.id,
+    req.actor,
   );
   return SuccessResponse(200, 'Admission restored', result);
 });

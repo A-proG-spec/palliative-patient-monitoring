@@ -103,6 +103,19 @@ export type ContributionCategory =
   | 'discharges'
   | 'patients';
 
+const getEnteredBy = (
+  createdByAdmin: { id: number; name: string } | null,
+  createdByStaff: { id: number; name: string } | null,
+) => {
+  if (createdByAdmin) {
+    return { id: createdByAdmin.id, name: createdByAdmin.name, type: 'admin' as const };
+  }
+  if (createdByStaff) {
+    return { id: createdByStaff.id, name: createdByStaff.name, type: 'staff' as const };
+  }
+  return null;
+};
+
 export const getStaffContributionDetail = async (
   staffId: string,
   category: ContributionCategory,
@@ -139,6 +152,8 @@ export const getStaffContributionDetail = async (
           include: {
             patient: { select: { id: true, firstName: true, lastName: true } },
             signatures: true,
+            createdByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
           },
         }),
         prisma.homeVisit.count({ where }),
@@ -155,6 +170,7 @@ export const getStaffContributionDetail = async (
             signature?.isTeamLeader ?? v.createdBy === id;
           return {
             id: v.id,
+            enteredBy: getEnteredBy(v.createdByAdmin, v.createdByStaff),
             patientId: v.patient.id,
             patientName: `${v.patient.firstName} ${v.patient.lastName}`,
             visitDate: v.visitDate,
@@ -189,6 +205,8 @@ export const getStaffContributionDetail = async (
             patient: { select: { id: true, firstName: true, lastName: true } },
             admission: { select: { id: true, ward: true, bedNumber: true } },
             signatures: true,
+            createdByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
           },
         }),
         prisma.patientProgressNote.count({ where }),
@@ -208,6 +226,7 @@ export const getStaffContributionDetail = async (
               : (signature?.role ?? 'Signer');
           return {
             id: n.id,
+            enteredBy: getEnteredBy(n.createdByAdmin, n.createdByStaff),
             patientId: n.patient.id,
             patientName: `${n.patient.firstName} ${n.patient.lastName}`,
             ward: n.admission?.ward ?? null,
@@ -241,6 +260,8 @@ export const getStaffContributionDetail = async (
           take: limit,
           include: {
             patient: { select: { id: true, firstName: true, lastName: true } },
+            createdByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
           },
         }),
         prisma.hospiceNursingAssessment.count({ where }),
@@ -253,6 +274,7 @@ export const getStaffContributionDetail = async (
         total,
         items: items.map((a) => ({
           id: a.id,
+          enteredBy: getEnteredBy(a.createdByAdmin, a.createdByStaff),
           patientId: a.patient.id,
           patientName: `${a.patient.firstName} ${a.patient.lastName}`,
           assessmentDate: a.assessmentDate,
@@ -284,6 +306,8 @@ export const getStaffContributionDetail = async (
           take: limit,
           include: {
             patient: { select: { id: true, firstName: true, lastName: true } },
+            orderedByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
           },
         }),
         prisma.laboratoryTest.count({ where }),
@@ -296,6 +320,7 @@ export const getStaffContributionDetail = async (
         total,
         items: items.map((l) => ({
           id: l.id,
+          enteredBy: getEnteredBy(l.createdByAdmin, l.orderedByStaff),
           patientId: l.patient.id,
           patientName: `${l.patient.firstName} ${l.patient.lastName}`,
           testName: l.testName,
@@ -322,6 +347,8 @@ export const getStaffContributionDetail = async (
           take: limit,
           include: {
             patient: { select: { id: true, firstName: true, lastName: true } },
+            orderedByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
           },
         }),
         prisma.imagingOrder.count({ where }),
@@ -334,6 +361,7 @@ export const getStaffContributionDetail = async (
         total,
         items: items.map((o) => ({
           id: o.id,
+          enteredBy: getEnteredBy(o.createdByAdmin, o.orderedByStaff),
           patientId: o.patient.id,
           patientName: `${o.patient.firstName} ${o.patient.lastName}`,
           modality: o.modality,
@@ -367,6 +395,8 @@ export const getStaffContributionDetail = async (
           take: limit,
           include: {
             patient: { select: { id: true, firstName: true, lastName: true } },
+            prescribedByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
           },
         }),
         prisma.medication.count({ where }),
@@ -379,6 +409,7 @@ export const getStaffContributionDetail = async (
         total,
         items: items.map((m) => ({
           id: m.id,
+          enteredBy: getEnteredBy(m.createdByAdmin, m.prescribedByStaff),
           patientId: m.patient.id,
           patientName: `${m.patient.firstName} ${m.patient.lastName}`,
           name: m.name,
@@ -405,6 +436,8 @@ export const getStaffContributionDetail = async (
           take: limit,
           include: {
             patient: { select: { id: true, firstName: true, lastName: true } },
+            requestedByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
           },
         }),
         prisma.referral.count({ where }),
@@ -417,6 +450,7 @@ export const getStaffContributionDetail = async (
         total,
         items: items.map((r) => ({
           id: r.id,
+          enteredBy: getEnteredBy(r.createdByAdmin, r.requestedByStaff),
           patientId: r.patient.id,
           patientName: `${r.patient.firstName} ${r.patient.lastName}`,
           referralType: r.referralType,
@@ -443,6 +477,8 @@ export const getStaffContributionDetail = async (
           take: limit,
           include: {
             patient: { select: { id: true, firstName: true, lastName: true } },
+            createdByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
           },
         }),
         prisma.hospitalAdmission.count({ where }),
@@ -455,6 +491,7 @@ export const getStaffContributionDetail = async (
         total,
         items: items.map((a) => ({
           id: a.id,
+          enteredBy: getEnteredBy(a.createdByAdmin, a.createdByStaff),
           patientId: a.patient.id,
           patientName: `${a.patient.firstName} ${a.patient.lastName}`,
           admissionDate: a.admissionDate,
@@ -481,6 +518,8 @@ export const getStaffContributionDetail = async (
           take: limit,
           include: {
             patient: { select: { id: true, firstName: true, lastName: true } },
+            createdByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
           },
         }),
         prisma.dischargeSummary.count({ where }),
@@ -493,6 +532,7 @@ export const getStaffContributionDetail = async (
         total,
         items: items.map((d) => ({
           id: d.id,
+          enteredBy: getEnteredBy(d.createdByAdmin, d.createdByStaff),
           patientId: d.patient.id,
           patientName: `${d.patient.firstName} ${d.patient.lastName}`,
           dateOfDischarge: d.dateOfDischarge,
@@ -527,6 +567,8 @@ export const getStaffContributionDetail = async (
             currentLocation: true,
             primaryDiagnosis: true,
             createdAt: true,
+            registeredByStaff: { select: { id: true, name: true } },
+            createdByAdmin: { select: { id: true, name: true } },
           },
         }),
         prisma.patient.count({ where }),
@@ -537,7 +579,18 @@ export const getStaffContributionDetail = async (
         page,
         limit,
         total,
-        items,
+        items: items.map((patient) => ({
+          id: patient.id,
+          firstName: patient.firstName,
+          lastName: patient.lastName,
+          age: patient.age,
+          sex: patient.sex,
+          status: patient.status,
+          currentLocation: patient.currentLocation,
+          primaryDiagnosis: patient.primaryDiagnosis,
+          createdAt: patient.createdAt,
+          enteredBy: getEnteredBy(patient.createdByAdmin, patient.registeredByStaff),
+        })),
       };
     }
 

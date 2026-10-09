@@ -15,7 +15,7 @@ export const createPsychiatryAssessment = asyncHandler(
     const result = await psychiatryService.createPsychiatryAssessment(
       patientId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(201, 'Psychiatry assessment saved', result);
   },
@@ -91,7 +91,7 @@ export const updatePsychiatryAssessment = asyncHandler(
       patientId,
       assessmentId,
       req.body,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Psychiatry assessment updated', result);
   },
@@ -114,7 +114,7 @@ export const deletePsychiatryAssessment = asyncHandler(
     const result = await psychiatryService.deletePsychiatryAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
       reason,
     );
     return SuccessResponse(200, 'Psychiatry assessment deleted', result);
@@ -132,7 +132,7 @@ export const restorePsychiatryAssessment = asyncHandler(
     const result = await psychiatryService.restorePsychiatryAssessment(
       patientId,
       assessmentId,
-      req.user.id,
+      req.actor,
     );
     return SuccessResponse(200, 'Psychiatry assessment restored', result);
   },
