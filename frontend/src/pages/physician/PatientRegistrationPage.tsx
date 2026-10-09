@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createPatientSchema, type CreatePatientFormData } from '@/schemas/patient.schema';
@@ -24,7 +24,16 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 
 const PatientRegistrationPage: React.FC = () => {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const mutation = useRegisterPatient();
+
+  // ── Route-aware base path ──
+  //   Admin lands on /admin/patients/new
+  //   Staff lands on /patients/new
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const patientsBasePath = isAdminRoute ? '/admin/patients' : '/patients';
+  const patientDetailPath = (patientId: string | number) =>
+    `${patientsBasePath}/${patientId}`;
 
   const {
     register,
@@ -51,7 +60,7 @@ const PatientRegistrationPage: React.FC = () => {
 
   const onSubmit = (data: CreatePatientFormData) => {
     mutation.mutate(data, {
-      onSuccess: (patient) => navigate(`/patients/${patient.id}`),
+      onSuccess: (patient) => navigate(patientDetailPath(patient.id)),
       onError: (err: unknown) => {
         const msg =
           (err as { response?: { data?: { message?: string } } })?.response?.data
@@ -64,7 +73,7 @@ const PatientRegistrationPage: React.FC = () => {
   return (
     <div className="max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
-        <BackButton to="/patients" label="Patients" />
+        <BackButton to={patientsBasePath} label="Patients" />
         <div>
           <h1 className="text-2xl font-bold text-on-surface">Register New Patient</h1>
           <p className="text-sm text-text-secondary">
@@ -261,7 +270,7 @@ const PatientRegistrationPage: React.FC = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => navigate('/patients')}
+            onClick={() => navigate(patientsBasePath)}
           >
             Cancel
           </Button>
