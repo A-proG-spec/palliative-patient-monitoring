@@ -90,12 +90,6 @@ const HospiceNursingDetailPage: React.FC = () => {
           </CardContent>
         </Card>
       )}
-
-      <div className="flex justify-end pb-6">
-        <Button variant="outline" onClick={() => navigate(`/patients/${id}/hospice-nursing`)}>
-          Back to List
-        </Button>
-      </div>
     </div>
   );
 };

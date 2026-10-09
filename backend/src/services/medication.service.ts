@@ -14,7 +14,7 @@ const toEnteredBy = (
       : null;
 
 // ─────────────────────────────────────────────────────────────
-// Order medication
+// List all medications for a patient (paginated)
 // ─────────────────────────────────────────────────────────────
 export const getAllMedications = async (
   patientId: string,
@@ -71,24 +71,45 @@ export const getAllMedications = async (
   };
 };
 
+// ─────────────────────────────────────────────────────────────
+// Order medication
+//
+// Staff  → prescribedBy = their staff id, createdByAdminId = null
+// Admin  → prescribedBy = null,            createdByAdminId = admin.id
+//
+// Admins never need to send `actingAsStaffId`. If they do
+// (e.g. prescribing on behalf of a physician), it is honored —
+// but it is never required.
+// ─────────────────────────────────────────────────────────────
 export const orderMedication = async (
   patientId: string,
   data: any,
   actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const sid = resolveStaffAttribution(actor, data.actingAsStaffId);
-  if (sid === undefined) {
-    throw new ApiError(400, 'actingAsStaffId is required to prescribe medication');
-  }
+
+  const hasActingAsStaffId =
+    data.actingAsStaffId !== undefined &&
+    data.actingAsStaffId !== null &&
+    data.actingAsStaffId !== '';
+
+  // Resolve staff attribution:
+  //   - staff actor    → their own staff id
+  //   - admin + actingAsStaffId → that staff id
+  //   - admin alone    → undefined (no staff attribution)
+  const sid = actor.type === 'staff' || hasActingAsStaffId
+    ? resolveStaffAttribution(actor, data.actingAsStaffId)
+    : undefined;
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
-    prisma.staff.findUnique({ where: { id: sid }, select: { id: true, name: true } }),
+    sid !== undefined
+      ? prisma.staff.findUnique({ where: { id: sid }, select: { id: true, name: true } })
+      : Promise.resolve(null),
   ]);
 
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (!staff) throw new ApiError(404, 'Staff member not found');
+  if (sid !== undefined && !staff) throw new ApiError(404, 'Staff member not found');
 
   const medication = await prisma.medication.create({
     data: {
@@ -98,7 +119,7 @@ export const orderMedication = async (
       frequency: data.frequency,
       route: data.route,
       administeredAt: data.administeredAt,
-      prescribedBy: sid,
+      prescribedBy: sid ?? null,
       createdByAdminId: adminCreatorId(actor),
       status: 'Ordered',
     },
@@ -123,7 +144,7 @@ export const orderMedication = async (
 };
 
 // ─────────────────────────────────────────────────────────────
-// List medications for a patient
+// List medications for a patient (non-paginated variant)
 // ─────────────────────────────────────────────────────────────
 export const getMedications = async (
   patientId: string,
@@ -211,7 +232,10 @@ export const getMedicationById = async (
 };
 
 // ─────────────────────────────────────────────────────────────
-// Update status (Ordered ↔ Given) — records auditor
+// Update status (Ordered ↔ Given)
+//
+// Staff → updatedByStaffId = their staff id
+// Admin → updatedBy = admin id (unless actingAsStaffId is sent)
 // ─────────────────────────────────────────────────────────────
 export const updateMedicationStatus = async (
   patientId: string,
@@ -222,11 +246,15 @@ export const updateMedicationStatus = async (
 ) => {
   const pid = toId(patientId, 'patient id');
   const mid = toId(medicationId, 'medication id');
-  const staffId = actor.type === 'staff'
+
+  const hasActingAsStaffId =
+    actingAsStaffId !== undefined &&
+    actingAsStaffId !== null &&
+    actingAsStaffId !== '';
+
+  const sid = actor.type === 'staff' || hasActingAsStaffId
     ? resolveStaffAttribution(actor, actingAsStaffId)
-    : actingAsStaffId !== undefined
-      ? resolveStaffAttribution(actor, actingAsStaffId)
-      : undefined;
+    : undefined;
 
   if (!['Ordered', 'Given'].includes(status)) {
     throw new ApiError(400, 'Invalid status value');
@@ -242,11 +270,15 @@ export const updateMedicationStatus = async (
     where: { id: mid },
     data: {
       status,
-      ...(actor.type === 'admin'
-        ? staffId !== undefined
-          ? { updatedByStaffId: staffId }
-          : { updatedBy: actor.id }
-        : { updatedByStaffId: staffId }),
+      // Attribute the actor.
+      //   staff → updatedByStaffId = sid
+      //   admin alone → updatedBy = admin.id
+      //   admin + actingAsStaffId → updatedByStaffId = sid
+      ...(actor.type === 'staff'
+        ? { updatedByStaffId: sid }
+        : hasActingAsStaffId
+          ? { updatedByStaffId: sid }
+          : { updatedBy: actor.id }),
     },
     include: {
       prescribedByStaff: { select: { id: true, name: true } },
@@ -305,9 +337,6 @@ export const deleteMedication = async (
 
 // ─────────────────────────────────────────────────────────────
 // Restore a soft-deleted medication (admin only)
-//
-// Uses prismaBase to bypass the soft-delete extension on read,
-// then update clears the deletedAt fields.
 // ─────────────────────────────────────────────────────────────
 export const restoreMedication = async (
   patientId: string,
@@ -449,8 +478,8 @@ export const getMedicationOrderById = async (medicationId: string) => {
 // ─────────────────────────────────────────────────────────────
 // Pharmacist queue — mark as Given
 //
-// Reuses the patient-scoped updater but skips the patient guard
-// because the pharmacist already sees the order in their queue.
+// Staff  → updatedByStaffId = their staff id
+// Admin  → updatedBy = admin id (unless actingAsStaffId is sent)
 // ─────────────────────────────────────────────────────────────
 export const markMedicationGivenByQueue = async (
   medicationId: string,
@@ -458,9 +487,15 @@ export const markMedicationGivenByQueue = async (
   actingAsStaffId?: string | number,
 ) => {
   const mid = toId(medicationId, 'medication id');
-  const sid = actor.type === 'admin' && actingAsStaffId === undefined
-    ? undefined
-    : resolveStaffAttribution(actor, actingAsStaffId);
+
+  const hasActingAsStaffId =
+    actingAsStaffId !== undefined &&
+    actingAsStaffId !== null &&
+    actingAsStaffId !== '';
+
+  const sid = actor.type === 'staff' || hasActingAsStaffId
+    ? resolveStaffAttribution(actor, actingAsStaffId)
+    : undefined;
 
   const existing = await prisma.medication.findUnique({
     where: { id: mid },
@@ -475,10 +510,11 @@ export const markMedicationGivenByQueue = async (
     where: { id: mid },
     data: {
       status: 'Given',
-      ...(actor.type === 'admin' && actingAsStaffId === undefined
-        ? { updatedBy: actor.id }
-        : { updatedByStaffId: sid }),
-      // Admins retain their Admin audit FK unless explicitly acting as Staff.
+      ...(actor.type === 'staff'
+        ? { updatedByStaffId: sid }
+        : hasActingAsStaffId
+          ? { updatedByStaffId: sid }
+          : { updatedBy: actor.id }),
     },
   });
 

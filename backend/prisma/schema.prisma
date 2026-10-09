@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
   //directUrl = env("DIRECT_URL")
 }
 
@@ -2722,7 +2722,6 @@ model Staff {
   admissionsCreated        HospitalAdmission[]        @relation("AdmissionCreatedBy")
   dischargeCreated         DischargeSummary[]         @relation("DischargeCreatedBy")
   progressNotesCreated     PatientProgressNote[]      @relation("ProgressNoteCreatedBy")
-  progressNotesResponsible PatientProgressNote[]      @relation("ProgressNoteResponsible")
   progressNoteSignatures   ProgressNoteSignature[]
   hospiceNursingCreated    HospiceNursingAssessment[] @relation("HospiceNursingCreatedBy")
   hospiceNursingAssessed   HospiceNursingAssessment[] @relation("HospiceNursingAssessedBy")
@@ -2818,8 +2817,8 @@ model Medication {
   dosage            String
   frequency         String
   route             String
-  prescribedBy      Int
-  prescribedByStaff Staff                    @relation("MedicationPrescribedBy", fields: [prescribedBy], references: [id])
+  prescribedBy      Int?
+  prescribedByStaff Staff?                    @relation("MedicationPrescribedBy", fields: [prescribedBy], references: [id])
   createdByAdminId  Int?
   createdByAdmin    Admin?                   @relation("MedicationCreatedByAdmin", fields: [createdByAdminId], references: [id])
   administeredAt    MedicationAdministeredAt
@@ -3888,9 +3887,6 @@ model PatientProgressNote {
   soapPlan       String? @default("")
 
   // Section 20 — authorization
-  responsibleClinicianId Int
-  responsibleClinician   Staff @relation("ProgressNoteResponsible", fields: [responsibleClinicianId], references: [id])
-
   facilityStamp String? @default("")
 
   // Meta
@@ -3918,7 +3914,6 @@ model PatientProgressNote {
   @@index([patientId, createdAt])
   @@index([admissionId, createdAt])
   @@index([createdBy])
-  @@index([responsibleClinicianId])
 }
 
 // ── ProgressNote child: medications ──

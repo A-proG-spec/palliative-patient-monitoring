@@ -1,4 +1,3 @@
-// src/pages/clinical/DischargePatientPage.tsx
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { usePatient } from '@/hooks/usePatients';
@@ -7,11 +6,10 @@ import { useDischargePatient } from '@/hooks/useDischarge';
 import { useAuthStore } from '@/store/auth.store';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
-import { DischargePatientWizard } from '@/components/admin/discharge/DischargePatientWizard';
 import { canDischarge } from '@/config/permissions';
-import { buildDischargePayload } from '@/lib/dischargePayload';
 import type { DischargeSummary } from '@/hooks/useDischargeFormState';
-
+import { DischargePatientWizard } from '@/components/admin/discharge/DischargePatientWizard';
+import { buildDischargePayload } from '@/lib/dischargePayload';
 const DischargePatientPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -81,6 +81,13 @@ const SYMPTOM_OPTIONS = Array.from({ length: 11 }, (_, i) => ({
 const RequestReferralPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  // Route-aware base path. This IS the patient detail route.
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const patientPath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
 
   const { data: patient, isLoading: pLoading, isSuccess } = usePatient(id!);
   const { data: visitsData } = usePatientVisits(id!, { limit: 1 });
@@ -90,8 +97,6 @@ const RequestReferralPage: React.FC = () => {
 
   const latestPPS = latestVisit?.ppsScore ?? 0;
   const latestKPS = latestVisit?.kpsScore ?? 0;
-
-  const patientPath = `/patients/${id}`;
 
   const {
     register,
@@ -125,14 +130,6 @@ const RequestReferralPage: React.FC = () => {
 
   // ═══════════════════════════════════════════════════════════════
   // AUTO-FILL — patient snapshot + latest PPS/KPS
-  //
-  // Split into TWO effects:
-  //   1. Patient snapshot — runs once when the patient loads
-  //   2. Visit scores    — runs whenever the latest visit changes
-  //
-  // Combining them into one effect with a single `hasHydrated`
-  // guard meant the visit scores were skipped if the visit query
-  // resolved *after* the patient query.
   // ═══════════════════════════════════════════════════════════════
   const patientHydrated = useRef(false);
 
@@ -155,8 +152,6 @@ const RequestReferralPage: React.FC = () => {
 
   const onSubmit = (data: CreateReferralFormData) => {
     // ── Coerce every numeric field to Number ──
-    // Defends against selects that emit string values even when
-    // `valueAsNumber` is set.
     const safePayload: CreateReferralFormData = {
       ...data,
       ppsScore: Number(data.ppsScore),

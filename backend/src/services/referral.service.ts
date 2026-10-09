@@ -73,6 +73,20 @@ export const createReferral = async (
     referralType: referral.referralType,
     referralDate: referral.referralDate,
     status: referral.status,
+
+    // ── Requestor / Referrer info (all variants) ──
+    requestedBy: referral.requestedBy,
+    requestedByStaff: referral.requestedByStaff
+      ? { id: referral.requestedByStaff.id, name: referral.requestedByStaff.name }
+      : null,
+    createdByAdmin: referral.createdByAdmin
+      ? { id: referral.createdByAdmin.id, name: referral.createdByAdmin.name }
+      : null,
+    requestingClinician:
+      referral.requestedByStaff?.name ??
+      referral.createdByAdmin?.name ??
+      null,
+
     enteredBy: toEnteredBy(referral.requestedByStaff, referral.createdByAdmin),
     createdAt: referral.createdAt,
   };
@@ -129,6 +143,20 @@ export const getReferrals = async (
       receivingFacility: r.receivingFacility,
       status: r.status,
       actionTaken: r.actionTaken,
+
+      // ── Requestor / Referrer info (all variants) ──
+      requestedBy: r.requestedBy,
+      requestedByStaff: r.requestedByStaff
+        ? { id: r.requestedByStaff.id, name: r.requestedByStaff.name }
+        : null,
+      createdByAdmin: r.createdByAdmin
+        ? { id: r.createdByAdmin.id, name: r.createdByAdmin.name }
+        : null,
+      requestingClinician:
+        r.requestedByStaff?.name ??
+        r.createdByAdmin?.name ??
+        null,
+
       enteredBy: toEnteredBy(r.requestedByStaff, r.createdByAdmin),
       createdAt: r.createdAt,
     })),
@@ -188,6 +216,19 @@ export const getReferralById = async (
 
     followUpDate: referral.followUpDate,
     followUpStatus: referral.followUpStatus,
+
+    // ── Requestor / Referrer info (all variants) ──
+    requestedBy: referral.requestedBy,
+    requestedByStaff: referral.requestedByStaff
+      ? { id: referral.requestedByStaff.id, name: referral.requestedByStaff.name }
+      : null,
+    createdByAdmin: referral.createdByAdmin
+      ? { id: referral.createdByAdmin.id, name: referral.createdByAdmin.name }
+      : null,
+    requestingClinician:
+      referral.requestedByStaff?.name ??
+      referral.createdByAdmin?.name ??
+      null,
 
     enteredBy: toEnteredBy(referral.requestedByStaff, referral.createdByAdmin),
     approvedBy: referral.approvedByAdmin

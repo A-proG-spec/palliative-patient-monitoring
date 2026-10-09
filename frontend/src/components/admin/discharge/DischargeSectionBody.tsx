@@ -163,6 +163,29 @@ const YesNo: React.FC<{
 );
 
 // ═══════════════════════════════════════════════════════════
+// Enum-backed radio options — value is the backend enum member
+// ═══════════════════════════════════════════════════════════
+
+const DISCHARGE_TYPE_OPTIONS = [
+  { value: 'PlannedDischarge', label: 'Planned Discharge' },
+  { value: 'Transfer', label: 'Transfer' },
+  { value: 'DischargeToHome', label: 'Discharge to Home' },
+  { value: 'DischargeToHospice', label: 'Discharge to Hospice' },
+  { value: 'DischargeToLongTermCare', label: 'Discharge to Long-Term Care Facility' },
+  { value: 'TransferToAnotherHospital', label: 'Transfer to Another Hospital/Facility' },
+  { value: 'Other', label: 'Other' },
+] as const;
+
+const DESTINATION_OPTIONS = [
+  { value: 'Home', label: 'Home' },
+  { value: 'FamilyCaregiverHome', label: 'Family / Caregiver Home' },
+  { value: 'Hospice', label: 'Hospice' },
+  { value: 'NursingLongTermCare', label: 'Nursing / Long-Term Care Facility' },
+  { value: 'AnotherHospital', label: 'Another Hospital' },
+  { value: 'Other', label: 'Other' },
+] as const;
+
+// ═══════════════════════════════════════════════════════════
 // Main body component
 // ═══════════════════════════════════════════════════════════
 
@@ -241,25 +264,17 @@ export const DischargeSectionBody: React.FC<DischargeSectionBodyProps> = ({
             </p>
             {errors.dischargeType && <p className="text-xs text-error">{errors.dischargeType}</p>}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {[
-                'Planned Discharge',
-                'Transfer',
-                'Discharge to Home',
-                'Discharge to Hospice',
-                'Discharge to Long-Term Care Facility',
-                'Transfer to Another Hospital/Facility',
-                'Other',
-              ].map((opt) => (
-                <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm text-on-surface">
+              {DISCHARGE_TYPE_OPTIONS.map(({ value, label }) => (
+                <label key={value} className="flex items-center gap-2 cursor-pointer text-sm text-on-surface">
                   <input
                     type="radio"
                     name="dischargeType"
-                    value={opt}
-                    checked={form.dischargeType === opt}
-                    onChange={() => set('dischargeType', opt)}
+                    value={value}
+                    checked={form.dischargeType === value}
+                    onChange={() => set('dischargeType', value)}
                     className="h-3.5 w-3.5 text-primary"
                   />
-                  {opt}
+                  {label}
                 </label>
               ))}
             </div>
@@ -769,24 +784,17 @@ export const DischargeSectionBody: React.FC<DischargeSectionBodyProps> = ({
             </p>
             {errors.dischargedTo && <p className="text-xs text-error">{errors.dischargedTo}</p>}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {[
-                'Home',
-                'Family/Caregiver Home',
-                'Hospice',
-                'Nursing/Long-Term Care Facility',
-                'Another Hospital',
-                'Other',
-              ].map((opt) => (
-                <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm text-on-surface">
+              {DESTINATION_OPTIONS.map(({ value, label }) => (
+                <label key={value} className="flex items-center gap-2 cursor-pointer text-sm text-on-surface">
                   <input
                     type="radio"
                     name="dischargedTo"
-                    value={opt}
-                    checked={form.dischargedTo === opt}
-                    onChange={() => set('dischargedTo', opt)}
+                    value={value}
+                    checked={form.dischargedTo === value}
+                    onChange={() => set('dischargedTo', value)}
                     className="h-3.5 w-3.5 text-primary"
                   />
-                  {opt}
+                  {label}
                 </label>
               ))}
             </div>

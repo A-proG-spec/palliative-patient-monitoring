@@ -34,6 +34,9 @@ const DISCHARGE_TYPE_MAP: Record<string, string> = {
   'Discharge to Home': 'DischargeToHome',
   'Discharge to Hospice': 'DischargeToHospice',
   'Discharge to Long-Term Care Facility': 'DischargeToLongTermCare',
+  // Frontend option label (DischargeSectionBody.tsx)
+  'Transfer to Another Hospital/Facility': 'TransferToAnotherHospital',
+  // Alternate label variant
   'Transfer to Another Hospital': 'TransferToAnotherHospital',
   Other: 'Other',
   // If already PascalCase, pass through
@@ -132,9 +135,15 @@ const ADVANCE_CARE_PLAN_MAP: Record<string, string> = {
 
 const DESTINATION_MAP: Record<string, string> = {
   Home: 'Home',
+  // Frontend label in DischargeSectionBody.tsx
+  'Family/Caregiver Home': 'FamilyCaregiverHome',
+  // Alternate label variants
   "Family / Caregiver's Home": 'FamilyCaregiverHome',
   FamilyCaregiverHome: 'FamilyCaregiverHome',
   Hospice: 'Hospice',
+  // Frontend label
+  'Nursing/Long-Term Care Facility': 'NursingLongTermCare',
+  // Alternate label variants
   'Nursing / Long-Term Care': 'NursingLongTermCare',
   NursingLongTermCare: 'NursingLongTermCare',
   'Another Hospital': 'AnotherHospital',
@@ -226,20 +235,37 @@ export function buildDischargePayload(
     dischargeType: mapEnum(form.dischargeType, DISCHARGE_TYPE_MAP),
     dischargeTypeOther: form.dischargeTypeOther || undefined,
 
-    // Clinical summary
+    // Patient snapshot
+    fullName: form.fullName || undefined,
+    dateOfBirth: form.dateOfBirth || undefined,
+    age: form.age || undefined,
+    sex: form.sex || undefined,
+    address: form.address || undefined,
+    telephone: form.telephone || undefined,
+    primaryCaregiver: form.primaryCaregiver || undefined,
+    caregiverRelationship: form.caregiverRelationship || undefined,
+    caregiverTelephone: form.caregiverTelephone || undefined,
+
+    // 2. Admission Info
+    primaryDiagnosis: form.primaryDiagnosis || undefined,
+    secondaryDiagnoses: form.secondaryDiagnoses || undefined,
+    reasonForAdmission: form.reasonForAdmission || undefined,
+    referringPhysicianFacility: form.referringPhysicianFacility || undefined,
+
+    // 3. Clinical summary
     finalDischargeDiagnosis: form.finalDischargeDiagnosis || undefined,
     clinicalProblemsManaged: cleanArray(form.clinicalProblemsManaged),
     summaryOfClinicalCourse: form.summaryOfClinicalCourse || undefined,
     importantInvestigations: form.importantInvestigations || undefined,
 
-    // Condition
+    // 4. Condition
     overallCondition: mapEnum(form.overallCondition, OVERALL_CONDITION_MAP),
     levelOfConsciousness: mapEnum(form.levelOfConsciousness, CONSCIOUSNESS_MAP),
     functionalStatus: mapEnum(form.functionalStatus, FUNCTIONAL_STATUS_MAP),
     mobility: mapEnum(form.mobility, MOBILITY_MAP),
     oralIntake: mapEnum(form.oralIntake, ORAL_INTAKE_MAP),
 
-    // Vitals
+    // 5. Vitals
     temperature: form.temperature || undefined,
     pulse: form.pulse || undefined,
     respiratoryRate: form.respiratoryRate || undefined,
@@ -247,7 +273,7 @@ export function buildDischargePayload(
     oxygenSaturation: form.oxygenSaturation || undefined,
     oxygenRequirement: form.oxygenRequirement || undefined,
 
-    // Symptoms (flattened)
+    // 6. Symptoms (flattened)
     pain: sev('Pain'),
     painNote: note('Pain'),
     shortnessOfBreath: sev('Shortness of Breath'),
@@ -272,7 +298,7 @@ export function buildDischargePayload(
     painScore: form.painScore || undefined,
     painControl: mapEnum(form.painControl, PAIN_CONTROL_MAP),
 
-    // Medications
+    // 7. Medications
     dischargeMedications: (form.dischargeMedications ?? [])
       .filter((m) => m.medication || m.dose || m.route || m.frequency)
       .map((m) => ({
@@ -287,7 +313,7 @@ export function buildDischargePayload(
     medicationChanges: form.medicationChanges || undefined,
     medicationReconciliationCompleted: yesNo(form.medicationReconciliation),
 
-    // Symptom management
+    // 8. Symptom management
     painManagementInstructions: form.painManagementInstructions || undefined,
     breathlessnessManagement: form.breathlessnessManagement || undefined,
     nauseaVomitingManagement: form.nauseaVomitingManagement || undefined,
@@ -296,7 +322,7 @@ export function buildDischargePayload(
       form.anxietyDeliriumManagement || undefined,
     otherSymptomManagement: form.otherSymptomManagement || undefined,
 
-    // Nutrition
+    // 9. Nutrition
     diet: mapEnum(form.diet, DIET_MAP),
     feedingAssistance: yesNo(form.feedingAssistance),
     enteralFeeding: yesNo(form.enteralFeeding),
@@ -305,14 +331,14 @@ export function buildDischargePayload(
     hydrationInstructions: form.hydrationInstructions || undefined,
     nutritionDietitianFollowUp: yesNo(form.nutritionFollowUp),
 
-    // Wound
+    // 10. Wound
     woundPresent: yesNo(form.woundPresent),
     woundLocation: form.woundLocation || undefined,
     woundCareInstructions: form.woundCareInstructions || undefined,
     dressingChanges: form.dressingChanges || undefined,
     pressureInjuryPrevention: form.pressureInjuryPrevention || undefined,
 
-    // Oxygen / equipment
+    // 11. Oxygen / equipment
     oxygenRequired: yesNo(form.oxygenRequired),
     oxygenDeliveryMethod: mapEnum(form.oxygenDeliveryMethod, OXYGEN_DELIVERY_MAP),
     oxygenDeliveryMethodOther: form.oxygenDeliveryOther || undefined,
@@ -321,7 +347,7 @@ export function buildDischargePayload(
     equipmentOther: form.equipmentOther || undefined,
     equipmentArranged: yesNo(form.equipmentArranged),
 
-    // Goals of care
+    // 12. Goals of care
     currentGoalsOfCare: cleanArray(form.goalsOfCare),
     currentGoalsOfCareOther: form.goalsOfCareOther || undefined,
     goalsOfCareReviewed: yesNo(form.goalsOfCareReviewed),
@@ -331,7 +357,7 @@ export function buildDischargePayload(
     codeStatusOther: form.codeStatusOther || undefined,
     advanceCarePlan: mapEnum(form.advanceCarePlan, ADVANCE_CARE_PLAN_MAP),
 
-    // Destination
+    // 13. Destination
     dischargedTo: mapEnum(form.dischargedTo, DESTINATION_MAP),
     dischargedToOther: form.dischargedToOther || undefined,
     destinationAddress: form.destinationAddress || undefined,
@@ -339,7 +365,7 @@ export function buildDischargePayload(
     transportOther: form.transportOther || undefined,
     escortCaregiver: form.escortCaregiver || undefined,
 
-    // Home / hospice
+    // 14. Home / hospice
     homePalliativeCareRequired: yesNo(form.homePalliativeCareRequired),
     hospiceReferral: mapEnum(form.hospiceReferral, HOSPICE_REFERRAL_MAP),
     communityNursingRequired: yesNo(form.communityNursingRequired),
@@ -349,7 +375,7 @@ export function buildDischargePayload(
     responsibleProvider: form.responsibleProvider || undefined,
     responsibleProviderPhone: form.responsibleProviderPhone || undefined,
 
-    // Education
+    // 15. Education
     educationTopics: cleanArray(form.educationTopics),
     educationOther: form.educationOther || undefined,
     patientUnderstanding: mapEnum(
@@ -358,13 +384,13 @@ export function buildDischargePayload(
     ),
     additionalEducationRequired: form.additionalEducationRequired || undefined,
 
-    // Warning signs
+    // 16. Warning signs
     warningSigns: cleanArray(form.warningSigns),
     warningSignsOther: form.warningSignsOther || undefined,
     warningSignsSpecificInstructions:
       form.warningSignsSpecificInstructions || undefined,
 
-    // Follow-up
+    // 17. Follow-up
     palliativeCareFollowUp: yesNo(form.palliativeCareFollowUp),
     palliativeCareFollowUpDate: form.palliativeCareFollowUpDate || undefined,
     palliativeCareFollowUpTime: form.palliativeCareFollowUpTime || undefined,
@@ -373,7 +399,7 @@ export function buildDischargePayload(
     hospiceHomeCareFollowUp: form.hospiceHomeCareFollowUp || undefined,
     otherAppointments: form.otherAppointments || undefined,
 
-    // Contacts
+    // 18. Contacts
     palliativeCareUnitContact: form.palliativeCareUnitContact || undefined,
     palliativeCareUnitPhone: form.palliativeCareUnitPhone || undefined,
     attendingClinician: form.attendingClinician || undefined,
@@ -382,7 +408,7 @@ export function buildDischargePayload(
     homeHospiceService: form.homeHospiceService || undefined,
     homeHospiceServicePhone: form.homeHospiceServicePhone || undefined,
 
-    // Notes
+    // 19. Notes
     dischargeNotes: form.dischargeNotes || undefined,
 
     // Workflow

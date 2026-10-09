@@ -12,6 +12,39 @@ const toEnteredBy = (a: any) => a.createdByAdmin
         ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
         : null;
 
+/**
+ * Resolve "assessedBy" for list rows.
+ * Prefers the explicit assessedByStaff, then the creator
+ * (staff or admin) as a fallback.
+ */
+const toAssessedBy = (a: any) => {
+    if (a.assessedByStaff) {
+        return {
+            id: a.assessedByStaff.id,
+            name: a.assessedByStaff.name,
+            role: a.assessedByStaff.role ?? null,
+            type: 'staff' as const,
+        };
+    }
+    if (a.createdByStaff) {
+        return {
+            id: a.createdByStaff.id,
+            name: a.createdByStaff.name,
+            role: a.createdByStaff.role ?? null,
+            type: 'staff' as const,
+        };
+    }
+    if (a.createdByAdmin) {
+        return {
+            id: a.createdByAdmin.id,
+            name: a.createdByAdmin.name,
+            role: null,
+            type: 'admin' as const,
+        };
+    }
+    return null;
+};
+
 const toHospiceDto = (a: any) => ({
     id: a.id,
     patientId: a.patientId,
@@ -295,7 +328,7 @@ export const getAllHospiceNursingAssessments = async (
             take: limit,
             include: {
                 assessedByStaff: { select: { id: true, name: true, role: true } },
-                createdByStaff: { select: { id: true, name: true } },
+                createdByStaff: { select: { id: true, name: true, role: true } },
                 createdByAdmin: { select: { id: true, name: true } },
             },
         }),
@@ -307,13 +340,7 @@ export const getAllHospiceNursingAssessments = async (
             id: a.id,
             patientId: a.patientId,
             assessmentDate: a.assessmentDate,
-            assessedBy: a.assessedByStaff
-                ? {
-                    id: a.assessedByStaff.id,
-                    name: a.assessedByStaff.name,
-                    role: a.assessedByStaff.role,
-                }
-                : null,
+            assessedBy: toAssessedBy(a),
             enteredBy: toEnteredBy(a),
             levelOfConsciousness: a.levelOfConsciousness,
             painScore: a.painScore,
@@ -362,7 +389,7 @@ export const getHospiceNursingAssessments = async (
                 assessmentDate: true,
                 assessedByStaffId: true,
                 assessedByStaff: { select: { id: true, name: true, role: true } },
-                createdByStaff: { select: { id: true, name: true } },
+                createdByStaff: { select: { id: true, name: true, role: true } },
                 createdByAdmin: { select: { id: true, name: true } },
                 levelOfConsciousness: true,
                 painScore: true,
@@ -382,13 +409,7 @@ export const getHospiceNursingAssessments = async (
             id: a.id,
             patientId: a.patientId,
             assessmentDate: a.assessmentDate,
-            assessedBy: a.assessedByStaff
-                ? {
-                    id: a.assessedByStaff.id,
-                    name: a.assessedByStaff.name,
-                    role: a.assessedByStaff.role,
-                }
-                : null,
+            assessedBy: toAssessedBy(a),
             enteredBy: toEnteredBy(a),
             levelOfConsciousness: a.levelOfConsciousness,
             painScore: a.painScore,

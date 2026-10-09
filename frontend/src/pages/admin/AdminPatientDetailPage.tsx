@@ -3,8 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import type { NavigateFunction, Location } from 'react-router-dom';
 import {
   XCircle, Phone, MapPin, User, Calendar, FileText, Printer,
-  AlertTriangle, NotebookPen, Trash2, Heart, Plus, ClipboardList,
-  Pill, FlaskConical, Camera, GitBranch, Building2,
+  AlertTriangle, NotebookPen, Trash2, Heart, Plus, 
 } from 'lucide-react';
 
 import {

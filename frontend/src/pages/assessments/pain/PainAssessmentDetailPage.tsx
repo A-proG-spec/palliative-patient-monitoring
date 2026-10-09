@@ -63,8 +63,7 @@ const PainAssessmentDetailPage: React.FC = () => {
     ? `/admin/patients/${id}`
     : `/patients/${id}`;
 
-  const isOwner = user?.role === 'Nurse';
-  const canManage = isAdmin || isOwner;
+  const canManage = isAdmin;
 
   const { data: patient } = usePatient(id!);
   const { data: a, isLoading, error, refetch } = usePainAssessment(

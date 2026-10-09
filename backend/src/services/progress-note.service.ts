@@ -40,7 +40,9 @@ const isAllSigned = (signatures: any[]): boolean => {
 };
 
 // ═════════════════════════════════════════════════════════════
-// Create — auto-signs the responsible clinician
+// Create — attribution comes from the actor only
+//   • staff  → createdBy        = staff.id
+//   • admin  → createdByAdminId = admin.id
 // ═════════════════════════════════════════════════════════════
 export const createProgressNote = async (
   patientId: string,
@@ -48,34 +50,30 @@ export const createProgressNote = async (
   actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const hasActingAsStaffId = data.actingAsStaffId !== undefined &&
-    data.actingAsStaffId !== null && data.actingAsStaffId !== '';
+
+  // Resolve the staff attribution (only meaningful for staff actors,
+  // or when an admin explicitly sends actingAsStaffId).
+  const hasActingAsStaffId =
+    data.actingAsStaffId !== undefined &&
+    data.actingAsStaffId !== null &&
+    data.actingAsStaffId !== '';
+
   const sid = actor.type === 'staff' || hasActingAsStaffId
     ? resolveStaffAttribution(actor, data.actingAsStaffId)
     : undefined;
-  if (sid === undefined && (data.responsibleClinicianId === undefined ||
-    data.responsibleClinicianId === null || data.responsibleClinicianId === '')) {
-    throw new ApiError(400, 'responsibleClinicianId is required when creating a progress note as an admin');
-  }
-  const responsibleClinicianId = sid ?? toId(data.responsibleClinicianId, 'responsible clinician id');
 
-  const [patient, staff, responsibleClinician] = await Promise.all([
+  const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({ where: { id: pid }, select: { id: true } }),
     sid !== undefined
       ? prisma.staff.findUnique({
-        where: { id: sid },
-        select: { id: true, name: true, role: true },
-      })
+          where: { id: sid },
+          select: { id: true, name: true, role: true },
+        })
       : Promise.resolve(null),
-    prisma.staff.findUnique({
-      where: { id: responsibleClinicianId },
-      select: { id: true, name: true, role: true },
-    }),
   ]);
 
   if (!patient) throw new ApiError(404, 'Patient not found');
   if (sid !== undefined && !staff) throw new ApiError(404, 'Staff member not found');
-  if (!responsibleClinician) throw new ApiError(404, 'Responsible clinician not found');
 
   let admissionId: number | null = data.admissionId
     ? toId(data.admissionId, 'admission id')
@@ -96,7 +94,6 @@ export const createProgressNote = async (
       admissionId,
 
       attendingClinician: data.attendingClinician,
-      createdByAdminId: adminCreatorId(actor),
       palliativeCareUnit: data.palliativeCareUnit ?? null,
 
       generalCondition: data.generalCondition ?? null,
@@ -105,7 +102,7 @@ export const createProgressNote = async (
       functionalStatus: data.functionalStatus ?? null,
       changesSincePreviousReview: data.changesSincePreviousReview ?? '',
 
-      // Vitals (schema field names)
+      // Vitals
       temperature: data.temperature ?? null,
       pulse: data.pulse ?? null,
       respiratoryRate: data.respiratoryRate ?? null,
@@ -245,60 +242,50 @@ export const createProgressNote = async (
       soapAssessment: data.soapAssessment ?? '',
       soapPlan: data.soapPlan ?? '',
 
-      responsibleClinicianId,
       facilityStamp: data.facilityStamp ?? '',
 
+      // ── Attribution — actor only ──
       createdBy: sid ?? null,
-
-      signatures: {
-        create: {
-          staffId: responsibleClinician.id,
-          name: responsibleClinician.name,
-          role: responsibleClinician.role === 'Physician' || responsibleClinician.role === 'Nurse'
-            ? responsibleClinician.role
-            : 'Reviewer',
-          signedAt: new Date(),
-        },
-      },
+      createdByAdminId: adminCreatorId(actor),
 
       // Children
       ...(Array.isArray(data.medications) && data.medications.length > 0
         ? {
-          medications: {
-            create: data.medications.map((m: any) => ({
-              medicationTreatment: m.medicationTreatment ?? '',
-              dose: m.dose ?? '',
-              route: m.route ?? '',
-              frequency: m.frequency ?? '',
-              reasonResponse: m.reasonResponse ?? '',
-            })),
-          },
-        }
+            medications: {
+              create: data.medications.map((m: any) => ({
+                medicationTreatment: m.medicationTreatment ?? '',
+                dose: m.dose ?? '',
+                route: m.route ?? '',
+                frequency: m.frequency ?? '',
+                reasonResponse: m.reasonResponse ?? '',
+              })),
+            },
+          }
         : {}),
       ...(Array.isArray(data.multidisciplinaryTeamReview) &&
-        data.multidisciplinaryTeamReview.length > 0
+      data.multidisciplinaryTeamReview.length > 0
         ? {
-          multidisciplinaryTeamReview: {
-            create: data.multidisciplinaryTeamReview.map((m: any) => ({
-              discipline: m.discipline ?? '',
-              reviewIntervention: m.reviewIntervention ?? '',
-              followUpRequired: m.followUpRequired ?? null,
-            })),
-          },
-        }
+            multidisciplinaryTeamReview: {
+              create: data.multidisciplinaryTeamReview.map((m: any) => ({
+                discipline: m.discipline ?? '',
+                reviewIntervention: m.reviewIntervention ?? '',
+                followUpRequired: m.followUpRequired ?? null,
+              })),
+            },
+          }
         : {}),
       ...(Array.isArray(data.additionalProgressNotes) &&
-        data.additionalProgressNotes.length > 0
+      data.additionalProgressNotes.length > 0
         ? {
-          additionalProgressNotes: {
-            create: data.additionalProgressNotes.map((n: any) => ({
-              date: n.date ?? '',
-              time: n.time ?? '',
-              note: n.note ?? '',
-              clinicianName: n.clinicianName ?? '',
-            })),
-          },
-        }
+            additionalProgressNotes: {
+              create: data.additionalProgressNotes.map((n: any) => ({
+                date: n.date ?? '',
+                time: n.time ?? '',
+                note: n.note ?? '',
+                clinicianName: n.clinicianName ?? '',
+              })),
+            },
+          }
         : {}),
     },
     include: {
@@ -314,7 +301,6 @@ export const createProgressNote = async (
     admissionId: note.admissionId,
     attendingClinician: note.attendingClinician,
     generalCondition: note.generalCondition,
-    responsibleClinicianId: note.responsibleClinicianId,
     signatures: formatSignatures(note.signatures),
     enteredBy: formatEnteredBy(note.createdByStaff, note.createdByAdmin),
     createdAt: note.createdAt,
@@ -355,7 +341,6 @@ export const getAllProgressNotes = async (
       include: {
         createdByStaff: { select: { id: true, name: true, role: true } },
         createdByAdmin: { select: { id: true, name: true } },
-        responsibleClinician: { select: { id: true, name: true, role: true } },
         admission: {
           select: { id: true, admissionDate: true, ward: true, bedNumber: true },
         },
@@ -377,11 +362,6 @@ export const getAllProgressNotes = async (
       levelOfConsciousness: n.levelOfConsciousness,
       overallAssessment: n.overallAssessment,
       soapSubjective: n.soapSubjective,
-      responsibleClinician: {
-        staffId: n.responsibleClinician.id,
-        name: n.responsibleClinician.name,
-        role: n.responsibleClinician.role,
-      },
       signatures: formatSignatures(n.signatures),
       allSigned: isAllSigned(n.signatures),
       enteredBy: formatEnteredBy(n.createdByStaff, n.createdByAdmin),
@@ -395,6 +375,7 @@ export const getAllProgressNotes = async (
     total,
   };
 };
+
 // ═════════════════════════════════════════════════════════════
 // List progress notes for a patient
 // ═════════════════════════════════════════════════════════════
@@ -428,7 +409,6 @@ export const getProgressNotes = async (
       include: {
         createdByStaff: { select: { id: true, name: true, role: true } },
         createdByAdmin: { select: { id: true, name: true } },
-        responsibleClinician: { select: { id: true, name: true, role: true } },
         admission: { select: { id: true, admissionDate: true, ward: true, bedNumber: true } },
         signatures: true,
       },
@@ -449,12 +429,6 @@ export const getProgressNotes = async (
       levelOfConsciousness: n.levelOfConsciousness,
       overallAssessment: n.overallAssessment,
       soapSubjective: n.soapSubjective,
-
-      responsibleClinician: {
-        staffId: n.responsibleClinician.id,
-        name: n.responsibleClinician.name,
-        role: n.responsibleClinician.role,
-      },
 
       signatures: formatSignatures(n.signatures),
       allSigned: isAllSigned(n.signatures),
@@ -485,7 +459,6 @@ export const getProgressNoteById = async (
     include: {
       createdByStaff: { select: { id: true, name: true, role: true, email: true } },
       createdByAdmin: { select: { id: true, name: true } },
-      responsibleClinician: { select: { id: true, name: true, role: true, email: true } },
       admission: {
         select: {
           id: true, admissionDate: true, ward: true, bedNumber: true,
@@ -517,12 +490,6 @@ export const getProgressNoteById = async (
   return {
     ...noteData,
     dayOfAdmission,
-    responsibleClinician: {
-      staffId: note.responsibleClinician.id,
-      name: note.responsibleClinician.name,
-      role: note.responsibleClinician.role,
-      email: note.responsibleClinician.email,
-    },
     enteredBy: formatEnteredBy(createdByStaff, createdByAdmin),
     signatures: formatSignatures(note.signatures),
     allSigned: isAllSigned(note.signatures),
@@ -561,9 +528,9 @@ export const signProgressNote = async (
   const passwordOk = await bcrypt.compare(data.password, staff.password);
   if (!passwordOk) throw new ApiError(401, 'Invalid credentials');
 
-
-  if (staff.id === note.responsibleClinicianId) {
-    throw new ApiError(400, 'You are auto-signed as the responsible clinician');
+  // Prevent the note's creator (if a staff member) from signing
+  if (note.createdBy && staff.id === note.createdBy) {
+    throw new ApiError(400, 'You are auto-signed as the note creator');
   }
 
   const alreadySigned = note.signatures.some((s) => s.staffId === staff.id);
@@ -614,7 +581,6 @@ export const getProgressNoteSignatures = async (
     include: {
       createdByStaff: { select: { id: true, name: true } },
       createdByAdmin: { select: { id: true, name: true } },
-      responsibleClinician: { select: { id: true, name: true, role: true } },
       signatures: true,
     },
   });
@@ -624,11 +590,6 @@ export const getProgressNoteSignatures = async (
     noteId: note.id,
     createdAt: note.createdAt,
     enteredBy: formatEnteredBy(note.createdByStaff, note.createdByAdmin),
-    responsibleClinician: {
-      staffId: note.responsibleClinician.id,
-      name: note.responsibleClinician.name,
-      role: note.responsibleClinician.role,
-    },
     signatures: formatSignatures(note.signatures),
     allSigned: isAllSigned(note.signatures),
     totalSignatures: note.signatures.length,
@@ -660,8 +621,8 @@ export const updateProgressNote = async (
   // Strip fields that cannot be updated via this endpoint
   const blocked = [
     'signatures',
-    'responsibleClinicianId',
     'createdBy',
+    'createdByAdminId',
     'patientId',
     'id',
     'actingAsStaffId',

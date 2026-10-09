@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dischargeApi } from '@/api/discharge';
 import { useToast } from '@/context/ToastContext';
-import type { DischargeSummary } from '@/components/admin/DischargePatientModal';
+import type { DischargeSummary } from '@/hooks/useDischargeFormState';
 
 /**
  * Fetch the latest discharge summary for a patient.

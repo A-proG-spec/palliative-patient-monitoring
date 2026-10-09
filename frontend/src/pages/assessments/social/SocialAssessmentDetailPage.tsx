@@ -130,8 +130,7 @@ const SocialAssessmentDetailPage: React.FC = () => {
 
   const { user } = useAuthStore();
   const isAdmin = user?.type === 'admin';
-  const isOwner = user?.role === 'SocialWorker';
-  const canManage = isAdmin || isOwner;
+  const canManage = isAdmin;
 
   // ── Route-aware base path ──
   const isAdminRoute = pathname.startsWith('/admin/');

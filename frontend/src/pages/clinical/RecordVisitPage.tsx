@@ -387,16 +387,6 @@ const RecordVisitPage: React.FC = () => {
             setTimeout(() => navigate(patientPath), 1200);
           }}
         />
-
-        <div className="flex gap-3 pt-2">
-          <Button
-            variant="outline"
-            leftIcon={<ArrowLeft size={14} />}
-            onClick={() => navigate(patientPath)}
-          >
-            Back to Patient
-          </Button>
-        </div>
       </div>
     );
   }

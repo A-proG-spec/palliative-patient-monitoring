@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams, useNavigate, Navigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useOrderMedication } from '@/hooks/useMedications';
@@ -20,6 +20,13 @@ import {
 const OrderMedicationPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  // Route-aware base path. This IS the patient detail route.
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
 
   const access = usePermissionAccess('canOrderMedication');
 
@@ -40,7 +47,8 @@ const OrderMedicationPage: React.FC = () => {
 
   const onSubmit = (data: CreateMedicationFormData) => {
     mutation.mutate(data, {
-      onSuccess: () => navigate(`/patients/${id}`),
+      // Navigate back to the patient detail page (admin or staff aware).
+      onSuccess: () => navigate(basePath),
     });
   };
 
@@ -49,13 +57,13 @@ const OrderMedicationPage: React.FC = () => {
 
   // ── Write gate ──
   if (!access.allowed || patient.status === 'Discharged') {
-    return <Navigate to={`/patients/${id}`} replace />;
+    return <Navigate to={basePath} replace />;
   }
 
   return (
     <div className="max-w-xl space-y-5">
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={basePath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             Order Medication
@@ -113,7 +121,7 @@ const OrderMedicationPage: React.FC = () => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => navigate(`/patients/${id}`)}
+                onClick={() => navigate(basePath)}
               >
                 Cancel
               </Button>

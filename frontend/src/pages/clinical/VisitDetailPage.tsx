@@ -622,16 +622,6 @@ const VisitDetailPage: React.FC = () => {
           </Section>
         )}
       </div>
-
-      {/* ── Actions ── */}
-      <div className="flex justify-end pb-6">
-        <Button
-          variant="outline"
-          onClick={() => navigate(`/patients/${id}`)}
-        >
-          Back to Patient
-        </Button>
-      </div>
     </div>
   );
 };

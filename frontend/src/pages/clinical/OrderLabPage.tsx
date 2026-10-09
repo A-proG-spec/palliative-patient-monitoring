@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams, useNavigate, Navigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useOrderLab } from '@/hooks/useLabs';
@@ -39,8 +39,15 @@ const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({
 const OrderLabPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const user = useAuthStore((s) => s.user);
   const { toast } = useToast();
+
+  // Route-aware base path. This IS the patient detail route.
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
 
   const access = usePermissionAccess('canOrderLab');
 
@@ -193,7 +200,8 @@ const OrderLabPage: React.FC = () => {
         toast.success(
           'Lab test ordered successfully. You can record the result from the test detail page.',
         );
-        navigate(`/patients/${id}`);
+        // Route-aware: admin → /admin/patients/:id, staff → /patients/:id
+        navigate(basePath);
       },
     });
   };
@@ -203,14 +211,14 @@ const OrderLabPage: React.FC = () => {
 
   // ── Write gate ──
   if (!access.allowed || patient.status === 'Discharged') {
-    return <Navigate to={`/patients/${id}`} replace />;
+    return <Navigate to={basePath} replace />;
   }
 
   return (
     <div className="max-w-3xl space-y-5">
       {/* ── Header ── */}
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={basePath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             CLINICAL LABORATORY ORDER FORM
@@ -403,7 +411,7 @@ const OrderLabPage: React.FC = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => navigate(`/patients/${id}`)}
+            onClick={() => navigate(basePath)}
           >
             Cancel
           </Button>

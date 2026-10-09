@@ -215,7 +215,9 @@ const HospiceNursingPage: React.FC = () => {
     resolver: zodResolver(createHospiceNursingAssessmentSchema),
     defaultValues: {
       assessmentDate: new Date().toISOString().split('T')[0],
-      assessedByStaffId: user?.id ? String(user.id) : undefined,
+      // assessedByStaffId is only meaningful for staff users.
+      // Admins attribute via createdByAdminId on the backend.
+      assessedByStaffId: !isAdmin && user?.id ? String(user.id) : undefined,
       orientation: [],
       generalAppearance: [],
       painLocation: [],
@@ -226,15 +228,16 @@ const HospiceNursingPage: React.FC = () => {
     },
   });
 
-  // Sync assessedByStaffId if the user store hydrates after mount
+  // Sync assessedByStaffId only when a staff user logs in
   useEffect(() => {
+    if (isAdmin) return;
     if (user?.id) {
       setValue('assessedByStaffId', String(user.id), {
         shouldDirty: false,
         shouldValidate: false,
       });
     }
-  }, [user?.id, setValue]);
+  }, [user?.id, isAdmin, setValue]);
 
   // ═══════════════════════════════════════════════════════════
   // Submit
@@ -248,11 +251,17 @@ const HospiceNursingPage: React.FC = () => {
       cleaned[k] = v;
     }
 
+    // Admins never send assessedByStaffId — backend uses createdByAdminId
+    if (isAdmin) {
+      delete cleaned.assessedByStaffId;
+    }
+
     createMutation.mutate(cleaned as any, {
       onSuccess: () => {
         reset({
           assessmentDate: new Date().toISOString().split('T')[0],
-          assessedByStaffId: user?.id ? String(user.id) : undefined,
+          assessedByStaffId:
+            !isAdmin && user?.id ? String(user.id) : undefined,
           orientation: [],
           generalAppearance: [],
           painLocation: [],
@@ -268,47 +277,14 @@ const HospiceNursingPage: React.FC = () => {
         const message =
           err?.response?.data?.message ??
           'Failed to save hospice nursing assessment.';
-        const fieldErrors = err?.response?.data?.errors;
-        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
-          toast.error(
-            `${message} — ${fieldErrors
-              .slice(0, 3)
-              .map((e: any) => e.message ?? e.field)
-              .join(', ')}`,
-          );
-        } else {
-          toast.error(message);
-        }
+        toast.error(message);
       },
     });
   };
 
-  const onInvalid = (formErrors: any) => {
-    const flat: string[] = [];
-    const walk = (obj: any, path = ''): void => {
-      if (!obj || typeof obj !== 'object') return;
-      if ('message' in obj && typeof obj.message === 'string') {
-        flat.push(`${path || 'form'}: ${obj.message}`);
-        return;
-      }
-      for (const [k, v] of Object.entries(obj)) {
-        const next = path ? `${path}.${k}` : k;
-        if (Array.isArray(v)) {
-          v.forEach((item, i) => walk(item, `${next}[${i}]`));
-        } else {
-          walk(v, next);
-        }
-      }
-    };
-    walk(formErrors);
-
-    if (flat.length > 0) {
-      const shown = flat.slice(0, 3).join(' • ');
-      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
-      toast.error(`Save failed — ${shown}${rest}`);
-    } else {
-      toast.error('Save failed — please review the form.');
-    }
+  // ── Minimal, clean invalid handler ──
+  const onInvalid = () => {
+    toast.error('Please fix the highlighted fields before saving.');
   };
 
   if (patientLoading || isLoading) return <PageLoader />;
@@ -449,35 +425,65 @@ const HospiceNursingPage: React.FC = () => {
               <Input
                 label="Pulse Rate (bpm)"
                 type="number"
-                {...register('pulseRate', { valueAsNumber: true })}
+                {...register('pulseRate', {
+                  setValueAs: (v) =>
+                    v === '' || v === null || v === undefined
+                      ? undefined
+                      : Number(v),
+                })}
               />
               <Input
                 label="Respiratory Rate (/min)"
                 type="number"
-                {...register('respiratoryRate', { valueAsNumber: true })}
+                {...register('respiratoryRate', {
+                  setValueAs: (v) =>
+                    v === '' || v === null || v === undefined
+                      ? undefined
+                      : Number(v),
+                })}
               />
               <Input
                 label="Temperature (°C)"
                 type="number"
                 step="0.1"
-                {...register('temperature', { valueAsNumber: true })}
+                {...register('temperature', {
+                  setValueAs: (v) =>
+                    v === '' || v === null || v === undefined
+                      ? undefined
+                      : Number(v),
+                })}
               />
               <Input
                 label="SpO₂ (%)"
                 type="number"
-                {...register('oxygenSaturation', { valueAsNumber: true })}
+                {...register('oxygenSaturation', {
+                  setValueAs: (v) =>
+                    v === '' || v === null || v === undefined
+                      ? undefined
+                      : Number(v),
+                })}
               />
               <Input
                 label="Weight (kg)"
                 type="number"
                 step="0.1"
-                {...register('weightKg', { valueAsNumber: true })}
+                {...register('weightKg', {
+                  setValueAs: (v) =>
+                    v === '' || v === null || v === undefined
+                      ? undefined
+                      : Number(v),
+                })}
               />
               <Input
                 label="Height (cm)"
                 type="number"
                 step="0.1"
-                {...register('heightCm', { valueAsNumber: true })}
+                {...register('heightCm', {
+                  setValueAs: (v) =>
+                    v === '' || v === null || v === undefined
+                      ? undefined
+                      : Number(v),
+                })}
               />
             </div>
           </Section>
@@ -516,7 +522,12 @@ const HospiceNursingPage: React.FC = () => {
                   type="number"
                   min={0}
                   max={10}
-                  {...register('painScore', { valueAsNumber: true })}
+                  {...register('painScore', {
+                    setValueAs: (v) =>
+                      v === '' || v === null || v === undefined
+                        ? undefined
+                        : Number(v),
+                  })}
                 />
                 <CheckboxGroup
                   label="Location"

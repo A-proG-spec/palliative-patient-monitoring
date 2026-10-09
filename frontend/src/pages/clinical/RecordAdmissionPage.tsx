@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useParams, useNavigate, Navigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -84,6 +84,13 @@ const SYMPTOM_OPTIONS = [
 const RecordAdmissionPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  // Route-aware base path. This IS the patient detail route.
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
 
   const access = usePermissionAccess('canRecordAdmission');
 
@@ -155,9 +162,16 @@ const RecordAdmissionPage: React.FC = () => {
   }, [user, setValue]);
 
   // ── Auto-fill Referring Clinician from the selected referral ──
+  //
+  // The backend computes `requestingClinician` as:
+  //   requestedByStaff.name ?? createdByAdmin.name ?? null
+  // which covers both staff- and admin-created referrals.
   useEffect(() => {
     if (!selectedReferralId) {
-      setValue('referringClinician', '');
+      setValue('referringClinician', '', {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
       return;
     }
 
@@ -165,12 +179,20 @@ const RecordAdmissionPage: React.FC = () => {
       (r) => String(r.id) === String(selectedReferralId),
     );
 
-    if (selectedReferral?.requestedBy?.name) {
-      setValue('referringClinician', selectedReferral.requestedBy.name, {
-        shouldDirty: true,
-        shouldValidate: false,
-      });
-    }
+    if (!selectedReferral) return;
+
+    // Prefer the backend-computed fallback string; fall back to the
+    // individual relations in case the DTO didn't include it.
+    const referrer =
+      (selectedReferral as any).requestingClinician ??
+      (selectedReferral as any).requestedByStaff?.name ??
+      (selectedReferral as any).createdByAdmin?.name ??
+      '';
+
+    setValue('referringClinician', referrer, {
+      shouldDirty: true,
+      shouldValidate: false,
+    });
   }, [selectedReferralId, acceptedReferrals, setValue]);
 
   const onSubmit = (data: CreateAdmissionFormData) => {
@@ -182,7 +204,7 @@ const RecordAdmissionPage: React.FC = () => {
     }
 
     mutation.mutate(cleaned as CreateAdmissionFormData, {
-      onSuccess: () => navigate(`/patients/${id}`),
+      onSuccess: () => navigate(basePath),
     });
   };
 
@@ -191,14 +213,14 @@ const RecordAdmissionPage: React.FC = () => {
 
   // ── Write gate ──
   if (!access.allowed || patient.status === 'Discharged') {
-    return <Navigate to={`/patients/${id}`} replace />;
+    return <Navigate to={basePath} replace />;
   }
 
   return (
     <div className="max-w-3xl space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <BackButton to={`/patients/${id}`} label="Patient" />
+        <BackButton to={basePath} label="Patient" />
         <div>
           <h1 className="text-xl font-bold text-on-surface">
             PATIENT ADMISSION FORM
@@ -664,7 +686,7 @@ const RecordAdmissionPage: React.FC = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => navigate(`/patients/${id}`)}
+            onClick={() => navigate(basePath)}
           >
             Cancel
           </Button>

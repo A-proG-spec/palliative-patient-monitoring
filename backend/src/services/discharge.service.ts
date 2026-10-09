@@ -12,6 +12,23 @@ const formatEnteredBy = (staff?: any, admin?: any) =>
       : null;
 
 // ─────────────────────────────────────────────────────────────
+// Helper — coerce '' / undefined → null so Prisma enums accept
+// the value. Prisma's nullable enum columns accept `null` or a
+// valid enum member, but never `""`.
+// ─────────────────────────────────────────────────────────────
+const nz = <T>(v: T | '' | undefined | null): T | null =>
+  v === '' || v === undefined || v === null ? null : v;
+
+/** Filter empty strings out of a string[] before writing. */
+const cleanStrArray = (arr: unknown): string[] | undefined => {
+  if (!Array.isArray(arr)) return undefined;
+  const cleaned = arr.filter(
+    (s): s is string => typeof s === 'string' && s.trim().length > 0,
+  );
+  return cleaned;
+};
+
+// ─────────────────────────────────────────────────────────────
 // Create discharge summary — finalizes discharge workflow
 // ─────────────────────────────────────────────────────────────
 export const createDischargeSummary = async (
@@ -57,26 +74,27 @@ export const createDischargeSummary = async (
   }
 
   // Symptom fields arrive as { pain: 'Mild', painNote: '...', ... }
+  // Each severity is an enum → must be coerced with nz.
   const symptomFields = {
-    pain: data.pain ?? null,
+    pain: nz(data.pain),
     painNote: data.painNote ?? null,
-    shortnessOfBreath: data.shortnessOfBreath ?? null,
+    shortnessOfBreath: nz(data.shortnessOfBreath),
     shortnessOfBreathNote: data.shortnessOfBreathNote ?? null,
-    nausea: data.nausea ?? null,
+    nausea: nz(data.nausea),
     nauseaNote: data.nauseaNote ?? null,
-    vomiting: data.vomiting ?? null,
+    vomiting: nz(data.vomiting),
     vomitingNote: data.vomitingNote ?? null,
-    constipation: data.constipation ?? null,
+    constipation: nz(data.constipation),
     constipationNote: data.constipationNote ?? null,
-    fatigue: data.fatigue ?? null,
+    fatigue: nz(data.fatigue),
     fatigueNote: data.fatigueNote ?? null,
-    anxiety: data.anxiety ?? null,
+    anxiety: nz(data.anxiety),
     anxietyNote: data.anxietyNote ?? null,
-    delirium: data.delirium ?? null,
+    delirium: nz(data.delirium),
     deliriumNote: data.deliriumNote ?? null,
-    appetiteLoss: data.appetiteLoss ?? null,
+    appetiteLoss: nz(data.appetiteLoss),
     appetiteLossNote: data.appetiteLossNote ?? null,
-    other: data.other ?? null,
+    other: nz(data.other),
     otherNote: data.otherNote ?? null,
   };
 
@@ -91,20 +109,22 @@ export const createDischargeSummary = async (
         dateOfAdmission: data.dateOfAdmission ?? null,
         dateOfDischarge: data.dateOfDischarge,
         timeOfDischarge: data.timeOfDischarge ?? null,
-        dischargeType: data.dischargeType ?? null,
+        dischargeType: nz(data.dischargeType),
         dischargeTypeOther: data.dischargeTypeOther ?? null,
 
         finalDischargeDiagnosis: data.finalDischargeDiagnosis ?? null,
-        clinicalProblemsManaged: data.clinicalProblemsManaged ?? [],
+        clinicalProblemsManaged: cleanStrArray(data.clinicalProblemsManaged) ?? [],
         summaryOfClinicalCourse: data.summaryOfClinicalCourse ?? null,
         importantInvestigations: data.importantInvestigations ?? null,
 
-        overallCondition: data.overallCondition ?? null,
-        levelOfConsciousness: data.levelOfConsciousness ?? null,
-        functionalStatus: data.functionalStatus ?? null,
-        mobility: data.mobility ?? null,
-        oralIntake: data.oralIntake ?? null,
+        // Condition at discharge — all enums
+        overallCondition: nz(data.overallCondition),
+        levelOfConsciousness: nz(data.levelOfConsciousness),
+        functionalStatus: nz(data.functionalStatus),
+        mobility: nz(data.mobility),
+        oralIntake: nz(data.oralIntake),
 
+        // Vitals — plain strings
         temperature: data.temperature ?? null,
         pulse: data.pulse ?? null,
         respiratoryRate: data.respiratoryRate ?? null,
@@ -114,12 +134,11 @@ export const createDischargeSummary = async (
 
         ...symptomFields,
         painScore: data.painScore ?? null,
-        painControl: data.painControl ?? null,
+        painControl: nz(data.painControl),
 
         prnMedications: data.prnMedications ?? null,
         medicationChanges: data.medicationChanges ?? null,
-        medicationReconciliationCompleted:
-          data.medicationReconciliationCompleted ?? null,
+        medicationReconciliationCompleted: nz(data.medicationReconciliationCompleted),
 
         painManagementInstructions: data.painManagementInstructions ?? null,
         breathlessnessManagement: data.breathlessnessManagement ?? null,
@@ -129,65 +148,74 @@ export const createDischargeSummary = async (
           data.anxietyAgitationDeliriumManagement ?? null,
         otherSymptomManagement: data.otherSymptomManagement ?? null,
 
-        diet: data.diet ?? null,
+        // Nutrition — enums
+        diet: nz(data.diet),
         dietOther: data.dietOther ?? null,
-        feedingAssistance: data.feedingAssistance ?? null,
-        enteralFeeding: data.enteralFeeding ?? null,
-        feedingTube: data.feedingTube ?? null,
+        feedingAssistance: nz(data.feedingAssistance),
+        enteralFeeding: nz(data.enteralFeeding),
+        feedingTube: nz(data.feedingTube),
         feedingTubeOther: data.feedingTubeOther ?? null,
         hydrationInstructions: data.hydrationInstructions ?? null,
-        nutritionDietitianFollowUp: data.nutritionDietitianFollowUp ?? null,
+        nutritionDietitianFollowUp: nz(data.nutritionDietitianFollowUp),
 
-        woundPresent: data.woundPresent ?? null,
+        // Wound — enums
+        woundPresent: nz(data.woundPresent),
         woundLocation: data.woundLocation ?? null,
         woundCareInstructions: data.woundCareInstructions ?? null,
         dressingChanges: data.dressingChanges ?? null,
         pressureInjuryPrevention: data.pressureInjuryPrevention ?? null,
 
-        oxygenRequired: data.oxygenRequired ?? null,
-        oxygenDeliveryMethod: data.oxygenDeliveryMethod ?? null,
+        // Oxygen / equipment — enums
+        oxygenRequired: nz(data.oxygenRequired),
+        oxygenDeliveryMethod: nz(data.oxygenDeliveryMethod),
         oxygenDeliveryMethodOther: data.oxygenDeliveryMethodOther ?? null,
         oxygenFlowRate: data.oxygenFlowRate ?? null,
-        equipmentRequired: data.equipmentRequired ?? [],
+        equipmentRequired: cleanStrArray(data.equipmentRequired) ?? [],
         equipmentOther: data.equipmentOther ?? null,
-        equipmentArranged: data.equipmentArranged ?? null,
+        equipmentArranged: nz(data.equipmentArranged),
 
-        currentGoalsOfCare: data.currentGoalsOfCare ?? [],
+        // Goals of care — enums
+        currentGoalsOfCare: cleanStrArray(data.currentGoalsOfCare) ?? [],
         currentGoalsOfCareOther: data.currentGoalsOfCareOther ?? null,
-        goalsOfCareReviewed: data.goalsOfCareReviewed ?? null,
+        goalsOfCareReviewed: nz(data.goalsOfCareReviewed),
         patientDecisionMakerPreferences:
           data.patientDecisionMakerPreferences ?? null,
-        codeStatus: data.codeStatus ?? null,
+        codeStatus: nz(data.codeStatus),
         codeStatusOther: data.codeStatusOther ?? null,
-        advanceCarePlan: data.advanceCarePlan ?? null,
+        advanceCarePlan: nz(data.advanceCarePlan),
 
-        dischargedTo: data.dischargedTo ?? null,
+        // Destination — enums
+        dischargedTo: nz(data.dischargedTo),
         dischargedToOther: data.dischargedToOther ?? null,
         destinationAddress: data.destinationAddress ?? null,
-        transport: data.transport ?? null,
+        transport: nz(data.transport),
         transportOther: data.transportOther ?? null,
         escortCaregiver: data.escortCaregiver ?? null,
 
-        homePalliativeCareRequired: data.homePalliativeCareRequired ?? null,
-        hospiceReferral: data.hospiceReferral ?? null,
-        communityNursingRequired: data.communityNursingRequired ?? null,
-        homeVisitsRequired: data.homeVisitsRequired ?? null,
-        caregiverSupportRequired: data.caregiverSupportRequired ?? null,
+        // Home / hospice — enums
+        homePalliativeCareRequired: nz(data.homePalliativeCareRequired),
+        hospiceReferral: nz(data.hospiceReferral),
+        communityNursingRequired: nz(data.communityNursingRequired),
+        homeVisitsRequired: nz(data.homeVisitsRequired),
+        caregiverSupportRequired: nz(data.caregiverSupportRequired),
         servicesArranged: data.servicesArranged ?? null,
         responsibleProvider: data.responsibleProvider ?? null,
         responsibleProviderPhone: data.responsibleProviderPhone ?? null,
 
-        educationTopics: data.educationTopics ?? [],
+        // Education — enums
+        educationTopics: cleanStrArray(data.educationTopics) ?? [],
         educationOther: data.educationOther ?? null,
-        patientUnderstanding: data.patientUnderstanding ?? null,
+        patientUnderstanding: nz(data.patientUnderstanding),
         additionalEducationRequired: data.additionalEducationRequired ?? null,
 
-        warningSigns: data.warningSigns ?? [],
+        // Warning signs — strings
+        warningSigns: cleanStrArray(data.warningSigns) ?? [],
         warningSignsOther: data.warningSignsOther ?? null,
         warningSignsSpecificInstructions:
           data.warningSignsSpecificInstructions ?? null,
 
-        palliativeCareFollowUp: data.palliativeCareFollowUp ?? null,
+        // Follow-up — enums
+        palliativeCareFollowUp: nz(data.palliativeCareFollowUp),
         palliativeCareFollowUpDate: data.palliativeCareFollowUpDate ?? null,
         palliativeCareFollowUpTime: data.palliativeCareFollowUpTime ?? null,
         physicianSpecialistFollowUp: data.physicianSpecialistFollowUp ?? null,
@@ -195,6 +223,7 @@ export const createDischargeSummary = async (
         hospiceHomeCareFollowUp: data.hospiceHomeCareFollowUp ?? null,
         otherAppointments: data.otherAppointments ?? null,
 
+        // Contacts
         palliativeCareUnitContact: data.palliativeCareUnitContact ?? null,
         palliativeCareUnitPhone: data.palliativeCareUnitPhone ?? null,
         attendingClinician: data.attendingClinician ?? null,
@@ -208,21 +237,30 @@ export const createDischargeSummary = async (
 
         createdBy: sid ?? null,
         createdByAdminId: adminCreatorId(actor),
+
         // Discharge medications (child rows)
         ...(Array.isArray(data.dischargeMedications) &&
-          data.dischargeMedications.length > 0
+        data.dischargeMedications.length > 0
           ? {
-            dischargeMedications: {
-              create: data.dischargeMedications.map((m: any) => ({
-                medication: m.medication ?? '',
-                dose: m.dose ?? '',
-                route: m.route ?? '',
-                frequency: m.frequency ?? '',
-                purpose: m.purpose ?? '',
-                instructions: m.instructions ?? '',
-              })),
-            },
-          }
+              dischargeMedications: {
+                create: data.dischargeMedications
+                  .filter(
+                    (m: any) =>
+                      (m.medication ?? '').trim().length > 0 ||
+                      (m.dose ?? '').trim().length > 0 ||
+                      (m.route ?? '').trim().length > 0 ||
+                      (m.frequency ?? '').trim().length > 0,
+                  )
+                  .map((m: any) => ({
+                    medication: m.medication ?? '',
+                    dose: m.dose ?? '',
+                    route: m.route ?? '',
+                    frequency: m.frequency ?? '',
+                    purpose: m.purpose ?? '',
+                    instructions: m.instructions ?? '',
+                  })),
+              },
+            }
           : {}),
       },
       include: {

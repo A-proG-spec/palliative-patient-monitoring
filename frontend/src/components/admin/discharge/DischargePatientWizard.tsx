@@ -56,9 +56,7 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
     bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeKey]);
 
-  // ═══════════════════════════════════════════════════════════
-  // Hard-disable browser autofill on every field inside the wizard.
-  // ═══════════════════════════════════════════════════════════
+  // Neutralize browser autofill on every field
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -138,9 +136,7 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
 
   return (
     <div ref={rootRef} className="space-y-4">
-      {/* ═══════════════════════════════════════════════════════
-          Page header — normal flow, scrolls with the page
-      ═══════════════════════════════════════════════════════ */}
+      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex-shrink-0 h-10 w-10 rounded-xl bg-warning-bg flex items-center justify-center">
@@ -183,12 +179,8 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════
-          Sidebar + Body — constrained height so both panes
-          scroll internally instead of stretching the page
-      ═══════════════════════════════════════════════════════ */}
+      {/* Sidebar + Body */}
       <div className="flex gap-0 border border-border-base rounded-2xl bg-surface-lowest overflow-hidden h-[600px]">
-        {/* Sidebar — its own scroll area, capped by card height */}
         <DischargeSectionNav
           sections={DISCHARGE_SECTIONS}
           activeKey={activeKey}
@@ -197,7 +189,6 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
           progress={progress}
         />
 
-        {/* Body */}
         <div className="flex-1 flex flex-col min-w-0 min-h-0">
           {/* Mobile section picker */}
           <div className="lg:hidden px-4 pt-4 pb-2 border-b border-border-base bg-surface-low/30 flex-shrink-0">
@@ -219,7 +210,7 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
             </select>
           </div>
 
-          {/* Section header — pinned */}
+          {/* Section header */}
           <div className="px-6 pt-5 pb-3 border-b border-border-base flex-shrink-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="font-mono text-[11px] bg-primary/10 text-primary rounded px-1.5 py-0.5 leading-none">
@@ -232,7 +223,7 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
             <p className="text-xs text-text-muted">{activeDef.description}</p>
           </div>
 
-          {/* Section body — the only scrolling region in the card */}
+          {/* Section body */}
           <div ref={bodyRef} className="px-6 py-5 flex-1 min-h-0 overflow-y-auto">
             <DischargeSectionBody
               sectionKey={activeKey}
@@ -242,7 +233,7 @@ export const DischargePatientWizard: React.FC<DischargePatientModalProps> = ({
             />
           </div>
 
-          {/* Prev / Next nav — pinned footer */}
+          {/* Prev / Next footer */}
           <div className="px-6 py-3 border-t border-border-base bg-surface-low/30 flex items-center justify-between flex-shrink-0">
             <Button
               variant="outline"

@@ -130,8 +130,7 @@ const PharmacistAssessmentDetailPage: React.FC = () => {
 
   const { user } = useAuthStore();
   const isAdmin = user?.type === 'admin';
-  const isOwner = user?.role === 'Pharmacist';
-  const canManage = isAdmin || isOwner;
+  const canManage = isAdmin;
 
   // ── Route-aware base path ──
   const isAdminRoute = pathname.startsWith('/admin/');
