@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { usePatient } from '@/hooks/usePatients';
-import { useCreateSocialAssessment } from '@/hooks/useSocialAssessments';
+import {
+  useCreateSocialAssessment,
+  useSocialAssessment,
+  useUpdateSocialAssessment,
+} from '@/hooks/useSocialAssessments';
 import {
   createSocialAssessmentSchema,
   type CreateSocialAssessmentFormData,
@@ -23,6 +27,9 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
+
+import { useRecordAccess } from '@/hooks/useRecordAccess';
+import { useAuthStore } from '@/store/auth.store';
 import { useToast } from '@/context/ToastContext';
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -42,21 +49,53 @@ const UTILITY_KEYS = [
   { key: 'TelephoneAccess', label: 'Telephone access' },
 ] as const;
 
+type HouseholdMemberRow = {
+  name: string;
+  relationship: string;
+  age: string;
+  occupation: string;
+};
+
 const SocialAssessmentFormPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, assessmentId } = useParams<{
+    id: string;
+    assessmentId?: string;
+  }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { toast } = useToast();
 
-  const patientPath = `/patients/${id}`;
+  // ── Mode detection ──
+  const isEditMode = Boolean(assessmentId);
+
+  // ── Route-aware base path ──
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
+
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.type === 'admin';
+
+  const access = useRecordAccess('socialAssessment');
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
+
   const createMutation = useCreateSocialAssessment(id!);
+  const updateMutation = useUpdateSocialAssessment(id!);
+
+  // ── Fetch existing record only in edit mode ──
+  const { data: existing, isLoading: existingLoading } = useSocialAssessment(
+    id!,
+    assessmentId ?? '',
+  );
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<CreateSocialAssessmentFormData>({
     resolver: zodResolver(createSocialAssessmentSchema),
@@ -76,107 +115,226 @@ const SocialAssessmentFormPage: React.FC = () => {
     },
   });
 
-  // ── Controlled text for the household members textarea ──
-  const [householdText, setHouseholdText] = useState('');
+  const [householdMembers, setHouseholdMembers] = useState<HouseholdMemberRow[]>([]);
 
-  const parseHouseholdText = (text: string) => {
-    return text
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const parts = line.split('|').map((s) => s.trim());
-        const [name = '', relationship = '', age = '', occupation = ''] = parts;
-        const parsedAge = age ? Number(age) : undefined;
-        return {
-          name,
-          relationship,
-          age: Number.isFinite(parsedAge) ? parsedAge : undefined,
-          occupation,
-        };
-      });
-  };
+  const addHouseholdMember = () =>
+    setHouseholdMembers((prev) => [
+      ...prev,
+      { name: '', relationship: '', age: '', occupation: '' },
+    ]);
+
+  const updateHouseholdMember = (
+    index: number,
+    field: keyof HouseholdMemberRow,
+    value: string,
+  ) =>
+    setHouseholdMembers((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, [field]: value } : m)),
+    );
+
+  const removeHouseholdMember = (index: number) =>
+    setHouseholdMembers((prev) => prev.filter((_, i) => i !== index));
 
   // ═══════════════════════════════════════════════════════════
-  // Submit
+  // EDIT: hydrate form + household members from server record
+  // ═══════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!isEditMode || !existing) return;
+
+    reset({
+      assessmentType: existing.assessmentType ?? 'Admission',
+      householdSize: existing.householdSize ?? undefined,
+      livingArrangement: existing.livingArrangement ?? undefined,
+      livingArrangementOther: existing.livingArrangementOther ?? undefined,
+
+      caregiverAvailability: existing.caregiverAvailability ?? undefined,
+      caregiverHealth: existing.caregiverHealth ?? undefined,
+      caregiverUnderstanding: existing.caregiverUnderstanding ?? undefined,
+      caregiverStress: existing.caregiverStress ?? undefined,
+
+      familySupport: existing.familySupport ?? undefined,
+      communitySupport: existing.communitySupport ?? [],
+      contactFrequency: existing.contactFrequency ?? undefined,
+      isolationRisk: existing.isolationRisk ?? undefined,
+
+      incomeSources: existing.incomeSources ?? [],
+      incomeSourceOther: existing.incomeSourceOther ?? undefined,
+      monthlyHouseholdIncome: existing.monthlyHouseholdIncome ?? undefined,
+      financialRiskLevel: existing.financialRiskLevel ?? undefined,
+      financialChallenges: existing.financialChallenges ?? [],
+      financialChallengeOther: existing.financialChallengeOther ?? undefined,
+
+      residenceType: existing.residenceType ?? undefined,
+      residenceTypeOther: existing.residenceTypeOther ?? undefined,
+      homeEnvironment: existing.homeEnvironment ?? undefined,
+      utilitiesAccess: (existing as any).utilitiesAccess ?? {},
+      homeBasedCareSuitability: existing.homeBasedCareSuitability ?? undefined,
+
+      transportAccess: existing.transportAccess ?? [],
+      distanceToHealthFacilityKm:
+        existing.distanceToHealthFacilityKm ?? undefined,
+      transportChallenges: existing.transportChallenges ?? [],
+      transportChallengeOther: existing.transportChallengeOther ?? undefined,
+
+      employmentStatus: existing.employmentStatus ?? undefined,
+      educationLevel: existing.educationLevel ?? undefined,
+
+      religiousAffiliation: existing.religiousAffiliation ?? undefined,
+      religiousAffiliationOther:
+        existing.religiousAffiliationOther ?? undefined,
+      spiritualSupportAvailable:
+        existing.spiritualSupportAvailable ?? undefined,
+      culturalFactorsAffectingCare:
+        existing.culturalFactorsAffectingCare ?? undefined,
+
+      hasLegalRepresentative: existing.hasLegalRepresentative ?? undefined,
+      advanceDirectivesAvailable:
+        existing.advanceDirectivesAvailable ?? undefined,
+      legalConcerns: existing.legalConcerns ?? [],
+      legalConcernOther: existing.legalConcernOther ?? undefined,
+
+      familyPreparedForPrognosis:
+        existing.familyPreparedForPrognosis ?? undefined,
+      anticipatoryGrief: existing.anticipatoryGrief ?? undefined,
+      bereavementRisk: existing.bereavementRisk ?? undefined,
+      familyRequiresSupport: existing.familyRequiresSupport ?? undefined,
+
+      majorSocialIssues: existing.majorSocialIssues ?? [],
+      majorSocialIssueOther: existing.majorSocialIssueOther ?? undefined,
+      strengthsAndResources: existing.strengthsAndResources ?? undefined,
+      areasRequiringIntervention:
+        existing.areasRequiringIntervention ?? undefined,
+
+      plannedInterventions: existing.plannedInterventions ?? [],
+      plannedInterventionOther:
+        existing.plannedInterventionOther ?? undefined,
+      followUpPlan: existing.followUpPlan ?? undefined,
+      assessmentOutcome: existing.assessmentOutcome ?? [],
+    });
+
+    // Hydrate the shadow household-members state from the server record
+    const serverMembers = ((existing as any).householdMembers ?? []) as Array<{
+      name?: string;
+      relationship?: string;
+      age?: number;
+      occupation?: string;
+    }>;
+
+    setHouseholdMembers(
+      serverMembers.map((m) => ({
+        name: m.name ?? '',
+        relationship: m.relationship ?? '',
+        age: m.age != null ? String(m.age) : '',
+        occupation: m.occupation ?? '',
+      })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, existing?.id]);
+
+  // ═══════════════════════════════════════════════════════════
+  // Submit — create OR update depending on mode
   // ═══════════════════════════════════════════════════════════
   const onSubmit = (data: CreateSocialAssessmentFormData) => {
+    const parsedHouseholdMembers = householdMembers
+      .filter((m) => m.name.trim() || m.relationship.trim())
+      .map((m) => {
+        const parsedAge = m.age ? Number(m.age) : undefined;
+        return {
+          name: m.name.trim() || undefined,
+          relationship: m.relationship.trim() || undefined,
+          age: Number.isFinite(parsedAge) ? parsedAge : undefined,
+          occupation: m.occupation.trim() || undefined,
+        };
+      });
+
     const payload: CreateSocialAssessmentFormData = {
       ...data,
-      householdMembers: parseHouseholdText(householdText) as any,
+      householdMembers: parsedHouseholdMembers as any,
     };
 
-    createMutation.mutate(payload as any, {
-      onSuccess: () => navigate(patientPath),
-      onError: (err: any) => {
-        const message =
-          err?.response?.data?.message ?? 'Failed to save social assessment.';
-        const fieldErrors = err?.response?.data?.errors;
-        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
-          toast.error(
-            `${message} — ${fieldErrors
-              .slice(0, 3)
-              .map((e: any) => e.message ?? e.field)
-              .join(', ')}`,
-          );
-        } else {
-          toast.error(message);
-        }
-      },
-    });
-  };
+    const handleSuccess = () => navigate(basePath);
 
-  const onInvalid = (formErrors: any) => {
-    const flat: string[] = [];
-    const walk = (obj: any, path = ''): void => {
-      if (!obj || typeof obj !== 'object') return;
-      if ('message' in obj && typeof obj.message === 'string') {
-        flat.push(`${path || 'form'}: ${obj.message}`);
-        return;
+    const handleError = (err: any) => {
+      const status = err?.response?.status;
+      let message = 'Could not save the social assessment. Please try again.';
+
+      if (status === 400) {
+        message =
+          'Some fields are missing or invalid. Please review the highlighted fields.';
+      } else if (status === 403) {
+        message = 'You do not have permission to save this assessment.';
+      } else if (status === 404) {
+        message =
+          'Patient or assessment not found. Please refresh and try again.';
+      } else if (status >= 500) {
+        message = 'Server error. Please try again in a moment.';
+      } else if (!err?.response) {
+        message = 'Network error. Please check your connection and try again.';
       }
-      for (const [k, v] of Object.entries(obj)) {
-        const next = path ? `${path}.${k}` : k;
-        if (Array.isArray(v)) {
-          v.forEach((item, i) => walk(item, `${next}[${i}]`));
-        } else {
-          walk(v, next);
-        }
-      }
+
+      toast.error(message);
     };
-    walk(formErrors);
 
-    if (flat.length > 0) {
-      const shown = flat.slice(0, 3).join(' • ');
-      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
-      toast.error(`Save failed — ${shown}${rest}`);
+    if (isEditMode && assessmentId) {
+      updateMutation.mutate(
+        { assessmentId, data: payload as any },
+        { onSuccess: handleSuccess, onError: handleError },
+      );
     } else {
-      toast.error('Save failed — please review the form.');
+      createMutation.mutate(payload as any, {
+        onSuccess: handleSuccess,
+        onError: handleError,
+      });
     }
   };
 
-  if (isLoading) return <PageLoader />;
+  // ── Surface validation errors as a single clean toast ──
+  const onInvalid = (formErrors: any) => {
+    const count = Object.keys(formErrors ?? {}).length;
+
+    if (count === 0) {
+      toast.error('Please review the form and try again.');
+      return;
+    }
+
+    toast.error(
+      count === 1
+        ? 'Please fix the highlighted field and try again.'
+        : `Please fix the ${count} highlighted fields and try again.`,
+    );
+  };
+
+  // ── Loading / error states ──
+  if (isLoading || (isEditMode && existingLoading)) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
+
+  // ── Write gate — admin bypasses the record-role check ──
+  if ((!isAdmin && !access.allowed) || patient.status === 'Discharged') {
+    return <Navigate to={`${basePath}/social-assessment`} replace />;
+  }
 
   const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
 
-  // ── Utilities JSON bridge ──
   const utilities = (watch('utilitiesAccess') ?? {}) as Record<string, boolean>;
   const setUtility = (key: string, on: boolean) =>
-    setValue('utilitiesAccess', { ...utilities, [key]: on }, {
-      shouldDirty: true,
-    });
+    setValue(
+      'utilitiesAccess',
+      { ...utilities, [key]: on },
+      { shouldDirty: true },
+    );
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   return (
     <AssessmentFormShell
       title="Social Assessment"
       patientLabel={patientLabel}
-      backTo={patientPath}
-      mode="create"
-      isSubmitting={createMutation.isPending}
+      backTo={basePath}
+      mode={isEditMode ? 'edit' : 'create'}
+      isSubmitting={isSubmitting}
       onSubmit={handleSubmit(onSubmit, onInvalid)}
-      onCancel={() => navigate(patientPath)}
+      onCancel={() => navigate(basePath)}
     >
-      {/* ── 1. Assessment info ── */}
       <Section title="1. Assessment Information">
         <Select
           label="Assessment Type"
@@ -191,7 +349,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 2. Family composition ── */}
       <Section title="2. Family Composition">
         <Input
           label="Household Size"
@@ -200,22 +357,91 @@ const SocialAssessmentFormPage: React.FC = () => {
           error={errors.householdSize?.message}
           {...register('householdSize', { valueAsNumber: true })}
         />
-        <div className="space-y-1.5">
-          <Textarea
-            label="Household Members"
-            rows={5}
-            value={householdText}
-            onChange={(e) => setHouseholdText(e.target.value)}
-            placeholder="One per line as: Name | Relationship | Age | Occupation"
-          />
-          <p className="text-[11px] text-text-muted">
-            Format: <code>Name | Relationship | Age | Occupation</code> — one
-            member per line. Age must be numeric; leave blank if unknown.
-          </p>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-on-surface">
+              Household Members
+            </p>
+            <button
+              type="button"
+              onClick={addHouseholdMember}
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
+            >
+              <span aria-hidden>+</span> Add Member
+            </button>
+          </div>
+
+          {householdMembers.length === 0 && (
+            <p className="text-[11px] text-text-muted italic">
+              No household members added yet. Click "Add Member" to begin.
+            </p>
+          )}
+
+          {householdMembers.map((member, index) => (
+            <div
+              key={index}
+              className="rounded-lg border border-border bg-surface p-3 space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-text-muted">
+                  Member #{index + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeHouseholdMember(index)}
+                  className="text-xs text-red-600 hover:text-red-700 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+
+              <Grid cols={2}>
+                <Input
+                  label="Name"
+                  value={member.name}
+                  onChange={(e) =>
+                    updateHouseholdMember(index, 'name', e.target.value)
+                  }
+                  placeholder="e.g. Almaz Tesfaye"
+                />
+                <Input
+                  label="Relationship"
+                  value={member.relationship}
+                  onChange={(e) =>
+                    updateHouseholdMember(
+                      index,
+                      'relationship',
+                      e.target.value,
+                    )
+                  }
+                  placeholder="e.g. Daughter"
+                />
+                <Input
+                  label="Age"
+                  type="number"
+                  min={0}
+                  max={150}
+                  value={member.age}
+                  onChange={(e) =>
+                    updateHouseholdMember(index, 'age', e.target.value)
+                  }
+                  placeholder="e.g. 34"
+                />
+                <Input
+                  label="Occupation"
+                  value={member.occupation}
+                  onChange={(e) =>
+                    updateHouseholdMember(index, 'occupation', e.target.value)
+                  }
+                  placeholder="e.g. Teacher"
+                />
+              </Grid>
+            </div>
+          ))}
         </div>
       </Section>
 
-      {/* ── 3. Living arrangement ── */}
       <Section title="3. Living Arrangement">
         <Select
           label="Living Arrangement"
@@ -238,7 +464,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         )}
       </Section>
 
-      {/* ── 4. Caregiver ── */}
       <Section title="4. Primary Caregiver">
         <Grid cols={2}>
           <Select
@@ -287,7 +512,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         </Grid>
       </Section>
 
-      {/* ── 5. Social support ── */}
       <Section title="5. Social Support">
         <Grid cols={2}>
           <Select
@@ -339,7 +563,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 6. Financial ── */}
       <Section title="6. Financial Assessment">
         <CheckboxGroup
           label="Income Sources"
@@ -369,7 +592,10 @@ const SocialAssessmentFormPage: React.FC = () => {
             options={[
               { value: 'Below2000ETB', label: 'Below 2,000 ETB' },
               { value: 'Between2000And5000ETB', label: '2,000 – 5,000 ETB' },
-              { value: 'Between5001And10000ETB', label: '5,001 – 10,000 ETB' },
+              {
+                value: 'Between5001And10000ETB',
+                label: '5,001 – 10,000 ETB',
+              },
               { value: 'Above10000ETB', label: 'Above 10,000 ETB' },
             ]}
             placeholder="Select…"
@@ -409,7 +635,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         )}
       </Section>
 
-      {/* ── 7. Housing ── */}
       <Section title="7. Housing & Environment">
         <Grid cols={2}>
           <Select
@@ -472,7 +697,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 8. Transportation ── */}
       <Section title="8. Transportation">
         <CheckboxGroup
           label="Transport Access"
@@ -497,7 +721,13 @@ const SocialAssessmentFormPage: React.FC = () => {
         <CheckboxGroup
           label="Transport Challenges"
           values={watch('transportChallenges') ?? []}
-          options={['None', 'Financial', 'PhysicalAccess', 'Availability', 'Other']}
+          options={[
+            'None',
+            'Financial',
+            'PhysicalAccess',
+            'Availability',
+            'Other',
+          ]}
           onChange={(v) =>
             setValue('transportChallenges', v as any, { shouldDirty: true })
           }
@@ -510,7 +740,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         )}
       </Section>
 
-      {/* ── 9. Employment & education ── */}
       <Section title="9. Employment & Education">
         <Grid cols={2}>
           <Select
@@ -540,7 +769,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         </Grid>
       </Section>
 
-      {/* ── 10. Cultural & spiritual ── */}
       <Section title="10. Cultural & Spiritual Considerations">
         <Select
           label="Religious Affiliation"
@@ -577,7 +805,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 11. Legal & advocacy ── */}
       <Section title="11. Legal & Advocacy">
         <Grid cols={2}>
           <YesNo
@@ -623,7 +850,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         )}
       </Section>
 
-      {/* ── 12. Bereavement risk ── */}
       <Section title="12. Bereavement Risk Assessment">
         <Grid cols={2}>
           <Select
@@ -670,7 +896,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         </Grid>
       </Section>
 
-      {/* ── 13. Social work assessment ── */}
       <Section title="13. Social Work Assessment">
         <CheckboxGroup
           label="Major Social Issues"
@@ -708,7 +933,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 14. Care plan ── */}
       <Section title="14. Social Care Plan">
         <CheckboxGroup
           label="Planned Interventions"
@@ -741,7 +965,6 @@ const SocialAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 15. Summary ── */}
       <Section title="15. Summary">
         <CheckboxGroup
           label="Assessment Outcome"

@@ -1,11 +1,15 @@
-import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle } from 'lucide-react';
 
 import { usePatient } from '@/hooks/usePatients';
-import { useCreatePsychiatryAssessment } from '@/hooks/usePsychiatryAssessments';
+import {
+  useCreatePsychiatryAssessment,
+  usePsychiatryAssessment,
+  useUpdatePsychiatryAssessment,
+} from '@/hooks/usePsychiatryAssessments';
 import {
   createPsychiatryAssessmentSchema,
   type CreatePsychiatryAssessmentFormData,
@@ -37,20 +41,40 @@ const toYesNo = (v: boolean | null | undefined): 'Yes' | 'No' | '' =>
   v === undefined || v === null ? '' : v ? 'Yes' : 'No';
 
 const PsychiatryAssessmentFormPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, assessmentId } = useParams<{
+    id: string;
+    assessmentId?: string;
+  }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { toast } = useToast();
 
-  const patientPath = `/patients/${id}`;
+  // ── Mode detection ──
+  const isEditMode = Boolean(assessmentId);
+
+  // ── Route-aware base path ──
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
+
   const createMutation = useCreatePsychiatryAssessment(id!);
+  const updateMutation = useUpdatePsychiatryAssessment(id!);
+
+  // ── Fetch existing record only in edit mode ──
+  const { data: existing, isLoading: existingLoading } = usePsychiatryAssessment(
+    id!,
+    assessmentId ?? '',
+  );
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<CreatePsychiatryAssessmentFormData>({
     resolver: zodResolver(createPsychiatryAssessmentSchema),
@@ -75,67 +99,129 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
   });
 
   // ═══════════════════════════════════════════════════════════
-  // Submit
+  // EDIT: hydrate form from server record
+  // ═══════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!isEditMode || !existing) return;
+
+    reset({
+      assessmentType: existing.assessmentType ?? 'Admission',
+
+      reasonForReferral: existing.reasonForReferral ?? undefined,
+      currentSymptoms: existing.currentSymptoms ?? [],
+      symptomOther: existing.symptomOther ?? undefined,
+      onsetAndDuration: existing.onsetAndDuration ?? undefined,
+      severity: existing.severity ?? undefined,
+
+      appearanceBehavior: existing.appearanceBehavior ?? [],
+      speech: existing.speech ?? undefined,
+      mood: existing.mood ?? undefined,
+      affect: existing.affect ?? undefined,
+      thoughtProcess: existing.thoughtProcess ?? [],
+      thoughtContent: existing.thoughtContent ?? [],
+      perception: existing.perception ?? [],
+      cognition: existing.cognition ?? [],
+      insightJudgment: existing.insightJudgment ?? undefined,
+
+      suicidalIdeation: existing.suicidalIdeation ?? undefined,
+      suicideRiskLevel: existing.suicideRiskLevel ?? undefined,
+      protectiveFactors: existing.protectiveFactors ?? [],
+
+      organicCauses: existing.organicCauses ?? [],
+      medicationsAffectingMentalState:
+        existing.medicationsAffectingMentalState ?? undefined,
+
+      sleepPattern: existing.sleepPattern ?? undefined,
+      appetite: existing.appetite ?? undefined,
+      dailyFunctioning: existing.dailyFunctioning ?? undefined,
+      socialWithdrawal: existing.socialWithdrawal ?? undefined,
+
+      diagnoses: existing.diagnoses ?? [],
+      diagnosisOther: existing.diagnosisOther ?? undefined,
+
+      immediateInterventions: existing.immediateInterventions ?? [],
+      pharmacologicalPlan: existing.pharmacologicalPlan ?? [],
+      nonPharmacologicalPlan: existing.nonPharmacologicalPlan ?? [],
+      monitoringPlan: existing.monitoringPlan ?? [],
+
+      familyDistressLevel: existing.familyDistressLevel ?? undefined,
+      caregiverBurnout: existing.caregiverBurnout ?? undefined,
+      familyCounselingNeeded: existing.familyCounselingNeeded ?? undefined,
+
+      assessmentOutcome: existing.assessmentOutcome ?? [],
+      finalRecommendations: existing.finalRecommendations ?? [],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, existing?.id]);
+
+  // ═══════════════════════════════════════════════════════════
+  // Submit — create OR update depending on mode
   // ═══════════════════════════════════════════════════════════
   const onSubmit = (data: CreatePsychiatryAssessmentFormData) => {
-    createMutation.mutate(data as any, {
-      onSuccess: () => {
-        // Confirm the safety escalation to the user when high risk
-        if (data.suicideRiskLevel === 'High') {
-          toast.success(
-            'High-risk assessment saved — administrators have been notified.',
-          );
-        }
-        navigate(patientPath);
-      },
-      onError: (err: any) => {
-        const message =
-          err?.response?.data?.message ??
-          'Failed to save psychiatry assessment.';
-        const fieldErrors = err?.response?.data?.errors;
-        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
-          toast.error(
-            `${message} — ${fieldErrors
-              .slice(0, 3)
-              .map((e: any) => e.message ?? e.field)
-              .join(', ')}`,
-          );
-        } else {
-          toast.error(message);
-        }
-      },
-    });
-  };
-
-  const onInvalid = (formErrors: any) => {
-    const flat: string[] = [];
-    const walk = (obj: any, path = ''): void => {
-      if (!obj || typeof obj !== 'object') return;
-      if ('message' in obj && typeof obj.message === 'string') {
-        flat.push(`${path || 'form'}: ${obj.message}`);
-        return;
+    const handleSuccess = () => {
+      // Notify on high suicide risk — only when creating,
+      // so we don't re-alert on every edit save.
+      if (!isEditMode && data.suicideRiskLevel === 'High') {
+        toast.success(
+          'High-risk assessment saved — administrators have been notified.',
+        );
       }
-      for (const [k, v] of Object.entries(obj)) {
-        const next = path ? `${path}.${k}` : k;
-        if (Array.isArray(v)) {
-          v.forEach((item, i) => walk(item, `${next}[${i}]`));
-        } else {
-          walk(v, next);
-        }
-      }
+      navigate(basePath);
     };
-    walk(formErrors);
 
-    if (flat.length > 0) {
-      const shown = flat.slice(0, 3).join(' • ');
-      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
-      toast.error(`Save failed — ${shown}${rest}`);
+    const handleError = (err: any) => {
+      const status = err?.response?.status;
+      let message =
+        'Could not save the psychiatry assessment. Please try again.';
+
+      if (status === 400) {
+        message =
+          'Some fields are missing or invalid. Please review the highlighted fields.';
+      } else if (status === 403) {
+        message = 'You do not have permission to save this assessment.';
+      } else if (status === 404) {
+        message =
+          'Patient or assessment not found. Please refresh and try again.';
+      } else if (status >= 500) {
+        message = 'Server error. Please try again in a moment.';
+      } else if (!err?.response) {
+        message = 'Network error. Please check your connection and try again.';
+      }
+
+      toast.error(message);
+    };
+
+    if (isEditMode && assessmentId) {
+      updateMutation.mutate(
+        { assessmentId, data: data as any },
+        { onSuccess: handleSuccess, onError: handleError },
+      );
     } else {
-      toast.error('Save failed — please review the form.');
+      createMutation.mutate(data as any, {
+        onSuccess: handleSuccess,
+        onError: handleError,
+      });
     }
   };
 
-  if (isLoading) return <PageLoader />;
+  // ── Surface validation errors as a single clean toast ──
+  const onInvalid = (formErrors: any) => {
+    const count = Object.keys(formErrors ?? {}).length;
+
+    if (count === 0) {
+      toast.error('Please review the form and try again.');
+      return;
+    }
+
+    toast.error(
+      count === 1
+        ? 'Please fix the highlighted field and try again.'
+        : `Please fix the ${count} highlighted fields and try again.`,
+    );
+  };
+
+  // ── Loading / error states ──
+  if (isLoading || (isEditMode && existingLoading)) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
   const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
@@ -143,15 +229,17 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
   const suicideRiskLevel = watch('suicideRiskLevel');
   const isHighRisk = suicideRiskLevel === 'High';
 
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+
   return (
     <AssessmentFormShell
       title="Psychiatry Assessment"
       patientLabel={patientLabel}
-      backTo={patientPath}
-      mode="create"
-      isSubmitting={createMutation.isPending}
+      backTo={basePath}
+      mode={isEditMode ? 'edit' : 'create'}
+      isSubmitting={isSubmitting}
       onSubmit={handleSubmit(onSubmit, onInvalid)}
-      onCancel={() => navigate(patientPath)}
+      onCancel={() => navigate(basePath)}
     >
       {/* ── High-risk safety banner ── */}
       {isHighRisk && (
@@ -173,7 +261,6 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
         </div>
       )}
 
-      {/* ── 1. Assessment type ── */}
       <Section title="1. Assessment Type">
         <Select
           label="Assessment Type"
@@ -187,7 +274,6 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 2. Presenting problem ── */}
       <Section title="2. Presenting Problem">
         <Textarea
           label="Reason for Referral"
@@ -236,7 +322,6 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
         </Grid>
       </Section>
 
-      {/* ── 3. Mental state examination ── */}
       <Section title="3. Mental State Examination">
         <CheckboxGroup
           label="Appearance & Behavior"
@@ -341,7 +426,6 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 4. Suicide risk assessment ── */}
       <Section title="4. Suicide Risk Assessment">
         <Grid cols={2}>
           <Select
@@ -382,7 +466,6 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 5. Organic causes ── */}
       <Section title="5. Organic Causes to Rule Out">
         <CheckboxGroup
           label="Organic Causes"
@@ -407,7 +490,6 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 6. Sleep & appetite ── */}
       <Section title="6. Sleep & Appetite">
         <Grid cols={2}>
           <Select
@@ -434,7 +516,6 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
         </Grid>
       </Section>
 
-      {/* ── 7. Functional & social ── */}
       <Section title="7. Functional & Social Status">
         <Grid cols={2}>
           <Select
@@ -460,7 +541,6 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
         </Grid>
       </Section>
 
-      {/* ── 8. Diagnosis ── */}
       <Section title="8. Psychiatric Diagnosis">
         <CheckboxGroup
           label="Diagnoses"
@@ -483,7 +563,6 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
         )}
       </Section>
 
-      {/* ── 9. Care plan ── */}
       <Section title="9. Psychiatric Care Plan">
         <CheckboxGroup
           label="Immediate Interventions"
@@ -537,7 +616,6 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 10. Family ── */}
       <Section title="10. Family & Caregiver">
         <Select
           label="Family Distress Level"
@@ -571,7 +649,6 @@ const PsychiatryAssessmentFormPage: React.FC = () => {
         </Grid>
       </Section>
 
-      {/* ── 11. Summary ── */}
       <Section title="11. Summary & Recommendations">
         <CheckboxGroup
           label="Assessment Outcome"

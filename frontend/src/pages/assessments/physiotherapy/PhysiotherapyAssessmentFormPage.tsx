@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useParams, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { usePatient } from '@/hooks/usePatients';
-import { useCreatePhysiotherapyAssessment } from '@/hooks/usePhysiotherapyAssessments';
+import {
+  useCreatePhysiotherapyAssessment,
+  usePhysiotherapyAssessment,
+  useUpdatePhysiotherapyAssessment,
+} from '@/hooks/usePhysiotherapyAssessments';
 import {
   createPhysiotherapyAssessmentSchema,
   type CreatePhysiotherapyAssessmentFormData,
@@ -22,6 +26,9 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
+
+import { useRecordAccess } from '@/hooks/useRecordAccess';
+import { useAuthStore } from '@/store/auth.store';
 import { useToast } from '@/context/ToastContext';
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -46,20 +53,43 @@ const ADL_LEVELS = [
 ] as const;
 
 const PhysiotherapyAssessmentFormPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, assessmentId } = useParams<{
+    id: string;
+    assessmentId?: string;
+  }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { toast } = useToast();
 
-  const patientPath = `/patients/${id}`;
+  // ── Mode detection ──
+  const isEditMode = Boolean(assessmentId);
+
+  // ── Route-aware base path ──
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
+
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.type === 'admin';
+
+  const access = useRecordAccess('physiotherapyAssessment');
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
+
   const createMutation = useCreatePhysiotherapyAssessment(id!);
+  const updateMutation = useUpdatePhysiotherapyAssessment(id!);
+
+  // ── Fetch existing record only in edit mode ──
+  const { data: existing, isLoading: existingLoading } =
+    usePhysiotherapyAssessment(id!, assessmentId ?? '');
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<CreatePhysiotherapyAssessmentFormData>({
     resolver: zodResolver(createPhysiotherapyAssessmentSchema),
@@ -85,93 +115,161 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
   });
 
   // ═══════════════════════════════════════════════════════════
-  // Submit
+  // EDIT: hydrate form from server record
+  // ═══════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!isEditMode || !existing) return;
+
+    reset({
+      assessmentType: existing.assessmentType ?? 'Admission',
+
+      comorbidities: existing.comorbidities ?? [],
+      comorbidityOther: existing.comorbidityOther ?? undefined,
+      generalCondition: existing.generalCondition ?? undefined,
+
+      painLevel: existing.painLevel ?? undefined,
+      painTypes: existing.painTypes ?? [],
+      painTypeOther: existing.painTypeOther ?? undefined,
+      symptoms: existing.symptoms ?? [],
+
+      mobilityStatus: existing.mobilityStatus ?? undefined,
+      transferAbility: existing.transferAbility ?? undefined,
+      walkingAbility: existing.walkingAbility ?? undefined,
+      assistiveDevices: existing.assistiveDevices ?? [],
+      assistiveDeviceOther: existing.assistiveDeviceOther ?? undefined,
+
+      upperLimbStrength: existing.upperLimbStrength ?? undefined,
+      lowerLimbStrength: existing.lowerLimbStrength ?? undefined,
+      rangeOfMotion: existing.rangeOfMotion ?? undefined,
+      jointPainOrStiffness: existing.jointPainOrStiffness ?? undefined,
+      jointPainLocation: existing.jointPainLocation ?? undefined,
+
+      consciousness: existing.consciousness ?? undefined,
+      coordination: existing.coordination ?? undefined,
+      sensoryDeficit: existing.sensoryDeficit ?? undefined,
+      balance: existing.balance ?? undefined,
+
+      breathingPattern: existing.breathingPattern ?? undefined,
+      breathlessnessLevel: existing.breathlessnessLevel ?? undefined,
+      chestExpansion: existing.chestExpansion ?? undefined,
+      respiratoryNeeds: existing.respiratoryNeeds ?? [],
+
+      pressureRisk: existing.pressureRisk ?? undefined,
+      pressureAreas: existing.pressureAreas ?? [],
+      pressureAreaOther: existing.pressureAreaOther ?? undefined,
+      pressurePreventions: existing.pressurePreventions ?? [],
+
+      adl: (existing.adl ?? []) as any,
+
+      fallHistory: existing.fallHistory ?? undefined,
+      fallRiskLevel: existing.fallRiskLevel ?? undefined,
+      fallContributors: existing.fallContributors ?? [],
+
+      diagnosis: existing.diagnosis ?? [],
+      goals: existing.goals ?? undefined,
+      interventions: existing.interventions ?? [],
+      frequency: existing.frequency ?? [],
+      equipment: existing.equipment ?? [],
+      caregiverTrainings: existing.caregiverTrainings ?? [],
+
+      outcome: existing.outcome ?? [],
+      finalRecommendations: existing.finalRecommendations ?? [],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, existing?.id]);
+
+  // ═══════════════════════════════════════════════════════════
+  // Submit — create OR update depending on mode
   // ═══════════════════════════════════════════════════════════
   const onSubmit = (data: CreatePhysiotherapyAssessmentFormData) => {
-    createMutation.mutate(data as any, {
-      onSuccess: () => navigate(patientPath),
-      onError: (err: any) => {
-        const message =
-          err?.response?.data?.message ??
-          'Failed to save physiotherapy assessment.';
-        const fieldErrors = err?.response?.data?.errors;
-        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
-          toast.error(
-            `${message} — ${fieldErrors
-              .slice(0, 3)
-              .map((e: any) => e.message ?? e.field)
-              .join(', ')}`,
-          );
-        } else {
-          toast.error(message);
-        }
-      },
-    });
-  };
+    const handleSuccess = () => navigate(basePath);
 
-  const onInvalid = (formErrors: any) => {
-    const flat: string[] = [];
-    const walk = (obj: any, path = ''): void => {
-      if (!obj || typeof obj !== 'object') return;
-      if ('message' in obj && typeof obj.message === 'string') {
-        flat.push(`${path || 'form'}: ${obj.message}`);
-        return;
+    const handleError = (err: any) => {
+      const status = err?.response?.status;
+      let message =
+        'Could not save the physiotherapy assessment. Please try again.';
+
+      if (status === 400) {
+        message =
+          'Some fields are missing or invalid. Please review the highlighted fields.';
+      } else if (status === 403) {
+        message = 'You do not have permission to save this assessment.';
+      } else if (status === 404) {
+        message =
+          'Patient or assessment not found. Please refresh and try again.';
+      } else if (status >= 500) {
+        message = 'Server error. Please try again in a moment.';
+      } else if (!err?.response) {
+        message = 'Network error. Please check your connection and try again.';
       }
-      for (const [k, v] of Object.entries(obj)) {
-        const next = path ? `${path}.${k}` : k;
-        if (Array.isArray(v)) {
-          v.forEach((item, i) => walk(item, `${next}[${i}]`));
-        } else {
-          walk(v, next);
-        }
-      }
+
+      toast.error(message);
     };
-    walk(formErrors);
 
-    if (flat.length > 0) {
-      const shown = flat.slice(0, 3).join(' • ');
-      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
-      toast.error(`Save failed — ${shown}${rest}`);
+    if (isEditMode && assessmentId) {
+      updateMutation.mutate(
+        { assessmentId, data: data as any },
+        { onSuccess: handleSuccess, onError: handleError },
+      );
     } else {
-      toast.error('Save failed — please review the form.');
+      createMutation.mutate(data as any, {
+        onSuccess: handleSuccess,
+        onError: handleError,
+      });
     }
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // ADL row editor — reads/writes the `adl` child array
-  //   adl: Array<{ activity: PhysiotherapyAdlActivity; level?: PhysiotherapyAdlLevel }>
-  // ═══════════════════════════════════════════════════════════
+  // ── Surface validation errors as a single clean toast ──
+  const onInvalid = (formErrors: any) => {
+    const count = Object.keys(formErrors ?? {}).length;
+
+    if (count === 0) {
+      toast.error('Please review the form and try again.');
+      return;
+    }
+
+    toast.error(
+      count === 1
+        ? 'Please fix the highlighted field and try again.'
+        : `Please fix the ${count} highlighted fields and try again.`,
+    );
+  };
+
+  // ── ADL row editor ──
   const currentAdl = watch('adl') ?? [];
 
   const getAdlLevel = (activity: string): string =>
     currentAdl.find((r) => r.activity === activity)?.level ?? '';
 
   const setAdlLevel = (activity: string, level: string) => {
-    // Remove any existing row for this activity, then add a new
-    // one only if a level was chosen.
     const rest = currentAdl.filter((r) => r.activity !== activity);
-    const next = level
-      ? [...rest, { activity, level } as any]
-      : rest;
+    const next = level ? [...rest, { activity, level } as any] : rest;
     setValue('adl', next, { shouldDirty: true, shouldValidate: true });
   };
 
-  if (isLoading) return <PageLoader />;
+  // ── Loading / error states ──
+  if (isLoading || (isEditMode && existingLoading)) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
+  // ── Write gate — admin bypasses the record-role check ──
+  if ((!isAdmin && !access.allowed) || patient.status === 'Discharged') {
+    return <Navigate to={`${basePath}/physiotherapy-assessment`} replace />;
+  }
+
   const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   return (
     <AssessmentFormShell
       title="Physiotherapy Assessment"
       patientLabel={patientLabel}
-      backTo={patientPath}
-      mode="create"
-      isSubmitting={createMutation.isPending}
+      backTo={basePath}
+      mode={isEditMode ? 'edit' : 'create'}
+      isSubmitting={isSubmitting}
       onSubmit={handleSubmit(onSubmit, onInvalid)}
-      onCancel={() => navigate(patientPath)}
+      onCancel={() => navigate(basePath)}
     >
-      {/* ── 1. Assessment info ── */}
       <Section title="1. Assessment Information">
         <Select
           label="Assessment Type"
@@ -186,7 +284,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 2. Medical overview ── */}
       <Section title="2. Medical Overview">
         <CheckboxGroup
           label="Comorbidities"
@@ -205,7 +302,10 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
           }
         />
         {watch('comorbidities')?.includes('Other') && (
-          <Input label="Other comorbidities" {...register('comorbidityOther')} />
+          <Input
+            label="Other comorbidities"
+            {...register('comorbidityOther')}
+          />
         )}
         <Select
           label="General Condition"
@@ -220,7 +320,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 3. Pain & symptoms ── */}
       <Section title="3. Pain & Symptoms">
         <Input
           label="Pain Level (0–10)"
@@ -264,7 +363,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 4. Functional mobility ── */}
       <Section title="4. Functional Mobility">
         <Grid cols={2}>
           <Select
@@ -317,7 +415,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         )}
       </Section>
 
-      {/* ── 5. Musculoskeletal ── */}
       <Section title="5. Musculoskeletal Assessment">
         <Grid cols={2}>
           <Input
@@ -356,10 +453,12 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             {...register('jointPainOrStiffness')}
           />
         </Grid>
-        <Input label="Joint Pain Location" {...register('jointPainLocation')} />
+        <Input
+          label="Joint Pain Location"
+          {...register('jointPainLocation')}
+        />
       </Section>
 
-      {/* ── 6. Neurological ── */}
       <Section title="6. Neurological Assessment">
         <Grid cols={2}>
           <Select
@@ -403,7 +502,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         </Grid>
       </Section>
 
-      {/* ── 7. Respiratory ── */}
       <Section title="7. Respiratory Assessment">
         <Grid cols={2}>
           <Select
@@ -451,7 +549,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 8. Pressure injury ── */}
       <Section title="8. Pressure Injury Risk">
         <Select
           label="Pressure Risk"
@@ -472,7 +569,10 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
           }
         />
         {watch('pressureAreas')?.includes('Other') && (
-          <Input label="Other pressure area" {...register('pressureAreaOther')} />
+          <Input
+            label="Other pressure area"
+            {...register('pressureAreaOther')}
+          />
         )}
         <CheckboxGroup
           label="Prevention Strategies"
@@ -489,7 +589,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 9. ADL ── */}
       <Section title="9. Activities of Daily Living">
         <p className="text-xs text-text-muted -mt-2">
           Rate each activity — leave blank if not assessed.
@@ -501,7 +600,9 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
                 {label}
               </label>
               <Select
-                options={ADL_LEVELS as unknown as { value: string; label: string }[]}
+                options={
+                  ADL_LEVELS as unknown as { value: string; label: string }[]
+                }
                 placeholder="Select…"
                 value={getAdlLevel(activity)}
                 onChange={(e) => setAdlLevel(activity, e.target.value)}
@@ -511,7 +612,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         </Grid>
       </Section>
 
-      {/* ── 10. Fall risk ── */}
       <Section title="10. Fall Risk">
         <Grid cols={2}>
           <div>
@@ -569,7 +669,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 11. Diagnosis ── */}
       <Section title="11. Physiotherapy Diagnosis">
         <CheckboxGroup
           label="Diagnoses"
@@ -589,7 +688,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 12. Care plan ── */}
       <Section title="12. Physiotherapy Care Plan">
         <Textarea label="Goals" rows={3} {...register('goals')} />
         <CheckboxGroup
@@ -625,7 +723,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 13. Equipment ── */}
       <Section title="13. Equipment Needs">
         <CheckboxGroup
           label="Equipment"
@@ -645,7 +742,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 14. Caregiver training ── */}
       <Section title="14. Caregiver Training Needs">
         <CheckboxGroup
           label="Training Topics"
@@ -664,7 +760,6 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
         />
       </Section>
 
-      {/* ── 15. Summary ── */}
       <Section title="15. Summary & Recommendations">
         <CheckboxGroup
           label="Outcome"
@@ -677,7 +772,9 @@ const PhysiotherapyAssessmentFormPage: React.FC = () => {
             'HighRiskForFunctionalDecline',
             'PalliativeComfortFocusedPhysiotherapyRequired',
           ]}
-          onChange={(v) => setValue('outcome', v as any, { shouldDirty: true })}
+          onChange={(v) =>
+            setValue('outcome', v as any, { shouldDirty: true })
+          }
         />
         <CheckboxGroup
           label="Final Recommendations"

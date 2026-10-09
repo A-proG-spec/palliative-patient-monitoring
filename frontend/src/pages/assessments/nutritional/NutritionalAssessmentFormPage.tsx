@@ -1,11 +1,15 @@
-import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2 } from 'lucide-react';
 
 import { usePatient } from '@/hooks/usePatients';
-import { useCreateNutritionalAssessment } from '@/hooks/useNutritionalAssessments';
+import {
+  useCreateNutritionalAssessment,
+  useNutritionalAssessment,
+  useUpdateNutritionalAssessment,
+} from '@/hooks/useNutritionalAssessments';
 import {
   createNutritionalAssessmentSchema,
   type CreateNutritionalAssessmentFormData,
@@ -64,14 +68,33 @@ const SEVERITY_OPTIONS = [
 ] as const;
 
 const NutritionalAssessmentFormPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, assessmentId } = useParams<{
+    id: string;
+    assessmentId?: string;
+  }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { toast } = useToast();
 
-  const patientPath = `/patients/${id}`;
+  // ── Mode detection ──
+  const isEditMode = Boolean(assessmentId);
+
+  // ── Route-aware base path ──
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
+
   const createMutation = useCreateNutritionalAssessment(id!);
+  const updateMutation = useUpdateNutritionalAssessment(id!);
+
+  // ── Fetch existing record only in edit mode ──
+  const { data: existing, isLoading: existingLoading } = useNutritionalAssessment(
+    id!,
+    assessmentId ?? '',
+  );
 
   const {
     register,
@@ -79,6 +102,7 @@ const NutritionalAssessmentFormPage: React.FC = () => {
     watch,
     setValue,
     control,
+    reset,
     formState: { errors },
   } = useForm<CreateNutritionalAssessmentFormData>({
     resolver: zodResolver(createNutritionalAssessmentSchema),
@@ -110,16 +134,95 @@ const NutritionalAssessmentFormPage: React.FC = () => {
   const labResults = watch('labResults') ?? [];
 
   // ═══════════════════════════════════════════════════════════
-  // Submit
+  // EDIT: hydrate form from server record
+  // ═══════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!isEditMode || !existing) return;
+
+    reset({
+      assessmentType: existing.assessmentType ?? 'Admission',
+      weightKg: existing.weightKg ?? undefined,
+      heightCm: existing.heightCm ?? undefined,
+      bmi: existing.bmi ?? undefined,
+      muacCm: existing.muacCm ?? undefined,
+      recentWeightLossKg: existing.recentWeightLossKg ?? undefined,
+      weightLossPeriod: existing.weightLossPeriod ?? undefined,
+      nutritionalStatusClassification:
+        existing.nutritionalStatusClassification ?? undefined,
+
+      weightSixMonthsAgoKg: existing.weightSixMonthsAgoKg ?? undefined,
+      weightThreeMonthsAgoKg: existing.weightThreeMonthsAgoKg ?? undefined,
+      currentWeightKg: existing.currentWeightKg ?? undefined,
+      percentageWeightLoss: existing.percentageWeightLoss ?? undefined,
+      significantWeightLoss: existing.significantWeightLoss ?? undefined,
+
+      currentAppetite: existing.currentAppetite ?? undefined,
+      appetiteTrend: existing.appetiteTrend ?? undefined,
+      appetiteCauses: existing.appetiteCauses ?? [],
+      appetiteCauseOther: existing.appetiteCauseOther ?? undefined,
+
+      mealsPerDay: existing.mealsPerDay ?? undefined,
+      oralIntake: existing.oralIntake ?? undefined,
+      fluidIntake: existing.fluidIntake ?? undefined,
+      specialDiet: existing.specialDiet ?? undefined,
+      specialDietSpecify: existing.specialDietSpecify ?? undefined,
+
+      feedingMethod: existing.feedingMethod ?? undefined,
+      feedingMethodOther: existing.feedingMethodOther ?? undefined,
+      feedingAssistanceRequired:
+        existing.feedingAssistanceRequired ?? undefined,
+      difficultySwallowing: existing.difficultySwallowing ?? undefined,
+      difficultySwallowingDetails:
+        existing.difficultySwallowingDetails ?? undefined,
+
+      dietaryRecall: (existing.dietaryRecall ?? []) as any,
+
+      nauseaSeverity: existing.nauseaSeverity ?? undefined,
+      vomitingSeverity: existing.vomitingSeverity ?? undefined,
+      constipationSeverity: existing.constipationSeverity ?? undefined,
+      diarrheaSeverity: existing.diarrheaSeverity ?? undefined,
+      abdominalPainSeverity: existing.abdominalPainSeverity ?? undefined,
+      bloatingSeverity: existing.bloatingSeverity ?? undefined,
+      mouthSoresSeverity: existing.mouthSoresSeverity ?? undefined,
+
+      energyLevel: existing.energyLevel ?? undefined,
+      mealPreparation: existing.mealPreparation ?? undefined,
+      feedingAbility: existing.feedingAbility ?? undefined,
+
+      labResults: (existing.labResults ?? []) as any,
+
+      riskFactors: existing.riskFactors ?? [],
+      overallNutritionalRisk: existing.overallNutritionalRisk ?? undefined,
+
+      adequateFoodAccess: existing.adequateFoodAccess ?? undefined,
+      financialBarriersToNutrition:
+        existing.financialBarriersToNutrition ?? undefined,
+      requiresNutritionalAssistance:
+        existing.requiresNutritionalAssistance ?? undefined,
+
+      diagnoses: existing.diagnoses ?? [],
+      diagnosisOther: existing.diagnosisOther ?? undefined,
+
+      nutritionalGoals: existing.nutritionalGoals ?? undefined,
+      interventions: existing.interventions ?? [],
+      interventionOther: existing.interventionOther ?? undefined,
+      monitoringPlans: existing.monitoringPlans ?? [],
+      monitoringOther: existing.monitoringOther ?? undefined,
+
+      assessmentOutcome: existing.assessmentOutcome ?? [],
+      finalRecommendations: existing.finalRecommendations ?? [],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, existing?.id]);
+
+  // ═══════════════════════════════════════════════════════════
+  // Submit — create OR update depending on mode
   // ═══════════════════════════════════════════════════════════
   const onSubmit = (data: CreateNutritionalAssessmentFormData) => {
-    // ── Filter out empty dietary-recall rows before submit.
-    //    The backend requires mealType.min(1); blank rows would 400. ──
     const cleanedDietaryRecall = (data.dietaryRecall ?? []).filter(
       (r) => (r.mealType ?? '').trim().length > 0,
     );
 
-    // ── Strip testOther when test isn't 'Other' ──
     const cleanedLabResults = (data.labResults ?? []).map((r) => ({
       ...r,
       testOther: r.test === 'Other' ? r.testOther : undefined,
@@ -131,74 +234,79 @@ const NutritionalAssessmentFormPage: React.FC = () => {
       labResults: cleanedLabResults,
     };
 
-    createMutation.mutate(payload as any, {
-      onSuccess: () => navigate(patientPath),
-      onError: (err: any) => {
-        const message =
-          err?.response?.data?.message ?? 'Failed to save assessment.';
-        const fieldErrors = err?.response?.data?.errors;
-        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
-          toast.error(
-            `${message} — ${fieldErrors
-              .slice(0, 3)
-              .map((e: any) => e.message ?? e.field)
-              .join(', ')}`,
-          );
-        } else {
-          toast.error(message);
-        }
-      },
-    });
-  };
+    const handleSuccess = () => navigate(basePath);
 
-  const onInvalid = (formErrors: any) => {
-    const flat: string[] = [];
+    const handleError = (err: any) => {
+      const status = err?.response?.status;
+      let message =
+        'Could not save the nutritional assessment. Please try again.';
 
-    const walk = (obj: any, path = ''): void => {
-      if (!obj || typeof obj !== 'object') return;
-      if ('message' in obj && typeof obj.message === 'string') {
-        flat.push(`${path || 'form'}: ${obj.message}`);
-        return;
+      if (status === 400) {
+        message =
+          'Some fields are missing or invalid. Please review the highlighted fields.';
+      } else if (status === 403) {
+        message = 'You do not have permission to save this assessment.';
+      } else if (status === 404) {
+        message =
+          'Patient or assessment not found. Please refresh and try again.';
+      } else if (status >= 500) {
+        message = 'Server error. Please try again in a moment.';
+      } else if (!err?.response) {
+        message = 'Network error. Please check your connection and try again.';
       }
-      for (const [k, v] of Object.entries(obj)) {
-        const next = path ? `${path}.${k}` : k;
-        if (Array.isArray(v)) {
-          v.forEach((item, i) => walk(item, `${next}[${i}]`));
-        } else {
-          walk(v, next);
-        }
-      }
+
+      toast.error(message);
     };
 
-    walk(formErrors);
-
-    if (flat.length > 0) {
-      const shown = flat.slice(0, 3).join(' • ');
-      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
-      toast.error(`Save failed — ${shown}${rest}`);
+    if (isEditMode && assessmentId) {
+      updateMutation.mutate(
+        { assessmentId, data: payload as any },
+        { onSuccess: handleSuccess, onError: handleError },
+      );
     } else {
-      toast.error('Save failed — please review the form.');
+      createMutation.mutate(payload as any, {
+        onSuccess: handleSuccess,
+        onError: handleError,
+      });
     }
   };
 
-  if (isLoading) return <PageLoader />;
+  // ── Surface validation errors as a single clean toast ──
+  const onInvalid = (formErrors: any) => {
+    const count = Object.keys(formErrors ?? {}).length;
+
+    if (count === 0) {
+      toast.error('Please review the form and try again.');
+      return;
+    }
+
+    toast.error(
+      count === 1
+        ? 'Please fix the highlighted field and try again.'
+        : `Please fix the ${count} highlighted fields and try again.`,
+    );
+  };
+
+  // ── Loading / error states ──
+  if (isLoading || (isEditMode && existingLoading)) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
   const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
 
-  // ── Convenience for YesNo boolean bridging ──
   const boolToYesNo = (v: boolean | undefined | null): 'Yes' | 'No' | '' =>
     v === undefined || v === null ? '' : v ? 'Yes' : 'No';
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   return (
     <AssessmentFormShell
       title="Nutritional Assessment"
       patientLabel={patientLabel}
-      backTo={patientPath}
-      mode="create"
-      isSubmitting={createMutation.isPending}
+      backTo={basePath}
+      mode={isEditMode ? 'edit' : 'create'}
+      isSubmitting={isSubmitting}
       onSubmit={handleSubmit(onSubmit, onInvalid)}
-      onCancel={() => navigate(patientPath)}
+      onCancel={() => navigate(basePath)}
     >
       {/* ── 1. Assessment info ── */}
       <Section title="1. Assessment Information">

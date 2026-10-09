@@ -1,10 +1,14 @@
-import React from 'react';
-import { useParams, useNavigate, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useParams, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { usePatient } from '@/hooks/usePatients';
-import { useCreatePainAssessment } from '@/hooks/usePainAssessments';
+import {
+  useCreatePainAssessment,
+  usePainAssessment,
+  useUpdatePainAssessment,
+} from '@/hooks/usePainAssessments';
 import {
   createPainAssessmentSchema,
   type CreatePainAssessmentFormData,
@@ -25,7 +29,6 @@ import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
 
 import { useRecordAccess } from '@/hooks/useRecordAccess';
-import { patientPath } from '@/lib/clinicalPaths';
 import { useAuthStore } from '@/store/auth.store';
 import { useToast } from '@/context/ToastContext';
 
@@ -39,39 +42,47 @@ const displayId = (p: {
 const toYesNo = (v: boolean | null | undefined): 'Yes' | 'No' | '' =>
   v === undefined || v === null ? '' : v ? 'Yes' : 'No';
 
-// ── Shared enum option lists ────────────────────────────────────
-const SEVERITY_OPTIONS = [
-  { value: 'None', label: 'None' },
-  { value: 'Mild', label: 'Mild' },
-  { value: 'Moderate', label: 'Moderate' },
-  { value: 'Severe', label: 'Severe' },
-] as const;
-
-const NRS_0_TO_10 = Array.from({ length: 11 }, (_, i) => ({
-  value: String(i),
-  label: String(i),
-}));
-
 const PainAssessmentFormPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, assessmentId } = useParams<{
+    id: string;
+    assessmentId?: string;
+  }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { toast } = useToast();
 
-  // ── Narrow store subscription ──
+  // ── Mode detection ──
+  const isEditMode = Boolean(assessmentId);
+
+  // ── Auth + route-aware base path ──
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.type === 'admin';
-  const basePath = patientPath(isAdmin, id!);
+
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
 
   const access = useRecordAccess('painAssessment');
 
-  const { data: patient, isLoading, error, refetch } = usePatient(id!);
+  // ── Data ──
+  const { data: patient, isLoading: patientLoading, error: patientError, refetch: refetchPatient } =
+    usePatient(id!);
+
+  const { data: existing, isLoading: existingLoading } = usePainAssessment(
+    id!,
+    assessmentId ?? '',
+  );
+
   const createMutation = useCreatePainAssessment(id!);
+  const updateMutation = useUpdatePainAssessment(id!);
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<CreatePainAssessmentFormData>({
     resolver: zodResolver(createPainAssessmentSchema),
@@ -97,77 +108,126 @@ const PainAssessmentFormPage: React.FC = () => {
     },
   });
 
-  // ── Submit ──────────────────────────────────────────────────
-  const onSubmit = (data: CreatePainAssessmentFormData) => {
-    createMutation.mutate(data as any, {
-      onSuccess: () => navigate(basePath),
-      onError: (err: any) => {
-        const message =
-          err?.response?.data?.message ?? 'Failed to save pain assessment.';
-        const fieldErrors = err?.response?.data?.errors;
-        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
-          toast.error(
-            `${message} — ${fieldErrors
-              .slice(0, 3)
-              .map((e: any) => e.message ?? e.field)
-              .join(', ')}`,
-          );
-        } else {
-          toast.error(message);
-        }
-      },
+  // ═══════════════════════════════════════════════════════════
+  // Hydrate form in EDIT mode
+  // ═══════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!isEditMode || !existing) return;
+
+    // Map the server record back into the form shape.
+    // Array fields may arrive as null from the backend — coerce to [].
+    reset({
+      assessmentType: existing.assessmentType ?? 'Admission',
+      primaryPainComplaint: existing.primaryPainComplaint ?? undefined,
+      painOnset: existing.painOnset ?? undefined,
+      painDuration: existing.painDuration ?? undefined,
+      painLocations: existing.painLocations ?? [],
+      painLocationOther: existing.painLocationOther ?? undefined,
+      painDescriptions: existing.painDescriptions ?? [],
+      currentPainScore: existing.currentPainScore ?? undefined,
+      worstPainLast24h: existing.worstPainLast24h ?? undefined,
+      leastPainLast24h: existing.leastPainLast24h ?? undefined,
+      painType: existing.painType ?? [],
+      painPattern: existing.painPattern ?? [],
+      aggravatingFactors: existing.aggravatingFactors ?? [],
+      relievingFactors: existing.relievingFactors ?? [],
+      relievingOther: existing.relievingOther ?? undefined,
+      opioidUse: existing.opioidUse ?? undefined,
+      adjuvantDrugs: existing.adjuvantDrugs ?? [],
+      breakthroughFrequency: existing.breakthroughFrequency ?? undefined,
+      rescueMedicationUsed: existing.rescueMedicationUsed ?? undefined,
+      rescueEffectiveness: existing.rescueEffectiveness ?? undefined,
+      associatedSymptoms: existing.associatedSymptoms ?? [],
+      patientBehaviors: existing.patientBehaviors ?? [],
+      managementBarriers: existing.managementBarriers ?? [],
+      managementBarrierOther: existing.managementBarrierOther ?? undefined,
+      diagnosis: existing.diagnosis ?? [],
+      managementGoals: existing.managementGoals ?? undefined,
+      interventions: existing.interventions ?? [],
+      nonPharmacologicalMethods: existing.nonPharmacologicalMethods ?? [],
+      monitoringPlan: existing.monitoringPlan ?? [],
+      assessmentOutcome: existing.assessmentOutcome ?? [],
+      finalRecommendations: existing.finalRecommendations ?? [],
+      impacts: (existing.impacts ?? []) as any,
     });
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, existing?.id]);
 
-  // ── Surface RHF validation errors as a toast ────────────────
-  const onInvalid = (formErrors: any) => {
-    const flat: string[] = [];
+  // ═══════════════════════════════════════════════════════════
+  // Submit — create OR update depending on mode
+  // ═══════════════════════════════════════════════════════════
+  const onSubmit = (data: CreatePainAssessmentFormData) => {
+    const handleSuccess = () => navigate(basePath);
 
-    const walk = (obj: any, path = ''): void => {
-      if (!obj || typeof obj !== 'object') return;
-      if ('message' in obj && typeof obj.message === 'string') {
-        flat.push(`${path || 'form'}: ${obj.message}`);
-        return;
+    const handleError = (err: any) => {
+      const status = err?.response?.status;
+      let message = 'Could not save the pain assessment. Please try again.';
+
+      if (status === 400) {
+        message =
+          'Some fields are missing or invalid. Please review the highlighted fields.';
+      } else if (status === 403) {
+        message = 'You do not have permission to save this assessment.';
+      } else if (status === 404) {
+        message = 'Patient or assessment not found. Please refresh and try again.';
+      } else if (status >= 500) {
+        message = 'Server error. Please try again in a moment.';
+      } else if (!err?.response) {
+        message = 'Network error. Please check your connection and try again.';
       }
-      for (const [k, v] of Object.entries(obj)) {
-        const next = path ? `${path}.${k}` : k;
-        if (Array.isArray(v)) {
-          v.forEach((item, i) => walk(item, `${next}[${i}]`));
-        } else {
-          walk(v, next);
-        }
-      }
+
+      toast.error(message);
     };
 
-    walk(formErrors);
-
-    if (flat.length > 0) {
-      const shown = flat.slice(0, 3).join(' • ');
-      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
-      toast.error(`Save failed — ${shown}${rest}`);
+    if (isEditMode && assessmentId) {
+      updateMutation.mutate(
+        { assessmentId, data: data as any },
+        { onSuccess: handleSuccess, onError: handleError },
+      );
     } else {
-      toast.error('Save failed — please review the form.');
+      createMutation.mutate(data as any, {
+        onSuccess: handleSuccess,
+        onError: handleError,
+      });
     }
   };
 
-  if (isLoading) return <PageLoader />;
-  if (error || !patient) return <ErrorState onRetry={refetch} />;
+  // ── Surface validation errors as a single clean toast ──
+  const onInvalid = (formErrors: any) => {
+    const count = Object.keys(formErrors ?? {}).length;
 
-  // ── Write gate ──
-  // Adjust `/pain-assessment` to match your frontend `<Route path>`.
-  if (!access.allowed || patient.status === 'Discharged') {
-    return <Navigate to={`${basePath}/pain-assessment`} replace />;
+    if (count === 0) {
+      toast.error('Please review the form and try again.');
+      return;
+    }
+
+    toast.error(
+      count === 1
+        ? 'Please fix the highlighted field and try again.'
+        : `Please fix the ${count} highlighted fields and try again.`,
+    );
+  };
+
+  // ── Loading / error states ──
+  if (patientLoading || (isEditMode && existingLoading)) return <PageLoader />;
+  if (patientError || !patient) return <ErrorState onRetry={refetchPatient} />;
+
+  // ── Write gate — admin bypasses the record-role check ──
+  if ((!isAdmin && !access.allowed) || patient.status === 'Discharged') {
+    return <Navigate to={`${basePath}/pain`} replace />;
   }
 
   const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   return (
     <AssessmentFormShell
       title="Pain Assessment"
       patientLabel={patientLabel}
       backTo={basePath}
-      mode="create"
-      isSubmitting={createMutation.isPending}
+      mode={isEditMode ? 'edit' : 'create'}
+      isSubmitting={isSubmitting}
       onSubmit={handleSubmit(onSubmit, onInvalid)}
       onCancel={() => navigate(basePath)}
     >

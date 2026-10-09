@@ -1,10 +1,14 @@
-import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { usePatient } from '@/hooks/usePatients';
-import { useCreatePharmacistAssessment } from '@/hooks/usePharmacistAssessments';
+import {
+  useCreatePharmacistAssessment,
+  usePharmacistAssessment,
+  useUpdatePharmacistAssessment,
+} from '@/hooks/usePharmacistAssessments';
 import {
   createPharmacistAssessmentSchema,
   type CreatePharmacistAssessmentFormData,
@@ -35,21 +39,47 @@ const displayId = (p: {
 const toYesNo = (v: boolean | null | undefined): 'Yes' | 'No' | '' =>
   v === undefined || v === null ? '' : v ? 'Yes' : 'No';
 
+type MedicationRow = {
+  name: string;
+  dose: string;
+  route: string;
+  frequency: string;
+  indication: string;
+};
+
 const PharmacistAssessmentFormPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, assessmentId } = useParams<{
+    id: string;
+    assessmentId?: string;
+  }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { toast } = useToast();
 
-  const patientPath = `/patients/${id}`;
+  // ── Mode detection ──
+  const isEditMode = Boolean(assessmentId);
+
+  // ── Route-aware base path ──
+  const isAdminRoute = pathname.startsWith('/admin/');
+  const basePath = isAdminRoute
+    ? `/admin/patients/${id}`
+    : `/patients/${id}`;
 
   const { data: patient, isLoading, error, refetch } = usePatient(id!);
+
   const createMutation = useCreatePharmacistAssessment(id!);
+  const updateMutation = useUpdatePharmacistAssessment(id!);
+
+  // ── Fetch existing record only in edit mode ──
+  const { data: existing, isLoading: existingLoading } =
+    usePharmacistAssessment(id!, assessmentId ?? '');
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<CreatePharmacistAssessmentFormData>({
     resolver: zodResolver(createPharmacistAssessmentSchema),
@@ -80,62 +110,192 @@ const PharmacistAssessmentFormPage: React.FC = () => {
     },
   });
 
+  const [medications, setMedications] = React.useState<MedicationRow[]>([]);
+
+  const addMedication = () =>
+    setMedications((prev) => [
+      ...prev,
+      { name: '', dose: '', route: '', frequency: '', indication: '' },
+    ]);
+
+  const updateMedication = (
+    index: number,
+    field: keyof MedicationRow,
+    value: string,
+  ) =>
+    setMedications((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, [field]: value } : m)),
+    );
+
+  const removeMedication = (index: number) =>
+    setMedications((prev) => prev.filter((_, i) => i !== index));
+
   // ═══════════════════════════════════════════════════════════
-  // Submit
+  // EDIT: hydrate form + medications shadow state from server
+  // ═══════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!isEditMode || !existing) return;
+
+    reset({
+      assessmentType: existing.assessmentType ?? 'Admission',
+      weightKg: existing.weightKg ?? undefined,
+      wardUnit: existing.wardUnit ?? undefined,
+      allergies: existing.allergies ?? undefined,
+
+      otcHerbalUsed: existing.otcHerbalUsed ?? false,
+      otcHerbalDetails: existing.otcHerbalDetails ?? undefined,
+      medicationHistoryAdherence:
+        existing.medicationHistoryAdherence ?? undefined,
+      hasAdrHistory: existing.hasAdrHistory ?? false,
+      adrHistoryDetails: existing.adrHistoryDetails ?? undefined,
+
+      analgesicNonOpioids: existing.analgesicNonOpioids ?? false,
+      analgesicWeakOpioids: existing.analgesicWeakOpioids ?? false,
+      analgesicStrongOpioids: existing.analgesicStrongOpioids ?? false,
+      analgesicAdjuvants: existing.analgesicAdjuvants ?? false,
+      analgesicOtherDetails: existing.analgesicOtherDetails ?? undefined,
+      painControl: existing.painControl ?? undefined,
+      breakthroughPain: existing.breakthroughPain ?? undefined,
+      opioidSideEffects: existing.opioidSideEffects ?? [],
+
+      drugDrugInteractions: existing.drugDrugInteractions ?? undefined,
+      drugDrugInteractionDetails:
+        existing.drugDrugInteractionDetails ?? undefined,
+      drugDiseaseInteractions: existing.drugDiseaseInteractions ?? false,
+      drugDiseaseInteractionDetails:
+        existing.drugDiseaseInteractionDetails ?? undefined,
+      highRiskMedications: existing.highRiskMedications ?? [],
+
+      renalFunction: existing.renalFunction ?? undefined,
+      creatinine: existing.creatinine ?? undefined,
+      hepaticFunction: existing.hepaticFunction ?? undefined,
+      lfts: existing.lfts ?? undefined,
+
+      suspectedAdr: existing.suspectedAdr ?? false,
+      suspectedAdrDrug: existing.suspectedAdrDrug ?? undefined,
+      suspectedAdrReaction: existing.suspectedAdrReaction ?? undefined,
+      adrSeverity: existing.adrSeverity ?? undefined,
+      adrManagement: existing.adrManagement ?? [],
+
+      bowelFunction: existing.bowelFunction ?? undefined,
+      laxativeUse: existing.laxativeUse ?? false,
+      laxativeDetails: existing.laxativeDetails ?? undefined,
+
+      doseAdjustmentRequired: existing.doseAdjustmentRequired ?? false,
+      doseAdjustmentReasons: existing.doseAdjustmentReasons ?? [],
+
+      patientUnderstanding: existing.patientUnderstanding ?? undefined,
+      counselingTopics: existing.counselingTopics ?? [],
+
+      currentIssuesIdentified: existing.currentIssuesIdentified ?? undefined,
+      medicationPlanActions: existing.medicationPlanActions ?? [],
+      medicationPlanOther: existing.medicationPlanOther ?? undefined,
+
+      medicationAvailability: existing.medicationAvailability ?? undefined,
+      financialBarriers: existing.financialBarriers ?? false,
+      pharmacyIntervention: existing.pharmacyIntervention ?? false,
+
+      clinicalPharmacistName: existing.clinicalPharmacistName ?? undefined,
+      pharmacistSummary: existing.pharmacistSummary ?? undefined,
+      summaryFlags: existing.summaryFlags ?? [],
+      finalRecommendations: existing.finalRecommendations ?? [],
+
+      symptomMedicationEffectiveness:
+        (existing as any).symptomMedicationEffectiveness ?? {},
+    });
+
+    // Hydrate the shadow medication list from the server record
+    const serverMeds = ((existing as any).currentMedications ?? []) as Array<{
+      name?: string;
+      dose?: string;
+      route?: string;
+      frequency?: string;
+      indication?: string;
+    }>;
+
+    setMedications(
+      serverMeds.map((m) => ({
+        name: m.name ?? '',
+        dose: m.dose ?? '',
+        route: m.route ?? '',
+        frequency: m.frequency ?? '',
+        indication: m.indication ?? '',
+      })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, existing?.id]);
+
+  // ═══════════════════════════════════════════════════════════
+  // Submit — create OR update depending on mode
   // ═══════════════════════════════════════════════════════════
   const onSubmit = (data: CreatePharmacistAssessmentFormData) => {
-    createMutation.mutate(data as any, {
-      onSuccess: () => navigate(patientPath),
-      onError: (err: any) => {
-        const message =
-          err?.response?.data?.message ??
-          'Failed to save pharmacist assessment.';
-        const fieldErrors = err?.response?.data?.errors;
-        if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
-          toast.error(
-            `${message} — ${fieldErrors
-              .slice(0, 3)
-              .map((e: any) => e.message ?? e.field)
-              .join(', ')}`,
-          );
-        } else {
-          toast.error(message);
-        }
-      },
-    });
-  };
+    const parsedMedications = medications
+      .filter((m) => m.name.trim() || m.dose.trim() || m.indication.trim())
+      .map((m) => ({
+        name: m.name.trim() || undefined,
+        dose: m.dose.trim() || undefined,
+        route: m.route.trim() || undefined,
+        frequency: m.frequency.trim() || undefined,
+        indication: m.indication.trim() || undefined,
+      }));
 
-  const onInvalid = (formErrors: any) => {
-    const flat: string[] = [];
-    const walk = (obj: any, path = ''): void => {
-      if (!obj || typeof obj !== 'object') return;
-      if ('message' in obj && typeof obj.message === 'string') {
-        flat.push(`${path || 'form'}: ${obj.message}`);
-        return;
-      }
-      for (const [k, v] of Object.entries(obj)) {
-        const next = path ? `${path}.${k}` : k;
-        if (Array.isArray(v)) {
-          v.forEach((item, i) => walk(item, `${next}[${i}]`));
-        } else {
-          walk(v, next);
-        }
-      }
+    const payload = {
+      ...data,
+      currentMedications: parsedMedications,
     };
-    walk(formErrors);
 
-    if (flat.length > 0) {
-      const shown = flat.slice(0, 3).join(' • ');
-      const rest = flat.length > 3 ? ` (+${flat.length - 3} more)` : '';
-      toast.error(`Save failed — ${shown}${rest}`);
+    const handleSuccess = () => navigate(basePath);
+
+    const handleError = (err: any) => {
+      const status = err?.response?.status;
+      let message =
+        'Could not save the pharmacist assessment. Please try again.';
+
+      if (status === 400) {
+        message =
+          'Some fields are missing or invalid. Please review the highlighted fields.';
+      } else if (status === 403) {
+        message = 'You do not have permission to save this assessment.';
+      } else if (status === 404) {
+        message =
+          'Patient or assessment not found. Please refresh and try again.';
+      } else if (status >= 500) {
+        message = 'Server error. Please try again in a moment.';
+      } else if (!err?.response) {
+        message = 'Network error. Please check your connection and try again.';
+      }
+
+      toast.error(message);
+    };
+
+    if (isEditMode && assessmentId) {
+      updateMutation.mutate(
+        { assessmentId, data: payload as any },
+        { onSuccess: handleSuccess, onError: handleError },
+      );
     } else {
-      toast.error('Save failed — please review the form.');
+      createMutation.mutate(payload as any, {
+        onSuccess: handleSuccess,
+        onError: handleError,
+      });
     }
   };
 
-  // ── Controlled text state for the medications textarea ──
-  // Prevents the row list from being lost on re-render.
-  const [medicationsText, setMedicationsText] = React.useState('');
+  // ── Surface validation errors as a single clean toast ──
+  const onInvalid = (formErrors: any) => {
+    const count = Object.keys(formErrors ?? {}).length;
+
+    if (count === 0) {
+      toast.error('Please review the form and try again.');
+      return;
+    }
+
+    toast.error(
+      count === 1
+        ? 'Please fix the highlighted field and try again.'
+        : `Please fix the ${count} highlighted fields and try again.`,
+    );
+  };
 
   // ── Analgesic bridge: derive array from 4 booleans ──
   const analgesicValues: string[] = [
@@ -160,20 +320,23 @@ const PharmacistAssessmentFormPage: React.FC = () => {
     });
   };
 
-  if (isLoading) return <PageLoader />;
+  // ── Loading / error states ──
+  if (isLoading || (isEditMode && existingLoading)) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
   const patientLabel = `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`;
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   return (
     <AssessmentFormShell
       title="Pharmacist Assessment"
       patientLabel={patientLabel}
-      backTo={patientPath}
-      mode="create"
-      isSubmitting={createMutation.isPending}
+      backTo={basePath}
+      mode={isEditMode ? 'edit' : 'create'}
+      isSubmitting={isSubmitting}
       onSubmit={handleSubmit(onSubmit, onInvalid)}
-      onCancel={() => navigate(patientPath)}
+      onCancel={() => navigate(basePath)}
     >
       {/* ── 1. Assessment info ── */}
       <Section title="1. Assessment Information">
@@ -393,42 +556,90 @@ const PharmacistAssessmentFormPage: React.FC = () => {
 
       {/* ── 7. Current medications ── */}
       <Section title="7. Current Medications">
-        <p className="text-xs text-text-muted -mt-2">
-          Enter each medication on its own line as{' '}
-          <code className="bg-surface-low px-1 rounded">
-            Name | Dose | Route | Frequency | Indication
-          </code>
-        </p>
-        <Textarea
-          label="Medication list"
-          rows={5}
-          value={medicationsText}
-          onChange={(e) => {
-            const raw = e.target.value;
-            setMedicationsText(raw);
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-on-surface">
+              Medication List
+            </p>
+            <button
+              type="button"
+              onClick={addMedication}
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
+            >
+              <span aria-hidden>+</span> Add Medication
+            </button>
+          </div>
 
-            const rows = raw
-              .split('\n')
-              .map((l) => l.trim())
-              .filter(Boolean)
-              .map((l) => {
-                const [name = '', dose = '', route = '', frequency = '', indication = ''] =
-                  l.split('|');
-                return {
-                  name: name.trim(),
-                  dose: dose.trim(),
-                  route: route.trim(),
-                  frequency: frequency.trim(),
-                  indication: indication.trim(),
-                };
-              });
+          {medications.length === 0 && (
+            <p className="text-[11px] text-text-muted italic">
+              No medications added yet. Click "Add Medication" to begin.
+            </p>
+          )}
 
-            setValue('currentMedications', rows, { shouldDirty: true });
-          }}
-          placeholder={
-            'Morphine | 10mg | Oral | Every 6h | Pain\nLactulose | 15ml | Oral | Twice daily | Constipation'
-          }
-        />
+          {medications.map((med, index) => (
+            <div
+              key={index}
+              className="rounded-lg border border-border bg-surface p-3 space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-text-muted">
+                  Medication #{index + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeMedication(index)}
+                  className="text-xs text-red-600 hover:text-red-700 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+
+              <Grid cols={2}>
+                <Input
+                  label="Name"
+                  value={med.name}
+                  onChange={(e) =>
+                    updateMedication(index, 'name', e.target.value)
+                  }
+                  placeholder="e.g. Morphine"
+                />
+                <Input
+                  label="Dose"
+                  value={med.dose}
+                  onChange={(e) =>
+                    updateMedication(index, 'dose', e.target.value)
+                  }
+                  placeholder="e.g. 10mg"
+                />
+                <Input
+                  label="Route"
+                  value={med.route}
+                  onChange={(e) =>
+                    updateMedication(index, 'route', e.target.value)
+                  }
+                  placeholder="e.g. Oral"
+                />
+                <Input
+                  label="Frequency"
+                  value={med.frequency}
+                  onChange={(e) =>
+                    updateMedication(index, 'frequency', e.target.value)
+                  }
+                  placeholder="e.g. Every 6h"
+                />
+              </Grid>
+
+              <Input
+                label="Indication"
+                value={med.indication}
+                onChange={(e) =>
+                  updateMedication(index, 'indication', e.target.value)
+                }
+                placeholder="e.g. Pain"
+              />
+            </div>
+          ))}
+        </div>
       </Section>
 
       {/* ── 8. Adverse drug reactions ── */}

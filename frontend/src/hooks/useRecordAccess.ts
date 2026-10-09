@@ -4,24 +4,13 @@ import { hasPermission } from '@/config/permissions';
 import { RECORD_ROLES, type RecordRoleKey } from '@/config/recordRoles';
 
 export interface UseRecordAccessResult {
-  /** true if the current user can write this record type. */
   allowed: boolean;
-  /** Human-readable reason when `allowed` is false. */
   reason: string | null;
-  /** Eligible roles for tooltips / banners. */
   eligibleRoles: string[];
   isAdmin: boolean;
   role: string | null;
 }
 
-/**
- * useRecordAccess
- * ───────────────
- * Answers "can the currently logged-in user author this record type?".
- *
- *   allowed   → admin bypass OR role ∈ RECORD_ROLES[key]
- *   reason    → why not (for tooltip / banner text)
- */
 export function useRecordAccess(recordKey: RecordRoleKey): UseRecordAccessResult {
   const user = useAuthStore((s) => s.user);
 
@@ -40,6 +29,7 @@ export function useRecordAccess(recordKey: RecordRoleKey): UseRecordAccessResult
       };
     }
 
+    // ── Admin bypasses the record-role check entirely ──
     if (isAdmin) {
       return { allowed: true, reason: null, eligibleRoles, isAdmin: true, role: null };
     }
@@ -47,7 +37,8 @@ export function useRecordAccess(recordKey: RecordRoleKey): UseRecordAccessResult
     if (!role) {
       return {
         allowed: false,
-        reason: 'Your account has no assigned role. Ask an administrator to assign one.',
+        reason:
+          'Your account has no assigned role. Ask an administrator to assign one.',
         eligibleRoles,
         isAdmin: false,
         role: null,
@@ -67,7 +58,6 @@ export function useRecordAccess(recordKey: RecordRoleKey): UseRecordAccessResult
   }, [user, recordKey]);
 }
 
-/** Variant for arbitrary permission keys. */
 export function usePermissionAccess(permission: string): {
   allowed: boolean;
   isAdmin: boolean;

@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { usePatient } from '@/hooks/usePatients';
-import { useFamilyAssessment } from '@/hooks/useFamilyAssessments';
+import {
+  useFamilyAssessment,
+  useDeleteFamilyAssessment,
+} from '@/hooks/useFamilyAssessments';
 import { useAuthStore } from '@/store/auth.store';
 import { AssessmentDetailShell } from '@/components/assessments/AssessmentDetailShell';
 import {
@@ -136,8 +139,9 @@ const FamilyAssessmentDetailPage: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.type === 'admin';
 
-  // ── Edit is admin-only. Backend enforces roleMiddleware(['admin'])
-  //    on PATCH/DELETE for family assessments; non-admins get 403. ──
+  // ── Edit / Delete are admin-only. Backend enforces
+  //    roleMiddleware(['admin']) on PATCH/DELETE for family assessments;
+  //    non-admins get 403. ──
   const canManage = isAdmin;
 
   const { data: patient } = usePatient(id!);
@@ -145,6 +149,9 @@ const FamilyAssessmentDetailPage: React.FC = () => {
     id!,
     assessmentId!,
   );
+  const deleteMutation = useDeleteFamilyAssessment(id!);
+
+  const [showDelete, setShowDelete] = useState(false);
 
   const basePath = patientPath(isAdmin, id!);
 
@@ -152,40 +159,91 @@ const FamilyAssessmentDetailPage: React.FC = () => {
     ? `${patient.firstName} ${patient.lastName} · ${displayId(patient)}`
     : '—';
 
+  const handleDelete = (reason?: string) => {
+    deleteMutation.mutate(
+      { assessmentId: assessmentId!, reason },
+      {
+        onSuccess: () => navigate(`${basePath}/family-assessment`),
+        onError: () => {
+          // Stay on the page so the user can retry.
+          setShowDelete(false);
+        },
+      },
+    );
+    setShowDelete(false);
+  };
+
   // ── Early returns so the shell never renders without data ──
   if (isLoading) return <PageLoader />;
   if (error || !a) return <ErrorState onRetry={refetch} />;
 
   return (
-    <AssessmentDetailShell
-      title="Family Assessment"
-      patientLabel={patientLabel}
-      createdAt={a.createdAt}
-      createdByName={
-        // DTO shape first, then raw relation, then free-text
-        (a as any)?.enteredBy?.name ??
-        (a as any)?.createdByStaff?.name ??
-        a?.assessorName ??
-        null
-      }
-      isDeleted={!!a.deletedAt}
-      isAdmin={isAdmin}
-      backTo={`${basePath}/family-assessment`}
-      isLoading={false}
-      isError={false}
-      onRetry={refetch}
-      onPrint={() => window.print()}
-      onEdit={
-        canManage && !a.deletedAt
-          ? () =>
-              navigate(`${basePath}/family-assessment/${assessmentId}/edit`)
-          : undefined
-      }
-    >
-      {SECTIONS.map((s) => (
-        <DetailSectionRenderer key={s.title} section={s} data={a as any} />
-      ))}
-    </AssessmentDetailShell>
+    <>
+      <AssessmentDetailShell
+        title="Family Assessment"
+        patientLabel={patientLabel}
+        createdAt={a.createdAt}
+        createdByName={
+          // DTO shape first, then raw relation, then free-text
+          (a as any)?.enteredBy?.name ??
+          (a as any)?.createdByStaff?.name ??
+          a?.assessorName ??
+          null
+        }
+        isDeleted={!!a.deletedAt}
+        isAdmin={isAdmin}
+        backTo={`${basePath}/family-assessment`}
+        isLoading={false}
+        isError={false}
+        onRetry={refetch}
+        onPrint={() => window.print()}
+        onEdit={
+          canManage && !a.deletedAt
+            ? () =>
+                navigate(`${basePath}/family-assessment/${assessmentId}/edit`)
+            : undefined
+        }
+        onDelete={
+          canManage && !a.deletedAt ? () => setShowDelete(true) : undefined
+        }
+      >
+        {SECTIONS.map((s) => (
+          <DetailSectionRenderer key={s.title} section={s} data={a as any} />
+        ))}
+      </AssessmentDetailShell>
+
+      {/* ── Delete confirmation modal ── */}
+      {showDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/30 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-surface-lowest rounded-2xl border border-border-base shadow-xl p-6">
+            <h2 className="text-lg font-semibold text-on-surface mb-2">
+              Delete this family assessment?
+            </h2>
+            <p className="text-sm text-text-secondary mb-5">
+              The assessment will be soft-deleted and can be restored later.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDelete(false)}
+                disabled={deleteMutation.isPending}
+                className="flex-1 rounded-xl border border-border-base bg-surface-lowest px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-surface-low transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete()}
+                disabled={deleteMutation.isPending}
+                className="flex-1 rounded-xl bg-error px-4 py-2.5 text-sm font-medium text-white hover:bg-error/90 transition-colors disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
