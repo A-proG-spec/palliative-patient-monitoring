@@ -5,6 +5,7 @@ import {
   useMedicationDetail,
   useUpdateMedicationStatus,
 } from '@/hooks/useMedications';
+import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/common/StatusBadge';
@@ -41,6 +42,14 @@ const MedicationDetailContent: React.FC<{
   medicationId: string;
 }> = ({ patientId, medicationId }) => {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+
+  // ── Role gate ──
+  // Only Pharmacists and Admins may administer a medication.
+  // Physicians, Nurses, Radiologists, and other roles can VIEW
+  // the record but never mark it as given.
+  const canMarkGiven =
+    user?.type === 'admin' || user?.role === 'Pharmacist';
 
   const {
     data: med,
@@ -54,10 +63,31 @@ const MedicationDetailContent: React.FC<{
   if (isLoading) return <PageLoader />;
   if (error || !med) return <ErrorState onRetry={refetch} />;
 
-  const prescribedByName =
-    typeof med.prescribedBy === 'object' && med.prescribedBy !== null
-      ? med.prescribedBy.name
-      : '—';
+  // ═══════════════════════════════════════════════════════════
+  // Resolve the "Prescribed By" label from three possible sources
+  //
+  //   1. `prescribedBy` as an object { id, name, type } — the
+  //      preferred shape emitted by the backend's toPrescribedBy().
+  //   2. `prescribedBy` as a bare string — the legacy shape from
+  //      older API responses.
+  //   3. `enteredBy` — final fallback, always present.
+  //
+  // This covers both admin-authored orders (prescribedBy is null
+  // on the raw column, but the DTO surfaces the admin) and
+  // staff-authored orders (prescribedByStaff populated directly).
+  // ═══════════════════════════════════════════════════════════
+  const prescribedByName = (() => {
+    if (typeof med.prescribedBy === 'object' && med.prescribedBy !== null) {
+      return med.prescribedBy.name;
+    }
+    if (typeof med.prescribedBy === 'string' && med.prescribedBy.length > 0) {
+      return med.prescribedBy;
+    }
+    if (med.enteredBy && typeof med.enteredBy === 'object') {
+      return med.enteredBy.name;
+    }
+    return '—';
+  })();
 
   return (
     <div className="max-w-xl space-y-5">
@@ -77,7 +107,7 @@ const MedicationDetailContent: React.FC<{
             ['Frequency', med.frequency],
             ['Route', med.route],
             ['Administered At', med.administeredAt],
-            ['Prescribed By', prescribedByName],
+            ['Prescribed / Entered By', prescribedByName],
             ['Ordered', formatDate(med.createdAt)],
           ].map(([label, value]) => (
             <div key={label}>
@@ -88,25 +118,20 @@ const MedicationDetailContent: React.FC<{
 
           {med.status === 'Ordered' && (
             <div className="pt-3 flex gap-3">
-              <Button
-                leftIcon={<CheckCircle2 size={14} />}
-                loading={updateMutation.isPending}
-                onClick={() =>
-                  updateMutation.mutate(
-                    { medicationId, data: { status: 'Given' } },
-                    { onSuccess: () => navigate(`/patients/${patientId}`) },
-                  )
-                }
-              >
-                Mark as Given
-              </Button>
-              <Button
-                variant="outline"
-                leftIcon={<ArrowLeft size={14} />}
-                onClick={() => navigate(`/patients/${patientId}`)}
-              >
-                Back
-              </Button>
+              {canMarkGiven && (
+                <Button
+                  leftIcon={<CheckCircle2 size={14} />}
+                  loading={updateMutation.isPending}
+                  onClick={() =>
+                    updateMutation.mutate(
+                      { medicationId, data: { status: 'Given' } },
+                      { onSuccess: () => navigate(`/patients/${patientId}`) },
+                    )
+                  }
+                >
+                  Mark as Given
+                </Button>
+              )}
             </div>
           )}
         </CardContent>

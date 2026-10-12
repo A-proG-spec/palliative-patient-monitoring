@@ -239,7 +239,68 @@ export const orderLabTest = async (
 
   return toLabDto(labTest);
 };
+// ─────────────────────────────────────────────────────────────
+// Lab technician queue — completed requests (status: 'Completed')
+//
+// Mirror of getPendingLabRequests. Sorted newest-first by the
+// date the result was recorded.
+// ─────────────────────────────────────────────────────────────
+export const getCompletedLabRequests = async (
+  page: number = 1,
+  limit: number = 100,
+) => {
+  const where = { status: 'Completed' as const };
+  const skip = (page - 1) * limit;
 
+  const [items, total] = await Promise.all([
+    prisma.laboratoryTest.findMany({
+      where,
+      orderBy: { datePerformed: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        patient: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            hospitalPatientId: true,
+          },
+        },
+        orderedByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.laboratoryTest.count({ where }),
+  ]);
+
+  return {
+    items: items.map((l) => ({
+      id: l.id,
+      patientId: l.patient.id,
+      patientName: `${l.patient.firstName} ${l.patient.lastName}`,
+      patientDisplayId: l.patient.hospitalPatientId,
+
+      testName: l.testName,
+      category: l.category,
+      specimenType: l.specimenType,
+      specimenSite: l.specimenSite,
+      clinicalHistory: l.clinicalHistory,
+
+      enteredBy: getEnteredBy(l),
+
+      priority: l.priority,
+      dateRequested: l.dateOrdered,
+      dateCompleted: l.datePerformed,
+      status: l.status,
+      result: l.result,
+      performedBy: l.performedBy,
+    })),
+    page,
+    limit,
+    total,
+  };
+};
 // ─────────────────────────────────────────────────────────────
 // List lab tests for a patient
 // ─────────────────────────────────────────────────────────────
@@ -675,6 +736,7 @@ export default {
   deleteLabTest,
   restoreLabTest,
   getPendingLabRequests,
+  getCompletedLabRequests,
   getLabRequestById,
   enterLabResultFromQueue
 };

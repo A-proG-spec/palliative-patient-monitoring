@@ -58,6 +58,7 @@ const ReferralDetailPage = lazy(() => import('@/pages/clinical/ReferralDetailPag
 const RecordAdmissionPage = lazy(() => import('@/pages/clinical/RecordAdmissionPage'));
 const AdmissionDetailPage = lazy(() => import('@/pages/clinical/AdmissionDetailPage'));
 const RecordProgressNotePage = lazy(() => import('@/pages/clinical/RecordProgressNotePage'));
+const ProgressNoteDetailPage = lazy(() => import('@/pages/clinical/ProgressNoteDetailPage'));
 const HospiceNursingPage = lazy(() => import('@/pages/clinical/HospiceNursingPage'));
 const HospiceNursingDetailPage = lazy(() => import('@/pages/clinical/HospiceNursingDetailPage'));
 
@@ -203,7 +204,7 @@ const AppRoutes: React.FC = () => (
 
         {/* Admin sub-record detail routes */}
         <Route path="/admin/patients/:id/visits/:visitId" element={<S><VisitDetailPage /></S>} />
-        <Route path="/admin/patients/:id/progress-note/:noteId" element={<S><RecordProgressNotePage /></S>} />
+        <Route path="/admin/patients/:id/progress-note/:noteId" element={<S><ProgressNoteDetailPage /></S>} />
         <Route path="/admin/patients/:id/hospice-nursing/:assessmentId" element={<S><HospiceNursingDetailPage /></S>} />
         <Route path="/admin/patients/:id/medications/:medicationId" element={<S><MedicationDetailPage /></S>} />
         <Route path="/admin/patients/:id/labs/:labId" element={<S><LabDetailPage /></S>} />
@@ -252,7 +253,7 @@ const AppRoutes: React.FC = () => (
             <Route path="/patients/:id/progress-note/new" element={<S><RecordProgressNotePage /></S>} />
             <Route path="/patients/:id/progress-note/:noteId/edit" element={<S><RecordProgressNotePage /></S>} />
           </Route>
-          <Route path="/patients/:id/progress-note/:noteId" element={<S><RecordProgressNotePage /></S>} />
+          <Route path="/patients/:id/progress-note/:noteId" element={<S><ProgressNoteDetailPage /></S>} />
 
           {/* ── Hospice Nursing ── */}
           <Route element={<PermissionGate permission="canRecordHospiceNursing" />}>

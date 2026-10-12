@@ -11,23 +11,27 @@ import { QUERY_KEYS, ROUTES } from '@/constants';
 import api from '@/api/client';
 
 // ─────────────────────────────────────────────────────────────
-// Row shape — mirrors the backend `PendingImagingOrder` DTO
-// returned by `imaging.service.getPendingImagingOrders`.
+// Row shape — mirrors the backend `getPendingImagingOrders` DTO.
 // ─────────────────────────────────────────────────────────────
 interface ImagingOrder {
   id: number;
   patientId: number;
   patientName: string;
-  /** Medical Record No. — the system-generated patient ID (e.g. PAT-0001).
+  /** Medical Record No. — the system-generated patient ID.
    *  Null when the patient has no `hospitalPatientId` on record. */
   patientDisplayId: string | null;
 
   modality: string;
   bodyRegion: string;
-  specificQuestion?: string | null;
+  specificSite?: string | null;
+  specialClinicalQuestion?: string | null;
+  provisionalDiagnosis?: string | null;
 
+  // Ordering clinician — multiple shapes for compatibility.
+  orderedById: number | null;
+  orderedByName: string | null;
+  orderedByType: 'staff' | 'admin' | null;
   requestingClinician: string;
-  orderedById: number;
 
   priority: 'Routine' | 'Urgent' | 'Emergency';
   dateOrdered: string;
@@ -36,7 +40,8 @@ interface ImagingOrder {
 
 const fetchImagingOrders = async (): Promise<ImagingOrder[]> => {
   const response = await api.get('/imaging/pending-orders');
-  return response.data.imagingOrders ?? [];
+  // Backend returns { items, page, limit, total }
+  return response.data.items ?? [];
 };
 
 const ImagingOrdersPage: React.FC = () => {
@@ -163,7 +168,7 @@ const ImagingOrdersPage: React.FC = () => {
                     {order.modality}
                   </td>
                   <td className="px-5 py-3.5 text-sm text-text-secondary">
-                    {order.requestingClinician}
+                    {order.requestingClinician || order.orderedByName || '—'}
                   </td>
                   <td className="px-5 py-3.5 text-sm text-text-secondary">
                     {formatDate(order.dateOrdered)}

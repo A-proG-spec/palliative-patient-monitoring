@@ -1,21 +1,34 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
-import { prisma, prismaBase } from '../lib/prisma.js';
+import { prisma } from '../lib/prisma.js';
 import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
 import type { Actor } from '../types/index.js';
 
+// ─────────────────────────────────────────────────────────────
+// Actor helpers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Normalize an (staff, admin) relation pair into a single actor object.
+ * Prefers staff attribution; falls back to admin. Returns `null` when
+ * neither relation is populated.
+ */
 const formatEnteredBy = (staff?: any, admin?: any) =>
   admin
-    ? { id: admin.id, name: admin.name, type: 'admin' as const }
+    ? { id: admin.id, name: admin.name, role: null, type: 'admin' as const }
     : staff
-      ? { id: staff.id, name: staff.name, type: 'staff' as const }
+      ? { id: staff.id, name: staff.name, role: staff.role ?? null, type: 'staff' as const }
       : null;
 
 // ─────────────────────────────────────────────────────────────
-// Helper — coerce '' / undefined → null so Prisma enums accept
-// the value. Prisma's nullable enum columns accept `null` or a
-// valid enum member, but never `""`.
+// Value coercion helpers
 // ─────────────────────────────────────────────────────────────
+
+/**
+ * Coerce '' / undefined / null → null so Prisma nullable enums accept
+ * the value. Prisma nullable enum columns accept `null` or a valid
+ * enum member, but never `""`.
+ */
 const nz = <T>(v: T | '' | undefined | null): T | null =>
   v === '' || v === undefined || v === null ? null : v;
 
@@ -37,11 +50,19 @@ export const createDischargeSummary = async (
   actor: Actor,
 ) => {
   const pid = toId(patientId, 'patient id');
-  const hasActingAsStaffId = data.actingAsStaffId !== undefined &&
-    data.actingAsStaffId !== null && data.actingAsStaffId !== '';
-  const sid = actor.type === 'staff' || hasActingAsStaffId
-    ? resolveStaffAttribution(actor, data.actingAsStaffId)
-    : undefined;
+
+  const hasActingAsStaffId =
+    data.actingAsStaffId !== undefined &&
+    data.actingAsStaffId !== null &&
+    data.actingAsStaffId !== '';
+
+  // Staff attribution applies when:
+  //   • the caller is a staff member, OR
+  //   • an admin explicitly passed `actingAsStaffId` (acting-on-behalf).
+  const sid =
+    actor.type === 'staff' || hasActingAsStaffId
+      ? resolveStaffAttribution(actor, data.actingAsStaffId)
+      : undefined;
 
   const [patient, staff] = await Promise.all([
     prisma.patient.findUnique({
@@ -53,15 +74,19 @@ export const createDischargeSummary = async (
       : Promise.resolve(null),
   ]);
   if (!patient) throw new ApiError(404, 'Patient not found');
-  if (sid !== undefined && !staff) throw new ApiError(404, 'Staff member not found');
+  if (sid !== undefined && !staff) {
+    throw new ApiError(404, 'Staff member not found');
+  }
 
   const admissionId = data.admissionId
     ? toId(data.admissionId, 'admission id')
-    : (await prisma.hospitalAdmission.findFirst({
-      where: { patientId: pid, status: 'Active' },
-      orderBy: { admissionDate: 'desc' },
-      select: { id: true },
-    }))?.id;
+    : (
+        await prisma.hospitalAdmission.findFirst({
+          where: { patientId: pid, status: 'Active' },
+          orderBy: { admissionDate: 'desc' },
+          select: { id: true },
+        })
+      )?.id;
 
   if (admissionId) {
     const existing = await prisma.dischargeSummary.findFirst({
@@ -69,7 +94,10 @@ export const createDischargeSummary = async (
       select: { id: true },
     });
     if (existing) {
-      throw new ApiError(400, 'Discharge summary already exists for this admission');
+      throw new ApiError(
+        400,
+        'Discharge summary already exists for this admission',
+      );
     }
   }
 
@@ -113,7 +141,8 @@ export const createDischargeSummary = async (
         dischargeTypeOther: data.dischargeTypeOther ?? null,
 
         finalDischargeDiagnosis: data.finalDischargeDiagnosis ?? null,
-        clinicalProblemsManaged: cleanStrArray(data.clinicalProblemsManaged) ?? [],
+        clinicalProblemsManaged:
+          cleanStrArray(data.clinicalProblemsManaged) ?? [],
         summaryOfClinicalCourse: data.summaryOfClinicalCourse ?? null,
         importantInvestigations: data.importantInvestigations ?? null,
 
@@ -138,7 +167,9 @@ export const createDischargeSummary = async (
 
         prnMedications: data.prnMedications ?? null,
         medicationChanges: data.medicationChanges ?? null,
-        medicationReconciliationCompleted: nz(data.medicationReconciliationCompleted),
+        medicationReconciliationCompleted: nz(
+          data.medicationReconciliationCompleted,
+        ),
 
         painManagementInstructions: data.painManagementInstructions ?? null,
         breathlessnessManagement: data.breathlessnessManagement ?? null,
@@ -235,6 +266,11 @@ export const createDischargeSummary = async (
         dischargeNotes: data.dischargeNotes ?? null,
         status: 'Final',
 
+        // ── Attribution ──
+        // Staff (Physician / Nurse) → `createdBy`
+        // Admin                    → `createdByAdminId`
+        // When an admin acts-on-behalf-of-staff, BOTH may be set — the
+        // staff is credited for the clinical act, the admin for the action.
         createdBy: sid ?? null,
         createdByAdminId: adminCreatorId(actor),
 
@@ -264,7 +300,7 @@ export const createDischargeSummary = async (
           : {}),
       },
       include: {
-        createdByStaff: { select: { id: true, name: true } },
+        createdByStaff: { select: { id: true, name: true, role: true } },
         createdByAdmin: { select: { id: true, name: true } },
       },
     });
@@ -307,7 +343,7 @@ export const createDischargeSummary = async (
     dateOfDischarge: summary.dateOfDischarge,
     dischargeType: summary.dischargeType,
     status: summary.status,
-    enteredBy: formatEnteredBy(summary.createdByStaff, summary.createdByAdmin),
+    createdBy: formatEnteredBy(summary.createdByStaff, summary.createdByAdmin),
     createdAt: summary.createdAt,
   };
 };
@@ -322,9 +358,17 @@ export const getDischargeSummaryByPatient = async (patientId: string) => {
     where: { patientId: pid },
     orderBy: { createdAt: 'desc' },
     include: {
+      // relation name is `createdByStaff`, backed by the `createdBy` scalar
       createdByStaff: { select: { id: true, name: true, role: true } },
       createdByAdmin: { select: { id: true, name: true } },
-      admission: { select: { id: true, admissionDate: true, ward: true, bedNumber: true } },
+      admission: {
+        select: {
+          id: true,
+          admissionDate: true,
+          ward: true,
+          bedNumber: true,
+        },
+      },
       dischargeMedications: true,
     },
   });
@@ -345,6 +389,14 @@ export const getDischargeSummaryByAdmission = async (admissionId: string) => {
     include: {
       createdByStaff: { select: { id: true, name: true, role: true } },
       createdByAdmin: { select: { id: true, name: true } },
+      admission: {
+        select: {
+          id: true,
+          admissionDate: true,
+          ward: true,
+          bedNumber: true,
+        },
+      },
       dischargeMedications: true,
     },
   });
@@ -371,8 +423,6 @@ export const updateDischargeSummary = async (
     include: {
       createdByStaff: { select: { id: true, name: true, role: true } },
       createdByAdmin: { select: { id: true, name: true } },
-      admission: { select: { id: true, admissionDate: true, ward: true, bedNumber: true } },
-      dischargeMedications: true,
     },
   });
   if (!summary) throw new ApiError(404, 'Discharge summary not found');
@@ -383,10 +433,23 @@ export const updateDischargeSummary = async (
 
   const updated = await prisma.dischargeSummary.update({
     where: { id: sid },
-    data: { ...data },
+    data: {
+      ...data,
+      // Record who last touched it — admin updates flow through `updatedBy`,
+      // staff updates don't (the column is admin-only in the schema).
+      updatedBy: uid ?? null,
+    },
     include: {
       createdByStaff: { select: { id: true, name: true, role: true } },
       createdByAdmin: { select: { id: true, name: true } },
+      admission: {
+        select: {
+          id: true,
+          admissionDate: true,
+          ward: true,
+          bedNumber: true,
+        },
+      },
       dischargeMedications: true,
     },
   });
@@ -417,7 +480,10 @@ export const finalizeDischargeSummary = async (
 
   const updated = await prisma.dischargeSummary.update({
     where: { id: sid },
-    data: { status: 'Final', ...(actor.type === 'admin' ? { updatedBy: aid } : {}) },
+    data: {
+      status: 'Final',
+      ...(actor.type === 'admin' ? { updatedBy: aid } : {}),
+    },
   });
 
   return { id: updated.id, status: updated.status };
@@ -444,22 +510,29 @@ export const deleteDischargeSummary = async (
 };
 
 // ─────────────────────────────────────────────────────────────
-// Helper
+// Formatter — single source of truth for the client-facing shape
 // ─────────────────────────────────────────────────────────────
 const formatSummary = (summary: any) => {
   const {
-    createdBy,
-    createdByAdminId,
+    // Raw FKs — never exposed to the client
+    createdBy: _createdByScalar,
+    createdByAdminId: _createdByAdminIdScalar,
+    // Populated relations — replaced with a single `createdBy` object
     createdByStaff,
     createdByAdmin,
     ...summaryData
   } = summary;
+
   return {
     ...summaryData,
     id: summary.id,
     patientId: summary.patientId,
     admissionId: summary.admissionId,
-    enteredBy: formatEnteredBy(createdByStaff, createdByAdmin),
+    /**
+     * Normalized actor who created this discharge summary.
+     *   { id, name, role, type: 'staff' | 'admin' } | null
+     */
+    createdBy: formatEnteredBy(createdByStaff, createdByAdmin),
   };
 };
 

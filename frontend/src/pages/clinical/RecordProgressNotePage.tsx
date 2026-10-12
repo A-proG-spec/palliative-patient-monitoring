@@ -9,9 +9,8 @@ import {
   Trash2,
   NotebookPen,
   CheckCircle2,
-  ArrowLeft,
-  Check,
   AlertCircle,
+  Check,
   Circle,
 } from 'lucide-react';
 import { usePatient } from '@/hooks/usePatients';
@@ -20,6 +19,7 @@ import {
   useCreateProgressNote,
   useUpdateProgressNote,
   useProgressNote,
+  useProgressNotes,
   buildBlankProgressNote,
   type ProgressNoteMedRow,
   type ProgressNoteAdditionalEntry,
@@ -39,6 +39,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/context/ToastContext';
 import ProgressNoteSignatureSection from '@/components/progress-notes/ProgressNoteSignatureSection';
 import { usePermissionAccess } from '@/hooks/useRecordAccess';
+
 // ═════════════════════════════════════════════════════════════
 // Section definitions
 // ═════════════════════════════════════════════════════════════
@@ -63,8 +64,7 @@ type SectionKey =
   | 'assessment'
   | 'plan'
   | 'soap'
-  | 'additional'
-  | 'auth';
+  | 'additional';
 
 interface SectionDef {
   key: SectionKey;
@@ -96,7 +96,6 @@ const SECTIONS: SectionDef[] = [
   { key: 'plan', num: '17', label: 'Plan', description: 'Symptom, medication, nursing, family plans', fields: ['symptomManagementPlan', 'medicationPlan', 'nursingSupportiveCarePlan', 'investigationsMonitoring', 'familyCaregiverPlan', 'referralsConsultations', 'dischargeTransferHospicePlanning'], requiredFields: [] },
   { key: 'soap', num: '18', label: 'SOAP Notes', description: 'Subjective, objective, assessment, plan', fields: ['soapSubjective', 'soapObjective', 'soapAssessment', 'soapPlan'], requiredFields: [] },
   { key: 'additional', num: '19', label: 'Additional Notes', description: 'Extra progress note entries', fields: ['additionalProgressNotes'], requiredFields: [] },
-  { key: 'auth', num: '20', label: 'Authorization', description: 'Facility stamp', fields: ['facilityStamp'], requiredFields: [] },
 ];
 
 // ── Filled / empty helper ──
@@ -430,6 +429,11 @@ const RecordProgressNotePage: React.FC = () => {
 
   const { data: patient, isLoading: patientLoading, error: patientError, refetch: refetchPatient } = usePatient(id!);
   const { data: existingNote, isLoading: noteLoading } = useProgressNote(id!, noteId ?? '');
+
+  // Fetch the two most recent notes so we can skip the one being
+  // edited and still pick up the true "previous" note's vitals.
+  const { data: prevNotesData } = useProgressNotes(id!, { limit: 2 });
+
   const createNote = useCreateProgressNote(id!);
   const updateNote = useUpdateProgressNote(id!);
 
@@ -464,6 +468,72 @@ const RecordProgressNotePage: React.FC = () => {
       reset(existingNote as unknown as CreateProgressNoteFormData);
     }
   }, [isEditMode, existingNote, reset]);
+
+  // ═══════════════════════════════════════════════════════════
+  // AUTO-FILL previous vitals from the most recent progress note
+  // ─────────────────────────────────────────────────────────
+  // Runs ONLY in create mode. In edit mode the note's own saved
+  // vitals are already in the form — we must not overwrite them.
+  //
+  // The "previous" column in the vitals table is meant to show
+  // the patient's last recorded values so the clinician can see
+  // the trend at a glance. So we copy the most recent note's
+  // `current` values into the blank form's `previous` slot.
+  // ═══════════════════════════════════════════════════════════
+  const prevVitalsHydrated = useRef(false);
+
+  useEffect(() => {
+    if (isEditMode) return;
+    if (!prevNotesData?.items?.length) return;
+    if (prevVitalsHydrated.current) return;
+
+    // Skip the note we're editing (edit mode never reaches here,
+    // but the guard keeps this future-proof if behaviour changes).
+    const lastNote = prevNotesData.items.find(
+      (n) => String(n.id) !== String(noteId ?? ''),
+    );
+    if (!lastNote) return;
+
+    prevVitalsHydrated.current = true;
+
+    // The list endpoint returns a flat shape (`temperature`, `pulse`, …)
+    // and the form stores nested `vitals.<key>.current/previous`.
+    // Handle both shapes so this keeps working if the DTO changes.
+    const src: any = lastNote as any;
+    const nested = src.vitals ?? null;
+
+    const pick = (key: string): string => {
+      // Prefer nested shape when the DTO provides it.
+      const nestedVal = nested?.[key];
+      if (nestedVal && typeof nestedVal === 'object' && 'current' in nestedVal) {
+        return String(nestedVal.current ?? '');
+      }
+      // Fall back to the flat backend column.
+      const flat = src[key];
+      return flat === null || flat === undefined ? '' : String(flat);
+    };
+
+    const VITALS = [
+      'temperature',
+      'pulse',
+      'respiratoryRate',
+      'bloodPressure',
+      'spo2',
+      'oxygenFlow',
+    ] as const;
+
+    for (const key of VITALS) {
+      const prevValue = pick(key);
+      if (!prevValue) continue;
+
+      setValue(
+        `vitals.${key}.previous`,
+        prevValue,
+        { shouldDirty: false, shouldValidate: false },
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, prevNotesData?.items, noteId, setValue]);
 
   const set = useCallback(
     <K extends keyof CreateProgressNoteFormData>(
@@ -596,11 +666,6 @@ const RecordProgressNotePage: React.FC = () => {
 
         <ProgressNoteSignatureSection patientId={id!} noteId={savedNoteId} onSigned={() => { }} />
 
-        <div className="flex gap-3 pt-2">
-          <Button variant="outline" leftIcon={<ArrowLeft size={14} />} onClick={() => navigate(`/patients/${id}`)}>
-            Back to Patient
-          </Button>
-        </div>
       </div>
     );
   }
@@ -760,7 +825,8 @@ const RecordProgressNotePage: React.FC = () => {
             </p>
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setShowDiscard(false)}>Keep Editing</Button>
-              <Button variant="destructive" className="flex-1" onClick={() => navigate(`/patients/${id}`)}>Discard</Button>            </div>
+              <Button variant="destructive" className="flex-1" onClick={() => navigate(`/patients/${id}`)}>Discard</Button>
+            </div>
           </div>
         </div>
       )}
@@ -898,7 +964,6 @@ const SectionBody: React.FC<SectionBodyProps> = ({
                 <tr className="text-left text-xs text-text-muted">
                   <th className="pb-2 pr-4 font-medium w-44">Vital Sign</th>
                   <th className="pb-2 pr-4 font-medium">Current</th>
-                  <th className="pb-2 font-medium">Previous / Trend</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-base">
@@ -917,14 +982,6 @@ const SectionBody: React.FC<SectionBodyProps> = ({
                         type="text" placeholder="—"
                         value={form.vitals[key].current}
                         onChange={(e) => setVital(key, 'current', e.target.value)}
-                        className="block w-full rounded-md border border-border-base bg-surface-lowest px-2 py-1 text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </td>
-                    <td className="py-2">
-                      <input
-                        type="text" placeholder="—"
-                        value={form.vitals[key].previous}
-                        onChange={(e) => setVital(key, 'previous', e.target.value)}
                         className="block w-full rounded-md border border-border-base bg-surface-lowest px-2 py-1 text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </td>
@@ -1503,7 +1560,7 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             options={[
               { value: 'PositioningComfortMeasures', label: 'Positioning/Comfort Measures' },
               { value: 'PersonalHygiene', label: 'Personal Hygiene' },
-              { value: 'OralCare', label: 'Oral Care' },
+              { value: 'OraBalCare', label: 'Oral Care' },
               { value: 'PressureInjuryPrevention', label: 'Pressure-Injury Prevention' },
               { value: 'WoundCare', label: 'Wound Care' },
               { value: 'OxygenTherapy', label: 'Oxygen Therapy' },
@@ -1734,26 +1791,6 @@ const SectionBody: React.FC<SectionBodyProps> = ({
           >Add Another Entry</Button>
         </div>
       );
-
-    case 'auth':
-      return (
-        <div className="space-y-4">
-          <SectionTitle num={20}>Authorization</SectionTitle>
-          <div className="rounded-lg bg-surface-low border border-border-base px-4 py-3 text-xs text-text-secondary leading-relaxed">
-            Signatures (Responsible Clinician, Physician, Nurse, Reviewer) are added
-            through the <strong className="text-on-surface">Signatures</strong> section
-            that appears after saving. The Responsible Clinician is auto-signed as the
-            note's creator.
-          </div>
-          <Input
-            label="Facility Stamp (optional)"
-            value={form.facilityStamp}
-            error={errors.facilityStamp?.message}
-            onChange={(e) => set('facilityStamp', e.target.value)}
-          />
-        </div>
-      );
-
     default:
       return null;
   }

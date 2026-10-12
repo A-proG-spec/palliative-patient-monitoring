@@ -1,8 +1,10 @@
 import apiClient from './client';
 
 // ─────────────────────────────────────────────────────────────
-// Radiologist queue — flat list of pending imaging orders
-// across all patients.
+// Radiologist queue — flat list of imaging orders across all
+// patients. Two endpoints:
+//   • /imaging/pending-orders   → status: 'Ordered'
+//   • /imaging/completed-orders → status: 'Completed'
 // ─────────────────────────────────────────────────────────────
 
 export interface PendingImagingOrder {
@@ -22,6 +24,8 @@ export interface PendingImagingOrder {
 
   priority: 'Routine' | 'Urgent' | 'Emergency';
   dateOrdered: string;
+  /** Only present on completed rows. */
+  dateCompleted?: string | null;
   status: 'Ordered' | 'Completed' | 'Cancelled';
 }
 
@@ -59,9 +63,16 @@ export interface SubmitImagingReportResponse {
 }
 
 export const imagingQueueApi = {
+  /** Pending imaging orders (status: 'Ordered'). */
   list: (params?: { page?: number; limit?: number }) =>
     apiClient
       .get<ImagingQueueListResponse>('/imaging/pending-orders', { params })
+      .then((r) => r.data),
+
+  /** Completed imaging orders (status: 'Completed'). */
+  listCompleted: (params?: { page?: number; limit?: number }) =>
+    apiClient
+      .get<ImagingQueueListResponse>('/imaging/completed-orders', { params })
       .then((r) => r.data),
 
   getById: (id: number | string) =>

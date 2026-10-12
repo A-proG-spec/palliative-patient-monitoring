@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import type { NavigateFunction, Location } from 'react-router-dom';
 import {
   XCircle, Phone, MapPin, User, Calendar, FileText, Printer,
-  AlertTriangle, NotebookPen, Trash2, Heart, Plus, 
+  AlertTriangle, NotebookPen, Trash2, Heart, Plus,
 } from 'lucide-react';
 
 import {
@@ -119,6 +119,17 @@ const RowActions: React.FC<RowActionsProps> = ({
   );
 
 // ── Discharge summary viewer modal ──
+//
+// NOTE: The API response differs from the wizard's form-state
+// `DischargeSummary` type. The backend returns:
+//   • `createdBy` → normalized actor { id, name, role, type }
+//   • `createdAt` → ISO timestamp
+//   • raw persisted columns (no `submittedBy` / `submittedAt`)
+//
+// The wizard's form-state fields (`submittedBy`, `submittedAt`)
+// never reach the client after a page reload — they only exist
+// in-session via navigation state. So we read `createdBy` and
+// `createdAt` here.
 interface DischargeSummaryViewerProps {
   summary: DischargeSummary;
   patientName: string;
@@ -129,6 +140,31 @@ interface DischargeSummaryViewerProps {
 const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
   summary, patientName, onClose, onPrint,
 }) => {
+  // Backend-provided actor object (see getDischargeSummaryByPatient)
+  const actor = (summary as any).createdBy as
+    | {
+        id: number;
+        name: string;
+        role: string | null;
+        type: 'staff' | 'admin';
+      }
+    | null
+    | undefined;
+
+  const createdByLabel = actor?.name
+    ? `${actor.name}${actor.role ? ` · ${actor.role}` : ''} (${actor.type})`
+    : '—';
+
+  const createdAtLabel = (summary as any).createdAt
+    ? new Date((summary as any).createdAt).toLocaleString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '—';
+
   const rows: [string, string][] = [
     ['Patient', summary.fullName || patientName],
     ['Hospital / Facility', summary.hospitalName],
@@ -146,10 +182,10 @@ const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
     ['Medication Reconciliation', summary.medicationReconciliation || '—'],
     ['Code Status', summary.codeStatus || '—'],
     ['Transport', summary.transport || '—'],
-    ['Submitted By', summary.submittedBy || '—'],
-    ['Submitted At', summary.submittedAt
-      ? new Date(summary.submittedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-      : '—'],
+
+    // ✅ Real backend fields
+    ['Created By', createdByLabel],
+    ['Created At', createdAtLabel],
   ];
 
   return (
@@ -195,14 +231,6 @@ const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
         <div className="flex gap-3 px-6 pb-5">
           <Button variant="outline" className="flex-1" onClick={onClose}>
             Close
-          </Button>
-          <Button
-            variant="secondary"
-            className="flex-1"
-            leftIcon={<Printer size={14} />}
-            onClick={onPrint}
-          >
-            Print / Save as PDF
           </Button>
         </div>
       </div>

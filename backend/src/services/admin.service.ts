@@ -2,6 +2,7 @@ import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
 import { StaffRole } from '@prisma/client';
+
 // ═════════════════════════════════════════════════════════════
 // HELPERS
 // ═════════════════════════════════════════════════════════════
@@ -799,7 +800,6 @@ export const getReports = async (startDate?: string, endDate?: string) => {
   ]);
 
   // ── Aggregate visits by month (client-side, JSON-safe) ──
-  // Format is 'YYYY-MM' — lexicographically sortable.
   const visitsByMonthMap = new Map<string, number>();
   for (const v of visitsByMonthRows) {
     const month = v.visitDate.toISOString().slice(0, 7);
@@ -1092,6 +1092,26 @@ export const getStaffPerformanceList = async (
   return { items, page, limit, total };
 };
 
+/**
+ * getStaffPerformanceDetail
+ * ─────────────────────────
+ * Every counter here MUST match its corresponding `getStaffActivity`
+ * source, so the totals never disagree with the paginated list.
+ *
+ * Attribution:
+ *   • Physician / Nurse      → visits, patients, medications ordered,
+ *                              labs ordered, imaging ordered,
+ *                              referrals, progress notes
+ *   • Pharmacist             → medications marked Given
+ *                              (updatedByStaffId + status='Given')
+ *   • LaboratoryTechnician   → lab tests Completed
+ *                              (LaboratoryTest.performedBy = name
+ *                               AND status = 'Completed')
+ *   • Radiologist            → imaging reports Completed
+ *                              (ImagingOrder.radiologistName = name
+ *                               AND status = 'Completed')
+ *   • Assessment authors     → one count per assessment model
+ */
 export const getStaffPerformanceDetail = async (staffId: string) => {
   const id = toId(staffId, 'staff id');
 
@@ -1101,40 +1121,152 @@ export const getStaffPerformanceDetail = async (staffId: string) => {
   });
   if (!staff) throw new ApiError(404, 'Staff member not found');
 
+  const staffName = staff.name;
+
   const [
+    // ── Physician / Nurse ──
     totalVisitsRecorded,
     totalPatientsAssigned,
+    totalPatientsAdminAttributed,
     totalMedicationsOrdered,
     totalLabTestsRequested,
     totalImagingOrdersPlaced,
     totalReferralsSubmitted,
+    totalProgressNotesCreated,
+
+    // ── Pharmacist / Lab Tech / Radiologist ──
+    totalMedicationsGiven,
+    totalLabTestsCompleted,
+    totalImagingReportsSubmitted,
+
+    // ── Assessment authoring ──
+    totalPainAssessments,
+    totalPharmacistAssessments,
+    totalPhysiotherapyAssessments,
+    totalFamilyAssessments,
+    totalNutritionalAssessments,
+    totalSocialAssessments,
+    totalSpiritualAssessments,
+    totalPsychiatryAssessments,
   ] = await Promise.all([
+    // ── Physician / Nurse ──
     prisma.homeVisit.count({ where: { createdBy: id } }),
+
+    // Primary: staff attributed as the registrant.
     prisma.patient.count({ where: { registeredBy: id } }),
+
+    // Fallback: admin-attributed with acting staff explicitly recorded.
+    // (Only fires when an admin registered and passed actingAsStaffId.)
+    prisma.patient.count({ where: { createdByAdminId: id } }),
+
     prisma.medication.count({ where: { prescribedBy: id } }),
     prisma.laboratoryTest.count({ where: { orderedBy: id } }),
     prisma.imagingOrder.count({ where: { orderedBy: id } }),
     prisma.referral.count({ where: { requestedBy: id } }),
+    prisma.patientProgressNote.count({ where: { createdBy: id } }),
+
+    // ── Pharmacist: medication marked Given ──
+    prisma.medication.count({
+      where: {
+        updatedByStaffId: id,
+        status: 'Given',
+      },
+    }),
+
+    // ── Lab Technician ──
+    // MUST match getStaffActivity's lab filter:
+    //   LaboratoryTest.performedBy = staffName AND status = 'Completed'
+    staffName
+      ? prisma.laboratoryTest.count({
+          where: {
+            performedBy: staffName,
+            status: 'Completed',
+          },
+        })
+      : Promise.resolve(0),
+
+    // ── Radiologist ──
+    // MUST match getStaffActivity's imaging filter:
+    //   ImagingOrder.radiologistName = staffName AND status = 'Completed'
+    staffName
+      ? prisma.imagingOrder.count({
+          where: {
+            radiologistName: staffName,
+            status: 'Completed',
+          },
+        })
+      : Promise.resolve(0),
+
+    // ── Assessment authoring ──
+    prisma.painAssessment.count({ where: { createdBy: id } }),
+    prisma.clinicalPharmacistAssessment.count({ where: { createdBy: id } }),
+    prisma.physiotherapyAssessment.count({ where: { createdBy: id } }),
+    prisma.familyAssessment.count({ where: { createdBy: id } }),
+    prisma.nutritionalAssessment.count({ where: { createdBy: id } }),
+    prisma.socialAssessment.count({ where: { createdBy: id } }),
+    prisma.spiritualAssessment.count({ where: { createdBy: id } }),
+    prisma.psychiatryAssessment.count({ where: { createdBy: id } }),
   ]);
 
-  // Recent activity — capped at 20 items for the initial load.
+  const totalPatientsAttributed =
+    totalPatientsAssigned + totalPatientsAdminAttributed;
+
   const recentActivityResult = await getStaffActivity(id, 1, 20);
 
   return {
     id: staff.id,
     name: staff.name,
     role: staff.role,
+
+    // ── Physician / Nurse ──
     totalVisitsRecorded,
-    totalPatientsAssigned,
+    // Expose both field names so any UI label works.
+    totalPatientsAssigned: totalPatientsAttributed,
+    totalPatientsRegistered: totalPatientsAttributed,
     totalMedicationsOrdered,
     totalLabTestsRequested,
     totalImagingOrdersPlaced,
     totalReferralsSubmitted,
+    totalProgressNotesCreated,
+
+    // ── Pharmacist / Lab Tech / Radiologist ──
+    totalMedicationsGiven,
+    totalLabTestsCompleted,
+    totalImagingReportsSubmitted,
+
+    // ── Assessment authoring ──
+    totalPainAssessments,
+    totalPharmacistAssessments,
+    totalPhysiotherapyAssessments,
+    totalFamilyAssessments,
+    totalNutritionalAssessments,
+    totalSocialAssessments,
+    totalSpiritualAssessments,
+    totalPsychiatryAssessments,
+
     averageResponseTimeMinutes: null,
     recentActivity: recentActivityResult.items,
   };
 };
 
+/**
+ * getStaffActivity
+ * ────────────────
+ * Chronological timeline of every action a staff member performed.
+ *
+ * CRITICAL INVARIANT: every source here matches a counter in
+ * getStaffPerformanceDetail 1:1. In particular:
+ *
+ *   • Patients → registeredBy = staff.id OR createdByAdminId = staff.id
+ *                (matches the "Patients Registered" card)
+ *   • Labs     → performedBy = staff.name AND status = 'Completed'
+ *   • Imaging  → radiologistName = staff.name AND status = 'Completed'
+ *
+ * Physician/Nurse "ordered" rows are included for their own feed
+ * (they authored the order). Lab techs / radiologists only see rows
+ * they themselves performed / reported — never rows they merely
+ * "ordered" (which is a different action surface).
+ */
 export const getStaffActivity = async (
   staffId: number,
   page: number = 1,
@@ -1142,16 +1274,35 @@ export const getStaffActivity = async (
 ) => {
   const skip = (page - 1) * limit;
 
-  // Collect activity across every model that stamps the staff id.
+  const staff = await prisma.staff.findUnique({
+    where: { id: staffId },
+    select: { id: true, name: true },
+  });
+  if (!staff) throw new ApiError(404, 'Staff member not found');
+
+  const staffName = staff.name;
+
   const [
     visits,
+    patients,
     medications,
     labs,
     imaging,
     referrals,
     admissions,
     notes,
+
+    // Assessments
+    painAssessments,
+    pharmacistAssessments,
+    physiotherapyAssessments,
+    familyAssessments,
+    nutritionalAssessments,
+    socialAssessments,
+    spiritualAssessments,
+    psychiatryAssessments,
   ] = await Promise.all([
+    // ── Home visits ──
     prisma.homeVisit.findMany({
       where: { createdBy: staffId },
       orderBy: { createdAt: 'desc' },
@@ -1162,18 +1313,54 @@ export const getStaffActivity = async (
         createdByAdmin: { select: { id: true, name: true } },
       },
     }),
+
+    // ── Patients registered ──
+    // Matches the "Patients Registered" card count.
+    prisma.patient.findMany({
+      where: {
+        OR: [
+          { registeredBy: staffId },
+          { createdByAdminId: staffId },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        registeredByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
+    }),
+
+    // ── Medications ──
     prisma.medication.findMany({
-      where: { prescribedBy: staffId },
+      where: {
+        OR: [
+          { prescribedBy: staffId },
+          { updatedByStaffId: staffId, status: 'Given' },
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       take: skip + limit,
       include: {
         patient: { select: { id: true, firstName: true, lastName: true } },
         prescribedByStaff: { select: { id: true, name: true } },
         createdByAdmin: { select: { id: true, name: true } },
+        updatedByStaff: { select: { id: true, name: true } },
       },
     }),
+
+    // ── Labs ──
+    // Both branches taggable — the "performed" branch requires
+    // status='Completed' to mirror the card count.
     prisma.laboratoryTest.findMany({
-      where: { orderedBy: staffId },
+      where: {
+        OR: [
+          { orderedBy: staffId },
+          ...(staffName
+            ? [{ performedBy: staffName, status: 'Completed' as const }]
+            : []),
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       take: skip + limit,
       include: {
@@ -1182,8 +1369,18 @@ export const getStaffActivity = async (
         createdByAdmin: { select: { id: true, name: true } },
       },
     }),
+
+    // ── Imaging ──
+    // Same treatment as labs.
     prisma.imagingOrder.findMany({
-      where: { orderedBy: staffId },
+      where: {
+        OR: [
+          { orderedBy: staffId },
+          ...(staffName
+            ? [{ radiologistName: staffName, status: 'Completed' as const }]
+            : []),
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       take: skip + limit,
       include: {
@@ -1192,6 +1389,8 @@ export const getStaffActivity = async (
         createdByAdmin: { select: { id: true, name: true } },
       },
     }),
+
+    // ── Referrals ──
     prisma.referral.findMany({
       where: { requestedBy: staffId },
       orderBy: { createdAt: 'desc' },
@@ -1202,6 +1401,8 @@ export const getStaffActivity = async (
         createdByAdmin: { select: { id: true, name: true } },
       },
     }),
+
+    // ── Admissions ──
     prisma.hospitalAdmission.findMany({
       where: { createdBy: staffId },
       orderBy: { createdAt: 'desc' },
@@ -1212,7 +1413,91 @@ export const getStaffActivity = async (
         createdByAdmin: { select: { id: true, name: true } },
       },
     }),
+
+    // ── Progress notes ──
     prisma.patientProgressNote.findMany({
+      where: { createdBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
+    }),
+
+    // ── Assessments ──
+    prisma.painAssessment.findMany({
+      where: { createdBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.clinicalPharmacistAssessment.findMany({
+      where: { createdBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.physiotherapyAssessment.findMany({
+      where: { createdBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.familyAssessment.findMany({
+      where: { createdBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.nutritionalAssessment.findMany({
+      where: { createdBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.socialAssessment.findMany({
+      where: { createdBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.spiritualAssessment.findMany({
+      where: { createdBy: staffId },
+      orderBy: { createdAt: 'desc' },
+      take: skip + limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.psychiatryAssessment.findMany({
       where: { createdBy: staffId },
       orderBy: { createdAt: 'desc' },
       take: skip + limit,
@@ -1225,6 +1510,7 @@ export const getStaffActivity = async (
   ]);
 
   const activity = [
+    // ── Visits ──
     ...visits.map((v) => ({
       id: `visit-${v.id}`,
       type: 'visit' as const,
@@ -1238,45 +1524,83 @@ export const getStaffActivity = async (
           ? { id: v.createdByStaff.id, name: v.createdByStaff.name, type: 'staff' as const }
           : null,
     })),
-    ...medications.map((m) => ({
-      id: `medication-${m.id}`,
-      type: 'medication' as const,
-      patientId: String(m.patient.id),
-      patientName: `${m.patient.firstName} ${m.patient.lastName}`,
-      timestamp: m.createdAt.toISOString(),
-      description: `${m.name} · ${m.dosage}`,
-      enteredBy: m.createdByAdmin
-        ? { id: m.createdByAdmin.id, name: m.createdByAdmin.name, type: 'admin' as const }
-        : m.prescribedByStaff
-          ? { id: m.prescribedByStaff.id, name: m.prescribedByStaff.name, type: 'staff' as const }
+
+    // ── Patients registered ──
+    ...patients.map((p) => ({
+      id: `patient-${p.id}`,
+      type: 'patient' as const,
+      patientId: String(p.id),
+      patientName: `${p.firstName} ${p.lastName}`,
+      timestamp: p.createdAt.toISOString(),
+      description: `Patient registered · ${p.primaryDiagnosis}`,
+      enteredBy: p.createdByAdmin
+        ? { id: p.createdByAdmin.id, name: p.createdByAdmin.name, type: 'admin' as const }
+        : p.registeredByStaff
+          ? { id: p.registeredByStaff.id, name: p.registeredByStaff.name, type: 'staff' as const }
           : null,
     })),
-    ...labs.map((l) => ({
-      id: `lab-${l.id}`,
-      type: 'lab' as const,
-      patientId: String(l.patient.id),
-      patientName: `${l.patient.firstName} ${l.patient.lastName}`,
-      timestamp: l.createdAt.toISOString(),
-      description: `${l.testName} · ${l.category}`,
-      enteredBy: l.createdByAdmin
-        ? { id: l.createdByAdmin.id, name: l.createdByAdmin.name, type: 'admin' as const }
-        : l.orderedByStaff
-          ? { id: l.orderedByStaff.id, name: l.orderedByStaff.name, type: 'staff' as const }
-          : null,
-    })),
-    ...imaging.map((i) => ({
-      id: `imaging-${i.id}`,
-      type: 'imaging' as const,
-      patientId: String(i.patient.id),
-      patientName: `${i.patient.firstName} ${i.patient.lastName}`,
-      timestamp: i.createdAt.toISOString(),
-      description: `${i.modality} · ${i.bodyRegion}`,
-      enteredBy: i.createdByAdmin
-        ? { id: i.createdByAdmin.id, name: i.createdByAdmin.name, type: 'admin' as const }
-        : i.orderedByStaff
-          ? { id: i.orderedByStaff.id, name: i.orderedByStaff.name, type: 'staff' as const }
-          : null,
-    })),
+
+    // ── Medications ──
+    ...medications.map((m) => {
+      const wasOrderedByThisStaff = m.prescribedBy === staffId;
+      return {
+        id: `medication-${m.id}`,
+        type: 'medication' as const,
+        patientId: String(m.patient.id),
+        patientName: `${m.patient.firstName} ${m.patient.lastName}`,
+        timestamp: (wasOrderedByThisStaff ? m.createdAt : m.updatedAt).toISOString(),
+        description: wasOrderedByThisStaff
+          ? `${m.name} · ${m.dosage} ordered`
+          : `${m.name} · ${m.dosage} administered`,
+        enteredBy: m.createdByAdmin
+          ? { id: m.createdByAdmin.id, name: m.createdByAdmin.name, type: 'admin' as const }
+          : m.prescribedByStaff
+            ? { id: m.prescribedByStaff.id, name: m.prescribedByStaff.name, type: 'staff' as const }
+            : null,
+      };
+    }),
+
+    // ── Labs ──
+    ...labs.map((l) => {
+      const wasOrderedByThisStaff = l.orderedBy === staffId;
+      return {
+        id: `lab-${l.id}`,
+        type: 'lab' as const,
+        patientId: String(l.patient.id),
+        patientName: `${l.patient.firstName} ${l.patient.lastName}`,
+        timestamp: (wasOrderedByThisStaff ? l.createdAt : l.updatedAt).toISOString(),
+        description: wasOrderedByThisStaff
+          ? `${l.testName} · ${l.category} requested`
+          : `${l.testName} · result recorded`,
+        enteredBy: l.createdByAdmin
+          ? { id: l.createdByAdmin.id, name: l.createdByAdmin.name, type: 'admin' as const }
+          : l.orderedByStaff
+            ? { id: l.orderedByStaff.id, name: l.orderedByStaff.name, type: 'staff' as const }
+            : null,
+      };
+    }),
+
+    // ── Imaging ──
+    ...imaging.map((i) => {
+      const wasOrderedByThisStaff = i.orderedBy === staffId;
+      return {
+        id: `imaging-${i.id}`,
+        type: 'imaging' as const,
+        patientId: String(i.patient.id),
+        patientName: `${i.patient.firstName} ${i.patient.lastName}`,
+        timestamp: (wasOrderedByThisStaff ? i.createdAt : i.updatedAt).toISOString(),
+        description: wasOrderedByThisStaff
+          ? `${i.modality} · ${i.bodyRegion} ordered`
+          : `${i.modality} · ${i.bodyRegion} report submitted`,
+        enteredBy: i.createdByAdmin
+          ? { id: i.createdByAdmin.id, name: i.createdByAdmin.name, type: 'admin' as const }
+          : i.orderedByStaff
+            ? { id: i.orderedByStaff.id, name: i.orderedByStaff.name, type: 'staff' as const }
+            : null,
+      };
+    }),
+
+    // ── Referrals ──
     ...referrals.map((r) => ({
       id: `referral-${r.id}`,
       type: 'referral' as const,
@@ -1290,6 +1614,8 @@ export const getStaffActivity = async (
           ? { id: r.requestedByStaff.id, name: r.requestedByStaff.name, type: 'staff' as const }
           : null,
     })),
+
+    // ── Admissions ──
     ...admissions.map((a) => ({
       id: `admission-${a.id}`,
       type: 'admission' as const,
@@ -1303,6 +1629,8 @@ export const getStaffActivity = async (
           ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
           : null,
     })),
+
+    // ── Progress notes ──
     ...notes.map((n) => ({
       id: `progress_note-${n.id}`,
       type: 'progress_note' as const,
@@ -1314,6 +1642,112 @@ export const getStaffActivity = async (
         ? { id: n.createdByAdmin.id, name: n.createdByAdmin.name, type: 'admin' as const }
         : n.createdByStaff
           ? { id: n.createdByStaff.id, name: n.createdByStaff.name, type: 'staff' as const }
+          : null,
+    })),
+
+    // ── Assessments ──
+    ...painAssessments.map((a) => ({
+      id: `pain-assessment-${a.id}`,
+      type: 'assessment' as const,
+      patientId: String(a.patient.id),
+      patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+      timestamp: a.createdAt.toISOString(),
+      description: `Pain assessment · ${a.assessmentType}`,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
+    })),
+    ...pharmacistAssessments.map((a) => ({
+      id: `pharmacist-assessment-${a.id}`,
+      type: 'assessment' as const,
+      patientId: String(a.patient.id),
+      patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+      timestamp: a.createdAt.toISOString(),
+      description: `Pharmacist assessment · ${a.assessmentType}`,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
+    })),
+    ...physiotherapyAssessments.map((a) => ({
+      id: `physiotherapy-assessment-${a.id}`,
+      type: 'assessment' as const,
+      patientId: String(a.patient.id),
+      patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+      timestamp: a.createdAt.toISOString(),
+      description: `Physiotherapy assessment · ${a.assessmentType}`,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
+    })),
+    ...familyAssessments.map((a) => ({
+      id: `family-assessment-${a.id}`,
+      type: 'assessment' as const,
+      patientId: String(a.patient.id),
+      patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+      timestamp: a.createdAt.toISOString(),
+      description: `Family assessment · ${a.assessmentType}`,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
+    })),
+    ...nutritionalAssessments.map((a) => ({
+      id: `nutritional-assessment-${a.id}`,
+      type: 'assessment' as const,
+      patientId: String(a.patient.id),
+      patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+      timestamp: a.createdAt.toISOString(),
+      description: `Nutritional assessment · ${a.assessmentType}`,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
+    })),
+    ...socialAssessments.map((a) => ({
+      id: `social-assessment-${a.id}`,
+      type: 'assessment' as const,
+      patientId: String(a.patient.id),
+      patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+      timestamp: a.createdAt.toISOString(),
+      description: `Social assessment · ${a.assessmentType}`,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
+    })),
+    ...spiritualAssessments.map((a) => ({
+      id: `spiritual-assessment-${a.id}`,
+      type: 'assessment' as const,
+      patientId: String(a.patient.id),
+      patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+      timestamp: a.createdAt.toISOString(),
+      description: `Spiritual assessment · ${a.assessmentType}`,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
+          : null,
+    })),
+    ...psychiatryAssessments.map((a) => ({
+      id: `psychiatry-assessment-${a.id}`,
+      type: 'assessment' as const,
+      patientId: String(a.patient.id),
+      patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+      timestamp: a.createdAt.toISOString(),
+      description: `Psychiatry assessment · ${a.assessmentType}`,
+      enteredBy: a.createdByAdmin
+        ? { id: a.createdByAdmin.id, name: a.createdByAdmin.name, type: 'admin' as const }
+        : a.createdByStaff
+          ? { id: a.createdByStaff.id, name: a.createdByStaff.name, type: 'staff' as const }
           : null,
     })),
   ]

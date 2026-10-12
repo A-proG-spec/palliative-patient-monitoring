@@ -16,6 +16,10 @@ router.get(
   validate(getMedicationsQuerySchema),
   medicationController.getPendingOrders,
 );
+router.get(
+  '/completed-orders',
+  medicationController.getCompletedMedicationOrders,
+);
 
 router.get('/queue/:id', medicationController.getOrderDetail);
 router.patch('/queue/:id/status', medicationController.markOrderGiven);

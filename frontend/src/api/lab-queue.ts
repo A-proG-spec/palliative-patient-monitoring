@@ -1,8 +1,10 @@
 import apiClient from './client';
 
 // ─────────────────────────────────────────────────────────────
-// Lab technician queue — flat list of pending lab requests
-// across all patients.
+// Lab technician queue — flat list of lab requests across all
+// patients. Two endpoints:
+//   • /labs/pending-requests    → status: 'Ordered'
+//   • /labs/completed-requests  → status: 'Completed'
 // ─────────────────────────────────────────────────────────────
 
 export interface PendingLabRequest {
@@ -22,6 +24,8 @@ export interface PendingLabRequest {
 
   priority: 'Routine' | 'Urgent' | 'Emergency';
   dateRequested: string;
+  /** Only present on completed rows. */
+  dateCompleted?: string | null;
   status: 'Ordered' | 'Completed' | 'Cancelled';
 }
 
@@ -54,9 +58,16 @@ export interface EnterLabResultResponse {
 }
 
 export const labQueueApi = {
+  /** Pending lab requests (status: 'Ordered'). */
   list: (params?: { page?: number; limit?: number }) =>
     apiClient
       .get<LabQueueListResponse>('/labs/pending-requests', { params })
+      .then((r) => r.data),
+
+  /** Completed lab requests (status: 'Completed'). */
+  listCompleted: (params?: { page?: number; limit?: number }) =>
+    apiClient
+      .get<LabQueueListResponse>('/labs/completed-requests', { params })
       .then((r) => r.data),
 
   getById: (id: number | string) =>

@@ -13,6 +13,58 @@ import { QUERY_KEYS, ROUTES } from '@/constants';
 import { useToast } from '@/context/ToastContext';
 import api from '@/api/client';
 
+// ─────────────────────────────────────────────────────────────
+// Detail DTO — mirrors `getImagingOrderDetailForQueue`.
+// ─────────────────────────────────────────────────────────────
+interface ImagingOrderDetail {
+  id: number;
+  patientId: number;
+  patientName: string;
+  patientDisplayId: string | null;
+  age?: number | null;
+  sex?: string | null;
+
+  // Exam identification
+  modality: string;
+  imagingType: string;
+  bodyRegion: string;
+  bodyPart: string;
+  specificSite?: string | null;
+  laterality?: string | null;
+
+  // Clinical context
+  provisionalDiagnosis?: string | null;
+  indication?: string | null;
+  presentingSymptoms?: string | null;
+  clinicalHistory?: string | null;
+  specialClinicalQuestion?: string | null;
+  notes?: string | null;
+
+  // Ordering clinician
+  orderedById: number | null;
+  orderedByName: string | null;
+  orderedByType: 'staff' | 'admin' | null;
+  requestingClinician: string;
+
+  // Workflow
+  dateOrdered: string;
+  priority: 'Routine' | 'Urgent' | 'Emergency';
+  status: 'Ordered' | 'Completed' | 'Cancelled';
+
+  // Report
+  findings?: string | null;
+  impression?: string | null;
+  recommendation?: string | null;
+  reportDate?: string | null;
+  report: {
+    findings?: string | null;
+    impression?: string | null;
+    recommendation?: string | null;
+    reportDate?: string | null;
+    reportText: string;
+  } | null;
+}
+
 /**
  * ImagingOrderDetailPage
  * Accessed via /imaging-orders/:id
@@ -25,7 +77,12 @@ const ImagingOrderDetailPage: React.FC = () => {
   const { toast } = useToast();
   const [report, setReport] = useState('');
 
-  const { data: img, isLoading, error, refetch } = useQuery({
+  const {
+    data: img,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery<ImagingOrderDetail>({
     queryKey: [...QUERY_KEYS.IMAGING_ORDERS, id],
     queryFn: async () => {
       const res = await api.get(`/imaging/queue/${id}`);
@@ -36,11 +93,16 @@ const ImagingOrderDetailPage: React.FC = () => {
 
   const submitReportMutation = useMutation({
     mutationFn: async () => {
+      // The backend accepts { reportText } and splits it into
+      // findings + impression at the first blank line.
       await api.patch(`/imaging/queue/${id}/report`, { reportText: report });
     },
     onSuccess: () => {
       toast.success('Imaging report submitted successfully');
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.IMAGING_ORDERS });
+      queryClient.invalidateQueries({
+        queryKey: [...QUERY_KEYS.IMAGING_ORDERS, id],
+      });
       navigate(ROUTES.IMAGING_ORDERS);
     },
     onError: () => {
@@ -59,6 +121,7 @@ const ImagingOrderDetailPage: React.FC = () => {
         {img.status && <StatusBadge status={img.status} />}
       </div>
 
+      {/* ── Order details ── */}
       <Card padding="lg">
         <CardContent className="space-y-3 text-sm">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-warning-bg text-warning mb-4">
@@ -66,30 +129,43 @@ const ImagingOrderDetailPage: React.FC = () => {
           </div>
           {[
             ['Patient', img.patientName ?? '—'],
-            ['Imaging Type', img.imagingType ?? img.type ?? '—'],
-            ['Body Part', img.bodyPart ?? '—'],
-            ['Ordered By', img.orderedBy?.name ?? img.orderedByName ?? '—'],
-            ['Date Ordered', formatDate(img.dateOrdered ?? img.createdAt)],
-            ['Indication', img.indication ?? img.clinicalIndication ?? '—'],
+            ['Medical Record No.', img.patientDisplayId ?? '—'],
+            ['Imaging Type', img.modality ?? '—'],
+            ['Body Part', img.bodyRegion ?? '—'],
+            ['Laterality', img.laterality ?? '—'],
+            ['Ordered By', img.orderedByName ?? '—'],
+            ['Date Ordered', formatDate(img.dateOrdered)],
+            ['Priority', img.priority ?? '—'],
+            ['Indication', img.provisionalDiagnosis ?? img.indication ?? '—'],
+            ['Presenting Symptoms', img.presentingSymptoms ?? '—'],
+            ['Clinical Question', img.specialClinicalQuestion ?? '—'],
             ['Notes', img.notes ?? '—'],
           ].map(([label, value]) => (
             <div key={String(label)} className="flex gap-2">
-              <span className="text-text-muted min-w-[140px] flex-shrink-0">{label}:</span>
-              <span className="text-on-surface font-medium">{String(value)}</span>
+              <span className="text-text-muted min-w-[160px] flex-shrink-0">
+                {label}:
+              </span>
+              <span className="text-on-surface font-medium">{String(value ?? '—')}</span>
             </div>
           ))}
         </CardContent>
       </Card>
 
+      {/* ── Report entry — only for non-completed orders ── */}
       {img.status !== 'Completed' && (
         <Card padding="lg">
-          <p className="text-sm font-semibold text-on-surface mb-3">Enter Imaging Report</p>
+          <p className="text-sm font-semibold text-on-surface mb-3">
+            Enter Imaging Report
+          </p>
           <textarea
             value={report}
             onChange={(e) => setReport(e.target.value)}
             placeholder="Enter imaging report / findings…"
             className="w-full rounded-xl border border-border-base bg-surface-low px-4 py-3 text-sm text-on-surface placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[120px] resize-y"
           />
+          <p className="text-xs text-text-muted mt-2">
+            Tip: separate findings and impression with a blank line.
+          </p>
           <div className="flex gap-3 mt-4">
             <Button
               leftIcon={<CheckCircle2 size={15} />}
@@ -99,19 +175,28 @@ const ImagingOrderDetailPage: React.FC = () => {
             >
               Submit Report
             </Button>
-            <Button variant="outline" onClick={() => navigate(ROUTES.IMAGING_ORDERS)}>
+            <Button
+              variant="outline"
+              onClick={() => navigate(ROUTES.IMAGING_ORDERS)}
+            >
               Cancel
             </Button>
           </div>
         </Card>
       )}
 
-      {img.status === 'Completed' && (img.report || img.reportText) && (
+      {/* ── Report display — read from the composite `report` alias ── */}
+      {img.status === 'Completed' && img.report && (
         <Card padding="lg">
           <p className="text-sm font-semibold text-on-surface mb-2">Report</p>
           <p className="text-sm text-text-secondary whitespace-pre-wrap">
-            {img.report?.reportText ?? img.reportText ?? '—'}
+            {img.report.reportText || '—'}
           </p>
+          {img.report.reportDate && (
+            <p className="text-xs text-text-muted mt-3">
+              Reported on {formatDate(img.report.reportDate)}
+            </p>
+          )}
         </Card>
       )}
     </div>

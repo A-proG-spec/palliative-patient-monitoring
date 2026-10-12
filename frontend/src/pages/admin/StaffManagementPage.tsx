@@ -30,7 +30,6 @@ import { Pagination } from '@/components/common/Pagination';
 import { formatRelativeTime } from '@/lib/utils';
 import { ROLE_LABELS } from '@/constants';
 import StaffEditModal from '@/components/admin/StaffEditModal';
-import { StaffPerformanceTab } from './StaffPerformanceTab';
 import type {
   StaffListItem,
   StaffListFilterStatus,
@@ -278,19 +277,7 @@ const StaffManagementPage: React.FC = () => {
       <div className="flex border-b border-border-base">
         <TabButton id="active" label="Active Staff" count={activeCount} />
         <TabButton id="pending" label="Pending Approvals" count={pendingCount} />
-        <button
-          type="button"
-          onClick={() => setTab('performance')}
-          className={
-            'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ' +
-            (tab === 'performance'
-              ? 'text-primary border-primary'
-              : 'text-text-secondary border-transparent hover:text-on-surface')
-          }
-        >
-          <TrendingUp size={14} />
-          Performance
-        </button>
+  
       </div>
 
       {/* ══════════════════════════════════════════════════════ */}
@@ -380,12 +367,16 @@ const StaffManagementPage: React.FC = () => {
                     return (
                       <tr
                         key={staff.id}
+                        onClick={() =>
+                          navigate(`/admin/staff/performance/${staff.id}`)
+                        }
                         className={
-                          'transition-colors ' +
+                          'cursor-pointer transition-colors ' +
                           (isDeleted
                             ? 'bg-error-bg/20 hover:bg-error-bg/30'
                             : 'hover:bg-surface-low/50')
                         }
+                        title="View staff performance"
                       >
                         <td className="px-5 py-3.5 font-mono text-xs text-text-muted">
                           #{staff.id}
@@ -414,7 +405,10 @@ const StaffManagementPage: React.FC = () => {
                         <td className="px-5 py-3.5 text-text-muted text-xs">
                           {formatRelativeTime(staff.createdAt)}
                         </td>
-                        <td className="px-5 py-3.5">
+                        <td
+                          className="px-5 py-3.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <div className="flex items-center gap-2">
                             {isDeleted ? (
                               <Button
@@ -425,7 +419,10 @@ const StaffManagementPage: React.FC = () => {
                                   restoreMutation.isPending &&
                                   restoreMutation.variables === staff.id
                                 }
-                                onClick={() => handleRestore(staff.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRestore(staff.id);
+                                }}
                                 className="text-xs"
                               >
                                 Restore
@@ -437,7 +434,10 @@ const StaffManagementPage: React.FC = () => {
                                   variant="outline"
                                   leftIcon={<Pencil size={12} />}
                                   className="text-xs"
-                                  onClick={() => setEditTarget(staff)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditTarget(staff);
+                                  }}
                                 >
                                   Edit
                                 </Button>
@@ -446,7 +446,10 @@ const StaffManagementPage: React.FC = () => {
                                   variant="destructive"
                                   className="text-xs"
                                   leftIcon={<Trash2 size={12} />}
-                                  onClick={() => setDeleteTarget(staff)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteTarget(staff);
+                                  }}
                                 >
                                   Delete
                                 </Button>
@@ -478,7 +481,6 @@ const StaffManagementPage: React.FC = () => {
       {/* ══════════════════════════════════════════════════════ */}
       {/* Performance tab                                       */}
       {/* ══════════════════════════════════════════════════════ */}
-      {tab === 'performance' && <StaffPerformanceTab />}
 
       {/* ══════════════════════════════════════════════════════ */}
       {/* Pending approvals tab                                 */}

@@ -4,10 +4,34 @@ import { prisma, prismaBase } from '../lib/prisma.js';
 import { resolveStaffAttribution, adminCreatorId } from '@utils/actor.js';
 import type { Actor } from '../types/index.js';
 
+// ─────────────────────────────────────────────────────────────
+// Attribution helpers
+//
+// `enteredBy` and `prescribedBy` are two DIFFERENT surfaces:
+//
+//   • enteredBy    → who physically typed the record (staff OR admin)
+//   • prescribedBy → who authored the clinical order
+//
+// Historically the schema only had a staff FK for `prescribedBy`,
+// so admin-authored orders showed an empty "Prescribed By". This
+// helper gives both fields the same fallback chain so admin
+// orders render the admin's name where the prescriber appears.
+// ─────────────────────────────────────────────────────────────
 const toEnteredBy = (
   staff?: { id: number; name: string } | null,
   admin?: { id: number; name: string } | null,
-) => admin
+) =>
+  admin
+    ? { id: admin.id, name: admin.name, type: 'admin' as const }
+    : staff
+      ? { id: staff.id, name: staff.name, type: 'staff' as const }
+      : null;
+
+const toPrescribedBy = (
+  staff?: { id: number; name: string } | null,
+  admin?: { id: number; name: string } | null,
+) =>
+  admin
     ? { id: admin.id, name: admin.name, type: 'admin' as const }
     : staff
       ? { id: staff.id, name: staff.name, type: 'staff' as const }
@@ -60,6 +84,7 @@ export const getAllMedications = async (
       route: m.route,
       administeredAt: m.administeredAt,
       status: m.status,
+      prescribedBy: toPrescribedBy(m.prescribedByStaff, m.createdByAdmin),
       enteredBy: toEnteredBy(m.prescribedByStaff, m.createdByAdmin),
       createdAt: m.createdAt,
       deletedAt: m.deletedAt ?? null,
@@ -94,9 +119,9 @@ export const orderMedication = async (
     data.actingAsStaffId !== '';
 
   // Resolve staff attribution:
-  //   - staff actor    → their own staff id
-  //   - admin + actingAsStaffId → that staff id
-  //   - admin alone    → undefined (no staff attribution)
+  //   - staff actor                → their own staff id
+  //   - admin + actingAsStaffId    → that staff id
+  //   - admin alone                → undefined (no staff attribution)
   const sid = actor.type === 'staff' || hasActingAsStaffId
     ? resolveStaffAttribution(actor, data.actingAsStaffId)
     : undefined;
@@ -138,7 +163,14 @@ export const orderMedication = async (
     route: medication.route,
     administeredAt: medication.administeredAt,
     status: medication.status,
-    enteredBy: toEnteredBy(medication.prescribedByStaff, medication.createdByAdmin),
+    prescribedBy: toPrescribedBy(
+      medication.prescribedByStaff,
+      medication.createdByAdmin,
+    ),
+    enteredBy: toEnteredBy(
+      medication.prescribedByStaff,
+      medication.createdByAdmin,
+    ),
     createdAt: medication.createdAt,
   };
 };
@@ -188,6 +220,7 @@ export const getMedications = async (
       route: m.route,
       administeredAt: m.administeredAt,
       status: m.status,
+      prescribedBy: toPrescribedBy(m.prescribedByStaff, m.createdByAdmin),
       enteredBy: toEnteredBy(m.prescribedByStaff, m.createdByAdmin),
       createdAt: m.createdAt,
     })),
@@ -226,7 +259,14 @@ export const getMedicationById = async (
     route: medication.route,
     administeredAt: medication.administeredAt,
     status: medication.status,
-    enteredBy: toEnteredBy(medication.prescribedByStaff, medication.createdByAdmin),
+    prescribedBy: toPrescribedBy(
+      medication.prescribedByStaff,
+      medication.createdByAdmin,
+    ),
+    enteredBy: toEnteredBy(
+      medication.prescribedByStaff,
+      medication.createdByAdmin,
+    ),
     createdAt: medication.createdAt,
   };
 };
@@ -271,8 +311,8 @@ export const updateMedicationStatus = async (
     data: {
       status,
       // Attribute the actor.
-      //   staff → updatedByStaffId = sid
-      //   admin alone → updatedBy = admin.id
+      //   staff                 → updatedByStaffId = sid
+      //   admin alone           → updatedBy = admin.id
       //   admin + actingAsStaffId → updatedByStaffId = sid
       ...(actor.type === 'staff'
         ? { updatedByStaffId: sid }
@@ -295,7 +335,14 @@ export const updateMedicationStatus = async (
     route: updated.route,
     administeredAt: updated.administeredAt,
     status: updated.status,
-    enteredBy: toEnteredBy(updated.prescribedByStaff, updated.createdByAdmin),
+    prescribedBy: toPrescribedBy(
+      updated.prescribedByStaff,
+      updated.createdByAdmin,
+    ),
+    enteredBy: toEnteredBy(
+      updated.prescribedByStaff,
+      updated.createdByAdmin,
+    ),
     updatedAt: updated.updatedAt,
   };
 };
@@ -415,6 +462,12 @@ export const getPendingMedicationOrders = async (
       route: m.route,
       administeredAt: m.administeredAt,
 
+      prescribingClinician:
+        m.prescribedByStaff?.name ??
+        m.createdByAdmin?.name ??
+        null,
+
+      prescribedBy: toPrescribedBy(m.prescribedByStaff, m.createdByAdmin),
       enteredBy: toEnteredBy(m.prescribedByStaff, m.createdByAdmin),
 
       dateOrdered: m.createdAt,
@@ -425,7 +478,71 @@ export const getPendingMedicationOrders = async (
     total,
   };
 };
+// ─────────────────────────────────────────────────────────────
+// Pharmacist queue — completed orders (status: 'Given')
+//
+// Mirror of getPendingMedicationOrders. Sorted newest-first so
+// the pharmacist sees what they just administered at the top.
+// ─────────────────────────────────────────────────────────────
+export const getCompletedMedicationOrders = async (
+  page: number = 1,
+  limit: number = 100,
+) => {
+  const where = { status: 'Given' as const };
+  const skip = (page - 1) * limit;
 
+  const [items, total] = await Promise.all([
+    prisma.medication.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        patient: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            hospitalPatientId: true,
+            currentLocation: true,
+          },
+        },
+        prescribedByStaff: { select: { id: true, name: true, role: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.medication.count({ where }),
+  ]);
+
+  return {
+    items: items.map((m) => ({
+      id: m.id,
+      patientId: m.patient.id,
+      patientName: `${m.patient.firstName} ${m.patient.lastName}`,
+      patientDisplayId: m.patient.hospitalPatientId,
+      currentLocation: m.patient.currentLocation,
+
+      medicationName: m.name,
+      dose: m.dosage,
+      frequency: m.frequency,
+      route: m.route,
+      administeredAt: m.administeredAt,
+
+      prescribingClinician:
+        m.prescribedByStaff?.name ?? m.createdByAdmin?.name ?? null,
+
+      prescribedBy: toPrescribedBy(m.prescribedByStaff, m.createdByAdmin),
+      enteredBy: toEnteredBy(m.prescribedByStaff, m.createdByAdmin),
+
+      dateOrdered: m.createdAt,
+      dateCompleted: m.updatedAt,
+      status: m.status,
+    })),
+    page,
+    limit,
+    total,
+  };
+};
 // ─────────────────────────────────────────────────────────────
 // Pharmacist queue — single order detail
 // ─────────────────────────────────────────────────────────────
@@ -468,6 +585,12 @@ export const getMedicationOrderById = async (medicationId: string) => {
     route: med.route,
     administeredAt: med.administeredAt,
 
+    prescribingClinician:
+      med.prescribedByStaff?.name ??
+      med.createdByAdmin?.name ??
+      null,
+
+    prescribedBy: toPrescribedBy(med.prescribedByStaff, med.createdByAdmin),
     enteredBy: toEnteredBy(med.prescribedByStaff, med.createdByAdmin),
 
     dateOrdered: med.createdAt,
@@ -530,6 +653,7 @@ export default {
   deleteMedication,
   restoreMedication,
   getPendingMedicationOrders,
+  getCompletedMedicationOrders,
   getMedicationOrderById,
   markMedicationGivenByQueue,
 };

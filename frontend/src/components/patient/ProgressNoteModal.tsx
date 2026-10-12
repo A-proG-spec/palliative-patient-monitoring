@@ -1,13 +1,101 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { X, Printer, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { ErrorState } from '@/components/common/EmptyState';
-import { formatDate, hasRole } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import { useProgressNote, useDeleteProgressNote } from '@/hooks/useProgressNotes';
 import { useAuthStore } from '@/store/auth.store';
 import type { ProgressNote } from '@/hooks/useProgressNotes';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Symptom flat ↔ nested mapping
+// ══════════════════════════════════════════════════════════════════════════════
+
+const SYMPTOM_KEYS: { frontend: string; backend: string; label: string }[] = [
+  { frontend: 'Pain',                 backend: 'pain',           label: 'Pain' },
+  { frontend: 'Shortness of Breath',  backend: 'shortnessOfBreath', label: 'Shortness of Breath' },
+  { frontend: 'Nausea',               backend: 'nausea',         label: 'Nausea' },
+  { frontend: 'Vomiting',             backend: 'vomiting',       label: 'Vomiting' },
+  { frontend: 'Constipation',         backend: 'constipation',   label: 'Constipation' },
+  { frontend: 'Diarrhea',             backend: 'diarrhea',       label: 'Diarrhea' },
+  { frontend: 'Fatigue',              backend: 'fatigue',        label: 'Fatigue' },
+  { frontend: 'Anxiety',              backend: 'anxiety',        label: 'Anxiety' },
+  { frontend: 'Delirium/Confusion',   backend: 'delirium',       label: 'Delirium / Confusion' },
+  { frontend: 'Insomnia',             backend: 'insomania',      label: 'Insomnia' },
+  { frontend: 'Appetite Loss',        backend: 'appetiteLoss',   label: 'Appetite Loss' },
+  { frontend: 'Other',                backend: 'other',          label: 'Other' },
+];
+
+const VITAL_KEYS = [
+  { key: 'temperature',     label: 'Temperature',     unit: '°C' },
+  { key: 'pulse',           label: 'Pulse',           unit: 'bpm' },
+  { key: 'respiratoryRate', label: 'Respiratory Rate', unit: '/min' },
+  { key: 'bloodPressure',   label: 'Blood Pressure',  unit: 'mmHg' },
+  { key: 'spo2',            label: 'SpO₂',            unit: '%' },
+  { key: 'oxygenFlow',      label: 'Oxygen Flow',     unit: 'L/min' },
+] as const;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Normalize — accepts BOTH the flat backend shape and any nested shape,
+// returns the canonical nested form the display logic uses.
+// ══════════════════════════════════════════════════════════════════════════════
+
+interface NormalizedNote {
+  vitals: Record<string, { current: string; previous: string }>;
+  symptoms: Record<string, { severity: string; notes: string }>;
+}
+
+function normalizeNote(note: any): NormalizedNote {
+  // ── Vitals ──
+  // The backend returns flat columns: `temperature`, `pulse`, etc.
+  // The frontend form uses nested: `vitals.temperature.current`.
+  // Handle both.
+  const nestedVitals = note.vitals;
+  const vitals: NormalizedNote['vitals'] = {};
+
+  for (const { key } of VITAL_KEYS) {
+    const nested = nestedVitals?.[key];
+    if (nested && typeof nested === 'object' && 'current' in nested) {
+      vitals[key] = {
+        current: nested.current ?? '',
+        previous: nested.previous ?? '',
+      };
+    } else {
+      // Flat backend shape
+      vitals[key] = {
+        current: note[key] != null ? String(note[key]) : '',
+        previous: '',
+      };
+    }
+  }
+
+  // ── Symptoms ──
+  // The backend returns flat columns: `pain`, `painNote`, `nausea`, etc.
+  // The frontend form uses nested: `symptoms['Pain'].severity`.
+  // Handle both.
+  const nestedSymptoms = note.symptoms;
+  const symptoms: NormalizedNote['symptoms'] = {};
+
+  for (const { frontend, backend } of SYMPTOM_KEYS) {
+    const nested = nestedSymptoms?.[frontend];
+    if (nested && typeof nested === 'object' && 'severity' in nested) {
+      symptoms[frontend] = {
+        severity: nested.severity ?? 'None',
+        notes: nested.notes ?? '',
+      };
+    } else {
+      // Flat backend shape
+      symptoms[frontend] = {
+        severity: note[backend] ?? 'None',
+        notes: note[`${backend}Note`] ?? '',
+      };
+    }
+  }
+
+  return { vitals, symptoms };
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Props
@@ -21,16 +109,14 @@ interface ProgressNoteModalProps {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Section Component
+// Section + Field
 // ══════════════════════════════════════════════════════════════════════════════
 
-interface SectionProps {
+const Section: React.FC<{
   title: string;
   children: React.ReactNode;
   isEmpty?: boolean;
-}
-
-const Section: React.FC<SectionProps> = ({ title, children, isEmpty }) => (
+}> = ({ title, children, isEmpty }) => (
   <div className="mb-6">
     <h3 className="text-sm font-semibold text-on-surface mb-3 border-b border-border-base pb-2">
       {title}
@@ -43,12 +129,20 @@ const Section: React.FC<SectionProps> = ({ title, children, isEmpty }) => (
   </div>
 );
 
-const Field: React.FC<{ label: string; value?: string | null | number }> = ({ label, value }) => (
-  <div className="flex gap-2">
-    <span className="text-text-muted min-w-[140px] flex-shrink-0">{label}:</span>
-    <span className="text-on-surface">{value || '—'}</span>
-  </div>
-);
+const Field: React.FC<{ label: string; value?: string | null | number }> = ({
+  label,
+  value,
+}) => {
+  if (value === undefined || value === null || value === '') return null;
+  return (
+    <div className="flex gap-2">
+      <span className="text-text-muted min-w-[160px] flex-shrink-0">
+        {label}:
+      </span>
+      <span className="text-on-surface">{String(value)}</span>
+    </div>
+  );
+};
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Modal Component
@@ -64,18 +158,29 @@ export const ProgressNoteModal: React.FC<ProgressNoteModalProps> = ({
   const modalRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  const { data: note, isLoading, error, refetch } = useProgressNote(patientId, noteId);
+  const { data: note, isLoading, error, refetch } = useProgressNote(
+    patientId,
+    noteId,
+  );
   const deleteMutation = useDeleteProgressNote(patientId);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
 
+  // ── Normalized data (handles both flat and nested shapes) ──
+  const normalized = useMemo(
+    () => (note ? normalizeNote(note as any) : null),
+    [note],
+  );
+
   // ── Access control ──
   const isAdmin = user?.type === 'admin';
-  const isAuthor = note?.responsibleClinician?.staffId === user?.id;
+  const isAuthor =
+    (note as any)?.responsibleClinician?.staffId === user?.id ||
+    (note as any)?.createdBy === user?.id;
   const canEdit = isAuthor || isAdmin;
   const canDelete = isAdmin;
 
-  // ── Lock body scroll on mount ──
+  // ── Lock body scroll ──
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -86,252 +191,50 @@ export const ProgressNoteModal: React.FC<ProgressNoteModalProps> = ({
 
   // ── Focus trap ──
   useEffect(() => {
-    if (modalRef.current) {
-      const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
+    if (!modalRef.current) return;
+    const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
 
-      const handleTab = (e: KeyboardEvent) => {
-        if (e.key !== 'Tab') return;
-
-        if (e.shiftKey && document.activeElement === firstElement) {
-          e.preventDefault();
-          lastElement?.focus();
-        } else if (!e.shiftKey && document.activeElement === lastElement) {
-          e.preventDefault();
-          firstElement?.focus();
-        }
-      };
-
-      document.addEventListener('keydown', handleTab);
-      firstElement?.focus();
-
-      return () => {
-        document.removeEventListener('keydown', handleTab);
-      };
-    }
-  }, [isLoading]);
-
-  // ── Escape key handler ──
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (showDeleteConfirm) {
-          setShowDeleteConfirm(false);
-        } else {
-          onClose();
-        }
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey && document.activeElement === firstElement) {
+        e.preventDefault();
+        lastElement?.focus();
+      } else if (!e.shiftKey && document.activeElement === lastElement) {
+        e.preventDefault();
+        firstElement?.focus();
       }
     };
 
+    document.addEventListener('keydown', handleTab);
+    firstElement?.focus();
+    return () => document.removeEventListener('keydown', handleTab);
+  }, [isLoading]);
+
+  // ── Escape key ──
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showDeleteConfirm) setShowDeleteConfirm(false);
+        else onClose();
+      }
+    };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [onClose, showDeleteConfirm]);
 
   // ── Handlers ──
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => window.print();
 
   const handleDelete = () => {
-    deleteMutation.mutate(noteId, {
-      onSuccess: () => {
-        onClose();
-      },
-    });
+    deleteMutation.mutate(noteId, { onSuccess: () => onClose() });
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
-  // ── Render helpers ──
-  const renderVitals = (note: ProgressNote) => {
-    const isEmpty = !note.vitals?.temperature?.current &&
-      !note.vitals?.pulse?.current &&
-      !note.vitals?.respiratoryRate?.current &&
-      !note.vitals?.bloodPressure?.current &&
-      !note.vitals?.spo2?.current &&
-      !note.vitals?.oxygenFlow?.current &&
-      !note.otherRelevantObservations;
-
-    return (
-      <Section title="2. Vital Signs" isEmpty={isEmpty}>
-        {!isEmpty && (
-          <>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-              <Field label="Temperature" value={note.vitals?.temperature?.current} />
-              <Field label="(Previous)" value={note.vitals?.temperature?.previous} />
-              <Field label="Pulse" value={note.vitals?.pulse?.current} />
-              <Field label="(Previous)" value={note.vitals?.pulse?.previous} />
-              <Field label="Respiratory Rate" value={note.vitals?.respiratoryRate?.current} />
-              <Field label="(Previous)" value={note.vitals?.respiratoryRate?.previous} />
-              <Field label="Blood Pressure" value={note.vitals?.bloodPressure?.current} />
-              <Field label="(Previous)" value={note.vitals?.bloodPressure?.previous} />
-              <Field label="SpO2" value={note.vitals?.spo2?.current} />
-              <Field label="(Previous)" value={note.vitals?.spo2?.previous} />
-              <Field label="Oxygen Flow" value={note.vitals?.oxygenFlow?.current} />
-              <Field label="(Previous)" value={note.vitals?.oxygenFlow?.previous} />
-            </div>
-            {note.otherRelevantObservations && (
-              <Field label="Other Observations" value={note.otherRelevantObservations} />
-            )}
-          </>
-        )}
-      </Section>
-    );
-  };
-
-  const renderSymptoms = (note: ProgressNote) => {
-    const symptoms = note.symptoms ?? {};
-    const hasSymptoms = Object.entries(symptoms).some(([_, s]) => s?.severity !== 'None' || s?.notes);
-    const hasPainDetails = note.painScore || note.painLocation || note.painCharacter ||
-      note.currentPainManagement || note.responseToTreatment;
-
-    const isEmpty = !hasSymptoms && !hasPainDetails;
-
-    return (
-      <Section title="3. Symptom Assessment" isEmpty={isEmpty}>
-        {!isEmpty && (
-          <>
-            {hasSymptoms && (
-              <div className="space-y-1">
-                {Object.entries(symptoms).map(([symptom, data]) => (
-                  data?.severity !== 'None' || data?.notes ? (
-                    <div key={symptom} className="flex gap-2">
-                      <span className="text-text-muted min-w-[140px]">{symptom}:</span>
-                      <span className="text-on-surface">
-                        {data?.severity ?? '—'}
-                        {data?.notes ? ` — ${data.notes}` : ''}
-                      </span>
-                    </div>
-                  ) : null
-                ))}
-              </div>
-            )}
-            {hasPainDetails && (
-              <div className="mt-3 pt-3 border-t border-border-base">
-                <Field label="Pain Score" value={note.painScore} />
-                <Field label="Location" value={note.painLocation} />
-                <Field label="Character" value={note.painCharacter} />
-                <Field label="Current Management" value={note.currentPainManagement} />
-                <Field label="Response to Treatment" value={note.responseToTreatment} />
-                <Field label="Breakthrough Episodes" value={note.breakthroughPainEpisodes} />
-                <Field label="Frequency" value={note.breakthroughPainFrequency} />
-              </div>
-            )}
-          </>
-        )}
-      </Section>
-    );
-  };
-
-  const renderMedications = (note: ProgressNote) => {
-    const meds = note.medications ?? [];
-    const hasMeds = meds.some(m => m?.medicationTreatment || m?.dose || m?.route);
-    const hasReview = note.currentMedicationRegimenReviewed || note.changesMade ||
-      note.prnBreakthroughMedicationUsed || note.medicationSideEffects;
-
-    const isEmpty = !hasMeds && !hasReview;
-
-    return (
-      <Section title="12. Medication Review" isEmpty={isEmpty}>
-        {!isEmpty && (
-          <>
-            {hasReview && (
-              <>
-                <Field label="Regimen Reviewed" value={note.currentMedicationRegimenReviewed} />
-                <Field label="Changes Made" value={note.changesMade} />
-              </>
-            )}
-            {hasMeds && (
-              <div className="mt-3">
-                <p className="text-text-muted text-xs mb-2">Current Medications:</p>
-                <div className="space-y-2">
-                  {meds.map((med, i) => (
-                    med?.medicationTreatment || med?.dose ? (
-                      <div key={i} className="bg-surface-low p-2 rounded text-xs">
-                        <div><strong>{med.medicationTreatment || '—'}</strong></div>
-                        <div>Dose: {med.dose || '—'} | Route: {med.route || '—'} | Frequency: {med.frequency || '—'}</div>
-                        {med.reasonResponse && <div>Reason/Response: {med.reasonResponse}</div>}
-                      </div>
-                    ) : null
-                  ))}
-                </div>
-              </div>
-            )}
-            {(note.prnBreakthroughMedicationUsed || note.prnEffectiveness) && (
-              <div className="mt-3 pt-3 border-t border-border-base">
-                <Field label="PRN Used" value={note.prnBreakthroughMedicationUsed} />
-                <Field label="PRN Effectiveness" value={note.prnEffectiveness} />
-              </div>
-            )}
-            {note.medicationSideEffects && (
-              <div className="mt-2">
-                <Field label="Side Effects" value={note.medicationSideEffects} />
-                {note.medicationSideEffectsDetail && (
-                  <Field label="Details" value={note.medicationSideEffectsDetail} />
-                )}
-              </div>
-            )}
-          </>
-        )}
-      </Section>
-    );
-  };
-
-  const renderMDT = (note: ProgressNote) => {
-    const mdt = note.multidisciplinaryTeamReview ?? [];
-    const hasEntries = mdt.some(m => m?.reviewIntervention);
-    const isEmpty = !hasEntries;
-
-    return (
-      <Section title="15. Multidisciplinary Team Review" isEmpty={isEmpty}>
-        {!isEmpty && (
-          <div className="space-y-2">
-            {mdt.map((entry, i) => (
-              entry?.reviewIntervention ? (
-                <div key={i} className="bg-surface-low p-3 rounded">
-                  <div className="font-medium text-xs text-primary mb-1">{entry.discipline}</div>
-                  <div className="text-sm">{entry.reviewIntervention}</div>
-                  {entry.followUpRequired && (
-                    <div className="text-xs text-text-muted mt-1">
-                      Follow-up required: {entry.followUpRequired}
-                    </div>
-                  )}
-                </div>
-              ) : null
-            ))}
-          </div>
-        )}
-      </Section>
-    );
-  };
-
-  const renderAdditionalNotes = (note: ProgressNote) => {
-    const notes = note.additionalProgressNotes ?? [];
-    const isEmpty = notes.length === 0;
-
-    return (
-      <Section title="19. Additional Progress Notes" isEmpty={isEmpty}>
-        {!isEmpty && (
-          <div className="space-y-3">
-            {notes.map((entry, i) => (
-              <div key={i} className="border-l-2 border-primary pl-3">
-                <div className="text-xs text-text-muted mb-1">
-                  {entry.date} {entry.time} — {entry.clinicianName}
-                </div>
-                <div className="text-sm">{entry.note}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-    );
+    if (e.target === e.currentTarget) onClose();
   };
 
   // ── Loading / Error ──
@@ -345,7 +248,7 @@ export const ProgressNoteModal: React.FC<ProgressNoteModalProps> = ({
     );
   }
 
-  if (error || !note) {
+  if (error || !note || !normalized) {
     return (
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/30 backdrop-blur-sm p-4"
@@ -361,7 +264,9 @@ export const ProgressNoteModal: React.FC<ProgressNoteModalProps> = ({
     );
   }
 
-  // ── Delete Confirmation Modal ──
+  // ══════════════════════════════════════════════════════════════════════
+  // Delete confirmation
+  // ══════════════════════════════════════════════════════════════════════
   if (showDeleteConfirm) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/30 backdrop-blur-sm p-4">
@@ -369,9 +274,12 @@ export const ProgressNoteModal: React.FC<ProgressNoteModalProps> = ({
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-error-bg text-error mb-4">
             <Trash2 size={24} />
           </div>
-          <h2 className="text-lg font-semibold text-on-surface mb-2">Delete Progress Note</h2>
+          <h2 className="text-lg font-semibold text-on-surface mb-2">
+            Delete Progress Note
+          </h2>
           <p className="text-sm text-text-secondary mb-6">
-            Are you sure you want to delete this progress note? This action cannot be undone.
+            Are you sure you want to delete this progress note? This action
+            cannot be undone.
           </p>
           <div className="flex gap-3">
             <Button
@@ -396,7 +304,24 @@ export const ProgressNoteModal: React.FC<ProgressNoteModalProps> = ({
     );
   }
 
-  // ── Main Modal ──
+  // ══════════════════════════════════════════════════════════════════════
+  // Main read-only modal
+  // ══════════════════════════════════════════════════════════════════════
+  const n = note as any;
+  const vitals = normalized.vitals;
+  const symptoms = normalized.symptoms;
+
+  // Helper: does any vital have a value?
+  const hasVitals = VITAL_KEYS.some(
+    (v) => vitals[v.key]?.current || vitals[v.key]?.previous,
+  );
+
+  // Helper: does any symptom have a non-None severity or notes?
+  const hasSymptoms = SYMPTOM_KEYS.some((s) => {
+    const row = symptoms[s.frontend];
+    return (row?.severity && row.severity !== 'None') || row?.notes;
+  });
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/30 backdrop-blur-sm p-4"
@@ -409,12 +334,14 @@ export const ProgressNoteModal: React.FC<ProgressNoteModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border-base flex-shrink-0 print:hidden">
           <div>
-            <h2 className="text-base font-semibold text-on-surface">Patient Progress Note</h2>
+            <h2 className="text-base font-semibold text-on-surface">
+              Patient Progress Note
+            </h2>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-sm text-text-secondary">
-                {formatDate(note.createdAt)}
+                {formatDate(n.createdAt)}
               </span>
-              {note.allSigned && <Badge variant="success">All Signed</Badge>}
+              {n.allSigned && <Badge variant="success">All Signed</Badge>}
             </div>
           </div>
           <button
@@ -427,343 +354,734 @@ export const ProgressNoteModal: React.FC<ProgressNoteModalProps> = ({
           </button>
         </div>
 
-        {/* Body - Scrollable */}
+        {/* Body — read-only */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {/* Print-only header */}
           <div className="hidden print:block mb-6">
             <h1 className="text-xl font-bold">Patient Progress Note</h1>
-            <p className="text-sm text-gray-600">Date: {formatDate(note.createdAt)}</p>
+            <p className="text-sm text-gray-600">
+              Date: {formatDate(n.createdAt)}
+            </p>
           </div>
 
-          {/* Section 0: Header Info */}
+          {/* ── Note Information ── */}
           <Section
             title="Note Information"
-            isEmpty={!note.attendingClinician && !note.palliativeCareUnit && !note.dayOfAdmission}
+            isEmpty={!n.attendingClinician && !n.palliativeCareUnit}
           >
-            <Field label="Attending Clinician" value={note.attendingClinician} />
-            <Field label="Palliative Care Unit" value={note.palliativeCareUnit} />
-            <Field label="Day of Admission" value={note.dayOfAdmission} />
+            <Field label="Attending Clinician" value={n.attendingClinician} />
+            <Field label="Palliative Care Unit" value={n.palliativeCareUnit} />
           </Section>
 
-          {/* Section 1: Current Clinical Status */}
+          {/* ── 1. Current Clinical Status ── */}
           <Section
             title="1. Current Clinical Status"
             isEmpty={
-              !note.generalCondition &&
-              !note.levelOfConsciousness &&
-              !note.orientation &&
-              !note.functionalStatus &&
-              !note.changesSincePreviousReview
+              !n.generalCondition &&
+              !n.levelOfConsciousness &&
+              !n.orientation &&
+              !n.functionalStatus &&
+              !n.changesSincePreviousReview
             }
           >
-            <Field label="General Condition" value={note.generalCondition} />
-            <Field label="Level of Consciousness" value={note.levelOfConsciousness} />
-            <Field label="Orientation" value={note.orientation} />
-            <Field label="Functional Status" value={note.functionalStatus} />
-            <Field label="Changes Since Previous Review" value={note.changesSincePreviousReview} />
+            <Field label="General Condition" value={n.generalCondition} />
+            <Field
+              label="Level of Consciousness"
+              value={n.levelOfConsciousness}
+            />
+            <Field label="Orientation" value={n.orientation} />
+            <Field label="Functional Status" value={n.functionalStatus} />
+            <Field
+              label="Changes Since Previous Review"
+              value={n.changesSincePreviousReview}
+            />
           </Section>
 
-          {/* Section 2: Vital Signs */}
-          {renderVitals(note)}
+          {/* ── 2. Vital Signs ── */}
+          <Section title="2. Vital Signs" isEmpty={!hasVitals}>
+            {!hasVitals ? null : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                {VITAL_KEYS.map(({ key, label, unit }) => {
+                  const v = vitals[key];
+                  if (!v?.current && !v?.previous) return null;
+                  return (
+                    <div key={key} className="flex gap-2">
+                      <span className="text-text-muted min-w-[160px] flex-shrink-0">
+                        {label}:
+                      </span>
+                      <span className="text-on-surface">
+                        {v.current || '—'}
+                        {v.current && unit ? ` ${unit}` : ''}
+                        {v.previous ? (
+                          <span className="text-text-muted text-xs ml-2">
+                            (prev: {v.previous})
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <Field
+              label="Other Observations"
+              value={n.otherRelevantObservations}
+            />
+          </Section>
 
-          {/* Section 3: Symptom Assessment */}
-          {renderSymptoms(note)}
+          {/* ── 3. Symptom Assessment ── */}
+          <Section title="3. Symptom Assessment" isEmpty={!hasSymptoms}>
+            {!hasSymptoms ? null : (
+              <div className="space-y-1.5">
+                {SYMPTOM_KEYS.map(({ frontend, label }) => {
+                  const row = symptoms[frontend];
+                  if (!row) return null;
+                  if (row.severity === 'None' && !row.notes) return null;
+                  return (
+                    <div key={frontend} className="flex gap-2">
+                      <span className="text-text-muted min-w-[160px] flex-shrink-0">
+                        {label}:
+                      </span>
+                      <span className="text-on-surface">
+                        {row.severity}
+                        {row.notes ? ` — ${row.notes}` : ''}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
 
-          {/* Section 4: Respiratory */}
+          {/* ── 3b. Pain Review ── */}
+          <Section
+            title="Pain Review"
+            isEmpty={
+              !n.painScore &&
+              !n.painLocation &&
+              !n.painCharacter &&
+              !n.currentPainManagement &&
+              !n.responseToTreatment &&
+              !n.breakthroughPainEpisodes
+            }
+          >
+            <Field label="Pain Score" value={n.painScore} />
+            <Field label="Location" value={n.painLocation} />
+            <Field label="Character" value={n.painCharacter} />
+            <Field
+              label="Current Management"
+              value={n.currentPainManagement}
+            />
+            <Field
+              label="Response to Treatment"
+              value={n.responseToTreatment}
+            />
+            <Field
+              label="Breakthrough Episodes"
+              value={n.breakthroughPainEpisodes}
+            />
+            <Field
+              label="Frequency"
+              value={n.breakthroughPainFrequency}
+            />
+          </Section>
+
+          {/* ── 4. Respiratory ── */}
           <Section
             title="4. Respiratory Status"
             isEmpty={
-              !note.breathing &&
-              !note.oxygenTherapy &&
-              !note.respiratorySecretions &&
-              !note.cough &&
-              !note.otherRespiratoryFindings
+              !n.breathing &&
+              !n.oxygenTherapy &&
+              !n.respiratorySecretions &&
+              !n.cough &&
+              !n.otherRespiratoryFindings
             }
           >
-            <Field label="Breathing" value={note.breathing} />
-            <Field label="Oxygen Therapy" value={note.oxygenTherapy} />
-            <Field label="Oxygen Delivery" value={note.oxygenDelivery} />
-            {note.oxygenDeliveryOther && <Field label="Other Delivery Method" value={note.oxygenDeliveryOther} />}
-            <Field label="Respiratory Secretions" value={note.respiratorySecretions} />
-            <Field label="Cough" value={note.cough} />
-            <Field label="Other Findings" value={note.otherRespiratoryFindings} />
+            <Field label="Breathing" value={n.breathing} />
+            <Field label="Oxygen Therapy" value={n.oxygenTherapy} />
+            <Field label="Oxygen Delivery" value={n.oxygenDelivery} />
+            <Field
+              label="Other Delivery Method"
+              value={n.oxygenDeliveryOther}
+            />
+            <Field
+              label="Respiratory Secretions"
+              value={n.respiratorySecretions}
+            />
+            <Field label="Cough" value={n.cough} />
+            <Field
+              label="Other Findings"
+              value={n.otherRespiratoryFindings}
+            />
           </Section>
 
-          {/* Section 5: Nutrition & Hydration */}
+          {/* ── 5. Nutrition & Hydration ── */}
           <Section
             title="5. Nutrition & Hydration"
             isEmpty={
-              !note.oralIntake &&
-              !note.diet &&
-              !note.fluidIntake &&
-              !note.feedingAssistance &&
-              !note.enteralFeeding &&
-              !note.ivFluids &&
-              !note.nauseaVomitingAffectingIntake &&
-              !note.nutritionHydrationConcerns
+              !n.oralIntake &&
+              !n.diet &&
+              !n.fluidIntake &&
+              !n.feedingAssistance &&
+              !n.enteralFeeding &&
+              !n.ivFluids &&
+              !n.nauseaVomitingAffectingIntake &&
+              !n.nutritionHydrationConcerns
             }
           >
-            <Field label="Oral Intake" value={note.oralIntake} />
-            <Field label="Diet" value={note.diet} />
-            <Field label="Fluid Intake" value={note.fluidIntake} />
-            <Field label="Feeding Assistance" value={note.feedingAssistance} />
-            <Field label="Enteral Feeding" value={note.enteralFeeding} />
-            <Field label="IV Fluids" value={note.ivFluids} />
-            <Field label="Nausea/Vomiting Affecting Intake" value={note.nauseaVomitingAffectingIntake} />
-            <Field label="Concerns" value={note.nutritionHydrationConcerns} />
+            <Field label="Oral Intake" value={n.oralIntake} />
+            <Field label="Diet" value={n.diet} />
+            <Field label="Fluid Intake" value={n.fluidIntake} />
+            <Field
+              label="Feeding Assistance"
+              value={n.feedingAssistance}
+            />
+            <Field label="Enteral Feeding" value={n.enteralFeeding} />
+            <Field label="IV Fluids" value={n.ivFluids} />
+            <Field
+              label="Nausea/Vomiting Affecting Intake"
+              value={n.nauseaVomitingAffectingIntake}
+            />
+            <Field
+              label="Concerns"
+              value={n.nutritionHydrationConcerns}
+            />
           </Section>
 
-          {/* Section 6: Elimination */}
+          {/* ── 6. Elimination ── */}
           <Section
             title="6. Elimination"
             isEmpty={
-              !note.urineOutput &&
-              !note.urinaryCatheter &&
-              !note.bowelMovement &&
-              !note.lastBowelMovement &&
-              !note.otherEliminationConcerns
+              !n.urineOutput &&
+              !n.urinaryCatheter &&
+              !n.bowelMovement &&
+              !n.lastBowelMovement &&
+              !n.otherEliminationConcerns
             }
           >
-            <Field label="Urine Output" value={note.urineOutput} />
-            <Field label="Urinary Catheter" value={note.urinaryCatheter} />
-            <Field label="Bowel Movement" value={note.bowelMovement} />
-            <Field label="Last Bowel Movement" value={note.lastBowelMovement} />
-            <Field label="Other Concerns" value={note.otherEliminationConcerns} />
+            <Field label="Urine Output" value={n.urineOutput} />
+            <Field label="Urinary Catheter" value={n.urinaryCatheter} />
+            <Field label="Bowel Movement" value={n.bowelMovement} />
+            <Field
+              label="Last Bowel Movement"
+              value={n.lastBowelMovement}
+            />
+            <Field
+              label="Other Concerns"
+              value={n.otherEliminationConcerns}
+            />
           </Section>
 
-          {/* Section 7: Skin & Wound */}
+          {/* ── 7. Skin & Wound ── */}
           <Section
             title="7. Skin & Wound Status"
             isEmpty={
-              !note.skin &&
-              !note.skinOther &&
-              !note.pressureInjury &&
-              !note.pressureInjuryLocationStage &&
-              !note.woundCareProvided &&
-              !note.woundPressureInjuryChanges
+              !n.skin &&
+              !n.skinOther &&
+              !n.pressureInjury &&
+              !n.pressureInjuryLocationStage &&
+              !n.woundCareProvided &&
+              !n.woundPressureInjuryChanges
             }
           >
-            <Field label="Skin" value={note.skin} />
-            {note.skinOther && <Field label="Other" value={note.skinOther} />}
-            <Field label="Pressure Injury" value={note.pressureInjury} />
-            {note.pressureInjuryLocationStage && (
-              <Field label="Location/Stage" value={note.pressureInjuryLocationStage} />
+            <Field label="Skin" value={n.skin} />
+            {n.skinOther && (
+              <Field label="Other" value={n.skinOther} />
             )}
-            <Field label="Wound Care Provided" value={note.woundCareProvided} />
-            <Field label="Changes" value={note.woundPressureInjuryChanges} />
+            <Field label="Pressure Injury" value={n.pressureInjury} />
+            {n.pressureInjuryLocationStage && (
+              <Field
+                label="Location/Stage"
+                value={n.pressureInjuryLocationStage}
+              />
+            )}
+            <Field
+              label="Wound Care Provided"
+              value={n.woundCareProvided}
+            />
+            <Field
+              label="Changes"
+              value={n.woundPressureInjuryChanges}
+            />
           </Section>
 
-          {/* Section 8: Psychological/Emotional */}
+          {/* ── 8. Psychological ── */}
           <Section
             title="8. Psychological / Emotional Status"
             isEmpty={
-              (!note.moodBehavior || note.moodBehavior.length === 0) &&
-              !note.psychologicalDistress &&
-              !note.patientsMainConcernsToday &&
-              !note.counselingPsychologicalSupportProvided
+              (!n.moodBehavior || n.moodBehavior.length === 0) &&
+              !n.psychologicalDistress &&
+              !n.patientsMainConcernsToday &&
+              !n.counselingPsychologicalSupportProvided
             }
           >
-            {note.moodBehavior && note.moodBehavior.length > 0 && (
-              <Field label="Mood/Behavior" value={note.moodBehavior.join(', ')} />
+            {n.moodBehavior?.length > 0 && (
+              <Field
+                label="Mood/Behavior"
+                value={n.moodBehavior.join(', ')}
+              />
             )}
-            <Field label="Psychological Distress" value={note.psychologicalDistress} />
-            <Field label="Patient's Main Concerns" value={note.patientsMainConcernsToday} />
-            <Field label="Support Provided" value={note.counselingPsychologicalSupportProvided} />
+            <Field
+              label="Psychological Distress"
+              value={n.psychologicalDistress}
+            />
+            <Field
+              label="Patient's Main Concerns"
+              value={n.patientsMainConcernsToday}
+            />
+            <Field
+              label="Support Provided"
+              value={n.counselingPsychologicalSupportProvided}
+            />
           </Section>
 
-          {/* Section 9: Spiritual/Cultural */}
+          {/* ── 9. Spiritual ── */}
           <Section
             title="9. Spiritual / Cultural Needs"
             isEmpty={
-              !note.spiritualDistressIdentified &&
-              !note.patientsSpiritualCulturalConcerns &&
-              !note.spiritualCareProvided &&
-              !note.spiritualReferralRequired &&
-              !note.spiritualNotes
+              !n.spiritualDistressIdentified &&
+              !n.patientsSpiritualCulturalConcerns &&
+              !n.spiritualCareProvided &&
+              !n.spiritualReferralRequired &&
+              !n.spiritualNotes
             }
           >
-            <Field label="Spiritual Distress Identified" value={note.spiritualDistressIdentified} />
-            <Field label="Patient's Concerns" value={note.patientsSpiritualCulturalConcerns} />
-            <Field label="Care Provided" value={note.spiritualCareProvided} />
-            <Field label="Referral Required" value={note.spiritualReferralRequired} />
-            {note.spiritualNotes && <Field label="Notes" value={note.spiritualNotes} />}
+            <Field
+              label="Spiritual Distress Identified"
+              value={n.spiritualDistressIdentified}
+            />
+            <Field
+              label="Patient's Concerns"
+              value={n.patientsSpiritualCulturalConcerns}
+            />
+            <Field
+              label="Care Provided"
+              value={n.spiritualCareProvided}
+            />
+            <Field
+              label="Referral Required"
+              value={n.spiritualReferralRequired}
+            />
+            <Field label="Notes" value={n.spiritualNotes} />
           </Section>
 
-          {/* Section 10: Family/Caregiver */}
+          {/* ── 10. Family ── */}
           <Section
             title="10. Family / Caregiver Update"
             isEmpty={
-              !note.familyCaregiverPresent &&
-              !note.familyCaregiverConcerns &&
-              !note.familyEducationSupportProvided &&
-              !note.familyMeetingHeld &&
-              !note.familyMeetingParticipants
+              !n.familyCaregiverPresent &&
+              !n.familyCaregiverConcerns &&
+              !n.familyEducationSupportProvided &&
+              !n.familyMeetingHeld &&
+              !n.familyMeetingParticipants
             }
           >
-            <Field label="Family/Caregiver Present" value={note.familyCaregiverPresent} />
-            <Field label="Concerns" value={note.familyCaregiverConcerns} />
-            <Field label="Education/Support Provided" value={note.familyEducationSupportProvided} />
-            <Field label="Meeting Held" value={note.familyMeetingHeld} />
-            {note.familyMeetingParticipants && (
-              <Field label="Participants" value={note.familyMeetingParticipants} />
-            )}
+            <Field
+              label="Family/Caregiver Present"
+              value={n.familyCaregiverPresent}
+            />
+            <Field label="Concerns" value={n.familyCaregiverConcerns} />
+            <Field
+              label="Education/Support Provided"
+              value={n.familyEducationSupportProvided}
+            />
+            <Field label="Meeting Held" value={n.familyMeetingHeld} />
+            <Field
+              label="Participants"
+              value={n.familyMeetingParticipants}
+            />
           </Section>
 
-          {/* Section 11: Goals of Care */}
+          {/* ── 11. Goals of Care ── */}
           <Section
             title="11. Goals of Care"
             isEmpty={
-              (!note.currentGoalsOfCare || note.currentGoalsOfCare.length === 0) &&
-              !note.currentGoalsOfCareOther &&
-              !note.goalsReviewedToday &&
-              !note.changeInGoalsIdentified &&
-              !note.patientDecisionMakerPreferences &&
-              !note.codeStatus &&
-              !note.advanceCarePlanReviewed
+              (!n.currentGoalsOfCare ||
+                n.currentGoalsOfCare.length === 0) &&
+              !n.currentGoalsOfCareOther &&
+              !n.goalsReviewedToday &&
+              !n.changeInGoalsIdentified &&
+              !n.patientDecisionMakerPreferences &&
+              !n.codeStatus &&
+              !n.advanceCarePlanReviewed
             }
           >
-            {note.currentGoalsOfCare && note.currentGoalsOfCare.length > 0 && (
-              <Field label="Current Goals" value={note.currentGoalsOfCare.join(', ')} />
+            {n.currentGoalsOfCare?.length > 0 && (
+              <Field
+                label="Current Goals"
+                value={n.currentGoalsOfCare.join(', ')}
+              />
             )}
-            {note.currentGoalsOfCareOther && <Field label="Other Goals" value={note.currentGoalsOfCareOther} />}
-            <Field label="Goals Reviewed Today" value={note.goalsReviewedToday} />
-            <Field label="Changes Identified" value={note.changeInGoalsIdentified} />
-            <Field label="Patient/Decision Maker Preferences" value={note.patientDecisionMakerPreferences} />
-            <Field label="Code Status" value={note.codeStatus} />
-            {note.codeStatusOther && <Field label="Other" value={note.codeStatusOther} />}
-            <Field label="Advance Care Plan Reviewed" value={note.advanceCarePlanReviewed} />
+            {n.currentGoalsOfCareOther && (
+              <Field
+                label="Other Goals"
+                value={n.currentGoalsOfCareOther}
+              />
+            )}
+            <Field
+              label="Goals Reviewed Today"
+              value={n.goalsReviewedToday}
+            />
+            <Field
+              label="Changes Identified"
+              value={n.changeInGoalsIdentified}
+            />
+            <Field
+              label="Patient/Decision Maker Preferences"
+              value={n.patientDecisionMakerPreferences}
+            />
+            <Field label="Code Status" value={n.codeStatus} />
+            {n.codeStatusOther && (
+              <Field label="Other" value={n.codeStatusOther} />
+            )}
+            <Field
+              label="Advance Care Plan Reviewed"
+              value={n.advanceCarePlanReviewed}
+            />
           </Section>
 
-          {/* Section 12: Medication Review */}
-          {renderMedications(note)}
+          {/* ── 12. Medication Review ── */}
+          <Section
+            title="12. Medication Review"
+            isEmpty={
+              !n.currentMedicationRegimenReviewed &&
+              !n.changesMade &&
+              (!n.medications || n.medications.length === 0) &&
+              !n.prnBreakthroughMedicationUsed &&
+              !n.medicationSideEffects
+            }
+          >
+            <Field
+              label="Regimen Reviewed"
+              value={n.currentMedicationRegimenReviewed}
+            />
+            <Field label="Changes Made" value={n.changesMade} />
 
-          {/* Section 13: Nursing/Supportive Care */}
+            {n.medications?.length > 0 && (
+              <div className="mt-3">
+                <p className="text-text-muted text-xs mb-2">
+                  Current Medications:
+                </p>
+                <div className="space-y-2">
+                  {n.medications.map(
+                    (med: any, i: number) =>
+                      (med?.medicationTreatment ||
+                        med?.dose ||
+                        med?.route) && (
+                        <div
+                          key={i}
+                          className="bg-surface-low p-2 rounded text-xs"
+                        >
+                          <div>
+                            <strong>
+                              {med.medicationTreatment || '—'}
+                            </strong>
+                          </div>
+                          <div>
+                            Dose: {med.dose || '—'} | Route:{' '}
+                            {med.route || '—'} | Frequency:{' '}
+                            {med.frequency || '—'}
+                          </div>
+                          {med.reasonResponse && (
+                            <div>
+                              Reason/Response: {med.reasonResponse}
+                            </div>
+                          )}
+                        </div>
+                      ),
+                  )}
+                </div>
+              </div>
+            )}
+
+            {(n.prnBreakthroughMedicationUsed ||
+              n.prnEffectiveness) && (
+              <div className="mt-3 pt-3 border-t border-border-base">
+                <Field
+                  label="PRN Used"
+                  value={n.prnBreakthroughMedicationUsed}
+                />
+                <Field
+                  label="PRN Effectiveness"
+                  value={n.prnEffectiveness}
+                />
+              </div>
+            )}
+            {n.medicationSideEffects && (
+              <div className="mt-2">
+                <Field
+                  label="Side Effects"
+                  value={n.medicationSideEffects}
+                />
+                {n.medicationSideEffectsDetail && (
+                  <Field
+                    label="Details"
+                    value={n.medicationSideEffectsDetail}
+                  />
+                )}
+              </div>
+            )}
+          </Section>
+
+          {/* ── 13. Nursing ── */}
           <Section
             title="13. Nursing / Supportive Care"
             isEmpty={
-              (!note.nursingSupportiveCareProvided || note.nursingSupportiveCareProvided.length === 0) &&
-              !note.nursingSupportiveCareOther &&
-              !note.responseToSupportiveCare
+              (!n.nursingSupportiveCareProvided ||
+                n.nursingSupportiveCareProvided.length === 0) &&
+              !n.nursingSupportiveCareOther &&
+              !n.responseToSupportiveCare
             }
           >
-            {note.nursingSupportiveCareProvided && note.nursingSupportiveCareProvided.length > 0 && (
-              <Field label="Care Provided" value={note.nursingSupportiveCareProvided.join(', ')} />
+            {n.nursingSupportiveCareProvided?.length > 0 && (
+              <Field
+                label="Care Provided"
+                value={n.nursingSupportiveCareProvided.join(', ')}
+              />
             )}
-            {note.nursingSupportiveCareOther && <Field label="Other" value={note.nursingSupportiveCareOther} />}
-            <Field label="Response to Care" value={note.responseToSupportiveCare} />
+            {n.nursingSupportiveCareOther && (
+              <Field label="Other" value={n.nursingSupportiveCareOther} />
+            )}
+            <Field
+              label="Response to Care"
+              value={n.responseToSupportiveCare}
+            />
           </Section>
 
-          {/* Section 14: Investigations */}
+          {/* ── 14. Investigations ── */}
           <Section
             title="14. Investigations"
             isEmpty={
-              (!note.investigationsPerformedReviewed || note.investigationsPerformedReviewed.length === 0) &&
-              !note.investigationsPerformedReviewedOther &&
-              !note.significantResults &&
-              !note.clinicalSignificanceActionTaken
+              (!n.investigationsPerformedReviewed ||
+                n.investigationsPerformedReviewed.length === 0) &&
+              !n.investigationsPerformedReviewedOther &&
+              !n.significantResults &&
+              !n.clinicalSignificanceActionTaken
             }
           >
-            {note.investigationsPerformedReviewed && note.investigationsPerformedReviewed.length > 0 && (
-              <Field label="Performed/Reviewed" value={note.investigationsPerformedReviewed.join(', ')} />
+            {n.investigationsPerformedReviewed?.length > 0 && (
+              <Field
+                label="Performed/Reviewed"
+                value={n.investigationsPerformedReviewed.join(', ')}
+              />
             )}
-            {note.investigationsPerformedReviewedOther && (
-              <Field label="Other" value={note.investigationsPerformedReviewedOther} />
+            {n.investigationsPerformedReviewedOther && (
+              <Field
+                label="Other"
+                value={n.investigationsPerformedReviewedOther}
+              />
             )}
-            <Field label="Significant Results" value={note.significantResults} />
-            <Field label="Clinical Significance / Action Taken" value={note.clinicalSignificanceActionTaken} />
+            <Field
+              label="Significant Results"
+              value={n.significantResults}
+            />
+            <Field
+              label="Clinical Significance / Action Taken"
+              value={n.clinicalSignificanceActionTaken}
+            />
           </Section>
 
-          {/* Section 15: MDT Review */}
-          {renderMDT(note)}
+          {/* ── 15. MDT Review ── */}
+          <Section
+            title="15. Multidisciplinary Team Review"
+            isEmpty={
+              !n.multidisciplinaryTeamReview ||
+              n.multidisciplinaryTeamReview.length === 0 ||
+              !n.multidisciplinaryTeamReview.some(
+                (m: any) => m?.reviewIntervention,
+              )
+            }
+          >
+            <div className="space-y-2">
+              {n.multidisciplinaryTeamReview?.map(
+                (entry: any, i: number) =>
+                  entry?.reviewIntervention ? (
+                    <div
+                      key={i}
+                      className="bg-surface-low p-3 rounded"
+                    >
+                      <div className="font-medium text-xs text-primary mb-1">
+                        {entry.discipline}
+                      </div>
+                      <div className="text-sm">
+                        {entry.reviewIntervention}
+                      </div>
+                      {entry.followUpRequired && (
+                        <div className="text-xs text-text-muted mt-1">
+                          Follow-up required: {entry.followUpRequired}
+                        </div>
+                      )}
+                    </div>
+                  ) : null,
+              )}
+            </div>
+          </Section>
 
-          {/* Section 16: Assessment */}
+          {/* ── 16. Assessment ── */}
           <Section
             title="16. Clinical Assessment"
             isEmpty={
-              !note.overallAssessment &&
-              (!note.problemsIdentifiedToday || note.problemsIdentifiedToday.length === 0)
+              !n.overallAssessment &&
+              (!n.problemsIdentifiedToday ||
+                n.problemsIdentifiedToday.length === 0)
             }
           >
-            <Field label="Overall Assessment" value={note.overallAssessment} />
-            {note.problemsIdentifiedToday && note.problemsIdentifiedToday.length > 0 && (
-              <Field label="Problems Identified" value={note.problemsIdentifiedToday.join(', ')} />
+            <Field
+              label="Overall Assessment"
+              value={n.overallAssessment}
+            />
+            {n.problemsIdentifiedToday?.length > 0 && (
+              <Field
+                label="Problems Identified"
+                value={n.problemsIdentifiedToday.join(', ')}
+              />
             )}
           </Section>
 
-          {/* Section 17: Plan */}
+          {/* ── 17. Plan ── */}
           <Section
             title="17. Plan"
             isEmpty={
-              !note.symptomManagementPlan &&
-              !note.medicationPlan &&
-              !note.nursingSupportiveCarePlan &&
-              !note.investigationsMonitoring &&
-              !note.familyCaregiverPlan &&
-              !note.referralsConsultations &&
-              !note.dischargeTransferHospicePlanning
+              !n.symptomManagementPlan &&
+              !n.medicationPlan &&
+              !n.nursingSupportiveCarePlan &&
+              !n.investigationsMonitoring &&
+              !n.familyCaregiverPlan &&
+              !n.referralsConsultations &&
+              !n.dischargeTransferHospicePlanning
             }
           >
-            <Field label="Symptom Management" value={note.symptomManagementPlan} />
-            <Field label="Medication Plan" value={note.medicationPlan} />
-            <Field label="Nursing/Supportive Care" value={note.nursingSupportiveCarePlan} />
-            <Field label="Investigations/Monitoring" value={note.investigationsMonitoring} />
-            <Field label="Family/Caregiver" value={note.familyCaregiverPlan} />
-            <Field label="Referrals/Consultations" value={note.referralsConsultations} />
-            <Field label="Discharge/Transfer/Hospice Planning" value={note.dischargeTransferHospicePlanning} />
+            <Field
+              label="Symptom Management"
+              value={n.symptomManagementPlan}
+            />
+            <Field label="Medication Plan" value={n.medicationPlan} />
+            <Field
+              label="Nursing/Supportive Care"
+              value={n.nursingSupportiveCarePlan}
+            />
+            <Field
+              label="Investigations/Monitoring"
+              value={n.investigationsMonitoring}
+            />
+            <Field
+              label="Family/Caregiver"
+              value={n.familyCaregiverPlan}
+            />
+            <Field
+              label="Referrals/Consultations"
+              value={n.referralsConsultations}
+            />
+            <Field
+              label="Discharge/Transfer/Hospice Planning"
+              value={n.dischargeTransferHospicePlanning}
+            />
           </Section>
 
-          {/* Section 18: SOAP Notes */}
+          {/* ── 18. SOAP ── */}
           <Section
             title="18. SOAP Notes"
             isEmpty={
-              !note.soapSubjective &&
-              !note.soapObjective &&
-              !note.soapAssessment &&
-              !note.soapPlan
+              !n.soapSubjective &&
+              !n.soapObjective &&
+              !n.soapAssessment &&
+              !n.soapPlan
             }
           >
-            <Field label="Subjective" value={note.soapSubjective} />
-            <Field label="Objective" value={note.soapObjective} />
-            <Field label="Assessment" value={note.soapAssessment} />
-            <Field label="Plan" value={note.soapPlan} />
+            <Field label="Subjective" value={n.soapSubjective} />
+            <Field label="Objective" value={n.soapObjective} />
+            <Field label="Assessment" value={n.soapAssessment} />
+            <Field label="Plan" value={n.soapPlan} />
           </Section>
 
-          {/* Section 19: Additional Progress Notes */}
-          {renderAdditionalNotes(note)}
+          {/* ── 19. Additional Notes ── */}
+          <Section
+            title="19. Additional Progress Notes"
+            isEmpty={
+              !n.additionalProgressNotes ||
+              n.additionalProgressNotes.length === 0
+            }
+          >
+            <div className="space-y-3">
+              {n.additionalProgressNotes?.map(
+                (entry: any, i: number) => (
+                  <div
+                    key={i}
+                    className="border-l-2 border-primary pl-3"
+                  >
+                    <div className="text-xs text-text-muted mb-1">
+                      {entry.date} {entry.time} —{' '}
+                      {entry.clinicianName}
+                    </div>
+                    <div className="text-sm">{entry.note}</div>
+                  </div>
+                ),
+              )}
+            </div>
+          </Section>
 
-          {/* Section 20: Authorization/Signatures */}
+          {/* ── 20. Authorization ── */}
           <Section
             title="20. Authorization / Signatures"
-            isEmpty={!note.responsibleClinician && (!note.signatures || note.signatures.length === 0) && !note.facilityStamp}
+            isEmpty={
+              !n.responsibleClinician &&
+              (!n.signatures || n.signatures.length === 0) &&
+              !n.facilityStamp
+            }
           >
-            {note.responsibleClinician && (
+            {n.responsibleClinician && (
               <div className="mb-3">
-                <Field label="Responsible Clinician" value={note.responsibleClinician.name} />
-                <Field label="Role" value={note.responsibleClinician.role} />
+                <Field
+                  label="Responsible Clinician"
+                  value={n.responsibleClinician.name}
+                />
+                <Field
+                  label="Role"
+                  value={n.responsibleClinician.role}
+                />
               </div>
             )}
-            {note.signatures && note.signatures.length > 0 && (
+            {n.signatures?.length > 0 && (
               <div className="mt-3">
-                <p className="text-text-muted text-xs mb-2">Signatures:</p>
-                {note.signatures.map((sig, i) => (
-                  <div key={i} className="bg-surface-low p-2 rounded mb-2 text-xs">
-                    <div><strong>{sig.name}</strong> ({sig.role})</div>
-                    <div className="text-text-muted">{formatDate(sig.signedAt)}</div>
+                <p className="text-text-muted text-xs mb-2">
+                  Signatures:
+                </p>
+                {n.signatures.map((sig: any, i: number) => (
+                  <div
+                    key={i}
+                    className="bg-surface-low p-2 rounded mb-2 text-xs"
+                  >
+                    <div>
+                      <strong>{sig.name}</strong> ({sig.role})
+                    </div>
+                    <div className="text-text-muted">
+                      {formatDate(sig.signedAt)}
+                    </div>
                   </div>
                 ))}
               </div>
             )}
-            {note.facilityStamp && <Field label="Facility Stamp" value={note.facilityStamp} />}
+            {n.facilityStamp && (
+              <Field label="Facility Stamp" value={n.facilityStamp} />
+            )}
           </Section>
         </div>
 
         {/* Footer */}
         <div className="flex gap-3 px-6 pb-5 pt-4 border-t border-border-base flex-shrink-0 print:hidden">
-          <Button variant="outline" leftIcon={<Printer size={14} />} onClick={handlePrint}>
+          <Button
+            variant="outline"
+            leftIcon={<Printer size={14} />}
+            onClick={handlePrint}
+          >
             Print
           </Button>
           {canEdit && onEdit && (
-            <Button variant="outline" leftIcon={<Pencil size={14} />} onClick={() => onEdit(noteId)}>
+            <Button
+              variant="outline"
+              leftIcon={<Pencil size={14} />}
+              onClick={() => onEdit(noteId)}
+            >
               Edit
             </Button>
           )}
@@ -776,7 +1094,11 @@ export const ProgressNoteModal: React.FC<ProgressNoteModalProps> = ({
               Delete
             </Button>
           )}
-          <Button variant="secondary" onClick={onClose} className="ml-auto">
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            className="ml-auto"
+          >
             Close
           </Button>
         </div>
