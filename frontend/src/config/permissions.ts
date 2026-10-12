@@ -4,9 +4,7 @@ import {
   Pill,
   FlaskConical,
   Scan,
-  GitBranch,
   User as UserIcon,
-  Heart,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -40,7 +38,7 @@ export interface NavItem {
 //
 const PERMISSIONS: Record<string, StaffRole[]> = {
   // ── Patient registration / lifecycle ──
-  canRegisterPatient: ['Physician'],
+  canRegisterPatient: ['Physician', 'Nurse'],
   canEditPatient: ['Physician'],
   canViewPatients: ['Physician', 'Nurse'],
   canViewPatientDetail: ['Physician', 'Nurse'],

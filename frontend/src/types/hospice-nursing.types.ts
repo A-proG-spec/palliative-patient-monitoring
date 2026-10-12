@@ -100,6 +100,18 @@ export interface HospiceNursingAssessment {
   assessedByStaffId?: string | null;
   assessedByStaff?: { id: string; name: string; role?: string } | null;
 
+  // ✅ Added — matches `toHospiceDto` on the backend
+  assessedBy?: {
+    id: string;
+    name: string;
+    role: string | null;
+    type: 'staff' | 'admin';
+  } | null;
+  enteredBy?: {
+    id: string;
+    name: string;
+    type: 'staff' | 'admin';
+  } | null;
   // General observation
   levelOfConsciousness?: HospiceConsciousness;
   orientation: string[];

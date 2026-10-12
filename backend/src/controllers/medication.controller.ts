@@ -98,6 +98,22 @@ export const getPendingOrders = asyncHandler(
     return SuccessResponse(200, 'OK', result);
   },
 );
+// ═════════════════════════════════════════════════════════════
+// Pharmacist queue — completed orders
+// ═════════════════════════════════════════════════════════════
+export const getCompletedMedicationOrders = async (
+  req: Request,
+  res: Response,
+) => {
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 100;
+
+  const result = await medicationService.getCompletedMedicationOrders(
+    page,
+    limit,
+  );
+  res.json(result);
+};
 
 export const getOrderDetail = asyncHandler(
   async (req: Request, res: Response) => {
@@ -128,6 +144,7 @@ export default {
   deleteMedication,
   restoreMedication,
   getPendingOrders,
+  getCompletedMedicationOrders,
   getOrderDetail,
   markOrderGiven,
 };

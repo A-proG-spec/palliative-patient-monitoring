@@ -9,6 +9,10 @@ router.use(authMiddleware);
 router.use(roleMiddleware(['Radiologist', 'admin']));
 
 router.get('/pending-orders', imagingController.getPendingOrders);
+router.get(
+  '/completed-orders',
+  imagingController.getCompletedImagingOrders,
+);
 router.get('/queue/:id', imagingController.getOrderDetail);
 router.patch('/queue/:id/report', imagingController.submitReport);
 

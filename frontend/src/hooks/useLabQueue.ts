@@ -67,3 +67,10 @@ export function useEnterLabResult() {
     },
   });
 }
+export function useCompletedLabRequests() {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.LAB_REQUESTS, 'completed'],
+    queryFn: () => labQueueApi.listCompleted({ limit: 100 }),
+    staleTime: 30_000,
+  });
+}

@@ -83,7 +83,19 @@ export const updateLabResult = asyncHandler(async (req: Request, res: Response) 
   );
   return SuccessResponse(200, 'Lab test result updated', result);
 });
+// ═════════════════════════════════════════════════════════════
+// Lab technician queue — completed requests
+// ═════════════════════════════════════════════════════════════
+export const getCompletedLabRequests = async (
+  req: Request,
+  res: Response,
+) => {
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 100;
 
+  const result = await labService.getCompletedLabRequests(page, limit);
+  res.json(result);
+};
 // ─────────────────────────────────────────────────────────────
 // Cancel a lab test (before result entry)
 // ─────────────────────────────────────────────────────────────
@@ -159,6 +171,7 @@ export default {
   deleteLabTest,
   restoreLabTest,
   getPendingRequests,
+  getCompletedLabRequests,
   getRequestDetail,
   enterResult,
 };

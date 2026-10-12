@@ -325,7 +325,9 @@ export type StaffActivityType =
   | 'imaging'
   | 'referral'
   | 'admission'
-  | 'progress_note';
+  | 'progress_note'
+  | 'assessment'
+  | 'patient';
 
 export interface StaffActivityItem {
   id: string;

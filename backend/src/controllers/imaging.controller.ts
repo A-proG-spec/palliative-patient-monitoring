@@ -46,6 +46,19 @@ export const getImagingOrders = asyncHandler(async (req: Request, res: Response)
   const result = await imagingService.getImagingOrders(patientId, filters, page, limit);
   return SuccessResponse(200, 'OK', result);
 });
+// ═════════════════════════════════════════════════════════════
+// Radiologist queue — completed orders
+// ═════════════════════════════════════════════════════════════
+export const getCompletedImagingOrders = async (
+  req: Request,
+  res: Response,
+) => {
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 100;
+
+  const result = await imagingService.getCompletedImagingOrders(page, limit);
+  res.json(result);
+};
 
 export const getImagingOrderById = asyncHandler(async (req: Request, res: Response) => {
   const patientId = req.params.patientId as string;
@@ -170,6 +183,7 @@ export default {
   updateImagingStatus,
   deleteImagingOrder,
   restoreImagingOrder,
+  getCompletedImagingOrders,
   // Radiologist queue
   getPendingOrders,
   getOrderDetail,

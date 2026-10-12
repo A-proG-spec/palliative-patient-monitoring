@@ -61,3 +61,10 @@ export function useMarkMedicationGiven() {
     },
   });
 }
+export function useCompletedMedicationOrders() {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.MEDICATION_ORDERS, 'completed'],
+    queryFn: () => medicationQueueApi.listCompleted({ limit: 100 }),
+    staleTime: 30_000,
+  });
+}

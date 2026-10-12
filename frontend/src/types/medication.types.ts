@@ -1,5 +1,10 @@
-export type MedicationStatus = 'Ordered' | 'Given';
-export type MedicationAdministeredAt = 'Home' | 'Hospital';
+// frontend/src/types/medication.types.ts
+
+export interface MedicationActorRef {
+  id: number | string;
+  name: string;
+  type?: 'staff' | 'admin';
+}
 
 export interface Medication {
   id: string;
@@ -10,13 +15,22 @@ export interface Medication {
   route: string;
 
   /**
-   * Backend returns a populated object on list/detail endpoints
-   * (`{ id, name }`), but the raw model field is a numeric ID.
+   * Who authored the order.
+   *   • Object form { id, name, type } — preferred, emitted by the
+   *     backend's toPrescribedBy() so admin-authored orders carry
+   *     the admin's name.
+   *   • String form — legacy field (raw staff FK as a string).
+   *   • null — the raw `prescribedBy` column is empty because the
+   *     actor was an admin with no `actingAsStaffId`; callers
+   *     should fall back to `enteredBy`.
    */
-  prescribedBy?: { id: string; name: string } | string;
+  prescribedBy?: MedicationActorRef | string | null;
 
-  administeredAt: MedicationAdministeredAt;
-  status: MedicationStatus;
+  /** Who physically entered the record (staff or admin). */
+  enteredBy?: MedicationActorRef | null;
+
+  administeredAt: 'Home' | 'Hospital';
+  status: 'Ordered' | 'Given';
 
   visitId?: string;
   admissionId?: string;
@@ -30,11 +44,11 @@ export interface CreateMedicationRequest {
   dosage: string;
   frequency: string;
   route: string;
-  administeredAt: MedicationAdministeredAt;
+  administeredAt: 'Home' | 'Hospital';
 }
 
 export interface UpdateMedicationRequest {
-  status: MedicationStatus;
+  status: 'Ordered' | 'Given';
 }
 
 export interface MedicationListResponse {

@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, MapPin, Phone, Mail } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Navbar } from '@/components/common/Navbar';
 import { Footer } from '@/components/common/Footer';
 
@@ -577,73 +577,6 @@ const LandingPage: React.FC = () => {
             every day, for as long as possible.
           </p>
         </motion.div>
-      </section>
-
-      {/* ══════════════════════════════════════════════════════════
-          7. STATISTICS
-      ══════════════════════════════════════════════════════════ */}
-      <section
-        id="stats"
-        ref={statsRef}
-        className="py-24 px-6"
-        style={{
-          background: 'var(--color-surface-lowest)',
-          borderTop: '1px solid var(--color-border)',
-        }}
-        aria-labelledby="stats-heading"
-      >
-        <div className="max-w-6xl mx-auto">
-          <motion.div {...fadeUp()} className="text-center mb-12">
-            <p
-              className="text-xs font-bold uppercase tracking-[0.12em] mb-3"
-              style={{ color: 'var(--color-primary)' }}
-            >
-              Our Impact
-            </p>
-            <h2
-              id="stats-heading"
-              className="font-display font-bold"
-              style={{
-                fontSize: 'clamp(1.8rem, 3.5vw, 2.4rem)',
-                color: 'var(--color-on-surface)',
-              }}
-            >
-              Statistics
-            </h2>
-          </motion.div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {STATS.map((stat, i) => (
-              <motion.div
-                key={stat.label}
-                {...fadeUp(i * 0.1)}
-                whileHover={{ y: -5, transition: { duration: 0.18 } }}
-                className="rounded-2xl p-10 text-center"
-                style={{
-                  background: 'var(--color-background)',
-                  border: '1px solid var(--color-border)',
-                  boxShadow: 'var(--shadow-card)',
-                }}
-              >
-                <p
-                  className="font-display font-bold leading-none mb-3"
-                  style={{
-                    fontSize: 'clamp(2.4rem, 4vw, 3rem)',
-                    color: 'var(--color-primary)',
-                  }}
-                >
-                  {stat.value}
-                </p>
-                <p
-                  className="text-xs font-semibold uppercase tracking-[0.1em]"
-                  style={{ color: 'var(--color-on-surface)' }}
-                >
-                  {stat.label}
-                </p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
       </section>
 
       <Footer />

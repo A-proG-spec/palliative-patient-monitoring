@@ -70,3 +70,10 @@ export function useSubmitImagingReport() {
     },
   });
 }
+export function useCompletedImagingOrders() {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.IMAGING_ORDERS, 'completed'],
+    queryFn: () => imagingQueueApi.listCompleted({ limit: 100 }),
+    staleTime: 30_000,
+  });
+}

@@ -1,13 +1,14 @@
 import { ApiError } from '@utils/ApiError.js';
 import { toId } from '@utils/prisma.js';
 import { prisma, prismaBase } from '../lib/prisma.js';
+
 // ═════════════════════════════════════════════════════════════
 // SUMMARY — counts only (fast)
 //
 // Answers "how much has this staff contributed" across every
 // model that has an FK pointing at Staff.id.
 // ═════════════════════════════════════════════════════════════
-export const getStaffContributionSummary = async (staffId: string) => {
+export const getStaffContributionSummary = async (staffId) => {
   const id = toId(staffId, 'staff id');
 
   const staff = await prisma.staff.findUnique({
@@ -22,8 +23,11 @@ export const getStaffContributionSummary = async (staffId: string) => {
     visitsAsTeamLeader,
     visitsSigned,
     medicationsPrescribed,
+    medicationsGiven,
     labsOrdered,
+    labsCompleted,
     imagingOrdered,
+    imagingCompleted,
     referralsRequested,
     admissionsCreated,
     dischargesCreated,
@@ -32,22 +36,59 @@ export const getStaffContributionSummary = async (staffId: string) => {
     progressNotesSigned,
     hospiceCreated,
     hospiceAssessed,
+    // ── Assessment authors ──
+    painAssessmentsCreated,
+    pharmacistAssessmentsCreated,
+    physiotherapyAssessmentsCreated,
+    familyAssessmentsCreated,
+    nutritionalAssessmentsCreated,
+    socialAssessmentsCreated,
+    spiritualAssessmentsCreated,
+    psychiatryAssessmentsCreated,
   ] = await Promise.all([
     prisma.patient.count({ where: { registeredBy: id } }),
     prisma.homeVisit.count({ where: { createdBy: id } }),
     prisma.homeVisitSignature.count({ where: { staffId: id, isTeamLeader: true } }),
     prisma.homeVisitSignature.count({ where: { staffId: id, isTeamLeader: false } }),
+
     prisma.medication.count({ where: { prescribedBy: id } }),
+    // Pharmacists mark medications as given.
+    // Adjust the field name to match your model (administeredBy? givenBy?).
+    prisma.medication.count({ where: { administeredBy: id } }),
+
     prisma.laboratoryTest.count({ where: { orderedBy: id } }),
+    // Lab techs enter results.
+    prisma.laboratoryTest.count({ where: { performedBy: id } }),
+
     prisma.imagingOrder.count({ where: { orderedBy: id } }),
+    // Radiologists record exam-performed. If you track it via a
+    // dedicated field, use that; if it's just `radiologistName` as a
+    // string, use `{ radiologistName: staff.name }` — but the FK
+    // approach is cleaner.
+    prisma.imagingOrder.count({ where: { performedBy: id } }),
+
     prisma.referral.count({ where: { requestedBy: id } }),
     prisma.hospitalAdmission.count({ where: { createdBy: id } }),
     prisma.dischargeSummary.count({ where: { createdBy: id } }),
+
     prisma.patientProgressNote.count({ where: { createdBy: id } }),
     prisma.patientProgressNote.count({ where: { responsibleClinicianId: id } }),
     prisma.progressNoteSignature.count({ where: { staffId: id } }),
+
     prisma.hospiceNursingAssessment.count({ where: { createdBy: id } }),
     prisma.hospiceNursingAssessment.count({ where: { assessedByStaffId: id } }),
+
+    // ── Assessments — every model uses `createdByStaffId` or `createdBy`.
+    // Match whatever FK your Prisma schema defines. The examples below
+    // assume `createdByStaffId`. If it's `createdBy`, swap it in.
+    prisma.painAssessment.count({ where: { createdByStaffId: id } }),
+    prisma.pharmacistAssessment.count({ where: { createdByStaffId: id } }),
+    prisma.physiotherapyAssessment.count({ where: { createdByStaffId: id } }),
+    prisma.familyAssessment.count({ where: { createdByStaffId: id } }),
+    prisma.nutritionalAssessment.count({ where: { createdByStaffId: id } }),
+    prisma.socialAssessment.count({ where: { createdByStaffId: id } }),
+    prisma.spiritualAssessment.count({ where: { createdByStaffId: id } }),
+    prisma.psychiatryAssessment.count({ where: { createdByStaffId: id } }),
   ]);
 
   return {
@@ -59,26 +100,53 @@ export const getStaffContributionSummary = async (staffId: string) => {
     },
     totals: {
       patientsRegistered,
+
       visits: {
         created: visitsCreated,
         asTeamLeader: visitsAsTeamLeader,
         signedAsMember: visitsSigned,
-        total: visitsCreated + visitsSigned, // created is auto-signed, so signature count + created ≈ involvement
+        total: visitsCreated + visitsSigned,
       },
-      medications: { prescribed: medicationsPrescribed },
-      labs: { ordered: labsOrdered },
-      imaging: { ordered: imagingOrdered },
+
+      medications: {
+        prescribed: medicationsPrescribed,
+        given: medicationsGiven,
+      },
+
+      labs: {
+        ordered: labsOrdered,
+        completed: labsCompleted,
+      },
+
+      imaging: {
+        ordered: imagingOrdered,
+        completed: imagingCompleted,
+      },
+
       referrals: { requested: referralsRequested },
       admissions: { created: admissionsCreated },
       discharges: { created: dischargesCreated },
+
       progressNotes: {
         created: progressNotesCreated,
         asResponsibleClinician: progressNotesAsResponsible,
         signedAsMember: progressNotesSigned,
       },
+
       hospiceNursing: {
         created: hospiceCreated,
         asAssessor: hospiceAssessed,
+      },
+
+      assessments: {
+        pain: painAssessmentsCreated,
+        pharmacist: pharmacistAssessmentsCreated,
+        physiotherapy: physiotherapyAssessmentsCreated,
+        family: familyAssessmentsCreated,
+        nutritional: nutritionalAssessmentsCreated,
+        social: socialAssessmentsCreated,
+        spiritual: spiritualAssessmentsCreated,
+        psychiatry: psychiatryAssessmentsCreated,
       },
     },
   };
@@ -86,9 +154,6 @@ export const getStaffContributionSummary = async (staffId: string) => {
 
 // ═════════════════════════════════════════════════════════════
 // DETAIL — full lists (paginated, per category)
-//
-// The caller decides which categories to fetch by passing the
-// `category` string. Each returns a paginated list.
 // ═════════════════════════════════════════════════════════════
 
 export type ContributionCategory =
@@ -96,31 +161,83 @@ export type ContributionCategory =
   | 'progress-notes'
   | 'hospice-nursing'
   | 'labs'
+  | 'labs-completed'
   | 'imaging'
+  | 'imaging-completed'
   | 'medications'
+  | 'medications-given'
   | 'referrals'
   | 'admissions'
   | 'discharges'
-  | 'patients';
+  | 'patients'
+  // Assessments — one category each
+  | 'pain-assessments'
+  | 'pharmacist-assessments'
+  | 'physiotherapy-assessments'
+  | 'family-assessments'
+  | 'nutritional-assessments'
+  | 'social-assessments'
+  | 'spiritual-assessments'
+  | 'psychiatry-assessments';
 
-const getEnteredBy = (
-  createdByAdmin: { id: number; name: string } | null,
-  createdByStaff: { id: number; name: string } | null,
-) => {
+const getEnteredBy = (createdByAdmin, createdByStaff) => {
   if (createdByAdmin) {
-    return { id: createdByAdmin.id, name: createdByAdmin.name, type: 'admin' as const };
+    return { id: createdByAdmin.id, name: createdByAdmin.name, type: 'admin' };
   }
   if (createdByStaff) {
-    return { id: createdByStaff.id, name: createdByStaff.name, type: 'staff' as const };
+    return { id: createdByStaff.id, name: createdByStaff.name, type: 'staff' };
   }
   return null;
 };
 
+/**
+ * Reusable helper — one assessment category.
+ * All 8 assessments share the same shape: a patient, a type,
+ * a created-at, and some list items.
+ */
+const buildAssessmentDetail = async ({
+  staffId,
+  category,
+  model,
+  orderByField,
+  page,
+  limit,
+  itemMapper,
+}) => {
+  const skip = (page - 1) * limit;
+  const where = { createdByStaffId: staffId };
+
+  const [items, total] = await Promise.all([
+    model.findMany({
+      where,
+      orderBy: { [orderByField]: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+        createdByStaff: { select: { id: true, name: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+      },
+    }),
+    model.count({ where }),
+  ]);
+
+  return {
+    category,
+    page,
+    limit,
+    total,
+    items: items.map((row) =>
+      itemMapper(row, getEnteredBy(row.createdByAdmin, row.createdByStaff)),
+    ),
+  };
+};
+
 export const getStaffContributionDetail = async (
-  staffId: string,
-  category: ContributionCategory,
-  page: number = 1,
-  limit: number = 20,
+  staffId,
+  category,
+  page = 1,
+  limit = 20,
 ) => {
   const id = toId(staffId, 'staff id');
 
@@ -134,7 +251,7 @@ export const getStaffContributionDetail = async (
 
   switch (category) {
     // ─────────────────────────────────────────────────────
-    // Home visits — created OR signed, with signature roles
+    // Home visits
     // ─────────────────────────────────────────────────────
     case 'visits': {
       const where = {
@@ -185,7 +302,7 @@ export const getStaffContributionDetail = async (
     }
 
     // ─────────────────────────────────────────────────────
-    // Progress notes — created OR responsible OR signed
+    // Progress notes
     // ─────────────────────────────────────────────────────
     case 'progress-notes': {
       const where = {
@@ -243,7 +360,7 @@ export const getStaffContributionDetail = async (
     }
 
     // ─────────────────────────────────────────────────────
-    // Hospice nursing assessments — created OR assessed
+    // Hospice nursing
     // ─────────────────────────────────────────────────────
     case 'hospice-nursing': {
       const where = {
@@ -294,7 +411,7 @@ export const getStaffContributionDetail = async (
     }
 
     // ─────────────────────────────────────────────────────
-    // Laboratory tests ordered
+    // Lab tests — ORDERED (Physicians / Nurses)
     // ─────────────────────────────────────────────────────
     case 'labs': {
       const where = { orderedBy: id };
@@ -330,12 +447,56 @@ export const getStaffContributionDetail = async (
           dateOrdered: l.dateOrdered,
           datePerformed: l.datePerformed,
           result: l.result,
+          relationship: 'OrderedBy',
         })),
       };
     }
 
     // ─────────────────────────────────────────────────────
-    // Imaging orders
+    // Lab tests — COMPLETED (Lab Technicians)
+    // ─────────────────────────────────────────────────────
+    case 'labs-completed': {
+      const where = { performedBy: id };
+      const [items, total] = await Promise.all([
+        prisma.laboratoryTest.findMany({
+          where,
+          orderBy: { datePerformed: 'desc' },
+          skip,
+          take: limit,
+          include: {
+            patient: { select: { id: true, firstName: true, lastName: true } },
+            orderedByStaff: { select: { id: true, name: true } },
+          },
+        }),
+        prisma.laboratoryTest.count({ where }),
+      ]);
+      return {
+        category,
+        staff,
+        page,
+        limit,
+        total,
+        items: items.map((l) => ({
+          id: l.id,
+          patientId: l.patient.id,
+          patientName: `${l.patient.firstName} ${l.patient.lastName}`,
+          testName: l.testName,
+          category: l.category,
+          priority: l.priority,
+          status: l.status,
+          dateOrdered: l.dateOrdered,
+          datePerformed: l.datePerformed,
+          result: l.result,
+          orderedBy: l.orderedByStaff
+            ? { id: l.orderedByStaff.id, name: l.orderedByStaff.name }
+            : null,
+          relationship: 'PerformedBy',
+        })),
+      };
+    }
+
+    // ─────────────────────────────────────────────────────
+    // Imaging — ORDERED (Physicians / Nurses)
     // ─────────────────────────────────────────────────────
     case 'imaging': {
       const where = { orderedBy: id };
@@ -378,12 +539,63 @@ export const getStaffContributionDetail = async (
           technologistName: o.technologistName,
           dateOrdered: o.createdAt,
           performedAt: o.performedAt,
+          relationship: 'OrderedBy',
         })),
       };
     }
 
     // ─────────────────────────────────────────────────────
-    // Medications prescribed
+    // Imaging — COMPLETED (Radiologists)
+    // ─────────────────────────────────────────────────────
+    case 'imaging-completed': {
+      const where = { performedBy: id };
+      const [items, total] = await Promise.all([
+        prisma.imagingOrder.findMany({
+          where,
+          orderBy: { performedAt: 'desc' },
+          skip,
+          take: limit,
+          include: {
+            patient: { select: { id: true, firstName: true, lastName: true } },
+            orderedByStaff: { select: { id: true, name: true } },
+          },
+        }),
+        prisma.imagingOrder.count({ where }),
+      ]);
+      return {
+        category,
+        staff,
+        page,
+        limit,
+        total,
+        items: items.map((o) => ({
+          id: o.id,
+          patientId: o.patient.id,
+          patientName: `${o.patient.firstName} ${o.patient.lastName}`,
+          modality: o.modality,
+          bodyRegion: o.bodyRegion,
+          laterality: o.laterality,
+          priority: o.priority,
+          status: o.status,
+          hasReport: !!(o.findings || o.impression),
+          findings: o.findings,
+          impression: o.impression,
+          recommendation: o.recommendation,
+          reportDate: o.reportDate,
+          radiologistName: o.radiologistName,
+          technologistName: o.technologistName,
+          dateOrdered: o.createdAt,
+          performedAt: o.performedAt,
+          orderedBy: o.orderedByStaff
+            ? { id: o.orderedByStaff.id, name: o.orderedByStaff.name }
+            : null,
+          relationship: 'PerformedBy',
+        })),
+      };
+    }
+
+    // ─────────────────────────────────────────────────────
+    // Medications — PRESCRIBED (Physicians / Nurses)
     // ─────────────────────────────────────────────────────
     case 'medications': {
       const where = { prescribedBy: id };
@@ -419,12 +631,56 @@ export const getStaffContributionDetail = async (
           administeredAt: m.administeredAt,
           status: m.status,
           createdAt: m.createdAt,
+          relationship: 'PrescribedBy',
         })),
       };
     }
 
     // ─────────────────────────────────────────────────────
-    // Referrals requested
+    // Medications — GIVEN (Pharmacists)
+    // ─────────────────────────────────────────────────────
+    case 'medications-given': {
+      const where = { administeredBy: id };
+      const [items, total] = await Promise.all([
+        prisma.medication.findMany({
+          where,
+          orderBy: { updatedAt: 'desc' },
+          skip,
+          take: limit,
+          include: {
+            patient: { select: { id: true, firstName: true, lastName: true } },
+            prescribedByStaff: { select: { id: true, name: true } },
+          },
+        }),
+        prisma.medication.count({ where }),
+      ]);
+      return {
+        category,
+        staff,
+        page,
+        limit,
+        total,
+        items: items.map((m) => ({
+          id: m.id,
+          patientId: m.patient.id,
+          patientName: `${m.patient.firstName} ${m.patient.lastName}`,
+          name: m.name,
+          dosage: m.dosage,
+          frequency: m.frequency,
+          route: m.route,
+          administeredAt: m.administeredAt,
+          status: m.status,
+          createdAt: m.createdAt,
+          prescribedBy: m.prescribedByStaff
+            ? { id: m.prescribedByStaff.id, name: m.prescribedByStaff.name }
+            : null,
+          relationship: 'AdministeredBy',
+        })),
+      };
+    }
+
+    // ─────────────────────────────────────────────────────
+    // Referrals
     // ─────────────────────────────────────────────────────
     case 'referrals': {
       const where = { requestedBy: id };
@@ -465,7 +721,7 @@ export const getStaffContributionDetail = async (
     }
 
     // ─────────────────────────────────────────────────────
-    // Admissions created
+    // Admissions
     // ─────────────────────────────────────────────────────
     case 'admissions': {
       const where = { createdBy: id };
@@ -506,7 +762,7 @@ export const getStaffContributionDetail = async (
     }
 
     // ─────────────────────────────────────────────────────
-    // Discharge summaries created
+    // Discharge summaries
     // ─────────────────────────────────────────────────────
     case 'discharges': {
       const where = { createdBy: id };
@@ -592,6 +848,205 @@ export const getStaffContributionDetail = async (
           enteredBy: getEnteredBy(patient.createdByAdmin, patient.registeredByStaff),
         })),
       };
+    }
+
+    // ═════════════════════════════════════════════════════
+    // ASSESSMENTS — one case each
+    // ═════════════════════════════════════════════════════
+
+    case 'pain-assessments': {
+      const result = await buildAssessmentDetail({
+        staffId: id,
+        category,
+        model: prisma.painAssessment,
+        orderByField: 'createdAt',
+        page,
+        limit,
+        itemMapper: (a, enteredBy) => ({
+          id: a.id,
+          enteredBy,
+          patientId: a.patient.id,
+          patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+          assessmentType: a.assessmentType,
+          currentPainScore: a.currentPainScore,
+          painType: a.painType,
+          diagnosis: a.diagnosis,
+          assessmentOutcome: a.assessmentOutcome,
+          createdAt: a.createdAt,
+        }),
+      });
+      return { ...result, staff };
+    }
+
+    case 'pharmacist-assessments': {
+      const result = await buildAssessmentDetail({
+        staffId: id,
+        category,
+        model: prisma.pharmacistAssessment,
+        orderByField: 'createdAt',
+        page,
+        limit,
+        itemMapper: (a, enteredBy) => ({
+          id: a.id,
+          enteredBy,
+          patientId: a.patient.id,
+          patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+          assessmentType: a.assessmentType,
+          painControl: a.painControl,
+          pharmacistSummary: a.pharmacistSummary,
+          summaryFlags: a.summaryFlags,
+          finalRecommendations: a.finalRecommendations,
+          createdAt: a.createdAt,
+        }),
+      });
+      return { ...result, staff };
+    }
+
+    case 'physiotherapy-assessments': {
+      const result = await buildAssessmentDetail({
+        staffId: id,
+        category,
+        model: prisma.physiotherapyAssessment,
+        orderByField: 'createdAt',
+        page,
+        limit,
+        itemMapper: (a, enteredBy) => ({
+          id: a.id,
+          enteredBy,
+          patientId: a.patient.id,
+          patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+          assessmentType: a.assessmentType,
+          generalCondition: a.generalCondition,
+          mobilityStatus: a.mobilityStatus,
+          fallRiskLevel: a.fallRiskLevel,
+          diagnosis: a.diagnosis,
+          outcome: a.outcome,
+          createdAt: a.createdAt,
+        }),
+      });
+      return { ...result, staff };
+    }
+
+    case 'family-assessments': {
+      const result = await buildAssessmentDetail({
+        staffId: id,
+        category,
+        model: prisma.familyAssessment,
+        orderByField: 'createdAt',
+        page,
+        limit,
+        itemMapper: (a, enteredBy) => ({
+          id: a.id,
+          enteredBy,
+          patientId: a.patient.id,
+          patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+          assessmentType: a.assessmentType,
+          burdenLevel: a.burdenLevel,
+          palliativeCareAcceptance: a.palliativeCareAcceptance,
+          assessorName: a.assessorName,
+          assessmentOutcome: a.assessmentOutcome,
+          createdAt: a.createdAt,
+        }),
+      });
+      return { ...result, staff };
+    }
+
+    case 'nutritional-assessments': {
+      const result = await buildAssessmentDetail({
+        staffId: id,
+        category,
+        model: prisma.nutritionalAssessment,
+        orderByField: 'createdAt',
+        page,
+        limit,
+        itemMapper: (a, enteredBy) => ({
+          id: a.id,
+          enteredBy,
+          patientId: a.patient.id,
+          patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+          assessmentType: a.assessmentType,
+          bmi: a.bmi,
+          nutritionalStatusClassification: a.nutritionalStatusClassification,
+          overallNutritionalRisk: a.overallNutritionalRisk,
+          currentAppetite: a.currentAppetite,
+          createdAt: a.createdAt,
+        }),
+      });
+      return { ...result, staff };
+    }
+
+    case 'social-assessments': {
+      const result = await buildAssessmentDetail({
+        staffId: id,
+        category,
+        model: prisma.socialAssessment,
+        orderByField: 'createdAt',
+        page,
+        limit,
+        itemMapper: (a, enteredBy) => ({
+          id: a.id,
+          enteredBy,
+          patientId: a.patient.id,
+          patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+          assessmentType: a.assessmentType,
+          livingArrangement: a.livingArrangement,
+          isolationRisk: a.isolationRisk,
+          financialRiskLevel: a.financialRiskLevel,
+          bereavementRisk: a.bereavementRisk,
+          assessmentOutcome: a.assessmentOutcome,
+          createdAt: a.createdAt,
+        }),
+      });
+      return { ...result, staff };
+    }
+
+    case 'spiritual-assessments': {
+      const result = await buildAssessmentDetail({
+        staffId: id,
+        category,
+        model: prisma.spiritualAssessment,
+        orderByField: 'createdAt',
+        page,
+        limit,
+        itemMapper: (a, enteredBy) => ({
+          id: a.id,
+          enteredBy,
+          patientId: a.patient.id,
+          patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+          assessmentType: a.assessmentType,
+          religiousAffiliation: a.religiousAffiliation,
+          spiritualDistressLevel: a.spiritualDistressLevel,
+          feelsAtPeace: a.feelsAtPeace,
+          assessmentOutcome: a.assessmentOutcome,
+          createdAt: a.createdAt,
+        }),
+      });
+      return { ...result, staff };
+    }
+
+    case 'psychiatry-assessments': {
+      const result = await buildAssessmentDetail({
+        staffId: id,
+        category,
+        model: prisma.psychiatryAssessment,
+        orderByField: 'createdAt',
+        page,
+        limit,
+        itemMapper: (a, enteredBy) => ({
+          id: a.id,
+          enteredBy,
+          patientId: a.patient.id,
+          patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+          assessmentType: a.assessmentType,
+          severity: a.severity,
+          suicidalIdeation: a.suicidalIdeation,
+          suicideRiskLevel: a.suicideRiskLevel,
+          diagnoses: a.diagnoses,
+          assessmentOutcome: a.assessmentOutcome,
+          createdAt: a.createdAt,
+        }),
+      });
+      return { ...result, staff };
     }
 
     default:

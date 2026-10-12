@@ -9,6 +9,10 @@ router.use(authMiddleware);
 router.use(roleMiddleware(['LaboratoryTechnician', 'admin']));
 
 router.get('/pending-requests', labController.getPendingRequests);
+router.get(
+  '/completed-requests',
+  labController.getCompletedLabRequests,
+);
 router.get('/queue/:id', labController.getRequestDetail);
 router.patch('/queue/:id/result', labController.enterResult);
 

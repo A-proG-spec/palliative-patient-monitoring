@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  //directUrl = env("DIRECT_URL")
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -2711,20 +2711,21 @@ model Staff {
   updatedByAdmin Admin?    @relation("StaffUpdatedBy", fields: [updatedBy], references: [id])
 
   // Relations (as actor) — existing
-  patientsRegistered       Patient[]                  @relation("PatientRegisteredBy")
-  visitsCreated            HomeVisit[]                @relation("VisitCreatedBy")
-  visitSignatures          HomeVisitSignature[]
-  medicationsPrescribed    Medication[]               @relation("MedicationPrescribedBy")
-  medicationsUpdated       Medication[]               @relation("MedicationUpdatedByStaff")
-  labsOrdered              LaboratoryTest[]           @relation("LabOrderedBy")
-  imagingOrdered           ImagingOrder[]             @relation("ImagingOrderedBy")
-  referralsRequested       Referral[]                 @relation("ReferralRequestedBy")
-  admissionsCreated        HospitalAdmission[]        @relation("AdmissionCreatedBy")
-  dischargeCreated         DischargeSummary[]         @relation("DischargeCreatedBy")
-  progressNotesCreated     PatientProgressNote[]      @relation("ProgressNoteCreatedBy")
-  progressNoteSignatures   ProgressNoteSignature[]
-  hospiceNursingCreated    HospiceNursingAssessment[] @relation("HospiceNursingCreatedBy")
-  hospiceNursingAssessed   HospiceNursingAssessment[] @relation("HospiceNursingAssessedBy")
+  patientsRegistered     Patient[]                  @relation("PatientRegisteredBy")
+  visitsCreated          HomeVisit[]                @relation("VisitCreatedBy")
+  visitSignatures        HomeVisitSignature[]
+  medicationsPrescribed  Medication[]               @relation("MedicationPrescribedBy")
+  medicationsUpdated     Medication[]               @relation("MedicationUpdatedByStaff")
+  labsOrdered            LaboratoryTest[]           @relation("LabOrderedBy")
+  imagingOrdered         ImagingOrder[]             @relation("ImagingOrderedBy")
+  referralsRequested     Referral[]                 @relation("ReferralRequestedBy")
+  admissionsCreated      HospitalAdmission[]        @relation("AdmissionCreatedBy")
+  dischargeCreated       DischargeSummary[]         @relation("DischargeCreatedBy")
+  progressNotesCreated   PatientProgressNote[]      @relation("ProgressNoteCreatedBy")
+  progressNoteSignatures ProgressNoteSignature[]
+  hospiceNursingCreated  HospiceNursingAssessment[] @relation("HospiceNursingCreatedBy")
+  hospiceNursingAssessed HospiceNursingAssessment[] @relation("HospiceNursingAssessedBy")
+  imagingReportsEntered  ImagingOrder[]             @relation("ImagingReportEnteredBy")
 
   // Relations (as actor) — assessment creations
   clinicalPharmacistCreated ClinicalPharmacistAssessment[] @relation("ClinicalPharmacistCreatedBy")
@@ -2818,7 +2819,7 @@ model Medication {
   frequency         String
   route             String
   prescribedBy      Int?
-  prescribedByStaff Staff?                    @relation("MedicationPrescribedBy", fields: [prescribedBy], references: [id])
+  prescribedByStaff Staff?                   @relation("MedicationPrescribedBy", fields: [prescribedBy], references: [id])
   createdByAdminId  Int?
   createdByAdmin    Admin?                   @relation("MedicationCreatedByAdmin", fields: [createdByAdminId], references: [id])
   administeredAt    MedicationAdministeredAt
@@ -3211,6 +3212,9 @@ model ImagingOrder {
   createdByAdminId Int?
   createdByAdmin   Admin? @relation("ImagingCreatedByAdmin", fields: [createdByAdminId], references: [id])
 
+  reportEnteredByStaffId Int?
+  reportEnteredByStaff   Staff? @relation("ImagingReportEnteredBy", fields: [reportEnteredByStaffId], references: [id])
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   updatedBy      Int?
@@ -3226,6 +3230,7 @@ model ImagingOrder {
   @@index([modality])
   @@index([priority])
   @@index([createdAt])
+  @@index([reportEnteredByStaffId])
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -3776,85 +3781,85 @@ model PatientProgressNote {
   other                 ProgressNoteDistress?
   otherNote             String?
 
-  painScore                 String?                     @default("")
-  painLocation              String?                     @default("")
-  painCharacter             String?                     @default("")
-  currentPainManagement     String?                     @default("")
+  painScore                 String?               @default("")
+  painLocation              String?               @default("")
+  painCharacter             String?               @default("")
+  currentPainManagement     String?               @default("")
   responseToTreatment       ProgressNoteResponse?
-  breakthroughPainEpisodes  DischargeFeedingAssistance?
-  breakthroughPainFrequency String?                     @default("")
+  breakthroughPainEpisodes  YesNo?
+  breakthroughPainFrequency String?               @default("")
 
   // Section 4 — respiratory
   breathing                ProgressNoteBreathing?
-  oxygenTherapy            DischargeFeedingAssistance?
+  oxygenTherapy            YesNo?
   oxygenDelivery           ProgressNoteOxygenDelivery?
   oxygenDeliveryOther      String?                     @default("")
   respiratorySecretions    ProgressNoteSecretions?
-  cough                    DischargeFeedingAssistance?
+  cough                    YesNo?
   otherRespiratoryFindings String?                     @default("")
 
   // Section 5 — nutrition
   oralIntake                    ProgressNoteOralIntake?
-  diet                          String?                     @default("")
-  fluidIntake                   String?                     @default("")
-  feedingAssistance             DischargeFeedingAssistance?
-  enteralFeeding                DischargeFeedingAssistance?
-  ivFluids                      DischargeFeedingAssistance?
-  nauseaVomitingAffectingIntake DischargeFeedingAssistance?
-  nutritionHydrationConcerns    String?                     @default("")
+  diet                          String?                 @default("")
+  fluidIntake                   String?                 @default("")
+  feedingAssistance             YesNo?
+  enteralFeeding                YesNo?
+  ivFluids                      YesNo?
+  nauseaVomitingAffectingIntake YesNo?
+  nutritionHydrationConcerns    String?                 @default("")
 
   // Section 6 — elimination
   urineOutput              ProgressNoteUrineOutput?
-  urinaryCatheter          DischargeFeedingAssistance?
+  urinaryCatheter          YesNo?
   bowelMovement            ProgressNoteBowelMovement?
-  lastBowelMovement        String?                     @default("")
-  otherEliminationConcerns String?                     @default("")
+  lastBowelMovement        String?                    @default("")
+  otherEliminationConcerns String?                    @default("")
 
   // Section 7 — skin
   skin                        ProgressNoteSkin?
-  skinOther                   String?                     @default("")
-  pressureInjury              DischargeFeedingAssistance?
-  pressureInjuryLocationStage String?                     @default("")
-  woundCareProvided           DischargeFeedingAssistance?
-  woundPressureInjuryChanges  String?                     @default("")
+  skinOther                   String?           @default("")
+  pressureInjury              YesNo?
+  pressureInjuryLocationStage String?           @default("")
+  woundCareProvided           YesNo?
+  woundPressureInjuryChanges  String?           @default("")
 
   // Section 8 — psychological
-  moodBehavior                           ProgressNoteMoodBehavior[]  @default([])
+  moodBehavior                           ProgressNoteMoodBehavior[] @default([])
   psychologicalDistress                  ProgressNoteDistress?
-  patientsMainConcernsToday              String?                     @default("")
-  counselingPsychologicalSupportProvided DischargeFeedingAssistance?
+  patientsMainConcernsToday              String?                    @default("")
+  counselingPsychologicalSupportProvided YesNo?
 
   // Section 9 — spiritual
-  spiritualDistressIdentified       DischargeFeedingAssistance?
-  patientsSpiritualCulturalConcerns String?                     @default("")
-  spiritualCareProvided             DischargeFeedingAssistance?
-  spiritualReferralRequired         DischargeFeedingAssistance?
-  spiritualNotes                    String?                     @default("")
+  spiritualDistressIdentified       YesNo?
+  patientsSpiritualCulturalConcerns String? @default("")
+  spiritualCareProvided             YesNo?
+  spiritualReferralRequired         YesNo?
+  spiritualNotes                    String? @default("")
 
   // Section 10 — family
-  familyCaregiverPresent         DischargeFeedingAssistance?
-  familyCaregiverConcerns        String?                     @default("")
-  familyEducationSupportProvided String?                     @default("")
-  familyMeetingHeld              DischargeFeedingAssistance?
-  familyMeetingParticipants      String?                     @default("")
+  familyCaregiverPresent         YesNo?
+  familyCaregiverConcerns        String? @default("")
+  familyEducationSupportProvided String? @default("")
+  familyMeetingHeld              YesNo?
+  familyMeetingParticipants      String? @default("")
 
   // Section 11 — goals of care
-  currentGoalsOfCare              ProgressNoteGoalsOfCare[]   @default([])
-  currentGoalsOfCareOther         String?                     @default("")
-  goalsReviewedToday              DischargeFeedingAssistance?
-  changeInGoalsIdentified         DischargeFeedingAssistance?
-  patientDecisionMakerPreferences String?                     @default("")
+  currentGoalsOfCare              ProgressNoteGoalsOfCare[] @default([])
+  currentGoalsOfCareOther         String?                   @default("")
+  goalsReviewedToday              YesNo?
+  changeInGoalsIdentified         YesNo?
+  patientDecisionMakerPreferences String?                   @default("")
   codeStatus                      DischargeCodeStatus?
-  codeStatusOther                 String?                     @default("")
-  advanceCarePlanReviewed         DischargeFeedingAssistance?
+  codeStatusOther                 String?                   @default("")
+  advanceCarePlanReviewed         YesNo?
 
   // Section 12 — medication review
-  currentMedicationRegimenReviewed DischargeFeedingAssistance?
-  changesMade                      DischargeFeedingAssistance?
-  prnBreakthroughMedicationUsed    DischargeFeedingAssistance?
-  prnEffectiveness                 ProgressNotePRNEffectiveness?
-  medicationSideEffects            String?                       @default("None")
-  medicationSideEffectsDetail      String?                       @default("")
+  currentMedicationRegimenReviewed YesNo?
+  changesMade                      YesNo?
+  prnBreakthroughMedicationUsed    YesNo?
+  prnEffectiveness                 YesNo?
+  medicationSideEffects            String? @default("None")
+  medicationSideEffectsDetail      String? @default("")
 
   // Section 13 — nursing / supportive care
   nursingSupportiveCareProvided ProgressNoteNursingCare[] @default([])
