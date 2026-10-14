@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { usePatient } from '@/hooks/usePatients';
 import { usePatientVisits } from '@/hooks/useVisits';
+import { fetchAllPatientData } from '@/lib/fetchAllPatientData';
 import { usePatientMedications } from '@/hooks/useMedications';
 import { usePatientLabs } from '@/hooks/useLabs';
 import { usePatientImaging } from '@/hooks/useImaging';
@@ -95,20 +96,21 @@ const PatientDetailPage: React.FC = () => {
   // ── Derived tab visibility ──
   const canViewHospice = hasPermission(userRole, 'canViewHospiceNursing', isAdmin);
 
-  const tabs = useMemo<PatientTab[]>(() => {
-    const currentLocation = patient?.currentLocation ?? 'Home';
-    const all: PatientTab[] = [
-      'Visits', 'Progress Notes', 'Hospice Nursing',
-      'Medications', 'Labs', 'Imaging', 'Referrals', 'Admissions',
-    ];
-    return all.filter((t) => {
-      if (t === 'Progress Notes') return currentLocation === 'ReferredHospital';
-      if (t === 'Visits') return currentLocation === 'Home';
-      if (t === 'Hospice Nursing') return canViewHospice;
-      return true;
-    });
-  }, [patient?.currentLocation, canViewHospice]);
-
+const tabs = useMemo<PatientTab[]>(() => {
+  const currentLocation = patient?.currentLocation ?? 'Home';
+  const all: PatientTab[] = [
+    'Visits', 'Progress Notes', 'Hospice Nursing',
+    'Medications', 'Labs', 'Imaging', 'Referrals', 'Admissions',
+  ];
+  return all.filter((t) => {
+    // Progress Notes only make sense for hospitalised patients.
+    if (t === 'Progress Notes') return currentLocation === 'ReferredHospital';
+    // Hospice Nursing is gated by role permission.
+    if (t === 'Hospice Nursing') return canViewHospice;
+    // Everything else — including Visits — is always visible.
+    return true;
+  });
+}, [patient?.currentLocation, canViewHospice]);
   useEffect(() => {
     if (!tabs.includes(activeTab)) setActiveTab(tabs[0]);
   }, [tabs, activeTab]);
@@ -158,56 +160,23 @@ const PatientDetailPage: React.FC = () => {
   // ═══════════════════════════════════════════════════════════
   // handlePrint — fetches FULL visit details before printing
   // ═══════════════════════════════════════════════════════════
-  const handlePrint = async () => {
-    setIsPrinting(true);
+const handlePrint = async () => {
+  setIsPrinting(true);
+  try {
+    const bundle = await fetchAllPatientData(queryClient, id!);
 
-    try {
-      const visitIds = (visitsData?.items ?? []).map((v) => String(v.id));
-
-      const visitDetails = await Promise.all(
-        visitIds.map((visitId) =>
-          queryClient
-            .fetchQuery({
-              queryKey: ['patients', id, 'visits', visitId],
-              queryFn: () => visitApi.getById(id!, visitId),
-              staleTime: 0,
-            })
-            .catch(() => null),
-        ),
-      );
-
-      const fullVisits = (visitsData?.items ?? []).map((listItem, i) => ({
-        ...listItem,
-        ...(visitDetails[i] ?? {}),
-      }));
-
-      printPatientReport({
-        patient,
-        visits: fullVisits,
-        medications: medsData?.items ?? [],
-        labs: labsData?.items ?? [],
-        referrals: refsData?.items ?? [],
-        admissions: (admsData?.items ?? []) as unknown as HospitalAdmission[],
-        progressNotes: progressNotesData?.items ?? [],
-        hospiceNursing: hospiceData?.items ?? [],
-        painAssessments: painData?.items ?? [],
-        pharmacistAssessments: pharmacistData?.items ?? [],
-        physiotherapyAssessments: physioData?.items ?? [],
-        familyAssessments: familyData?.items ?? [],
-        nutritionalAssessments: nutritionData?.items ?? [],
-        socialAssessments: socialData?.items ?? [],
-        spiritualAssessments: spiritualData?.items ?? [],
-        psychiatryAssessments: psychiatryData?.items ?? [],
-        appName: APP_NAME,
-      });
-    } catch (err) {
-      toast.error('Failed to prepare the print report. Please try again.');
-      console.error('[Print] Failed:', err);
-    } finally {
-      setIsPrinting(false);
-    }
-  };
-
+    printPatientReport({
+      patient: patient!,   // already loaded above
+      ...bundle,           // visits, progressNotes, hospiceNursing, ...
+      appName: APP_NAME,
+    });
+  } catch (err) {
+    toast.error('Failed to prepare the print report. Please try again.');
+    console.error('[Print] Failed:', err);
+  } finally {
+    setIsPrinting(false);
+  }
+};
   const handleAddRecord = (route: string) => {
     setShowAddRecord(false);
     navigate(route);

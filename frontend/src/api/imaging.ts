@@ -2,177 +2,85 @@ import apiClient from './client';
 import { USE_MOCK } from '@/lib/config';
 import { mockImagingApi } from './mocks/imaging.mock';
 
-export type ImagingModality =
-  | 'XRay' | 'Ultrasound' | 'CT' | 'MRI'
-  | 'Mammography' | 'Fluoroscopy' | 'Interventional' | 'NuclearMedicine' | 'Other';
-export type ContrastDecision = 'No' | 'Yes' | 'ToBeDetermined' | 'NotApplicable';
-export type PregnancyStatus = 'NotPregnant' | 'Pregnant' | 'PossiblyPregnant' | 'NotApplicable';
-export type MetallicForeignBody = 'No' | 'Yes' | 'Unknown';
-export type ImagingPriority = 'Routine' | 'Urgent' | 'Emergency';
-export type Laterality = 'Right' | 'Left' | 'Bilateral' | 'NotApplicable';
-export type ImageQuality = 'Diagnostic' | 'Limited' | 'NonDiagnostic' | 'RepeatRequired';
-export type ImagingStatus = 'Ordered' | 'Completed' | 'Cancelled';
+// ═══════════════════════════════════════════════════════════════
+// Re-export canonical types from @/types/imaging.types
+//
+// This file previously declared its own duplicate copies of these
+// types, which drifted from the canonical definitions (most
+// notably `preparation: string[]` here vs `ImagingPreparation[]`
+// in the canonical file) and caused TS2345 errors when imaging
+// records were passed to printPatientReport.
+//
+// By re-exporting, all consumers of `@/api/imaging` — including
+// existing imports across the codebase — continue to work
+// unchanged, but they now resolve to the single canonical set.
+// ═══════════════════════════════════════════════════════════════
+export type {
+  ImagingModality,
+  ImagingContrastDecision,
+  ImagingPregnancyStatus,
+  ImagingMetallicForeignBody,
+  ImagingPriority,
+  ImagingLaterality,
+  ImagingImageQuality,
+  ImagingPreparation,
+  ImagingPerformedContrast,
+  ImagingStatus,
+  ImagingOrderReport,
+  ImagingOrder,
+  ImagingOrderListItem,
+  CreateImagingRequest,
+  UpdateImagingReportRequest,
+  RecordImagingPerformedRequest,
+  UpdateImagingStatusRequest,
+  ImagingListResponse,
+} from '@/types/imaging.types';
 
-export interface ImagingOrderReport {
-  reportNo?: string;
-  findings: string;
-  impression: string;
-  recommendations?: string;
-  reportingPhysician: string;
-  signature?: string;
-  reportDate?: string;
-  hospitalDepartmentStamp?: string;
-}
+// ═══════════════════════════════════════════════════════════════
+// Re-export queue-specific types from @/api/imaging-queue
+//
+// These types are NOT part of the patient-scoped imaging resource
+// — they describe the flat, cross-patient radiologist queue
+// returned by `/imaging/pending-orders` and
+// `/imaging/completed-orders`. They live in their own module.
+// ═══════════════════════════════════════════════════════════════
+export type {
+  PendingImagingOrder,
+  ImagingOrderDetail,
+  ImagingQueueListResponse,
+  SubmitImagingReportRequest,
+  SubmitImagingReportResponse,
+} from '@/api/imaging-queue';
 
-export interface ImagingOrder {
-  id: string;
-  patientId: string;
-  patientName?: string;
-  medicalRecordNo?: string;
-  wardClinic?: string;
-  contactNo?: string;
+// ═══════════════════════════════════════════════════════════════
+// Local imports of the types used in the API object signatures
+// below. We re-import them so TypeScript can resolve them by
+// name inside this file — `export type { ... } from '...'` only
+// re-exports, it does not bring the names into local scope.
+// ═══════════════════════════════════════════════════════════════
+import type {
+  ImagingModality,
+  ImagingPriority,
+  ImagingStatus,
+  ImagingOrder,
+  CreateImagingRequest,
+  UpdateImagingReportRequest,
+  RecordImagingPerformedRequest,
+  ImagingListResponse,
+} from '@/types/imaging.types';
 
-  provisionalDiagnosis?: string;
-  presentingSymptoms?: string;
-  medicalHistory?: string;
-  previousImaging: boolean;
-  previousImagingDetails?: string;
-
-  modality: ImagingModality;
-  modalityOtherText?: string;
-  bodyRegion: string;
-  bodyRegionOtherText?: string;
-  laterality: Laterality;
-  contrastRequested: ContrastDecision;
-
-  specificSite?: string;
-  protocolViews?: string;
-  specialClinicalQuestion?: string;
-
-  previousContrastReaction: boolean;
-  previousContrastReactionDetails?: string;
-  knownAllergies?: string;
-  creatinine?: string;
-  egfr?: string;
-  otherRelevantMedicationOrCondition?: string;
-
-  pregnancyStatus: PregnancyStatus;
-  implantedMedicalDevice: boolean;
-  deviceImplantDetails?: string;
-  metallicForeignBody: MetallicForeignBody;
-  otherSafetyConsiderations?: string;
-
-  preparation: string[];
-  preparationInstructions?: string;
-
-  priority: ImagingPriority;
-  reasonForUrgency?: string;
-
-  clinicianName?: string;
-  clinicianDepartment?: string;
-  clinicianLicenseNo?: string;
-  clinicianContact?: string;
-  clinicianSignature?: string;
-  clinicianSignedAt?: string;
-
-  examinationPerformed?: boolean;
-  performedModality?: string;
-  performedProtocol?: string;
-  performedContrast: 'None' | 'Administered' | 'NotAdministered';
-  technologistName?: string;
-  radiologistName?: string;
-  performedAt?: string;
-  imageQuality?: ImageQuality;
-
-  report?: ImagingOrderReport;
-
-  status: ImagingStatus;
-  orderedBy?: { id: string; name: string; role?: string };
-  dateOrdered?: string;
-  createdAt: string;
-  updatedAt?: string;
-
-  /** Soft-delete metadata */
-  deletedAt?: string | null;
-  deletionReason?: string | null;
-}
-
-export interface CreateImagingRequest {
-  provisionalDiagnosis?: string;
-  presentingSymptoms?: string;
-  medicalHistory?: string;
-  previousImaging?: boolean;
-  previousImagingDetails?: string;
-
-  modality: ImagingModality;
-  modalityOtherText?: string;
-  bodyRegion: string;
-  bodyRegionOtherText?: string;
-  laterality: Laterality;
-  contrastRequested: ContrastDecision;
-
-  specificSite?: string;
-  protocolViews?: string;
-  specialClinicalQuestion?: string;
-
-  previousContrastReaction?: boolean;
-  previousContrastReactionDetails?: string;
-  knownAllergies?: string;
-  creatinine?: string;
-  egfr?: string;
-  otherRelevantMedicationOrCondition?: string;
-
-  pregnancyStatus: PregnancyStatus;
-  implantedMedicalDevice?: boolean;
-  deviceImplantDetails?: string;
-  metallicForeignBody: MetallicForeignBody;
-  otherSafetyConsiderations?: string;
-
-  preparation?: string[];
-  preparationInstructions?: string;
-
-  priority: ImagingPriority;
-  reasonForUrgency?: string;
-
-  clinicianName?: string;
-  clinicianDepartment?: string;
-  clinicianLicenseNo?: string;
-  clinicianContact?: string;
-  clinicianSignature?: string;
-}
-
-export interface UpdateImagingReportRequest {
-  reportNo?: string;
-  findings: string;
-  impression: string;
-  recommendations?: string;
-  reportingPhysician: string;
-  signature?: string;
-  reportDate?: string;
-  hospitalDepartmentStamp?: string;
-}
-
-export interface RecordImagingPerformedRequest {
-  performedModality?: string;
-  performedProtocol?: string;
-  performedContrast?: 'None' | 'Administered' | 'NotAdministered';
-  technologistName?: string;
-  radiologistName?: string;
-  performedAt?: string;
-  imageQuality?: ImageQuality;
-}
-
-export interface ImagingListResponse {
-  items: ImagingOrder[];
-  page: number;
-  limit: number;
-  total: number;
-}
-
+// ═══════════════════════════════════════════════════════════════
+// API object
+// ═══════════════════════════════════════════════════════════════
 export const imagingApi = {
-  create: (patientId: string, data: CreateImagingRequest): Promise<ImagingOrder> => {
+  create: (
+    patientId: string,
+    data: CreateImagingRequest,
+  ): Promise<ImagingOrder> => {
     if (USE_MOCK) return mockImagingApi.create(patientId, data as any);
-    return apiClient.post<ImagingOrder>(`/patients/${patientId}/imaging`, data).then((r) => r.data);
+    return apiClient
+      .post<ImagingOrder>(`/patients/${patientId}/imaging`, data)
+      .then((r) => r.data);
   },
 
   /**
@@ -188,7 +96,8 @@ export const imagingApi = {
       limit?: number;
     },
   ): Promise<ImagingListResponse> => {
-    if (USE_MOCK) return mockImagingApi.getByPatient(patientId, params as any) as any;
+    if (USE_MOCK)
+      return mockImagingApi.getByPatient(patientId, params as any) as any;
     return apiClient
       .get<ImagingListResponse>(`/patients/${patientId}/imaging`, { params })
       .then((r) => r.data);
@@ -219,9 +128,15 @@ export const imagingApi = {
       .then((r) => r.data);
   },
 
-  getById: (patientId: string, imagingId: string): Promise<ImagingOrder> => {
-    if (USE_MOCK) return mockImagingApi.getById(patientId, imagingId) as any;
-    return apiClient.get<ImagingOrder>(`/patients/${patientId}/imaging/${imagingId}`).then((r) => r.data);
+  getById: (
+    patientId: string,
+    imagingId: string,
+  ): Promise<ImagingOrder> => {
+    if (USE_MOCK)
+      return mockImagingApi.getById(patientId, imagingId) as any;
+    return apiClient
+      .get<ImagingOrder>(`/patients/${patientId}/imaging/${imagingId}`)
+      .then((r) => r.data);
   },
 
   updateReport: (
@@ -229,9 +144,17 @@ export const imagingApi = {
     imagingId: string,
     data: UpdateImagingReportRequest,
   ): Promise<ImagingOrder> => {
-    if (USE_MOCK) return mockImagingApi.updateReport(patientId, imagingId, data as any) as any;
+    if (USE_MOCK)
+      return mockImagingApi.updateReport(
+        patientId,
+        imagingId,
+        data as any,
+      ) as any;
     return apiClient
-      .put<ImagingOrder>(`/patients/${patientId}/imaging/${imagingId}/report`, data)
+      .put<ImagingOrder>(
+        `/patients/${patientId}/imaging/${imagingId}/report`,
+        data,
+      )
       .then((r) => r.data);
   },
 
@@ -240,9 +163,13 @@ export const imagingApi = {
     imagingId: string,
     data: RecordImagingPerformedRequest,
   ): Promise<ImagingOrder> => {
-    if (USE_MOCK) return mockImagingApi.getById(patientId, imagingId) as any;
+    if (USE_MOCK)
+      return mockImagingApi.getById(patientId, imagingId) as any;
     return apiClient
-      .put<ImagingOrder>(`/patients/${patientId}/imaging/${imagingId}/performed`, data)
+      .put<ImagingOrder>(
+        `/patients/${patientId}/imaging/${imagingId}/performed`,
+        data,
+      )
       .then((r) => r.data);
   },
 
@@ -251,23 +178,40 @@ export const imagingApi = {
     imagingId: string,
     status: ImagingStatus,
   ): Promise<ImagingOrder> => {
-    if (USE_MOCK) return mockImagingApi.updateStatus(patientId, imagingId, status) as any;
+    if (USE_MOCK)
+      return mockImagingApi.updateStatus(
+        patientId,
+        imagingId,
+        status,
+      ) as any;
     return apiClient
-      .put<ImagingOrder>(`/patients/${patientId}/imaging/${imagingId}/status`, { status })
+      .put<ImagingOrder>(
+        `/patients/${patientId}/imaging/${imagingId}/status`,
+        { status },
+      )
       .then((r) => r.data);
   },
 
-  delete: (patientId: string, imagingId: string, reason?: string): Promise<{ id: string; success: boolean }> => {
+  delete: (
+    patientId: string,
+    imagingId: string,
+    reason?: string,
+  ): Promise<{ id: string; success: boolean }> => {
     if (USE_MOCK) return mockImagingApi.delete(patientId, imagingId);
     return apiClient
-      .delete<{ id: string; success: boolean }>(`/patients/${patientId}/imaging/${imagingId}`, {
-        data: { reason },
-      })
+      .delete<{ id: string; success: boolean }>(
+        `/patients/${patientId}/imaging/${imagingId}`,
+        { data: { reason } },
+      )
       .then((r) => r.data);
   },
 
-  restore: (patientId: string, imagingId: string): Promise<{ id: string; restored: boolean }> => {
-    if (USE_MOCK) return Promise.resolve({ id: imagingId, restored: true });
+  restore: (
+    patientId: string,
+    imagingId: string,
+  ): Promise<{ id: string; restored: boolean }> => {
+    if (USE_MOCK)
+      return Promise.resolve({ id: imagingId, restored: true });
     return apiClient
       .post<{ id: string; restored: boolean }>(
         `/patients/${patientId}/imaging/${imagingId}/restore`,

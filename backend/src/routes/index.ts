@@ -24,6 +24,7 @@ import painAssessmentRoutes from './pain-assessment.routes.js';
 import socialAssessmentRoutes from './social-assessment.routes.js';
 import spiritualAssessmentRoutes from './spiritual-assessment.routes.js';
 import psychiatryAssessmentRoutes from './psychiatry-assessment.routes.js';
+import adminProfileRoutes from './admin-profile.routes';
 
 const router = Router();
 
@@ -38,6 +39,8 @@ router.get('/health', (req, res) => {
 
 // ── Top-level feature routes ──
 router.use('/auth', authRoutes);
+router.use('/admin/profile', adminProfileRoutes);
+
 router.use('/admin', adminRoutes);
 router.use('/staff', staffRoutes);
 router.use('/profile', profileRoutes);

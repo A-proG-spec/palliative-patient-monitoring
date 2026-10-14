@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import type { NavigateFunction, Location } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   XCircle, Phone, MapPin, User, Calendar, FileText, Printer,
   AlertTriangle, NotebookPen, Trash2, Heart, Plus,
@@ -75,9 +76,13 @@ import { formatDate, cn } from '@/lib/utils';
 import { DISEASE_STAGE_LABELS as DSL, VISIT_TYPE_LABELS } from '@/constants';
 import type { DischargeSummary } from '@/components/admin/DischargePatientModal';
 import { printDischargeSummary } from '@/lib/printDischargeSummary';
+import { printPatientReport } from '@/lib/printPatientReport';
+import { fetchAllPatientData } from '@/lib/fetchAllPatientData';
+import { APP_NAME } from '@/lib/config';
 import { AssessmentCards } from '@/components/patient/AssessmentCards';
 import { AddRecordModal } from '@/components/patient/AddRecordModal';
 import { useAuthStore } from '@/store/auth.store';
+import { useToast } from '@/context/ToastContext';
 
 // ═══════════════════════════════════════════════════════════
 // RowActions
@@ -119,17 +124,6 @@ const RowActions: React.FC<RowActionsProps> = ({
   );
 
 // ── Discharge summary viewer modal ──
-//
-// NOTE: The API response differs from the wizard's form-state
-// `DischargeSummary` type. The backend returns:
-//   • `createdBy` → normalized actor { id, name, role, type }
-//   • `createdAt` → ISO timestamp
-//   • raw persisted columns (no `submittedBy` / `submittedAt`)
-//
-// The wizard's form-state fields (`submittedBy`, `submittedAt`)
-// never reach the client after a page reload — they only exist
-// in-session via navigation state. So we read `createdBy` and
-// `createdAt` here.
 interface DischargeSummaryViewerProps {
   summary: DischargeSummary;
   patientName: string;
@@ -140,14 +134,13 @@ interface DischargeSummaryViewerProps {
 const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
   summary, patientName, onClose, onPrint,
 }) => {
-  // Backend-provided actor object (see getDischargeSummaryByPatient)
   const actor = (summary as any).createdBy as
     | {
-        id: number;
-        name: string;
-        role: string | null;
-        type: 'staff' | 'admin';
-      }
+      id: number;
+      name: string;
+      role: string | null;
+      type: 'staff' | 'admin';
+    }
     | null
     | undefined;
 
@@ -157,12 +150,12 @@ const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
 
   const createdAtLabel = (summary as any).createdAt
     ? new Date((summary as any).createdAt).toLocaleString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
     : '—';
 
   const rows: [string, string][] = [
@@ -182,8 +175,6 @@ const DischargeSummaryViewer: React.FC<DischargeSummaryViewerProps> = ({
     ['Medication Reconciliation', summary.medicationReconciliation || '—'],
     ['Code Status', summary.codeStatus || '—'],
     ['Transport', summary.transport || '—'],
-
-    // ✅ Real backend fields
     ['Created By', createdByLabel],
     ['Created At', createdAtLabel],
   ];
@@ -259,8 +250,8 @@ const TAB_ACTIONS: Partial<Record<string, TabActionConfig>> = {
   Admissions: { label: 'Record Admission', path: (id) => `/admin/patients/${id}/admissions` },
 };
 
-// ── Tabs ──
-const tabs = [
+// ── All tabs, unfiltered ──
+const ALL_TABS = [
   'Visits',
   'Progress Notes',
   'Hospice Nursing',
@@ -278,7 +269,28 @@ const tabs = [
   'Spiritual Assessments',
   'Psychiatry Assessments',
 ] as const;
-type Tab = typeof tabs[number];
+type Tab = typeof ALL_TABS[number];
+
+/**
+ * Filter the tab list based on the patient's current location.
+ *
+ * Rules:
+ *   • Visits         → only when patient is at Home
+ *   • Progress Notes → only when patient is at ReferredHospital
+ *   • Everything else → always visible
+ *
+ * This mirrors the staff PatientDetailPage behaviour so both
+ * views show the same set of tabs for the same patient.
+ */
+function getVisibleTabs(currentLocation: string | undefined): Tab[] {
+  const isHospital = currentLocation === 'ReferredHospital';
+
+  return ALL_TABS.filter((tab) => {
+    if (tab === 'Visits') return !isHospital;
+    if (tab === 'Progress Notes') return isHospital;
+    return true;
+  });
+}
 
 // ═════════════════════════════════════════════════════════════
 // OUTER WRAPPER — reads the URL param and hard-guards it.
@@ -324,10 +336,14 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
   navigate,
   location,
 }) => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
   const [activeTab, setActiveTab] = useState<Tab>('Visits');
   const [showDischargeSummaryViewer, setShowDischargeSummaryViewer] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   const [showAddRecord, setShowAddRecord] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   // ── Discharge summary ──
   const locationState =
@@ -414,6 +430,22 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
   const deletePsychiatry = useDeletePsychiatryAssessment(patientId);
   const restorePsychiatry = useRestorePsychiatryAssessment(patientId);
 
+  // ── Location-aware tab list ──
+  // Recomputed whenever the patient's currentLocation changes.
+  const visibleTabs = useMemo<Tab[]>(
+    () => getVisibleTabs(patient?.currentLocation),
+    [patient?.currentLocation],
+  );
+
+  // If the currently-active tab is no longer in the visible list
+  // (e.g. the patient moved from Home → ReferredHospital and the
+  // Visits tab disappeared), snap to the first visible tab.
+  useEffect(() => {
+    if (!visibleTabs.includes(activeTab)) {
+      setActiveTab(visibleTabs[0]);
+    }
+  }, [visibleTabs, activeTab]);
+
   if (isLoading) return <PageLoader />;
   if (error || !patient) return <ErrorState onRetry={refetch} />;
 
@@ -441,6 +473,30 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
     if (dischargeSummary) printDischargeSummary(dischargeSummary);
   };
 
+  // ═══════════════════════════════════════════════════════════
+  // handlePrint — full patient history report
+  // Mirrors the staff PatientDetailPage flow: pulls the full
+  // detail of every record, then hands the bundle to the shared
+  // printPatientReport renderer.
+  // ═══════════════════════════════════════════════════════════
+  const handlePrint = async () => {
+    setIsPrinting(true);
+    try {
+      const bundle = await fetchAllPatientData(queryClient, patientId);
+
+      printPatientReport({
+        patient,
+        ...bundle,
+        appName: APP_NAME,
+      });
+    } catch (err) {
+      toast.error('Failed to prepare the print report. Please try again.');
+      console.error('[Print] Failed:', err);
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
   const dischargedOnLabel = dischargeSummary?.dateOfDischarge
     ? formatDate(dischargeSummary.dateOfDischarge)
     : patient.status === 'Discharged' ? 'previously' : null;
@@ -463,6 +519,17 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
         <div className="flex items-center gap-3 flex-wrap">
           <StatusBadge status={patient.status} type="patient" />
           <StatusBadge status={patient.currentLocation} />
+
+          {/* ── Print History ── */}
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<Printer size={14} />}
+            loading={isPrinting}
+            onClick={handlePrint}
+          >
+            Print History
+          </Button>
 
           {isPatientActive && (
             <>
@@ -549,7 +616,7 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
         {/* Tab strip + inline Add New for the active tab */}
         <div className="flex items-center justify-between border-b border-border-base">
           <div className="flex overflow-x-auto flex-1">
-            {tabs.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -1068,7 +1135,7 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
                         <td className="py-3 pr-4 text-text-secondary">{img.performedAt ? formatDate(img.performedAt) : '—'}</td>
                         <td className="py-3 pr-4"><StatusBadge status={img.priority} /></td>
                         <td className="py-3 pr-4"><StatusBadge status={img.status} type="lab" /></td>
-                        <td className="py-3 text-text-muted text-xs">{img.report ? 'Available' : '—'}</td>
+                        <td className="py-3 text-text-muted text-xs">{img.hasReport ? 'Available' : '—'}</td>
                         <td className="py-3 text-right">
                           <RowActions
                             isDeleted={isDeleted}
@@ -1224,7 +1291,7 @@ const PatientDetailContent: React.FC<PatientDetailContentProps> = ({
           )}
 
           {/* ═══════════════════════════════════════════════════════
-              Assessment tabs (8 of them — unchanged)
+              Assessment tabs (8 of them)
           ═══════════════════════════════════════════════════════ */}
           {activeTab === 'Pain Assessments' && (
             <AssessmentTabPanel

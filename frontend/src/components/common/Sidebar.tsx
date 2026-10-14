@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, UserCheck, GitBranch,
-  BarChart3, Settings, Heart, LogOut, Menu, X,
+  BarChart3, User, Heart, LogOut, Menu, X,
   ChevronRight, Bell,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
@@ -77,7 +77,7 @@ const adminNavItems = (
     badge: pendingReferrals || undefined,
   },
   { label: 'Reports', href: '/admin/reports', icon: BarChart3 },
-  { label: 'Settings', href: '/admin/settings', icon: Settings },
+  { label: 'Profile', href: '/admin/profile', icon: User },
 ];
 
 interface SidebarProps {

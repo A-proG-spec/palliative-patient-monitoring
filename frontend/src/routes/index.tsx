@@ -1,6 +1,6 @@
 // src/routes/index.tsx
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import PublicRoute from './PublicRoute';
 import ProtectedRoute from './ProtectedRoute';
@@ -37,7 +37,7 @@ const StaffManagementPage = lazy(() => import('@/pages/admin/StaffManagementPage
 const StaffPerformanceDetailPage = lazy(() => import('@/pages/admin/StaffPerformanceDetailPage'));
 const ReferralManagementPage = lazy(() => import('@/pages/admin/ReferralManagementPage'));
 const ReportsPage = lazy(() => import('@/pages/admin/ReportsPage'));
-const SettingsPage = lazy(() => import('@/pages/admin/SettingsPage'));
+const AdminProfilePage = lazy(() => import('@/pages/admin/AdminProfilePage'));
 
 // ── Clinical ──
 const DashboardPage = lazy(() => import('@/pages/clinical/DashboardPage'));
@@ -220,7 +220,13 @@ const AppRoutes: React.FC = () => (
         <Route path="/admin/staff/performance/:staffId" element={<S><StaffPerformanceDetailPage /></S>} />
         <Route path="/admin/referrals" element={<S><ReferralManagementPage /></S>} />
         <Route path="/admin/reports" element={<S><ReportsPage /></S>} />
-        <Route path="/admin/settings" element={<S><SettingsPage /></S>} />
+
+        <Route path="/admin/profile" element={<S><AdminProfilePage /></S>} />
+
+        <Route
+          path="/admin/settings"
+          element={<Navigate to="/admin/profile" replace />}
+        />
       </Route>
     </Route>
 
